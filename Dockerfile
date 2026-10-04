@@ -1,4 +1,4 @@
-FROM node:24-alpine
+FROM node:26-alpine
 
 LABEL org.opencontainers.image.title="Netnou" \
       org.opencontainers.image.description="Live public-transport map computed from GTFS, GTFS-Realtime and OpenStreetMap data" \
