@@ -8,7 +8,8 @@ name: Release
 #    that pull request is the release: release-please then tags the commit
 #    vX.Y.Z and publishes a GitHub release.
 # 2. The container image is built and pushed to ghcr.io/xiidoz/netnou: always
-#    as "latest", and for a release also as X.Y.Z, X.Y and - from 1.0.0 on - X.
+#    as "edge", and for a release also as "latest", X.Y.Z, X.Y and - from
+#    1.0.0 on - X. So "latest" is the newest release and "edge" is main.
 on:
   push:
     branches: [main]
@@ -45,7 +46,7 @@ jobs:
   image:
     name: Container image
     needs: release-please
-    # Also when release-please failed: "latest" does not depend on it.
+    # Also when release-please failed: "edge" does not depend on it.
     if: ${{ !cancelled() && github.repository == 'xiidoz/netnou' }}
     runs-on: ubuntu-latest
     permissions:
@@ -86,12 +87,14 @@ jobs:
         uses: docker/metadata-action@v6
         with:
           images: ghcr.io/xiidoz/netnou
-          # "latest" is the first line below and nothing else. There is no
+          # "latest" is what the second line below says and nothing else:
+          # people who follow it get releases, not every commit. There is no
           # tag "0": below 1.0.0 a new minor version may break things, so a
           # tag that follows all of 0.x would promise too much.
           flavor: latest=false
           tags: |
-            type=raw,value=latest
+            type=raw,value=edge
+            type=raw,value=latest,enable=${{ steps.release.outputs.tag != '' }}
             type=semver,pattern={{version}},value=${{ steps.release.outputs.tag }},enable=${{ steps.release.outputs.tag != '' }}
             type=semver,pattern={{major}}.{{minor}},value=${{ steps.release.outputs.tag }},enable=${{ steps.release.outputs.tag != '' }}
             type=semver,pattern={{major}},value=${{ steps.release.outputs.tag }},enable=${{ steps.release.outputs.tag != '' && !startsWith(steps.release.outputs.tag, 'v0.') }}
