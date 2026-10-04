@@ -27,15 +27,26 @@ Visitors' browsers load the map tiles themselves, by default from
 
 ## Docker
 
-`compose.yaml` in the repository runs Netnou on any Docker host:
+`compose.yaml` in the repository runs the published image
+`ghcr.io/xiidoz/netnou` on any Docker host:
 
 ```sh
-docker compose up -d --build    # build the image from the checkout
-docker compose up -d            # or use the published image ghcr.io/xiidoz/netnou
+docker compose up -d
 ```
 
 Then open <http://localhost:8080>. The first start takes a few minutes, see
 [What the first start does](../README.md#what-the-first-start-does).
+
+The file needs nothing else from the repository. You can download it on its
+own, or paste its content into Portainer (Stacks → Add stack → Web editor) or
+a similar tool; there the settings go into the `environment:` block of the
+pasted file.
+
+To run an image built from a checkout instead, add `compose.build.yaml`:
+
+```sh
+docker compose -f compose.yaml -f compose.build.yaml up -d --build
+```
 
 What the container looks like:
 
@@ -47,10 +58,19 @@ What the container looks like:
   uid 1000.
 - A health check asks `/api/status` once a minute. It reports "healthy" as
   soon as the server answers, also while the first import is still running.
-- The image is built for `linux/amd64` and `linux/arm64`. `latest` follows
-  the main branch; a release `v0.3.1` is also tagged `0.3.1` and `0.3`. Pin
-  one of those if you do not want every commit: below version 1.0 a new minor
-  version can change settings or the API, a new patch version does not.
+- The image is built for `linux/amd64` and `linux/arm64` and published under
+  these tags:
+
+  | Tag | What it is |
+  | --- | --- |
+  | `latest` | the newest release; what `compose.yaml` uses |
+  | `0.3.1` | exactly that release |
+  | `0.3` | the newest patch release of 0.3 |
+  | `edge` | the main branch, rebuilt with every commit; not a release |
+
+  Below version 1.0 a new minor version can change settings or the API, so
+  `latest` can bring such a change with an update; a tag like `0.3` cannot.
+  The [changelog](../CHANGELOG.md) marks these changes as breaking.
 
 Settings go into the `environment:` block (see
 [configuration.md](configuration.md)). Leave `HOST` unset in the container:
@@ -77,8 +97,10 @@ networks:
 To update:
 
 ```sh
-docker compose pull && docker compose up -d      # published image
-git pull && docker compose up -d --build         # built from the checkout
+# published image
+docker compose pull && docker compose up -d
+# built from the checkout
+git pull && docker compose -f compose.yaml -f compose.build.yaml up -d --build
 ```
 
 Do not give the container a memory limit below about 2 GB. If it is killed

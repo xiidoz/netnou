@@ -45,8 +45,12 @@ changes as breaking.
 With Docker:
 
 ```sh
-docker compose up -d --build    # builds the image from this checkout
+docker compose up -d
 ```
+
+This pulls the published image `ghcr.io/xiidoz/netnou`. `compose.yaml` needs
+nothing else from the repository, so it can also be downloaded on its own or
+pasted into Portainer as it is.
 
 With Node.js 22 or newer (nothing to install, `npm install` is not needed to
 run):
@@ -56,9 +60,6 @@ npm start
 ```
 
 Then open <http://localhost:8080>.
-
-`docker compose up -d` without `--build` uses the published image
-`ghcr.io/xiidoz/netnou` instead of building one.
 
 ### What the first start does
 

@@ -1,12 +1,15 @@
-# Runs Netnou on any Docker host. There are two ways to start it:
+# Runs Netnou on any Docker host from the published image:
 #
-#   docker compose up -d            # the published image, pulled if it is not there yet
-#   docker compose up -d --build    # an image built from this checkout instead
+#   docker compose up -d
 #
 # Then open http://localhost:8080. The first start downloads and imports about
 # 800 MB of timetable and OpenStreetMap data, which takes a few minutes.
 #
-# To update the published image: "docker compose pull", then "docker compose up -d".
+# This file needs nothing else from the repository: it can be downloaded on its
+# own or pasted into Portainer or a similar tool as it is. To build the image
+# from a checkout instead, see compose.build.yaml.
+#
+# To update: "docker compose pull", then "docker compose up -d".
 # Settings of your own host (container name, proxy network, ...) belong in a
 # compose.override.yaml next to this file: Compose merges it in by itself and
 # git ignores it.
@@ -14,8 +17,9 @@ name: "netnou"
 
 services:
   netnou:
+    # "latest" is the newest release. A version such as "0.3" stays on that
+    # line of releases; "edge" follows the main branch, commit by commit.
     image: "ghcr.io/xiidoz/netnou:latest"
-    build: "."
     restart: "unless-stopped"
     ports:
       # host:container. Change the left side to publish another port, use

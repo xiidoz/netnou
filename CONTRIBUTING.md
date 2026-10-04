@@ -212,8 +212,8 @@ changelog by hand.
    there is no such pull request.
 2. Merging that pull request is the release. The commit is tagged `vX.Y.Z`,
    a GitHub release with the same notes is published, and the container image
-   is pushed as `X.Y.Z` and `X.Y`. (`latest` is pushed for every commit on
-   `main`.)
+   is pushed as `latest`, `X.Y.Z` and `X.Y`. (Every commit on `main` is
+   pushed as `edge`, released or not.)
 
 Netnou stays at 0.x while much is still changing: features and breaking
 changes raise the minor version, fixes the patch version
