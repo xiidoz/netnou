@@ -1,0 +1,10 @@
+# Builds the image from this checkout instead of pulling the published one.
+# It is used on top of compose.yaml:
+#
+#   docker compose -f compose.yaml -f compose.build.yaml up -d --build
+services:
+  netnou:
+    build: "."
+    # A name of its own, so that the local build is not taken for a release
+    # and "docker compose pull" does not replace it.
+    image: "netnou:local"

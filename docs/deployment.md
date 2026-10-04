@@ -27,15 +27,26 @@ Visitors' browsers load the map tiles themselves, by default from
 
 ## Docker
 
-`compose.yaml` in the repository runs Netnou on any Docker host:
+`compose.yaml` in the repository runs the published image
+`ghcr.io/xiidoz/netnou` on any Docker host:
 
 ```sh
-docker compose up -d --build    # build the image from the checkout
-docker compose up -d            # or use the published image ghcr.io/xiidoz/netnou
+docker compose up -d
 ```
 
 Then open <http://localhost:8080>. The first start takes a few minutes, see
 [What the first start does](../README.md#what-the-first-start-does).
+
+The file needs nothing else from the repository. You can download it on its
+own, or paste its content into Portainer (Stacks → Add stack → Web editor) or
+a similar tool; there the settings go into the `environment:` block of the
+pasted file.
+
+To run an image built from a checkout instead, add `compose.build.yaml`:
+
+```sh
+docker compose -f compose.yaml -f compose.build.yaml up -d --build
+```
 
 What the container looks like:
 
@@ -86,8 +97,10 @@ networks:
 To update:
 
 ```sh
-docker compose pull && docker compose up -d      # published image
-git pull && docker compose up -d --build         # built from the checkout
+# published image
+docker compose pull && docker compose up -d
+# built from the checkout
+git pull && docker compose -f compose.yaml -f compose.build.yaml up -d --build
 ```
 
 Do not give the container a memory limit below about 2 GB. If it is killed
