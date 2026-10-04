@@ -1,0 +1,57 @@
+name: Bug report
+description: Something in Netnou itself does not work as it should
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Netnou displays data it does not own. Wrong times, delays or cancellations come from the feed provider [gtfs.de](https://gtfs.de), and a missing or wrong road or track is fixed in [OpenStreetMap](https://www.openstreetmap.org/fixthemap). Please report here what Netnou does wrong with that data.
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened?
+      description: What you did, what you saw, and what you expected instead. For a problem on the map, name the line, the stop and the time.
+    validations:
+      required: true
+  - type: dropdown
+    id: setup
+    attributes:
+      label: How do you run Netnou?
+      options:
+        - Docker, published image (ghcr.io/xiidoz/netnou)
+        - Docker, image built from a checkout
+        - Node.js (npm start)
+        - Other (please describe above)
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: The "version" field of /api/status, the image tag or the commit.
+    validations:
+      required: true
+  - type: input
+    id: environment
+    attributes:
+      label: Environment
+      description: Operating system, Node.js or Docker version, and the browser if the problem is in the page.
+      placeholder: Debian 13, Docker 29, Firefox 143
+  - type: textarea
+    id: settings
+    attributes:
+      label: Settings
+      description: The environment variables you have set (BBOX, AREA_FILE, OSM_PBF_URLS, ...). Leave empty for the defaults.
+      render: shell
+  - type: textarea
+    id: status
+    attributes:
+      label: Output of /api/status
+      description: Open /api/status on your instance and paste the answer.
+      render: json
+  - type: textarea
+    id: log
+    attributes:
+      label: Log output
+      description: The lines the server printed around the problem (docker compose logs netnou).
+      render: text

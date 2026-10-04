@@ -1,0 +1,3 @@
+# Rejects a commit whose message does not follow Conventional Commits
+# (commitlint.config.js, "Commit messages" in CONTRIBUTING.md).
+commitlint --edit "$1"

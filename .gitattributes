@@ -1,0 +1,9 @@
+# LF in the repository and in every checkout, whatever core.autocrlf says.
+* text=auto eol=lf
+*.png binary
+
+# Vendored files stay byte-identical to upstream (Leaflet ships CRLF files).
+public/vendor/** -text linguist-vendored
+
+# Written by tools/build-vgn-area.mjs, one very long line.
+server/areas/*.geojson linguist-generated

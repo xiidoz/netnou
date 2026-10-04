@@ -1,0 +1,25 @@
+# Caches written by the server (the default DATA_DIR)
+/data/
+
+# Dependencies and test output
+node_modules/
+coverage/
+
+# Logs
+*.log
+npm-debug.log*
+
+# Local settings and private deployment files
+.env
+.env.*
+!.env.example
+/.local/
+compose.override.yaml
+
+# Editors and operating systems
+.idea/
+.vscode/
+*.swp
+*~
+.DS_Store
+Thumbs.db

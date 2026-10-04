@@ -1,0 +1,38 @@
+version: 2
+
+# The commit messages follow Conventional Commits like all others (see
+# CONTRIBUTING.md); the type decides whether an update leads to a release.
+updates:
+  # Workflows only: no release.
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    commit-message:
+      prefix: ci
+      include: scope
+
+  # The Node.js base image in the Dockerfile. A new major is taken by hand,
+  # LTS lines only, together with .node-version and the matrix in ci.yml.
+  # "fix": the base image is part of what is shipped, so an update of it is
+  # released as a patch version.
+  - package-ecosystem: docker
+    directory: /
+    schedule:
+      interval: weekly
+    commit-message:
+      prefix: fix
+      include: scope
+
+  # Development tools only (ESLint, commitlint, husky); the server has no
+  # dependencies. No release.
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+    commit-message:
+      prefix: build
+      include: scope
+    groups:
+      minor-and-patch:
+        update-types: [minor, patch]

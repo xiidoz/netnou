@@ -1,0 +1,61 @@
+name: Commit messages
+
+# Versions, releases and the changelog are derived from the commit messages
+# (see CONTRIBUTING.md), so every commit that reaches main has to follow
+# Conventional Commits. So has the title of a pull request: it becomes the
+# commit message when the pull request is squashed.
+on:
+  push:
+    branches: [main]
+  pull_request:
+    # "edited" so that a corrected title is checked again.
+    types: [opened, edited, synchronize, reopened]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: commits-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  commitlint:
+    name: Conventional Commits
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          # commitlint reads the messages from the history.
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .node-version
+          cache: npm
+      - run: npm ci
+
+      # Values from the event go through the environment, never into the script text.
+      - name: Commits of the pull request
+        if: github.event_name == 'pull_request'
+        run: npx commitlint --from "$BASE" --to "$HEAD" --verbose
+        env:
+          BASE: ${{ github.event.pull_request.base.sha }}
+          HEAD: ${{ github.event.pull_request.head.sha }}
+      - name: Title of the pull request
+        if: github.event_name == 'pull_request'
+        run: printf '%s\n' "$TITLE" | npx commitlint --verbose
+        env:
+          TITLE: ${{ github.event.pull_request.title }}
+
+      - name: Pushed commits
+        if: github.event_name == 'push'
+        run: |
+          # The first push to a branch has nothing before it.
+          if [ "$BEFORE" = "0000000000000000000000000000000000000000" ]; then
+            npx commitlint --last --verbose
+          else
+            npx commitlint --from "$BEFORE" --to "$AFTER" --verbose
+          fi
+        env:
+          BEFORE: ${{ github.event.before }}
+          AFTER: ${{ github.sha }}

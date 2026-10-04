@@ -1,0 +1,104 @@
+name: Release
+
+# On every push to main:
+#
+# 1. release-please keeps a "release pull request" up to date. It works out the
+#    next version from the commit messages since the last release (see
+#    CONTRIBUTING.md), sets it in package.json and writes CHANGELOG.md. Merging
+#    that pull request is the release: release-please then tags the commit
+#    vX.Y.Z and publishes a GitHub release.
+# 2. The container image is built and pushed to ghcr.io/xiidoz/netnou: always
+#    as "latest", and for a release also as X.Y.Z, X.Y and - from 1.0.0 on - X.
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+# One at a time: two runs must not both decide on a release.
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  release-please:
+    name: Release pull request
+    # Forks inherit this file but do not make releases of their own.
+    if: github.repository == 'xiidoz/netnou'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      issues: write
+      pull-requests: write
+    steps:
+      - uses: googleapis/release-please-action@v5
+        with:
+          config-file: release-please-config.json
+          manifest-file: .release-please-manifest.json
+          # GitHub starts no workflows for what a workflow does with its own
+          # token, so with the default one CI does not run on the release pull
+          # request. A personal access token or app token in this secret
+          # changes that; without the secret everything else works the same.
+          token: ${{ secrets.RELEASE_PLEASE_TOKEN || secrets.GITHUB_TOKEN }}
+
+  image:
+    name: Container image
+    needs: release-please
+    # Also when release-please failed: "latest" does not depend on it.
+    if: ${{ !cancelled() && github.repository == 'xiidoz/netnou' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      # Never publish what does not pass its tests. They need no "npm ci":
+      # the server has no dependencies.
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .node-version
+      - run: npm test
+
+      # A release is a tag vX.Y.Z on this commit, set by the job above when the
+      # release pull request was merged. The tag is looked up instead of taken
+      # from that job's output, so that running this workflow again for the
+      # same commit publishes the same image tags.
+      - id: release
+        name: Is this commit a release?
+        run: |
+          ref=$(gh api "repos/$GITHUB_REPOSITORY/git/matching-refs/tags/v" --jq "map(select(.object.sha == \"$GITHUB_SHA\"))[0].ref // \"\"")
+          echo "tag=${ref#refs/tags/}" >> "$GITHUB_OUTPUT"
+        env:
+          GH_TOKEN: ${{ github.token }}
+
+      - uses: docker/setup-qemu-action@v4
+      - uses: docker/setup-buildx-action@v4
+      - uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - id: meta
+        uses: docker/metadata-action@v6
+        with:
+          images: ghcr.io/xiidoz/netnou
+          # "latest" is the first line below and nothing else. There is no
+          # tag "0": below 1.0.0 a new minor version may break things, so a
+          # tag that follows all of 0.x would promise too much.
+          flavor: latest=false
+          tags: |
+            type=raw,value=latest
+            type=semver,pattern={{version}},value=${{ steps.release.outputs.tag }},enable=${{ steps.release.outputs.tag != '' }}
+            type=semver,pattern={{major}}.{{minor}},value=${{ steps.release.outputs.tag }},enable=${{ steps.release.outputs.tag != '' }}
+            type=semver,pattern={{major}},value=${{ steps.release.outputs.tag }},enable=${{ steps.release.outputs.tag != '' && !startsWith(steps.release.outputs.tag, 'v0.') }}
+      - uses: docker/build-push-action@v7
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}

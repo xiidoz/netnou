@@ -1,0 +1,11 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Wrong timetable or delay data
+    url: https://gtfs.de
+    about: Netnou shows what the feed says. Wrong times, delays, cancellations, stops or notes come from the feed provider gtfs.de and have to be corrected there.
+  - name: Wrong route geometry
+    url: https://www.openstreetmap.org/fixthemap
+    about: Vehicles follow the roads and tracks mapped in OpenStreetMap. A missing or wrong road or track is fixed there and reaches Netnou with the next update of the extracts.
+  - name: Security vulnerability
+    url: https://github.com/xiidoz/netnou/security/advisories/new
+    about: Please report security problems through private vulnerability reporting, not in a public issue.

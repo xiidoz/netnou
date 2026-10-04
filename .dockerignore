@@ -1,0 +1,11 @@
+# The image only takes package.json, LICENSE, server/ and public/ (see
+# Dockerfile). Everything else stays out of the build context, above all data/
+# (several hundred MB of caches), node_modules/ and .git.
+*
+!package.json
+!LICENSE
+!server
+!public
+
+# Private deployment files never go into an image, whatever is allowed above.
+.local

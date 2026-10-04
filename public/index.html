@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="description" content="Live map of public transport: buses, trams, metro, suburban and regional trains with their current delays." data-i18n-content="page.description">
+  <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#15181c" media="(prefers-color-scheme: dark)">
+  <title>Netnou</title>
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+  <meta name="apple-mobile-web-app-title" content="Netnou">
+  <link rel="stylesheet" href="vendor/leaflet/leaflet.css">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <!-- The texts in this file are the English ones from locales/en.js. The script
+       replaces them with the visitor's language: data-i18n names the key for the
+       text of an element, data-i18n-<attribute> the key for an attribute (see
+       i18n.js). No inline scripts or styles: the Content-Security-Policy of the
+       server forbids them. -->
+  <div id="map" role="application" aria-label="Map with the current positions of the vehicles" data-i18n-aria-label="map.label"></div>
+
+  <!-- hidden until the texts are in the visitor's language -->
+  <header class="card controls" id="controls" hidden>
+    <div class="title">
+      <h1>Netnou</h1>
+      <p id="area-name"></p>
+      <select class="language" id="language" aria-label="Language" data-i18n-aria-label="language.label"></select>
+    </div>
+    <p class="status" id="status"><span class="dot"></span><span id="status-text" data-i18n="status.connecting">Connecting …</span></p>
+    <div class="chips" id="modes" role="group" aria-label="Show or hide modes of transport" data-i18n-aria-label="modes.label"></div>
+    <div class="segmented" role="group" aria-label="Colour of the vehicles" data-i18n-aria-label="colorBy.label">
+      <span class="segmented-label" data-i18n="colorBy.title">Colour by</span>
+      <button type="button" data-color-by="mode" aria-pressed="true" data-i18n="colorBy.mode">Mode</button>
+      <button type="button" data-color-by="delay" aria-pressed="false" data-i18n="colorBy.delay">Delay</button>
+    </div>
+    <ul class="legend" id="delay-legend" hidden></ul>
+    <p class="hint" id="area-hint" hidden><span class="swatch veil"></span><span data-i18n="area.hint">Grey: outside the area. Only lines that stop inside it are shown there, on a straight line between their stops.</span></p>
+  </header>
+
+  <aside class="card panel" id="panel" hidden tabindex="-1" aria-label="Details" data-i18n-aria-label="panel.label">
+    <button type="button" class="close" id="panel-close" aria-label="Close" data-i18n-aria-label="panel.close">×</button>
+    <div id="panel-body"></div>
+  </aside>
+
+  <div class="tooltip" id="tooltip" hidden></div>
+  <div class="banner" id="banner" hidden role="alert"></div>
+
+  <noscript><p class="banner">The live map needs JavaScript. <span lang="de">Die Live-Karte benötigt JavaScript.</span></p></noscript>
+
+  <script src="vendor/leaflet/leaflet.js"></script>
+  <script type="module" src="app.js"></script>
+</body>
+</html>

@@ -1,0 +1,64 @@
+# Runs Netnou on any Docker host. There are two ways to start it:
+#
+#   docker compose up -d            # the published image, pulled if it is not there yet
+#   docker compose up -d --build    # an image built from this checkout instead
+#
+# Then open http://localhost:8080. The first start downloads and imports about
+# 800 MB of timetable and OpenStreetMap data, which takes a few minutes.
+#
+# To update the published image: "docker compose pull", then "docker compose up -d".
+# Settings of your own host (container name, proxy network, ...) belong in a
+# compose.override.yaml next to this file: Compose merges it in by itself and
+# git ignores it.
+name: "netnou"
+
+services:
+  netnou:
+    image: "ghcr.io/xiidoz/netnou:latest"
+    build: "."
+    restart: "unless-stopped"
+    ports:
+      # host:container. Change the left side to publish another port, use
+      # "127.0.0.1:8080:8080" behind a reverse proxy on the same host, or remove
+      # the block when the proxy reaches the container over a Docker network.
+      - "8080:8080"
+    # Optional settings, all described in docs/configuration.md. To use one,
+    # uncomment "environment:" and the line itself.
+    # environment:
+      # Another area than the default (the VGN around Nürnberg): a rectangle
+      # "south,west,north,east", its name, and the OpenStreetMap extracts that
+      # cover it. Without extracts the vehicles move in straight lines.
+      # BBOX: "49.30,10.82,49.68,11.30"
+      # AREA_NAME: "Nürnberg, Fürth, Erlangen"
+      # OSM_PBF_URLS: "https://download.geofabrik.de/europe/germany/bayern/mittelfranken-latest.osm.pbf"
+      # Seconds between two fetches of the realtime feed (about 20 MB each)
+      # while somebody is looking at the map.
+      # REALTIME_INTERVAL_SECONDS: "30"
+      # Map tiles from another provider; the servers of openstreetmap.org are
+      # meant for light use only.
+      # TILE_URL: "https://tiles.example.org/{z}/{x}/{y}.png"
+      # TILE_ATTRIBUTION: "© <a href=\"https://www.openstreetmap.org/copyright\">OpenStreetMap</a>, tiles: Example"
+      # Importing a timetable takes about 1.5 GB of memory for a minute or two
+      # (measured for the default area). Node derives its heap limit from the
+      # memory it sees; on a small host, or with a memory limit on the
+      # container, set it explicitly. Do not limit the container to less than
+      # about 2 GB: each time it is killed for running out of memory it
+      # restarts and downloads the 300 MB timetable again.
+      # NODE_OPTIONS: "--max-old-space-size=2048"
+    read_only: true
+    cap_drop:
+      - "ALL"
+    security_opt:
+      - "no-new-privileges:true"
+    volumes:
+      # Timetable and OpenStreetMap caches, up to about 1 GB while importing;
+      # they are rebuilt from the feeds if lost, nothing else is written. A new
+      # named volume takes over the ownership of /data in the image, which
+      # makes it writable for the unprivileged "node" user. A bind mount
+      # instead has to be writable for uid 1000.
+      - type: "volume"
+        source: "data"
+        target: "/data"
+
+volumes:
+  data:
