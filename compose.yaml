@@ -14,6 +14,8 @@ name: "netnou"
 
 services:
   netnou:
+    # "latest" is the newest release. A version such as "0.3" stays on that
+    # line of releases; "edge" follows the main branch, commit by commit.
     image: "ghcr.io/xiidoz/netnou:latest"
     build: "."
     restart: "unless-stopped"

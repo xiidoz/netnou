@@ -47,10 +47,19 @@ What the container looks like:
   uid 1000.
 - A health check asks `/api/status` once a minute. It reports "healthy" as
   soon as the server answers, also while the first import is still running.
-- The image is built for `linux/amd64` and `linux/arm64`. `latest` follows
-  the main branch; a release `v0.3.1` is also tagged `0.3.1` and `0.3`. Pin
-  one of those if you do not want every commit: below version 1.0 a new minor
-  version can change settings or the API, a new patch version does not.
+- The image is built for `linux/amd64` and `linux/arm64` and published under
+  these tags:
+
+  | Tag | What it is |
+  | --- | --- |
+  | `latest` | the newest release; what `compose.yaml` uses |
+  | `0.3.1` | exactly that release |
+  | `0.3` | the newest patch release of 0.3 |
+  | `edge` | the main branch, rebuilt with every commit; not a release |
+
+  Below version 1.0 a new minor version can change settings or the API, so
+  `latest` can bring such a change with an update; a tag like `0.3` cannot.
+  The [changelog](../CHANGELOG.md) marks these changes as breaking.
 
 Settings go into the `environment:` block (see
 [configuration.md](configuration.md)). Leave `HOST` unset in the container:
