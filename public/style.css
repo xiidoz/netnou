@@ -91,6 +91,8 @@ button { font: inherit; color: inherit; }
 }
 .maplibregl-ctrl-group button + button { border-top-color: var(--border); }
 .maplibregl-ctrl-attrib a { color: var(--accent); }
+/* the marker for a newer version, next to the running one */
+.maplibregl-ctrl-attrib a.update { font-weight: 650; white-space: nowrap; }
 .maplibregl-ctrl-bottom-right { bottom: var(--safe-bottom); right: var(--safe-right); }
 @media (prefers-color-scheme: dark) {
   /* their icons are dark drawings */

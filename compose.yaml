@@ -41,6 +41,9 @@ services:
       # Another map behind the vehicles: the address of any style for MapLibre.
       # The default is the "bright" style of OpenFreeMap.
       # MAP_STYLE_URL: "https://tiles.openfreemap.org/styles/positron"
+      # No daily question to GitHub whether there is a newer release, and no
+      # marker in the page when there is one.
+      # UPDATE_CHECK: "off"
       # Importing a timetable takes about 1.5 GB of memory for a minute or two
       # (measured for the default area). Node derives its heap limit from the
       # memory it sees; on a small host, or with a memory limit on the

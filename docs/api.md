@@ -74,7 +74,10 @@ the fetching of the realtime feed.
 
 ```json
 {
-  "version": "0.1.0",
+  "version": "0.2.0",
+  "commit": "479e29cd13b2afc6b2c447e6e7b452f4ccf1beda",
+  "homepage": "https://github.com/xiidoz/netnou",
+  "update": { "version": "0.3.0", "url": "https://github.com/xiidoz/netnou/releases/tag/v0.3.0" },
   "now": 1791148705,
   "timetable": {
     "state": "ready",
@@ -97,7 +100,10 @@ the fetching of the realtime feed.
 
 | Field | Type | Meaning |
 | --- | --- | --- |
-| `version` | string | version of Netnou |
+| `version` | string | what runs: the number of a release (`0.2.0`), `edge` for a build of the main branch between two releases, or a number with `+dev` for a checkout or an image built by hand |
+| `commit` | string or null | the commit an image was built from; `null` for a development build |
+| `homepage` | string | where the software comes from, as `package.json` says |
+| `update` | object or null | the latest release, if it is newer than what runs: its `version` and the `url` of its notes. `null` if there is none, none is known, or the check is switched off ([Version and updates](configuration.md#version-and-updates)) |
 | `now` | time | clock of the server |
 | `timetable.state` | string | `starting`, `loading`, `ready` or `error` |
 | `timetable.step` | string or null | as in the 503 answer; also set while a newer feed is imported in the background |

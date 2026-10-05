@@ -100,6 +100,12 @@ export function loadConfig(env = process.env) {
     return value;
   }
 
+  function onOff(name, fallback) {
+    const raw = text(name).toLowerCase();
+    if (raw !== '' && raw !== 'on' && raw !== 'off') throw invalid(name, '"on" or "off"');
+    return raw === '' ? fallback : raw === 'on';
+  }
+
   function box(name) {
     const parts = parseBox(text(name));
     const [south, west, north, east] = parts ?? [];
@@ -199,5 +205,8 @@ export function loadConfig(env = process.env) {
     realtimeIntervalMs: number('REALTIME_INTERVAL_SECONDS', 30, 10, 3600) * 1000,
     // Polling stops this long after the last browser request.
     realtimeIdleMs: number('REALTIME_IDLE_SECONDS', 120, 30, 86400) * 1000,
+
+    // Whether to ask once a day if there is a newer release (lib/update.js).
+    updateCheck: onOff('UPDATE_CHECK', true),
   };
 }

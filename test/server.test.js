@@ -47,7 +47,9 @@ const REALTIME = encodeFeed({
 
 // Every setting the server reads; none may leak in from the shell running the tests.
 const SETTINGS = ['PORT', 'HOST', 'DATA_DIR', 'AREA_FILE', 'BBOX', 'AREA_NAME', 'VIEW', 'TIMEZONE', 'MAP_STYLE_URL', 'MAP_ORIGINS', 'TILE_URL', 'TILE_ATTRIBUTION', 'DATA_ATTRIBUTION',
-  'OSM_PBF_URLS', 'OSM_MAX_AGE_DAYS', 'FEED_URL', 'FEED_CHECK_MINUTES', 'DOWNLOAD_TIMEOUT_MINUTES', 'REALTIME_URL', 'REALTIME_INTERVAL_SECONDS', 'REALTIME_IDLE_SECONDS'];
+  'OSM_PBF_URLS', 'OSM_MAX_AGE_DAYS', 'FEED_URL', 'FEED_CHECK_MINUTES', 'DOWNLOAD_TIMEOUT_MINUTES', 'REALTIME_URL', 'REALTIME_INTERVAL_SECONDS', 'REALTIME_IDLE_SECONDS', 'UPDATE_CHECK'];
+// What an image carries about its build, which a checkout does not have.
+const BUILD = ['NETNOU_COMMIT', 'NETNOU_RELEASE'];
 
 let dir;
 let upstream;
@@ -58,8 +60,9 @@ let port;
 
 function start(settings) {
   const env = { ...process.env };
-  for (const name of [...SETTINGS, 'NODE_TEST_CONTEXT']) delete env[name];
-  const proc = spawn(process.execPath, [path.join('server', 'index.js')], { cwd: root, env: { ...env, ...settings }, stdio: ['ignore', 'pipe', 'pipe'] });
+  for (const name of [...SETTINGS, ...BUILD, 'NODE_TEST_CONTEXT']) delete env[name];
+  // (no test asks GitHub for the latest release)
+  const proc = spawn(process.execPath, [path.join('server', 'index.js')], { cwd: root, env: { ...env, UPDATE_CHECK: 'off', ...settings }, stdio: ['ignore', 'pipe', 'pipe'] });
   proc.stdout.setEncoding('utf8');
   proc.stderr.setEncoding('utf8');
   return proc;
@@ -186,7 +189,12 @@ test('/api/area', async () => {
 test('/api/status', async () => {
   const { status, json } = await get('/api/status');
   assert.equal(status, 200);
-  assert.equal(json.version, JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8')).version);
+  // a checkout is a development build of the version in package.json
+  const pkg = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
+  assert.equal(json.version, `${pkg.version}+dev`);
+  assert.equal(json.commit, null);
+  assert.equal(json.homepage, pkg.homepage.replace(/#.*$/, ''));
+  assert.equal(json.update, null);
   assert.ok(Math.abs(json.now - Date.now() / 1000) < 5);
   const { checkedAt, importedAt, ...timetable } = json.timetable;
   assert.deepEqual(timetable, {

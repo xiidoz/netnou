@@ -215,6 +215,12 @@ changelog by hand.
    is pushed as `latest`, `X.Y.Z` and `X.Y`. (Every commit on `main` is
    pushed as `edge`, released or not.)
 
+The workflow tells each image what it is, through the build arguments
+`COMMIT` and `RELEASE` of the `Dockerfile`: the image of a release reports
+its number as its version, any other reports `edge` and its commit. Without
+them, as in a checkout, the server reports the number in `package.json` with
+`+dev` (`describeBuild` in `server/lib/update.js`).
+
 Netnou stays at 0.x while much is still changing: features and breaking
 changes raise the minor version, fixes the patch version
 (`bump-minor-pre-major` in `release-please-config.json`). Nothing moves it to
