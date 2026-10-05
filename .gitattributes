@@ -2,7 +2,7 @@
 * text=auto eol=lf
 *.png binary
 
-# Vendored files stay byte-identical to upstream (Leaflet ships CRLF files).
+# Vendored files stay byte-identical to upstream.
 public/vendor/** -text linguist-vendored
 
 # Written by tools/build-vgn-area.mjs, one very long line.

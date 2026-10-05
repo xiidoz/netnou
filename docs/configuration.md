@@ -8,7 +8,7 @@ gtfs.de feeds on port 8080.
 - [Choosing an area](#choosing-an-area)
 - [Example: another region in Germany](#example-another-region-in-germany)
 - [Realtime polling and traffic](#realtime-polling-and-traffic)
-- [Map tiles](#map-tiles)
+- [The map](#the-map)
 - [Attribution](#attribution)
 - [Other feeds and other countries](#other-feeds-and-other-countries)
 
@@ -53,8 +53,10 @@ services:
 | `OSM_PBF_URLS` | five Geofabrik extracts of Bavaria; none for a custom area | comma-separated http(s) URLs | OpenStreetMap extracts (`.osm.pbf`) that together cover the area; empty means no route geometry |
 | `OSM_MAX_AGE_DAYS` | `30` | 1–3650 | how long the OpenStreetMap data is used before it is downloaded again |
 | `DOWNLOAD_TIMEOUT_MINUTES` | `30` | 1–1440 | limit for one download of the timetable or of an extract |
-| `TILE_URL` | `https://tile.openstreetmap.org/{z}/{x}/{y}.png` | http(s) URL template with `{z}`, `{x}`, `{y}` | where browsers load the map tiles from, see [Map tiles](#map-tiles) |
-| `TILE_ATTRIBUTION` | `© OpenStreetMap` with a link | HTML | credit shown on the map for the tiles |
+| `MAP_STYLE_URL` | `https://tiles.openfreemap.org/styles/bright` | http(s) URL | the style of the map behind the vehicles, see [The map](#the-map) |
+| `MAP_ORIGINS` | – | comma-separated http(s) URLs | further servers the map is loaded from, if the style does not take everything from its own |
+| `TILE_URL` | – | http(s) URL template with `{z}`, `{x}`, `{y}` | raster tiles as the map, instead of `MAP_STYLE_URL` |
+| `TILE_ATTRIBUTION` | `© OpenStreetMap` with a link if `TILE_URL` is set, otherwise nothing | HTML | credit shown for the map, besides what a style names itself |
 | `DATA_ATTRIBUTION` | `GTFS.DE / DELFI e.V. (CC BY-SA 4.0)` with links | HTML | credit shown on the map for the timetable and realtime data |
 
 Rules that apply to all of them:
@@ -153,44 +155,96 @@ The timetable itself (about 300 MB) is only downloaded when the provider
 publishes a new version, which gtfs.de does once a day. The check every
 `FEED_CHECK_MINUTES` is a single `HEAD` request.
 
-## Map tiles
+## The map
 
-The map background is loaded by the visitor's browser straight from the tile
-server in `TILE_URL`. The default is the server of the OpenStreetMap
-project, which is run on donated resources and whose
-[tile usage policy](https://operations.osmfoundation.org/policies/tiles/)
-allows light use only. For an instance with real traffic, switch to a
-commercial provider or your own tile server:
+The map behind the vehicles is drawn in the visitor's browser, by
+[MapLibre GL JS](https://maplibre.org) from vector tiles. What it shows and
+how is laid down in a *style*: a JSON document that names the tiles, the
+fonts and the icons and says how to draw them. `MAP_STYLE_URL` is the address
+of that document. The browser loads it, and everything it names, straight
+from the servers concerned.
+
+The default is the `bright` style of [OpenFreeMap](https://openfreemap.org).
+OpenFreeMap is financed by donations, needs no key or registration and sets
+no limit on the number of requests, so it also suits an instance with many
+visitors. It promises no availability. Its other styles are `positron`,
+`liberty`, `dark` and `fiord`:
+
+```sh
+MAP_STYLE_URL=https://tiles.openfreemap.org/styles/positron
+```
+
+Any [style for MapLibre](https://maplibre.org/maplibre-style-spec/) can be
+used, for example one of a commercial provider or of your own tile server.
+What to know when choosing one:
+
+- **Other servers.** The page's Content-Security-Policy lets the map be
+  loaded from the server of `MAP_STYLE_URL` and from nowhere else. A style
+  that takes its tiles, fonts or icons from other servers needs them listed
+  in `MAP_ORIGINS`; only scheme, host and port of each URL count. What the
+  policy blocks is reported in the console of the browser.
+
+  ```sh
+  MAP_STYLE_URL=https://maps.example.org/styles/day.json
+  MAP_ORIGINS=https://tiles.example.org,https://fonts.example.org
+  ```
+
+- **A light style.** For visitors whose device is set to a dark theme the
+  page turns the lightness of the map round, and for all others it tones the
+  colours down a little so that the vehicles stand out. A style that is dark
+  already would come out light in the dark theme.
+- **Names.** Styles for tiles in the OpenMapTiles scheme, which OpenFreeMap
+  and most other providers use, prefer the English name of a place. The page
+  replaces it by the name in the visitor's language where OpenStreetMap knows
+  one, and by the local name otherwise. Other styles are shown as they are.
+- **A key in the URL** is sent to every visitor's browser, like the style
+  itself. Providers let you restrict such a key to your domain.
+
+Browsers need WebGL 2 for the map, which all current ones have. A visitor
+without it gets a notice instead of the map.
+
+### Raster tiles
+
+A tile server that delivers images can be used as well. `TILE_URL` then takes
+the place of `MAP_STYLE_URL`; the two cannot be combined.
 
 ```sh
 TILE_URL=https://{s}.tiles.example.org/{z}/{x}/{y}.png
 TILE_ATTRIBUTION='© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>, tiles: Example'
 ```
 
-`{z}`, `{x}` and `{y}` are required. `{s}`, Leaflet's placeholder for a
-subdomain, is allowed in the first label of the host name only. The page's
-Content-Security-Policy follows the setting: images may be loaded from the
-origin of `TILE_URL` and from nowhere else.
+`{z}`, `{x}` and `{y}` are required. `{s}` stands for the subdomains `a`, `b`
+and `c` and is allowed in the first label of the host name only; `{r}`
+becomes `@2x` on screens with a high pixel density and nothing on others.
+The servers of the OpenStreetMap project (`tile.openstreetmap.org`) are run
+on donated resources and their
+[usage policy](https://operations.osmfoundation.org/policies/tiles/) allows
+light use only, so they are no choice for an instance with real traffic.
 
 ## Attribution
 
-`TILE_ATTRIBUTION` and `DATA_ATTRIBUTION` are shown in the corner of the map,
-in this form (the words in between are in the visitor's language):
+The credits are shown in the corner of the map, on a narrow screen behind an
+ⓘ button. There are up to three of them:
 
-```text
-<TILE_ATTRIBUTION> · Timetable and realtime data, processed: <DATA_ATTRIBUTION>
-```
+- what the style names as the sources of its tiles, for the default style
+  OpenFreeMap, OpenMapTiles and OpenStreetMap;
+- `DATA_ATTRIBUTION`, after the words "Timetable and realtime data,
+  processed:" in the visitor's language;
+- `TILE_ATTRIBUTION`. Raster tiles cannot name their source themselves, so
+  with `TILE_URL` it is needed and defaults to OpenStreetMap. With a style it
+  is empty unless the style lacks a credit that its data requires.
 
-Both values are inserted into the page **as HTML**, so that they can contain
-links. Only put text there that you control. If you change the feeds or the
-tile provider, change the credit with them; the licences of the default
-sources require it to be visible (see
+Both settings are inserted into the page **as HTML**, so that they can
+contain links; MapLibre keeps links and simple formatting and removes the
+rest. Only put text there that you control. If you change the feeds or the
+map, change the credit with them; the licences of the default sources
+require it to be visible (see
 [THIRD-PARTY-NOTICES.md](../THIRD-PARTY-NOTICES.md)).
 
 ## Other feeds and other countries
 
-`FEED_URL`, `REALTIME_URL`, `TIMEZONE`, `OSM_PBF_URLS`, `TILE_URL` and the
-attribution settings are enough to point Netnou at a mirror of the gtfs.de
+`FEED_URL`, `REALTIME_URL`, `TIMEZONE`, `OSM_PBF_URLS` and the attribution
+settings are enough to point Netnou at a mirror of the gtfs.de
 feeds or at their paid variants. A feed URL may contain an access key in its
 query string: status texts that are publicly visible show URLs without query
 string and credentials. A key in the path would be shown.

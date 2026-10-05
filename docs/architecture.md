@@ -32,7 +32,7 @@ flowchart LR
   end
   realtime[(GTFS-Realtime<br>feed)] --> rt
   api --> page[page in the browser]
-  tiles[(tile server)] --> page
+  tiles[(map: style and<br>vector tiles)] --> page
 ```
 
 One Node.js process does everything. A worker thread cuts the nationwide
@@ -95,7 +95,7 @@ Page (`public/`):
 | `app.js` | map, polling, animation, drawing on a canvas, detail panel |
 | `i18n.js`, `locales/` | texts in the visitor's language, see [translating.md](translating.md) |
 | `sw.js`, `manifest.webmanifest`, `icons/` | installable app and offline start |
-| `vendor/leaflet/` | the map library, vendored, see [its README](../public/vendor/leaflet/README.md) |
+| `vendor/maplibre-gl/` | the map library, vendored, see [its README](../public/vendor/maplibre-gl/README.md) |
 
 `tools/` holds two scripts that are run by hand: `build-vgn-area.mjs`
 regenerates the default area, `build-icons.mjs` renders the app icons from
@@ -246,11 +246,15 @@ otherwise a server would load a file written by older code:
 
 ## The page
 
-- **Map.** Leaflet draws the tiles; everything else is drawn by `app.js` on
-  one canvas on top: stations, the route of the selected trip, vehicles.
+- **Map.** MapLibre GL JS draws the map with WebGL, from the vector tiles of
+  the configured style or from raster tiles. Everything else is drawn by
+  `app.js` on one canvas lying on top: the veil outside the area, stations,
+  the route of the selected trip, vehicles. The map is never rotated or
+  tilted.
 - **Polling.** Every 10 seconds the page asks for the vehicles in the visible
-  section plus a margin, in full detail from zoom level 13 and in the reduced
-  form below. Moving the map beyond what is loaded asks again at once. A tab
+  section plus a margin, in full detail from zoom level 12 and in the reduced
+  form below. (Zoom levels are those of MapLibre, one less than the number in
+  the address of a raster tile.) Moving the map beyond what is loaded asks again at once. A tab
   in the background stops asking, which lets the server pause the realtime
   feed.
 - **Animation.** Vehicles are placed along their knots against the server's
@@ -260,15 +264,17 @@ otherwise a server would load a file written by older code:
 - **Offline start.** The service worker fetches from the network first and
   falls back to its cache, so an update shows up immediately and the
   installed app can still start without a connection (and then says that it
-  needs one). API answers and map tiles are never cached.
+  needs one). API answers and the map are never cached.
 - **Texts** come from locale files through `t()`; nothing a visitor reads is
   written out in `app.js` or sent by the server, apart from data such as
   names of stops and notes of the feed. See [translating.md](translating.md).
-- **Security.** The Content-Security-Policy allows scripts, styles and
-  connections from the page's own origin only, and images additionally from
-  the tile server. There are no inline scripts or styles.
-- **Browsers.** There is no build step, so the page runs as written: roughly
-  Chrome and Edge 87, Firefox 79, Safari 14.1 and newer.
+- **Security.** The Content-Security-Policy allows scripts, styles, workers
+  and connections from the page's own origin only. The one exception is the
+  map, which may be fetched from the server of its style or tiles and from
+  those in `MAP_ORIGINS`. There are no inline scripts or styles.
+- **Browsers.** There is no build step, so the page runs as written. The map
+  library sets the floor: it needs WebGL 2 and the JavaScript of 2022,
+  roughly Chrome and Edge 94, Firefox 114, Safari 16.4 and newer.
 - **Accessibility.** Filters, the language picker, the detail panel and its
   lists are ordinary controls and work with the keyboard. Vehicles and
   stations exist only on the canvas and can be selected with a pointer only.

@@ -15,6 +15,9 @@ export default {
   'map.label': 'Map with the current positions of the vehicles',
   'map.zoomIn': 'Zoom in',
   'map.zoomOut': 'Zoom out',
+  // the button that folds the credits in the corner of the map away, on narrow screens
+  'map.credits': 'Show or hide the credits',
+  'map.unsupported': 'This browser cannot draw the map. It needs WebGL 2, which is switched off or not available here.',
   // followed by the names of those who publish the data (DATA_ATTRIBUTION of the server)
   'attribution.data': 'Timetable and realtime data, processed:',
 

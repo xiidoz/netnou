@@ -27,7 +27,8 @@
   --veil: rgb(226 229 233 / 0.66);
   --veil-line: rgb(11 92 173 / 0.55);
 
-  --tile-filter: saturate(0.5) brightness(1.04);
+  /* The map is toned down so that the vehicles stand out. */
+  --map-filter: saturate(0.5) brightness(1.04);
   --gap: 12px;
   /* Installed as an app the page reaches under notches and the home indicator. */
   --safe-top: env(safe-area-inset-top, 0px);
@@ -48,7 +49,8 @@
     --mode-regional: #7d8b99;
     --veil: rgb(10 11 14 / 0.6);
     --veil-line: rgb(111 177 242 / 0.6);
-    --tile-filter: invert(1) hue-rotate(180deg) saturate(0.45) brightness(0.92) contrast(0.92);
+    /* Light becomes dark and the hues stay: the map may be any style or set of tiles, and few come in a dark version. */
+    --map-filter: invert(1) hue-rotate(180deg) saturate(0.45) brightness(0.92) contrast(0.92);
   }
 }
 
@@ -75,28 +77,25 @@ button { font: inherit; color: inherit; }
   background: var(--bg-subtle);
 }
 
-.leaflet-tile-pane { filter: var(--tile-filter); }
-.leaflet-container { font: inherit; background: var(--bg-subtle); }
-.leaflet-container.clickable { cursor: pointer; }
-.leaflet-control-attribution,
-.leaflet-bar a {
-  background: var(--bg) !important;
-  color: var(--text-muted) !important;
-  border-color: var(--border) !important;
+/* what MapLibre draws; app.js lays its own canvas over it */
+.maplibregl-canvas { filter: var(--map-filter); }
+.overlay-canvas { position: absolute; top: 0; left: 0; pointer-events: none; }
+.maplibregl-map { font-family: inherit; }
+.maplibregl-map.clickable .maplibregl-canvas-container { cursor: pointer; }
+
+/* the controls of MapLibre in the colours of the cards */
+.maplibregl-ctrl-group,
+.maplibregl-ctrl.maplibregl-ctrl-attrib {
+  background: var(--bg);
+  color: var(--text-muted);
 }
-.leaflet-control-attribution a { color: var(--accent) !important; }
-.overlay-canvas { pointer-events: none; }
-/* between the map tiles (200) and the vehicles (400) */
-.leaflet-veil-pane { z-index: 300; }
-.area-veil {
-  fill: var(--veil);
-  fill-opacity: 1;
-  stroke: var(--veil-line);
-  stroke-width: 1.5;
-  stroke-opacity: 1;
+.maplibregl-ctrl-group button + button { border-top-color: var(--border); }
+.maplibregl-ctrl-attrib a { color: var(--accent); }
+.maplibregl-ctrl-bottom-right { bottom: var(--safe-bottom); right: var(--safe-right); }
+@media (prefers-color-scheme: dark) {
+  /* their icons are dark drawings */
+  .maplibregl-ctrl-icon, .maplibregl-ctrl-attrib-button { filter: invert(1); }
 }
-.leaflet-bottom { bottom: var(--safe-bottom); }
-.leaflet-right { right: var(--safe-right); }
 
 /* ---------- cards ---------- */
 

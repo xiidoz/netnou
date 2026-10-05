@@ -7,6 +7,8 @@ export default {
   'map.label': 'Karte mit den aktuellen Positionen der Fahrzeuge',
   'map.zoomIn': 'Vergrößern',
   'map.zoomOut': 'Verkleinern',
+  'map.credits': 'Quellenangaben ein- oder ausblenden',
+  'map.unsupported': 'Dieser Browser kann die Karte nicht darstellen. Sie braucht WebGL 2, das hier abgeschaltet oder nicht verfügbar ist.',
   'attribution.data': 'Fahrplan- und Echtzeitdaten, aufbereitet:',
 
   'status.connecting': 'Verbinde …',

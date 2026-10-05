@@ -38,10 +38,9 @@ services:
       # Seconds between two fetches of the realtime feed (about 20 MB each)
       # while somebody is looking at the map.
       # REALTIME_INTERVAL_SECONDS: "30"
-      # Map tiles from another provider; the servers of openstreetmap.org are
-      # meant for light use only.
-      # TILE_URL: "https://tiles.example.org/{z}/{x}/{y}.png"
-      # TILE_ATTRIBUTION: "© <a href=\"https://www.openstreetmap.org/copyright\">OpenStreetMap</a>, tiles: Example"
+      # Another map behind the vehicles: the address of any style for MapLibre.
+      # The default is the "bright" style of OpenFreeMap.
+      # MAP_STYLE_URL: "https://tiles.openfreemap.org/styles/positron"
       # Importing a timetable takes about 1.5 GB of memory for a minute or two
       # (measured for the default area). Node derives its heap limit from the
       # memory it sees; on a small host, or with a memory limit on the

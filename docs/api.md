@@ -129,9 +129,10 @@ server runs and is available while the timetable is still loading.
   "view": [49.376, 10.916, 49.604, 11.204],
   "outline": [[[49.22, 11.9362], [49.2145, 11.9445], …]],
   "timeZone": "Europe/Berlin",
-  "tileUrl": "https://tile.openstreetmap.org/{z}/{x}/{y}.png",
+  "styleUrl": "https://tiles.openfreemap.org/styles/bright",
+  "tileUrl": null,
   "attribution": {
-    "map": "© <a href=\"https://www.openstreetmap.org/copyright\">OpenStreetMap</a>",
+    "map": "",
     "data": "<a href=\"https://gtfs.de\">GTFS.DE</a> / <a href=\"https://www.delfi.de\">DELFI e.V.</a> (<a href=\"https://creativecommons.org/licenses/by-sa/4.0/\">CC BY-SA 4.0</a>)"
   }
 }
@@ -144,8 +145,9 @@ server runs and is available while the timetable is still loading.
 | `view` | box | map section to show first |
 | `outline` | array of rings | the edge of the area, each ring an array of `[latitude, longitude]`. Note the order: the GeoJSON file the area comes from has longitude first |
 | `timeZone` | string | IANA name of the zone all times of day are meant in |
-| `tileUrl` | string | URL template of the map tiles, with `{z}`, `{x}`, `{y}` and possibly `{s}` |
-| `attribution.map`, `attribution.data` | string (HTML) | credits for the map tiles and for the timetable data, to be shown with the map |
+| `styleUrl` | string or `null` | URL of the [MapLibre style](https://maplibre.org/maplibre-style-spec/) of the map behind the vehicles; `null` if the instance uses raster tiles |
+| `tileUrl` | string or `null` | URL template of raster tiles, with `{z}`, `{x}`, `{y}` and possibly `{s}` and `{r}`; `null` if the instance uses a style |
+| `attribution.map`, `attribution.data` | string (HTML) | credits for the map and for the timetable data, to be shown with the map. `map` is empty where the style names its sources itself |
 
 ## `GET /api/vehicles`
 

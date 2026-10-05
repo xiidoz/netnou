@@ -6,14 +6,18 @@ running instance fetches and passes on.
 
 ## In the repository
 
-### Leaflet
+### MapLibre GL JS
 
-- Where: `public/vendor/leaflet/` (`leaflet.js`, `leaflet.css`), version
-  1.9.4, unmodified.
-- Licence: BSD 2-Clause. Copyright (c) 2010-2023, Volodymyr Agafonkin;
-  copyright (c) 2010-2011, CloudMade. The full text is in
-  [public/vendor/leaflet/LICENSE](public/vendor/leaflet/LICENSE).
-- Source: <https://leafletjs.com>
+- Where: `public/vendor/maplibre-gl/` (`maplibre-gl.mjs`,
+  `maplibre-gl-shared.mjs`, `maplibre-gl-worker.mjs`, `maplibre-gl.css`),
+  version 6.12.0, unmodified.
+- Licence: BSD 3-Clause. Copyright (c) 2023, MapLibre contributors. It
+  contains code from mapbox-gl-js 1.13 and earlier (BSD 3-Clause, copyright
+  (c) 2020, Mapbox), from glfx.js (MIT, copyright (C) 2011 by Evan Wallace)
+  and a portion of d3-color (BSD 3-Clause, copyright 2010-2016 Mike Bostock).
+  The full texts are in
+  [public/vendor/maplibre-gl/LICENSE.txt](public/vendor/maplibre-gl/LICENSE.txt).
+- Source: <https://github.com/maplibre/maplibre-gl-js>
 
 ### Outline of the default area
 
@@ -29,8 +33,9 @@ running instance fetches and passes on.
 
 ### Screenshot
 
-`docs/screenshot.png` shows map tiles © OpenStreetMap contributors and
-timetable data from gtfs.de / DELFI e.V., credited in the image.
+`docs/screenshot.png` shows a map of OpenFreeMap (© OpenMapTiles, data from
+OpenStreetMap) and timetable data from gtfs.de / DELFI e.V., credited in the
+image.
 
 ## Data fetched at run time
 
@@ -44,24 +49,27 @@ terms before you run a public instance.
 | --- | --- | --- |
 | Timetable (GTFS) and realtime data (GTFS-Realtime) | [gtfs.de](https://gtfs.de), provided by DELFI e.V. | [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/) |
 | Roads and tracks for the route geometry | OpenStreetMap extracts from [Geofabrik](https://download.geofabrik.de/) | © OpenStreetMap contributors, [ODbL 1.0](https://opendatacommons.org/licenses/odbl/1-0/) |
-| Map tiles, loaded by the visitor's browser | `tile.openstreetmap.org` | © OpenStreetMap contributors; [tile usage policy](https://operations.osmfoundation.org/policies/tiles/) of the OpenStreetMap Foundation |
+| The map behind the vehicles (style, vector tiles, fonts and icons), loaded by the visitor's browser | [OpenFreeMap](https://openfreemap.org) | tiles in the [OpenMapTiles](https://www.openmaptiles.org/) scheme, © OpenMapTiles, data © OpenStreetMap contributors ([ODbL 1.0](https://opendatacommons.org/licenses/odbl/1-0/)); [terms of service](https://openfreemap.org/tos/) of OpenFreeMap |
 
 What follows for an operator:
 
-- **Attribution.** The page credits OpenStreetMap and the provider of the
-  timetable data in the corner of the map, with links and the name of the
-  licence, and says that the timetable data was processed. Keep that credit
-  visible. If you change the sources, change the credit with `TILE_ATTRIBUTION`
-  and `DATA_ATTRIBUTION`
+- **Attribution.** The page credits the sources of the map (OpenFreeMap,
+  OpenMapTiles and OpenStreetMap, as named by the style) and the provider of
+  the timetable data in the corner of the map, with links and the name of
+  the licence, and says that the timetable data was processed. Keep that
+  credit visible. If you change the sources, see to it that the credit
+  changes with them: a style brings its own, `TILE_ATTRIBUTION` and
+  `DATA_ATTRIBUTION` set the rest
   (see [docs/configuration.md](docs/configuration.md#attribution)).
 - **Derived data.** What an instance publishes through its API (vehicle
   positions, trips, departures, route geometry) and keeps in its data
   directory is derived from these sources. It stays under their terms,
   including the share-alike conditions of CC BY-SA and the ODbL, and is not
   placed under the MIT License by passing through Netnou.
-- **Tile servers.** The default tile server is run by the OpenStreetMap
-  Foundation on donated resources and is meant for light use. For an instance
-  with real traffic, use another provider (`TILE_URL`).
+- **The map.** OpenFreeMap is financed by donations. Its terms allow public
+  and commercial use and set no limit on requests, but it is provided as it
+  is and may change or end without notice. Another map is a matter of
+  `MAP_STYLE_URL` (see [docs/configuration.md](docs/configuration.md#the-map)).
 
 ## Development tools
 

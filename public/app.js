@@ -9,6 +9,7 @@
 // lines, stops and operators, and the notes of the feed.
 
 import { formatNumber, formatTime, languagePicker, loadLanguage, setTimeZone, t, translatePage } from './i18n.js';
+import { AttributionControl, MapLibreMap, NavigationControl } from './vendor/maplibre-gl/maplibre-gl.mjs';
 
 const APP_NAME = 'Netnou';
 
@@ -32,11 +33,16 @@ const JUMP_DEG = 0.02; // a marker further off than this (1–2 km) jumps instea
 // Share of the map section loaded beyond each of its edges.
 const VEHICLE_MARGIN = 0.25;
 const STATION_MARGIN = 0.5;
+// Zoom levels are those of MapLibre, one less than the numbers in the address
+// of a raster tile: at zoom 0 the world is 512 px wide, and any value in
+// between two levels occurs.
+const MIN_ZOOM = 5;
+const MAX_ZOOM = 17;
 // From LABEL_ZOOM vehicles carry their line and follow their route.
-const LABEL_ZOOM = 13;
+const LABEL_ZOOM = 12;
 // Stations appear from STATION_ZOOM (rail only) and from ALL_STATIONS_ZOOM (all).
-const STATION_ZOOM = 13;
-const ALL_STATIONS_ZOOM = 15;
+const STATION_ZOOM = 12;
+const ALL_STATIONS_ZOOM = 14;
 // Delay classes in seconds; the legend is made from them.
 const DELAY_MINOR_S = 120;
 const DELAY_MAJOR_S = 300;
@@ -82,6 +88,10 @@ function saveSetting(key, value) {
   }
 }
 
+// The texts come first: the map takes those of its controls when it is created.
+const language = await loadLanguage();
+translatePage();
+
 // ---------- state ----------
 
 const state = {
@@ -96,6 +106,7 @@ const state = {
   scheduleOnly: 0, // answers without realtime data in a row
   online: false, // last poll delivered vehicles
   areaKnown: false, // api/area has answered: the map shows the area
+  outline: [], // the edge of the area: rings of [lat, lon]
   enabled: new Set([...MODES, 'other']),
   colorBy: loadSetting('colorBy', 'mode') === 'delay' ? 'delay' : 'mode',
   selection: null, // { type: 'trip' | 'station', id, data }
@@ -127,7 +138,7 @@ let colors = {};
 function readColors() {
   const style = getComputedStyle(document.documentElement);
   const get = (name) => style.getPropertyValue(name).trim();
-  colors = { mode: {}, delay: {}, text: get('--text'), bg: get('--bg'), accent: get('--accent'), muted: get('--text-muted') };
+  colors = { mode: {}, delay: {}, text: get('--text'), bg: get('--bg'), accent: get('--accent'), muted: get('--text-muted'), veil: get('--veil'), veilLine: get('--veil-line') };
   for (const mode of DRAW_ORDER) colors.mode[mode] = get(`--mode-${mode}`);
   for (const cls of ['ok', 'minor', 'major', 'severe', 'none']) colors.delay[cls] = get(`--delay-${cls}`);
 }
@@ -139,54 +150,100 @@ matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
 
 // ---------- map ----------
 
-const map = L.map('map', { zoomControl: false, minZoom: 6, maxZoom: 18 });
-map.attributionControl.setPrefix('<a href="https://leafletjs.com">Leaflet</a>');
-// Leaflet needs some view before anything can be drawn. Which part of the
-// world to show, and with which map tiles, the server says (see loadArea);
-// until then the map is empty.
-map.setView([0, 0], map.getMinZoom());
+/**
+ * A style for MapLibre out of a URL template for raster tiles. Of the
+ * placeholders besides {z}, {x} and {y} it knows {s}, the subdomains a to c,
+ * and {r}, "@2x" on a dense screen.
+ */
+function rasterStyle(template) {
+  const url = template.replace('{r}', window.devicePixelRatio > 1 ? '@2x' : '');
+  const tiles = url.includes('{s}') ? ['a', 'b', 'c'].map((subdomain) => url.replace('{s}', subdomain)) : [url];
+  return { version: 8, sources: { tiles: { type: 'raster', tiles, tileSize: 256, maxzoom: 19 } }, layers: [{ id: 'tiles', type: 'raster', source: 'tiles' }] };
+}
+
+/**
+ * A style with the names on the map in the visitor's language. Styles for
+ * tiles in the OpenMapTiles scheme, which most vector tiles follow, ask for
+ * the English name of a place (name_en) before its local one; here the name
+ * in the visitor's language takes the place of the English one. A style that
+ * names places in another way stays as it is.
+ */
+function localizedStyle(style) {
+  if (language === 'en') return style;
+  const own = ['coalesce', ['get', `name:${language}`], ['get', 'name']];
+  const rewrite = (value) => (!Array.isArray(value) ? value : value[0] === 'get' && value[1] === 'name_en' ? own : value.map(rewrite));
+  const localized = (layer) => ({ ...layer, layout: { ...layer.layout, 'text-field': rewrite(layer.layout['text-field']) } });
+  return { ...style, layers: style.layers.map((layer) => (layer.layout?.['text-field'] ? localized(layer) : layer)) };
+}
+
+let map;
+try {
+  map = new MapLibreMap({
+    container: 'map',
+    // Which part of the world to show, and with which map, the server says
+    // (see loadArea); until then the map is empty.
+    style: { version: 8, sources: {}, layers: [] },
+    center: [0, 0],
+    zoom: MIN_ZOOM,
+    minZoom: MIN_ZOOM,
+    maxZoom: MAX_ZOOM,
+    // North stays up and the view flat.
+    dragRotate: false,
+    touchPitch: false,
+    maxPitch: 0,
+    // (added in loadArea, with the credits for the data)
+    attributionControl: false,
+    locale: {
+      'Map.Title': t('map.label'),
+      'NavigationControl.ZoomIn': t('map.zoomIn'),
+      'NavigationControl.ZoomOut': t('map.zoomOut'),
+      'AttributionControl.ToggleAttribution': t('map.credits'),
+    },
+  });
+} catch (err) {
+  // MapLibre draws with WebGL 2, which an old browser lacks and a locked-down
+  // one refuses. Without a map there is nothing to show.
+  showBanner(t('map.unsupported'));
+  throw err;
+}
+map.touchZoomRotate.disableRotation();
+map.keyboard.disableRotation();
 
 // The area is far larger than a screen at street level, so only what is in
 // view (plus a margin, so that small pans need no reload) is requested.
 // Zoomed out, where hundreds of vehicles are dots, a reduced form without
 // route geometry is enough.
-const boxAround = (bounds) => [bounds.getSouth(), bounds.getWest(), bounds.getNorth(), bounds.getEast()];
+/** [south, west, north, east] of a map section, widened on every side by a share of its height and width. */
+function boxAround(bounds, margin) {
+  const lat = (bounds.getNorth() - bounds.getSouth()) * margin;
+  const lon = (bounds.getEast() - bounds.getWest()) * margin;
+  return [bounds.getSouth() - lat, bounds.getWest() - lon, bounds.getNorth() + lat, bounds.getEast() + lon];
+}
 const boxQuery = (box) => box.map((v) => v.toFixed(4)).join(',');
 const boxCovers = (box, bounds) => box[0] <= bounds.getSouth() && box[1] <= bounds.getWest() && box[2] >= bounds.getNorth() && box[3] >= bounds.getEast();
 const detailWanted = () => (map.getZoom() >= LABEL_ZOOM ? 'full' : 'lite');
 
-const canvas = L.DomUtil.create('canvas', 'overlay-canvas leaflet-zoom-hide', map.getPane('overlayPane'));
+// All that is Netnou's own is drawn on one canvas lying on the map. The mouse
+// and the fingers go through it to the map (see .overlay-canvas in style.css).
+const canvas = el('canvas', { class: 'overlay-canvas' });
+map.getCanvasContainer().append(canvas);
 const ctx = canvas.getContext('2d');
-let viewSize = map.getSize();
+let viewSize = { x: 0, y: 0 };
 
 function resizeCanvas() {
   const dpr = window.devicePixelRatio || 1;
-  viewSize = map.getSize();
+  const container = map.getContainer();
+  viewSize = { x: container.clientWidth, y: container.clientHeight };
   canvas.width = Math.round(viewSize.x * dpr);
   canvas.height = Math.round(viewSize.y * dpr);
   canvas.style.width = `${viewSize.x}px`;
   canvas.style.height = `${viewSize.y}px`;
-  placeCanvas();
-}
-
-// The overlay pane moves with the map; keep the canvas glued to the viewport.
-function placeCanvas() {
-  L.DomUtil.setPosition(canvas, map.containerPointToLayerPoint([0, 0]));
   draw();
 }
 
-map.on('move zoomend', placeCanvas);
+// The map moves frame by frame, also while it zooms, and the canvas with it.
+map.on('move', () => draw());
 map.on('resize', resizeCanvas);
-
-// Greys out everything outside the area, where vehicles are only followed
-// roughly: one polygon covering the surroundings, with the area as its hole.
-function showArea(area) {
-  const [south, west, north, east] = area.bbox;
-  const surroundings = [[south - 30, west - 60], [south - 30, east + 60], [north + 30, east + 60], [north + 30, west - 60]];
-  map.createPane('veil');
-  L.polygon([surroundings, ...area.outline], { pane: 'veil', className: 'area-veil', interactive: false, smoothFactor: 1.5 }).addTo(map);
-  $('area-hint').hidden = false;
-}
 
 // ---------- vehicle positions ----------
 
@@ -253,18 +310,41 @@ function draw() {
   ctx.clearRect(0, 0, viewSize.x, viewSize.y);
 
   const zoom = map.getZoom();
-  const origin = map.getPixelBounds().min;
   const project = (lat, lon) => {
-    const p = map.project([lat, lon], zoom);
-    return [p.x - origin.x, p.y - origin.y];
+    const point = map.project([lon, lat]);
+    return [point.x, point.y];
   };
   // (with a margin: a marker whose centre is just outside still reaches in)
   const onScreen = (x, y) => x > -30 && y > -30 && x < viewSize.x + 30 && y < viewSize.y + 30;
   const hits = [];
   const selection = state.selection;
 
+  // Everything outside the area, where vehicles are only followed roughly, is
+  // greyed out: the whole view with the area as its hole. On this canvas and
+  // not as a layer of the map, whose colours the dark theme turns round (see
+  // --map-filter in style.css).
+  if (state.outline.length) {
+    const edge = new Path2D();
+    for (const ring of state.outline) {
+      for (let i = 0; i < ring.length; i++) {
+        const [x, y] = project(ring[i][0], ring[i][1]);
+        if (i) edge.lineTo(x, y);
+        else edge.moveTo(x, y);
+      }
+      edge.closePath();
+    }
+    const veil = new Path2D(edge);
+    veil.rect(0, 0, viewSize.x, viewSize.y);
+    ctx.fillStyle = colors.veil;
+    ctx.fill(veil, 'evenodd');
+    ctx.strokeStyle = colors.veilLine;
+    ctx.lineWidth = 1.5;
+    ctx.lineJoin = 'round';
+    ctx.stroke(edge);
+  }
+
   // stations
-  const stationRadius = zoom >= 16 ? 4 : 3;
+  const stationRadius = zoom >= 15 ? 4 : 3;
   ctx.fillStyle = colors.bg;
   ctx.strokeStyle = colors.muted;
   ctx.lineWidth = 1.5;
@@ -307,7 +387,7 @@ function draw() {
     ctx.lineWidth = 4;
     ctx.stroke();
     ctx.globalAlpha = 1;
-    if (zoom >= 12) {
+    if (zoom >= 11) {
       ctx.lineWidth = 2;
       for (const [x, y] of points) {
         if (!onScreen(x, y)) continue;
@@ -322,7 +402,7 @@ function draw() {
 
   // vehicles
   const labeled = zoom >= LABEL_ZOOM;
-  const r = labeled ? (zoom >= 15 ? 11 : 10) : 4.5;
+  const r = labeled ? (zoom >= 14 ? 11 : 10) : 4.5;
   // Ease towards the computed position so that a changed delay does not make
   // the marker jump.
   const ease = 1 - Math.exp(-dt / EASE_MS);
@@ -448,17 +528,17 @@ function vehicleSummary(v) {
 }
 
 map.on('mousemove', (event) => {
-  const hit = hitTest(event.containerPoint);
+  const hit = hitTest(event.point);
   map.getContainer().classList.toggle('clickable', !!hit);
   tooltip.hidden = !hit;
   if (!hit) return;
   tooltip.textContent = hit.vehicle ? vehicleSummary(hit.vehicle) : hit.station.name;
-  tooltip.style.transform = `translate(${event.containerPoint.x + 14}px, ${event.containerPoint.y + 14}px)`;
+  tooltip.style.transform = `translate(${event.point.x + 14}px, ${event.point.y + 14}px)`;
 });
 map.on('mouseout', () => { tooltip.hidden = true; });
 
 map.on('click', (event) => {
-  const hit = hitTest(event.containerPoint);
+  const hit = hitTest(event.point);
   if (hit?.vehicle) select('trip', hit.vehicle.id);
   else if (hit?.station) select('station', hit.station.id);
   else closePanel();
@@ -470,7 +550,6 @@ const chipCounts = new Map();
 
 function buildControls() {
   languagePicker($('language'));
-  L.control.zoom({ position: 'bottomright', zoomInTitle: t('map.zoomIn'), zoomOutTitle: t('map.zoomOut') }).addTo(map);
 
   const container = $('modes');
   for (const mode of MODES) {
@@ -694,8 +773,8 @@ let pollSeq = 0;
 let stationSeq = 0;
 
 // What the server covers and how to show it: the area and its name, the map
-// section to start with, the map tiles and the time zone. It does not change
-// while the server runs, so it is asked for until it has answered once.
+// section to start with, the map behind it and the time zone. It does not
+// change while the server runs, so it is asked for until it has answered once.
 async function loadArea() {
   const res = await fetch('api/area');
   if (!res.ok) throw new Error(`api/area: HTTP ${res.status}`);
@@ -709,19 +788,26 @@ async function loadArea() {
   document.title = area.name ? `${APP_NAME} – ${area.name}` : APP_NAME;
 
   const [south, west, north, east] = area.bbox;
-  // Lines are followed beyond the area, so the map reaches well beyond it too.
-  const limit = L.latLngBounds([south - 6, west - 9], [north + 6, east + 9]);
-  map.setMaxBounds(limit);
-  const usable = saved && [saved.lat, saved.lon, saved.zoom].every(Number.isFinite) && limit.contains([saved.lat, saved.lon]);
+  // Lines are followed beyond the area, so the map reaches well beyond it too
+  // (but not beyond the latitudes a web map has).
+  const limit = [Math.max(south - 6, -85), west - 9, Math.min(north + 6, 85), east + 9];
+  map.setMaxBounds([[limit[1], limit[0]], [limit[3], limit[2]]]);
+  const usable = saved && [saved.lat, saved.lon, saved.zoom].every(Number.isFinite)
+    && saved.lat >= limit[0] && saved.lon >= limit[1] && saved.lat <= limit[2] && saved.lon <= limit[3];
   // (at once: gliding there from the placeholder would show nothing, and the vehicles are asked for right after)
-  if (usable) map.setView([saved.lat, saved.lon], saved.zoom, { animate: false });
-  else map.fitBounds([[area.view[0], area.view[1]], [area.view[2], area.view[3]]], { animate: false });
+  if (usable) map.jumpTo({ center: [saved.lon, saved.lat], zoom: saved.zoom });
+  else map.fitBounds([[area.view[1], area.view[0]], [area.view[3], area.view[2]]], { animate: false });
 
-  // Which tiles and whom to name for them and for the data are settings of the
-  // server; both attributions are HTML and may contain links.
-  const attribution = `${area.attribution.map} · ${t('attribution.data')} ${area.attribution.data}`;
-  L.tileLayer(area.tileUrl, { maxZoom: 19, attribution }).addTo(map);
-  showArea(area);
+  // Which map, and whom to name for the data, are settings of the server. A
+  // style names its sources itself; what the server adds for the map and for
+  // the data is HTML and may contain links.
+  map.setStyle(area.styleUrl ?? rasterStyle(area.tileUrl), { transformStyle: (previous, next) => localizedStyle(next) });
+  const credits = [area.attribution.map, `${t('attribution.data')} ${area.attribution.data}`].filter(Boolean);
+  // (the credits first: of the controls in a bottom corner, the one added last is on top)
+  map.addControl(new AttributionControl({ customAttribution: credits }), 'bottom-right');
+  map.addControl(new NavigationControl({ showCompass: false }), 'bottom-right');
+  state.outline = area.outline;
+  $('area-hint').hidden = false;
   state.areaKnown = true;
 }
 
@@ -729,7 +815,7 @@ async function loadArea() {
 async function loadStations() {
   const bounds = map.getBounds();
   if (map.getZoom() < STATION_ZOOM || (state.stationsLoaded && boxCovers(state.stationsLoaded, bounds))) return;
-  const box = boxAround(bounds.pad(STATION_MARGIN));
+  const box = boxAround(bounds, STATION_MARGIN);
   const seq = ++stationSeq;
   try {
     const res = await fetch(`api/stations?bbox=${boxQuery(box)}`);
@@ -749,7 +835,7 @@ async function poll() {
   let delay = POLL_MS;
   try {
     if (!state.areaKnown) await loadArea();
-    const request = { box: boxAround(map.getBounds().pad(VEHICLE_MARGIN)), detail: detailWanted() };
+    const request = { box: boxAround(map.getBounds(), VEHICLE_MARGIN), detail: detailWanted() };
     const res = await fetch(`api/vehicles?bbox=${boxQuery(request.box)}&detail=${request.detail}`);
     const data = await res.json();
     // The map was moved meanwhile and a newer request is under way.
@@ -814,9 +900,7 @@ document.addEventListener('visibilitychange', () => {
 });
 window.addEventListener('online', poll);
 
-async function init() {
-  await loadLanguage();
-  translatePage();
+function init() {
   // The lists have a column for the time, as wide as the language writes it (14:05 or 12:05 PM).
   const hours = Array.from({ length: 24 }, (_, hour) => formatTime(hour * 3600));
   document.documentElement.style.setProperty('--time-chars', Math.max(...hours.map((text) => text.length)));

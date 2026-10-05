@@ -35,10 +35,14 @@ function isHttpUrl(value) {
   }
 }
 
+// The map behind the vehicles unless the operator names another one: the
+// vector tiles of OpenFreeMap, which need no key and set no limit on requests.
+const MAP_STYLE_URL = 'https://tiles.openfreemap.org/styles/bright';
+
 /**
  * Origin of a tile URL template for the Content-Security-Policy, or null if
- * the template is not an http(s) URL. {s}, Leaflet's placeholder for a
- * subdomain, becomes a wildcard:
+ * the template is not an http(s) URL. {s}, the placeholder for a subdomain,
+ * becomes a wildcard:
  * https://{s}.tile.example.org/{z}/{x}/{y}.png -> https://*.tile.example.org
  */
 function tileOrigin(template) {
@@ -129,10 +133,19 @@ export function loadConfig(env = process.env) {
     throw invalid('TIMEZONE', 'an IANA time zone name such as Europe/Berlin');
   }
 
-  const tileUrl = text('TILE_URL') || 'https://tile.openstreetmap.org/{z}/{x}/{y}.png';
-  if (!tileOrigin(tileUrl) || !['{z}', '{x}', '{y}'].every((part) => tileUrl.includes(part))) {
-    throw invalid('TILE_URL', 'an http(s) URL template with {z}, {x} and {y}, e.g. https://tile.openstreetmap.org/{z}/{x}/{y}.png');
+  // The map behind the vehicles: a MapLibre style, which names its tiles, fonts
+  // and icons itself (MAP_STYLE_URL), or plain raster tiles (TILE_URL). The
+  // page may load from the server of either and from those in MAP_ORIGINS.
+  if (text('MAP_STYLE_URL') && text('TILE_URL')) throw new Error('MAP_STYLE_URL and TILE_URL are both set; use only one of them');
+  const tileUrl = text('TILE_URL') || null;
+  if (tileUrl && (!tileOrigin(tileUrl) || !['{z}', '{x}', '{y}'].every((part) => tileUrl.includes(part)))) {
+    throw invalid('TILE_URL', 'an http(s) URL template with {z}, {x} and {y}, e.g. https://tiles.example.org/{z}/{x}/{y}.png');
   }
+  const styleUrl = tileUrl ? null : httpUrl('MAP_STYLE_URL', text('MAP_STYLE_URL') || MAP_STYLE_URL);
+  const mapOrigins = [
+    tileUrl ? tileOrigin(tileUrl) : new URL(styleUrl).origin,
+    ...text('MAP_ORIGINS').split(',').map((s) => s.trim()).filter(Boolean).map((url) => new URL(httpUrl('MAP_ORIGINS', url)).origin),
+  ];
 
   // OpenStreetMap extracts (.osm.pbf) that together cover the area; the route
   // geometry between stops is computed from them. A custom area has to name
@@ -161,10 +174,13 @@ export function loadConfig(env = process.env) {
 
     // The zone the times of the feed are in (agency_timezone is not read).
     timeZone,
-    // Map tiles: a Leaflet URL template and the credit shown for it (HTML).
+    // The map: the URL of a style or a template for raster tiles, one of them
+    // null, and the origins the page may load it from.
+    styleUrl,
     tileUrl,
-    tileOrigin: tileOrigin(tileUrl),
-    tileAttribution: text('TILE_ATTRIBUTION') || '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+    mapOrigins: [...new Set(mapOrigins)],
+    // Credit for the map (HTML). A style names its sources itself, raster tiles cannot.
+    tileAttribution: text('TILE_ATTRIBUTION') || (tileUrl ? '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>' : ''),
     // Credit for the timetable and realtime data (HTML).
     dataAttribution: text('DATA_ATTRIBUTION') || '<a href="https://gtfs.de">GTFS.DE</a> / <a href="https://www.delfi.de">DELFI e.V.</a> (<a href="https://creativecommons.org/licenses/by-sa/4.0/">CC BY-SA 4.0</a>)',
 
