@@ -20,7 +20,7 @@ try {
   process.exit(1);
 }
 setTimeZone(config.timeZone);
-const { version } = JSON.parse(fs.readFileSync(new URL('../package.json', import.meta.url), 'utf8'));
+const { version, homepage } = JSON.parse(fs.readFileSync(new URL('../package.json', import.meta.url), 'utf8'));
 
 let timetable = null;
 
@@ -30,6 +30,8 @@ const realtime = new RealtimePoller({
   idleMs: config.realtimeIdleMs,
   getTimetable: () => timetable,
   log,
+  // The provider of the feed can tell what is asking and where to read about it.
+  userAgent: `Netnou/${version} (+${homepage.replace(/#.*$/, '')})`,
 });
 
 const feed = new FeedUpdater({

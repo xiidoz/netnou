@@ -82,6 +82,7 @@ Server (`server/`):
 | `lib/shapes.js` | route geometry for every hop (`loadNetworks`, `buildSegments`) |
 | `lib/timetable.js` | the loaded dataset and the queries of the API (`Timetable`) |
 | `lib/realtime.js` | fetches the realtime feed and matches it to the trips (`RealtimePoller`) |
+| `lib/http.js` | the GET the realtime feed is fetched with: patient with a busy server (`get`) |
 | `lib/pb.js` | decodes the GTFS-Realtime message (`decodeFeed`) |
 | `lib/time.js` | service days and the time zone of the feed |
 | `lib/files.js` | downloads, gzipped JSON files, error texts |
@@ -202,6 +203,20 @@ Each fetch produces a new snapshot:
 - **Staleness.** When fetching fails, the last delays are used until they are
   three minutes old; after that the server falls back to the timetable. When
   nobody is looking, the snapshot is dropped.
+
+The feed is fetched with `get` of `lib/http.js`, not with `fetch()`. The
+provider's server is slow to accept connections and slow to deliver at busy
+times, and `fetch()` gives up on a connection after ten seconds, which cannot
+be changed without a dependency. `get` has one limit for the whole request,
+90 seconds for the realtime feed:
+
+- While the server has not accepted the connection, it is asked again: after
+  ten seconds without an answer, or after a pause that grows from one to
+  eight seconds if the attempt failed at once.
+- Once the connection is accepted, nothing is started over. The request waits
+  for the answer and for the whole of it, however slowly it comes.
+- A fetch may therefore outlast the polling interval. The turns of the
+  interval that come meanwhile are left out.
 
 ## Failures and retries
 

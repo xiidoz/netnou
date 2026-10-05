@@ -151,6 +151,13 @@ and it stops `REALTIME_IDLE_SECONDS` after the last such request. A tab in the
 background stops asking, and `/api/status` does not count, so monitoring does
 not keep the fetching alive.
 
+The interval is the pace when all is well. At busy times the server of gtfs.de
+takes long to accept a connection and delivers slowly. A fetch is therefore
+given up to 90 seconds, and the next one starts with the first turn of the
+interval after it has ended. Until then the vehicles keep the delays of the
+last fetch, for at most three minutes. How often fetching fails is counted in
+`realtime.fetches` and `realtime.failures` of `/api/status`.
+
 The timetable itself (about 300 MB) is only downloaded when the provider
 publishes a new version, which gtfs.de does once a day. The check every
 `FEED_CHECK_MINUTES` is a single `HEAD` request.
