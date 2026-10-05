@@ -33,6 +33,7 @@
     "test:coverage": "node --test --experimental-test-coverage",
     "lint": "eslint .",
     "build:icons": "node tools/build-icons.mjs",
+    "build:social": "node tools/build-social-preview.mjs",
     "build:area": "node tools/build-vgn-area.mjs",
     "prepare": "husky"
   },
