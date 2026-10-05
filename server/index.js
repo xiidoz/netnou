@@ -51,6 +51,7 @@ const feed = new FeedUpdater({
 const MIME = {
   '.html': 'text/html; charset=utf-8',
   '.js': 'text/javascript; charset=utf-8',
+  '.mjs': 'text/javascript; charset=utf-8',
   '.css': 'text/css; charset=utf-8',
   '.json': 'application/json; charset=utf-8',
   '.svg': 'image/svg+xml',
@@ -61,20 +62,26 @@ const MIME = {
 };
 const COMPRESSIBLE = /^(text\/|application\/(json|manifest\+json)|image\/svg)/;
 
+const MAP_ORIGINS = config.mapOrigins.join(' ');
 const SECURITY_HEADERS = {
   'X-Content-Type-Options': 'nosniff',
   'Referrer-Policy': 'strict-origin-when-cross-origin',
-  // The map tiles are the only thing the page loads from elsewhere.
+  // The map is the only thing the page loads from elsewhere: MapLibre fetches
+  // the style, tiles and fonts (connect-src) and may load icons as images. What
+  // it has fetched it turns into images by way of blob: URLs.
   'Content-Security-Policy':
-    `default-src 'self'; img-src 'self' data: ${config.tileOrigin}; style-src 'self'; script-src 'self'; connect-src 'self'; frame-ancestors 'none'`,
+    `default-src 'self'; img-src 'self' data: blob: ${MAP_ORIGINS}; style-src 'self'; script-src 'self'; worker-src 'self'; connect-src 'self' ${MAP_ORIGINS}; frame-ancestors 'none'`,
 };
 
-function send(req, res, status, type, body, headers = {}) {
+const gzip = (body) => zlib.gzipSync(body, { level: 6 });
+
+/** @param compress how to gzip the body, for a caller that keeps the result */
+function send(req, res, status, type, body, headers = {}, compress = gzip) {
   const head = { ...SECURITY_HEADERS, 'Content-Type': type, ...headers };
   if (COMPRESSIBLE.test(type)) {
     head.Vary = 'Accept-Encoding';
     if (body.length > 1024 && /\bgzip\b/.test(req.headers['accept-encoding'] ?? '')) {
-      body = zlib.gzipSync(body, { level: 6 });
+      body = compress(body);
       head['Content-Encoding'] = 'gzip';
     }
   }
@@ -93,6 +100,10 @@ function etagMatches(req, etag) {
   return tags.includes(etag) || tags.includes('*');
 }
 
+// The compressed form of each static file, by path: the map library is over a
+// megabyte, too much to compress again for every visitor.
+const compressed = new Map();
+
 function serveStatic(req, res, pathname) {
   const relative = pathname.endsWith('/') ? `${pathname}index.html` : pathname;
   const file = path.join(config.publicDir, path.normalize(relative));
@@ -108,13 +119,16 @@ function serveStatic(req, res, pathname) {
 
   const type = MIME[path.extname(file).toLowerCase()] ?? 'application/octet-stream';
   const etag = `"${stat.size.toString(36)}-${Math.floor(stat.mtimeMs).toString(36)}"`;
-  // Always revalidate: the files are tiny and this way a deploy shows up immediately.
+  // Always revalidate: that is one small request per file and this way a deploy shows up immediately.
   const headers = { ETag: etag, 'Cache-Control': 'no-cache' };
   if (etagMatches(req, etag)) {
     res.writeHead(304, COMPRESSIBLE.test(type) ? { ...headers, Vary: 'Accept-Encoding' } : headers);
     return res.end();
   }
-  send(req, res, 200, type, fs.readFileSync(file), headers);
+  send(req, res, 200, type, fs.readFileSync(file), headers, (body) => {
+    if (compressed.get(file)?.etag !== etag) compressed.set(file, { etag, body: gzip(body) });
+    return compressed.get(file).body;
+  });
 }
 
 // The vehicles of the whole area are the same for every browser, so compute
@@ -164,8 +178,10 @@ const areaInfo = {
   outline: config.areaOutline.map((ring) => ring.map(([lon, lat]) => [lat, lon])),
   // The zone all times are to be shown in.
   timeZone: config.timeZone,
+  // The map behind the vehicles: a MapLibre style or raster tiles, the other is null.
+  styleUrl: config.styleUrl,
   tileUrl: config.tileUrl,
-  // HTML, set by the operator.
+  // HTML, set by the operator. A style names its sources itself; map is what to show besides.
   attribution: { map: config.tileAttribution, data: config.dataAttribution },
 };
 const areaEtag = `"${crypto.createHash('sha1').update(JSON.stringify(areaInfo)).digest('hex').slice(0, 16)}"`;

@@ -41,9 +41,10 @@ test('defaults: the VGN, its OSM extracts, the gtfs.de feeds and OpenStreetMap t
   assert.equal(config.realtimeIdleMs, 120_000);
 
   assert.equal(config.timeZone, 'Europe/Berlin');
-  assert.equal(config.tileUrl, 'https://tile.openstreetmap.org/{z}/{x}/{y}.png');
-  assert.equal(config.tileOrigin, 'https://tile.openstreetmap.org');
-  assert.equal(config.tileAttribution, '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>');
+  assert.equal(config.styleUrl, 'https://tiles.openfreemap.org/styles/bright');
+  assert.equal(config.tileUrl, null);
+  assert.deepEqual(config.mapOrigins, ['https://tiles.openfreemap.org']);
+  assert.equal(config.tileAttribution, '');
   assert.equal(config.dataAttribution, '<a href="https://gtfs.de">GTFS.DE</a> / <a href="https://www.delfi.de">DELFI e.V.</a> (<a href="https://creativecommons.org/licenses/by-sa/4.0/">CC BY-SA 4.0</a>)');
 });
 
@@ -78,6 +79,7 @@ test('every setting can be given', () => {
     TIMEZONE: 'europe/vienna',
     TILE_URL: 'https://{s}.tiles.example.org/{z}/{x}/{y}{r}.png?key=1',
     TILE_ATTRIBUTION: '<b>tiles</b>',
+    MAP_ORIGINS: 'https://fonts.example.org/noto/{fontstack}/{range}.pbf, http://localhost:8082,',
     DATA_ATTRIBUTION: '<b>data</b>',
     FEED_URL: 'http://127.0.0.1:8000/feed.zip',
     REALTIME_URL: 'http://127.0.0.1:8000/realtime.pb',
@@ -94,8 +96,9 @@ test('every setting can be given', () => {
   assert.equal(config.areaName, 'Testland');
   assert.deepEqual(config.view, [49.4, 10.9, 49.6, 11.2]);
   assert.equal(config.timeZone, 'Europe/Vienna');
+  assert.equal(config.styleUrl, null);
   assert.equal(config.tileUrl, 'https://{s}.tiles.example.org/{z}/{x}/{y}{r}.png?key=1');
-  assert.equal(config.tileOrigin, 'https://*.tiles.example.org');
+  assert.deepEqual(config.mapOrigins, ['https://*.tiles.example.org', 'https://fonts.example.org', 'http://localhost:8082']);
   assert.equal(config.tileAttribution, '<b>tiles</b>');
   assert.equal(config.dataAttribution, '<b>data</b>');
   assert.equal(config.feedUrl, 'http://127.0.0.1:8000/feed.zip');
@@ -109,13 +112,14 @@ test('every setting can be given', () => {
 });
 
 test('empty values count as not set, except for AREA_NAME and OSM_PBF_URLS', () => {
-  const config = loadConfig({ PORT: '', HOST: ' ', BBOX: '', AREA_FILE: '', VIEW: '', TIMEZONE: '', TILE_URL: '', TILE_ATTRIBUTION: '', FEED_URL: ' ', FEED_CHECK_MINUTES: '', AREA_NAME: '', OSM_PBF_URLS: '' });
+  const config = loadConfig({ PORT: '', HOST: ' ', BBOX: '', AREA_FILE: '', VIEW: '', TIMEZONE: '', MAP_STYLE_URL: ' ', MAP_ORIGINS: '', TILE_URL: '', TILE_ATTRIBUTION: '', FEED_URL: ' ', FEED_CHECK_MINUTES: '', AREA_NAME: '', OSM_PBF_URLS: '' });
   assert.equal(config.port, 8080);
   assert.equal(config.host, undefined);
   assert.deepEqual(config.view, [49.376, 10.916, 49.604, 11.204]);
   assert.equal(config.timeZone, 'Europe/Berlin');
-  assert.equal(config.tileOrigin, 'https://tile.openstreetmap.org');
-  assert.match(config.tileAttribution, /OpenStreetMap/);
+  assert.equal(config.styleUrl, 'https://tiles.openfreemap.org/styles/bright');
+  assert.deepEqual(config.mapOrigins, ['https://tiles.openfreemap.org']);
+  assert.equal(config.tileAttribution, '');
   assert.equal(config.feedUrl, 'https://download.gtfs.de/germany/free/latest.zip');
   assert.equal(config.feedCheckMs, 15 * 60_000);
   // the VGN without a name and without route geometry
@@ -123,8 +127,22 @@ test('empty values count as not set, except for AREA_NAME and OSM_PBF_URLS', () 
   assert.deepEqual(config.osmUrls, []);
 });
 
-test('the tile origin for the Content-Security-Policy', () => {
-  const origin = (TILE_URL) => loadConfig({ BBOX, TILE_URL }).tileOrigin;
+test('the map is a style or raster tiles, and the Content-Security-Policy gets the origins of either', () => {
+  const style = loadConfig({ BBOX, MAP_STYLE_URL: 'https://maps.example.org:8443/styles/day.json?key=1', MAP_ORIGINS: 'https://maps.example.org:8443/fonts, https://tiles.example.org' });
+  assert.equal(style.styleUrl, 'https://maps.example.org:8443/styles/day.json?key=1');
+  assert.equal(style.tileUrl, null);
+  // each origin once
+  assert.deepEqual(style.mapOrigins, ['https://maps.example.org:8443', 'https://tiles.example.org']);
+  // a style names its sources itself, unless the operator adds to them
+  assert.equal(style.tileAttribution, '');
+  assert.equal(loadConfig({ BBOX, TILE_ATTRIBUTION: '<b>map</b>' }).tileAttribution, '<b>map</b>');
+
+  const tiles = loadConfig({ BBOX, TILE_URL: 'https://tile.example.org/{z}/{x}/{y}.png' });
+  assert.equal(tiles.styleUrl, null);
+  assert.equal(tiles.tileUrl, 'https://tile.example.org/{z}/{x}/{y}.png');
+  assert.equal(tiles.tileAttribution, '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>');
+
+  const origin = (TILE_URL) => loadConfig({ BBOX, TILE_URL }).mapOrigins.join();
   assert.equal(origin('https://tile.example.org/{z}/{x}/{y}.png'), 'https://tile.example.org');
   assert.equal(origin('http://localhost:8081/tiles/{z}/{x}/{y}.png'), 'http://localhost:8081');
   assert.equal(origin('https://{s}.tile.example.org/{z}/{x}/{y}.png'), 'https://*.tile.example.org');
@@ -176,6 +194,9 @@ test('wrong settings are refused with a message that names the variable', () => 
     [{ FEED_URL: 'ftp://example.org/feed.zip' }, /^FEED_URL must be /],
     [{ REALTIME_URL: 'realtime.pb' }, /^REALTIME_URL must be an http\(s\) URL /],
     [{ OSM_PBF_URLS: 'https://example.org/a.osm.pbf,b.osm.pbf' }, /^OSM_PBF_URLS must be an http\(s\) URL \(got "b\.osm\.pbf"\)$/],
+    [{ MAP_STYLE_URL: 'styles/bright' }, /^MAP_STYLE_URL must be an http\(s\) URL \(got "styles\/bright"\)$/],
+    [{ MAP_STYLE_URL: 'https://maps.example.org/style.json', TILE_URL: 'https://tile.example.org/{z}/{x}/{y}.png' }, /^MAP_STYLE_URL and TILE_URL are both set; use only one of them$/],
+    [{ MAP_ORIGINS: 'https://tiles.example.org, fonts.example.org' }, /^MAP_ORIGINS must be an http\(s\) URL \(got "fonts\.example\.org"\)$/],
     [{ TILE_URL: 'https://tile.example.org/{z}/{x}.png' }, /^TILE_URL must be an http\(s\) URL template with \{z\}, \{x\} and \{y\}/],
     [{ TILE_URL: '/tiles/{z}/{x}/{y}.png' }, /^TILE_URL must be /],
     [{ TILE_URL: 'file:///tiles/{z}/{x}/{y}.png' }, /^TILE_URL must be /],

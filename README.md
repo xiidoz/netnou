@@ -6,7 +6,7 @@ delays and OpenStreetMap.
 [![CI](https://github.com/xiidoz/netnou/actions/workflows/ci.yml/badge.svg)](https://github.com/xiidoz/netnou/actions/workflows/ci.yml)
 [![Licence: MIT](https://img.shields.io/badge/licence-MIT-blue.svg)](LICENSE)
 
-![Map of central Nürnberg with buses, trams and trains as coloured markers; a panel lists the stops of tram 8 with its delays](docs/screenshot.png)
+![Map of central Nürnberg with buses, trams and trains as coloured markers; a panel lists the stops of tram 10 with its delays](docs/screenshot.png)
 
 Netnou shows buses, trams, underground, suburban, regional and long-distance
 trains moving on a map, with their current delays, the stop list of every trip
@@ -31,6 +31,8 @@ changes as breaking.
 
 - Vehicles animated along roads and tracks, coloured by kind of transport or
   by delay.
+- A vector map behind them that stays sharp at every zoom level and names
+  places in the visitor's language.
 - Stop list with delays, skipped stops and cancellations for every trip;
   departure board for every station; notes from the feed.
 - User interface in German and English, chosen per visitor; further languages
@@ -92,7 +94,7 @@ ones most people touch:
 | `AREA_FILE` | built-in VGN | GeoJSON file with the polygons of the area |
 | `AREA_NAME` | `Großraum Nürnberg (VGN)` | shown next to the title |
 | `OSM_PBF_URLS` | five Bavarian extracts | OpenStreetMap extracts covering the area |
-| `TILE_URL` | openstreetmap.org | where the browser loads map tiles from |
+| `MAP_STYLE_URL` | OpenFreeMap, style `bright` | the map behind the vehicles, as a MapLibre style |
 
 For example, München (in a POSIX shell; for PowerShell and Docker see the
 configuration guide):
@@ -143,7 +145,7 @@ The page uses a small JSON API, which is open to other clients too:
 | `GET /api/trip?id=…` | one trip: stops, delays, path |
 | `GET /api/stations` | stations, optionally within `?bbox=` |
 | `GET /api/departures?station=…` | departure board of a station |
-| `GET /api/area` | the configured area, map tiles and attribution |
+| `GET /api/area` | the configured area, map and attribution |
 | `GET /api/status` | state of the import and of the realtime feed |
 
 Reference: [docs/api.md](docs/api.md).
@@ -170,22 +172,23 @@ See [CONTRIBUTING.md](CONTRIBUTING.md).
 ## Data sources, licences and attribution
 
 The code is under the [MIT License](LICENSE). Two things in the repository
-are not: the vendored Leaflet library (`public/vendor/leaflet`, BSD-2-Clause)
-and the outline of the default area (`server/areas/vgn.geojson`, ©
-OpenStreetMap contributors, ODbL 1.0).
+are not: the vendored map library MapLibre GL JS
+(`public/vendor/maplibre-gl`, BSD-3-Clause) and the outline of the default
+area (`server/areas/vgn.geojson`, © OpenStreetMap contributors, ODbL 1.0).
 
 A running instance works with data that it fetches itself and that has its own
 terms:
 
 - Timetable and realtime data: [gtfs.de](https://gtfs.de), provided by DELFI
   e.V., CC BY-SA 4.0.
-- Roads, tracks and map tiles: © OpenStreetMap contributors, ODbL 1.0. The
-  extracts come from [Geofabrik](https://download.geofabrik.de/), the tiles by
-  default from `tile.openstreetmap.org`, whose
-  [usage policy](https://operations.osmfoundation.org/policies/tiles/) allows
-  light use only.
+- Roads and tracks for the routes: © OpenStreetMap contributors, ODbL 1.0,
+  as extracts from [Geofabrik](https://download.geofabrik.de/).
+- The map behind the vehicles: vector tiles of
+  [OpenFreeMap](https://openfreemap.org) in the OpenMapTiles scheme, made
+  from OpenStreetMap data and loaded by the visitor's browser. OpenFreeMap
+  needs no key and sets no limit on requests.
 
-Both credits are shown on the map and have to stay visible. Details and what
+The credits are shown on the map and have to stay visible. Details and what
 follows for operators: [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md).
 
 ## Disclaimer

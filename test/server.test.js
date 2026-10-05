@@ -46,7 +46,7 @@ const REALTIME = encodeFeed({
 });
 
 // Every setting the server reads; none may leak in from the shell running the tests.
-const SETTINGS = ['PORT', 'HOST', 'DATA_DIR', 'AREA_FILE', 'BBOX', 'AREA_NAME', 'VIEW', 'TIMEZONE', 'TILE_URL', 'TILE_ATTRIBUTION', 'DATA_ATTRIBUTION',
+const SETTINGS = ['PORT', 'HOST', 'DATA_DIR', 'AREA_FILE', 'BBOX', 'AREA_NAME', 'VIEW', 'TIMEZONE', 'MAP_STYLE_URL', 'MAP_ORIGINS', 'TILE_URL', 'TILE_ATTRIBUTION', 'DATA_ATTRIBUTION',
   'OSM_PBF_URLS', 'OSM_MAX_AGE_DAYS', 'FEED_URL', 'FEED_CHECK_MINUTES', 'DOWNLOAD_TIMEOUT_MINUTES', 'REALTIME_URL', 'REALTIME_INTERVAL_SECONDS', 'REALTIME_IDLE_SECONDS'];
 
 let dir;
@@ -104,7 +104,8 @@ before(async () => {
     BBOX: BBOX.join(','),
     AREA_NAME: 'Testland',
     TIMEZONE: 'UTC',
-    TILE_URL: 'https://{s}.tiles.example.org/{z}/{x}/{y}.png',
+    MAP_STYLE_URL: 'https://maps.example.org/styles/day.json',
+    MAP_ORIGINS: 'https://tiles.example.org',
     OSM_PBF_URLS: '',
     FEED_URL: `${upstream.url}/feed.zip`,
     REALTIME_URL: `${upstream.url}/realtime.pb`,
@@ -169,9 +170,10 @@ test('/api/area', async () => {
     view: BBOX,
     outline: [[[49.3, 10.8], [49.3, 11.3], [49.7, 11.3], [49.7, 10.8], [49.3, 10.8]]], // [lat, lon]
     timeZone: 'UTC',
-    tileUrl: 'https://{s}.tiles.example.org/{z}/{x}/{y}.png',
+    styleUrl: 'https://maps.example.org/styles/day.json',
+    tileUrl: null,
     attribution: {
-      map: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+      map: '',
       data: '<a href="https://gtfs.de">GTFS.DE</a> / <a href="https://www.delfi.de">DELFI e.V.</a> (<a href="https://creativecommons.org/licenses/by-sa/4.0/">CC BY-SA 4.0</a>)',
     },
   });
@@ -329,8 +331,9 @@ test('static files: types, revalidation, HEAD and gzip', async () => {
   assert.equal(page.headers['content-encoding'], undefined);
   assert.equal(Number(page.headers['content-length']), page.body.length);
   assert.ok(page.body.equals(fs.readFileSync(path.join(root, 'public', 'index.html'))));
-  // the tiles are the only thing allowed from elsewhere
-  assert.match(page.headers['content-security-policy'], /^default-src 'self'; img-src 'self' data: https:\/\/\*\.tiles\.example\.org; /);
+  // the map is the only thing allowed from elsewhere
+  const map = 'https://maps.example.org https://tiles.example.org';
+  assert.equal(page.headers['content-security-policy'], `default-src 'self'; img-src 'self' data: blob: ${map}; style-src 'self'; script-src 'self'; worker-src 'self'; connect-src 'self' ${map}; frame-ancestors 'none'`);
   assert.equal(page.headers['x-content-type-options'], 'nosniff');
 
   const { etag } = page.headers;
@@ -356,6 +359,10 @@ test('static files: types, revalidation, HEAD and gzip', async () => {
   assert.equal(packed.headers.vary, 'Accept-Encoding');
   assert.ok(packed.body.length < script.length);
   assert.ok(zlib.gunzipSync(packed.body).equals(script));
+  // (packed once and kept)
+  assert.ok((await request('/app.js', { headers: { 'Accept-Encoding': 'gzip' } })).body.equals(packed.body));
+  // the map library is modules, which browsers only run with the type of a script
+  assert.equal((await request('/vendor/maplibre-gl/maplibre-gl-worker.mjs')).headers['content-type'], 'text/javascript; charset=utf-8');
   const plain = await request('/app.js');
   assert.equal(plain.headers['content-encoding'], undefined);
   assert.ok(plain.body.equals(script));

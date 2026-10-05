@@ -121,7 +121,7 @@ test('app.js has no text for visitors of its own', () => {
   // Literals of several words that are not text; what stands before them says so.
   const NOT_TEXT = [
     /console\.\w+\($/, /new Error\($/, // said to developers, in English
-    /\bclass: $/, /DomUtil\.create\('\w+', $/, // class names
+    /\bclass: $/, // class names
     /\.on\($/, // event names
     /\.font = $/, // a canvas font
   ];

@@ -7,7 +7,7 @@ is set up and what a change is expected to look like.
 
 - **No runtime dependencies.** `package.json` has no `dependencies` and that
   is meant to stay so. The server runs on Node.js alone and the page loads
-  nothing but its own files, the vendored Leaflet and map tiles.
+  nothing but its own files, the vendored map library and the map.
 - **No build step.** What is in `public/` is what the browser gets.
 - **Node.js 22 or newer** to run the server and the tests. The linter needs
   22.13 or newer; `.node-version` names the version used in CI and in the
@@ -47,7 +47,7 @@ public/
   index.html, app.js, style.css   the page
   i18n.js, locales/   texts per language
   sw.js, manifest.webmanifest, icons/   installable app
-  vendor/leaflet/     vendored map library
+  vendor/maplibre-gl/ vendored map library
 test/                 tests and their fixtures (helpers.js)
 tools/                scripts run by hand: default area, app icons
 docs/                 documentation
@@ -165,10 +165,10 @@ earlier ones.
   `npm run build:icons`, which needs Chrome, Chromium or Edge (set `CHROME`
   to its path if it is not found). Run it after changing the favicon and
   commit the result.
-- **`public/vendor/leaflet/`** holds unmodified files of the Leaflet release.
-  Do not edit them; see
-  [public/vendor/leaflet/README.md](public/vendor/leaflet/README.md) for
-  updating.
+- **`public/vendor/maplibre-gl/`** holds unmodified files of the MapLibre GL
+  JS release. Do not edit them; see
+  [public/vendor/maplibre-gl/README.md](public/vendor/maplibre-gl/README.md)
+  for updating.
 
 ## Cache formats
 

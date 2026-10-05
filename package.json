@@ -9,7 +9,7 @@
     "transit",
     "live-map",
     "openstreetmap",
-    "leaflet"
+    "maplibre"
   ],
   "homepage": "https://github.com/xiidoz/netnou#readme",
   "bugs": {

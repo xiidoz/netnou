@@ -22,8 +22,9 @@
 The figures are approximate and were measured for the default area in October
 2026; a smaller area needs less.
 
-Visitors' browsers load the map tiles themselves, by default from
-`tile.openstreetmap.org` (see [Map tiles](configuration.md#map-tiles)).
+Visitors' browsers load the map behind the vehicles themselves, by default
+from `tiles.openfreemap.org` (see [The map](configuration.md#the-map)), and
+need WebGL 2 to draw it.
 
 ## Docker
 
@@ -200,14 +201,16 @@ Worth watching:
 
 ## Running a public instance
 
-- **Attribution.** The credits for OpenStreetMap and for the timetable data
-  on the map are required by the licences of the data. Keep them visible and
-  adjust them when you change the sources
+- **Attribution.** The credits for the map and for the timetable data in the
+  corner of the map are required by the licences of the data. Keep them
+  visible and adjust them when you change the sources
   ([Attribution](configuration.md#attribution),
   [THIRD-PARTY-NOTICES.md](../THIRD-PARTY-NOTICES.md)).
-- **Map tiles.** The default tile server is for light use only. With real
-  traffic, set `TILE_URL` to a provider that allows it
-  ([Map tiles](configuration.md#map-tiles)).
+- **The map.** The default map comes from OpenFreeMap, which allows public
+  and commercial use without a limit on requests but promises no
+  availability. While it is down, the vehicles move on an empty background.
+  For an instance that has to be dependable, use a provider with a service
+  agreement or your own tile server ([The map](configuration.md#the-map)).
 - **Load.** The API has no rate limiting of its own. Limit requests to
   `/api/` at the reverse proxy if the instance is exposed to the internet.
   Every client that asks for vehicles also keeps the server fetching the
@@ -217,10 +220,12 @@ Worth watching:
   and writes no access log; it logs a request only when handling it failed
   with an error. The page stores four settings in the browser's
   `localStorage` (`netnou.lang`, `netnou.hiddenModes`, `netnou.colorBy`,
-  `netnou.view`) and its own files in the browser cache `netnou-shell-v1`
+  `netnou.view`) and its own files in the browser cache `netnou-shell-v2`
   for the offline start. The only requests a visitor's browser makes to a
-  third party are those for map tiles; that provider sees the visitor's IP
-  address and the address of your site. A reverse proxy in front may log more.
+  third party are those for the map: its style, tiles, fonts and icons. With
+  the defaults they go to `tiles.openfreemap.org`, which is served through
+  Cloudflare; both see the visitor's IP address and the address of your
+  site. A reverse proxy in front may log more.
 - **Legal notices.** An imprint or a privacy notice, where the law requires
   one, is your responsibility. The page has no dedicated place for such
   links. `TILE_ATTRIBUTION` and `DATA_ATTRIBUTION` accept HTML, so a link can
@@ -244,6 +249,8 @@ The log lines below are quoted without their timestamp.
 | Vehicles move in straight lines although extracts are set | The route geometry is still being computed, or the step above failed. | Look at `routes.segments` in `/api/status` and at the log. |
 | Page: "timetable data only", pale vehicles | No realtime data: none in the feed for these trips, or the fetch fails. | `realtime.error` in `/api/status`; log line `Realtime: update failed: …`. |
 | Page: "No connection to the server" | The browser cannot reach the API. | Check the proxy configuration, in particular the trailing slash and the stripped prefix for a sub-path. |
+| The vehicles move on an empty background | The browser could not load the map: its server is down or blocked on the visitor's network, or the style takes tiles, fonts or icons from a server the page may not load from. | The console of the browser names the request. For a blocked server see `MAP_ORIGINS` in [The map](configuration.md#the-map). |
+| Page: "This browser cannot draw the map." | The browser has no WebGL 2: it is old, or hardware acceleration is switched off or unavailable, as in some remote sessions. | Nothing on the server. Another browser or device shows the map. |
 | The container restarts during the first minutes | Killed for exceeding a memory limit during the import. | Raise the limit to 2 GB or more, or set `NODE_OPTIONS`. |
 
 To force a clean import, stop the server, delete the contents of the data

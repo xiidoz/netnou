@@ -22,10 +22,10 @@ export default defineConfig([
     languageOptions: { globals: globals.node },
   },
   {
-    // The page: ES modules, with Leaflet loaded by a classic script before them.
+    // The page: ES modules.
     files: ['public/*.js', 'public/locales/**'],
     ignores: ['public/sw.js'],
-    languageOptions: { globals: { ...globals.browser, L: 'readonly' } },
+    languageOptions: { globals: globals.browser },
   },
   {
     // Registered as a classic script, so it may not use import or export.
