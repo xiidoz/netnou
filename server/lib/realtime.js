@@ -2,6 +2,7 @@
 // for the trips of the regional timetable.
 
 import { publicUrl, reason } from './files.js';
+import { get } from './http.js';
 import { decodeFeed } from './pb.js';
 import { serviceDayStart } from './time.js';
 
@@ -15,6 +16,12 @@ const MAX_PLAUSIBLE_DELAY_S = 6 * 3600;
 // page calls realtime data "live" up to the same age (LIVE_MAX_AGE_S in
 // public/app.js).
 const STALE_AFTER_S = 180;
+// One fetch may take this long, from the first attempt to connect to the last
+// byte. When the provider's server is busy it is slow to pick up and slow to
+// deliver, and a client that gives up early gets nothing and adds to the load
+// by starting over. Turns of the interval that come while a fetch is still
+// running are left out.
+const FETCH_LIMIT_MS = 90_000;
 
 function eventDelay(event, scheduled) {
   if (!event) return null;
@@ -141,14 +148,17 @@ export function buildRealtime(timetable, feed, now = Math.floor(Date.now() / 100
  * cost tens of GB per day for nothing.
  */
 export class RealtimePoller {
-  constructor({ url, intervalMs, idleMs, getTimetable, log }) {
+  /** @param userAgent how the server names itself to the provider of the feed */
+  constructor({ url, intervalMs, idleMs, getTimetable, log, userAgent }) {
     this.url = url;
     this.intervalMs = intervalMs;
     this.idleMs = idleMs;
     this.getTimetable = getTimetable;
     this.log = log;
+    this.userAgent = userAgent;
     this.snapshot = null;
-    this.status = { polling: false, fetchedAt: null, feedTimestamp: null, matchedTrips: 0, error: null };
+    // (fetches and failures count since the server started)
+    this.status = { polling: false, fetchedAt: null, feedTimestamp: null, matchedTrips: 0, error: null, fetches: 0, failures: 0 };
     this.lastTouch = 0;
     this.timer = null;
     this.busy = false;
@@ -183,38 +193,43 @@ export class RealtimePoller {
       return;
     }
     const timetable = this.getTimetable();
-    if (this.busy || !timetable) return;
+    if (!timetable) return;
+    if (this.busy) return this.dropStale();
     this.busy = true;
+    this.status.fetches++;
     try {
-      const res = await fetch(this.url, {
-        headers: this.etag ? { 'If-None-Match': this.etag } : {},
-        signal: AbortSignal.timeout(Math.max(this.intervalMs - 2000, 10000)),
-      });
-      if (res.status === 304) {
-        await res.body?.cancel();
-      } else {
-        if (!res.ok) throw new Error(`GET ${publicUrl(this.url)}: HTTP ${res.status}`);
-        const buf = Buffer.from(await res.arrayBuffer());
-        const feed = decodeFeed(buf, {
+      const headers = {};
+      if (this.userAgent) headers['User-Agent'] = this.userAgent;
+      if (this.etag) headers['If-None-Match'] = this.etag;
+      const res = await get(this.url, { headers, timeoutMs: FETCH_LIMIT_MS });
+      // Meanwhile the timetable may have been replaced or the polling paused:
+      // what arrived belongs to neither.
+      if (timetable !== this.getTimetable() || !this.timer) return;
+      if (res.status !== 304) {
+        if (res.status < 200 || res.status > 299) throw new Error(`GET ${publicUrl(this.url)}: HTTP ${res.status}`);
+        const feed = decodeFeed(res.body, {
           wantTrip: (trip) => timetable.tripIndex.has(trip.tripId),
           wantAlert: (alert) => alert.informed.some((e) => timetable.tripIndex.has(e.tripId) || timetable.stopIndex.has(e.stopId)),
         });
-        // The timetable may have been replaced while the download was running.
-        if (timetable !== this.getTimetable()) return;
         this.snapshot = buildRealtime(timetable, feed);
-        this.etag = res.headers.get('etag');
+        this.etag = res.headers.etag ?? null;
         this.status.feedTimestamp = feed.timestamp || null;
         this.status.matchedTrips = this.snapshot.matched;
       }
       this.status.fetchedAt = Math.floor(Date.now() / 1000);
       this.status.error = null;
     } catch (err) {
+      this.status.failures++;
       this.status.error = reason(err);
       this.log(`Realtime: update failed: ${this.status.error}`);
-      // Keep showing the last delays for a short while, then fall back to schedule.
-      if (this.status.fetchedAt && Date.now() / 1000 - this.status.fetchedAt > STALE_AFTER_S) this.reset();
+      this.dropStale();
     } finally {
       this.busy = false;
     }
+  }
+
+  /** The last delays stay in use for a short while when fetching fails, then it is back to the schedule. */
+  dropStale() {
+    if (this.status.fetchedAt && Date.now() / 1000 - this.status.fetchedAt > STALE_AFTER_S) this.reset();
   }
 }

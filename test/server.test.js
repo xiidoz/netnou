@@ -202,7 +202,7 @@ test('/api/status', async () => {
   assert.ok(Math.abs(checkedAt - json.now) < 60);
   assert.ok(!Number.isNaN(Date.parse(importedAt)));
   assert.deepEqual(json.routes, { segments: 0, osmFetchedAt: null });
-  assert.deepEqual(Object.keys(json.realtime).sort(), ['error', 'feedTimestamp', 'fetchedAt', 'matchedTrips', 'polling']);
+  assert.deepEqual(Object.keys(json.realtime).sort(), ['error', 'failures', 'feedTimestamp', 'fetchedAt', 'fetches', 'matchedTrips', 'polling']);
   assert.deepEqual(json.area, { name: 'Testland', bbox: BBOX });
   assert.deepEqual(json.view, BBOX);
 });

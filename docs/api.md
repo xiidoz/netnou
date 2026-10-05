@@ -89,7 +89,7 @@ the fetching of the realtime feed.
     "validUntil": "20261102"
   },
   "routes": { "segments": 53399, "osmFetchedAt": "2026-10-04T16:34:20.781Z" },
-  "realtime": { "polling": true, "fetchedAt": 1791148697, "feedTimestamp": 1791148698, "matchedTrips": 800, "error": null },
+  "realtime": { "polling": true, "fetchedAt": 1791148697, "feedTimestamp": 1791148698, "matchedTrips": 800, "error": null, "fetches": 412, "failures": 3 },
   "area": { "name": "Großraum Nürnberg (VGN)", "bbox": [48.5842, 10.0399, 50.5232, 12.5939] },
   "view": [49.376, 10.916, 49.604, 11.204]
 }
@@ -115,6 +115,7 @@ the fetching of the realtime feed.
 | `realtime.feedTimestamp` | time or null | timestamp inside the realtime feed |
 | `realtime.matchedTrips` | integer | trip updates that matched a trip of the timetable |
 | `realtime.error` | string or null | why the last fetch failed |
+| `realtime.fetches`, `realtime.failures` | integer | fetches begun and fetches failed since the server started |
 | `area.name`, `area.bbox`, `view` | | as in `/api/area` |
 
 ## `GET /api/area`
