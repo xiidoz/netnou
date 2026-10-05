@@ -30,7 +30,14 @@
       <select class="language" id="language" aria-label="Language" data-i18n-aria-label="language.label"></select>
     </div>
     <p class="status" id="status"><span class="dot"></span><span id="status-text" data-i18n="status.connecting">Connecting …</span></p>
-    <div class="chips" id="modes" role="group" aria-label="Show or hide modes of transport" data-i18n-aria-label="modes.label"></div>
+    <!-- On a narrow screen the chips are one row that scrolls sideways. The two
+         arrows show where it goes on and move it there. They are for eyes and
+         fingers only: the keyboard and a screen reader reach every chip itself. -->
+    <div class="chips-row">
+      <button type="button" class="chips-more back" id="modes-back" tabindex="-1" aria-hidden="true" hidden><span>‹</span></button>
+      <div class="chips" id="modes" role="group" aria-label="Show or hide modes of transport" data-i18n-aria-label="modes.label"></div>
+      <button type="button" class="chips-more" id="modes-on" tabindex="-1" aria-hidden="true" hidden><span>›</span></button>
+    </div>
     <div class="segmented" role="group" aria-label="Colour of the vehicles" data-i18n-aria-label="colorBy.label">
       <span class="segmented-label" data-i18n="colorBy.title">Colour by</span>
       <button type="button" data-color-by="mode" aria-pressed="true" data-i18n="colorBy.mode">Mode</button>

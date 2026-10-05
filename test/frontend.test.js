@@ -89,6 +89,16 @@ test('every key in use has a text and every text is in use', () => {
   for (const key of Object.keys(en)) assert.ok(used.has(key) || DYNAMIC_KEYS.some((prefix) => key.startsWith(prefix)), `${key} in locales/en.js is not used`);
 });
 
+test('what index.html hides from screen readers is no stop for the keyboard either', () => {
+  const hidden = read('index.html').match(/<[a-z][^>]*\saria-hidden="true"[^>]*>/g) ?? [];
+  // the arrows of the row of filters
+  assert.equal(hidden.length, 2);
+  for (const tag of hidden) {
+    assert.match(tag, /^<button /, tag);
+    assert.match(tag, /\stabindex="-1"/, `${tag} could be reached with the Tab key`);
+  }
+});
+
 test('index.html carries the English texts and marks them for translation', () => {
   const html = read('index.html').replace(/<!--[\s\S]*?-->/g, '');
   assert.match(html, /<html lang="en">/);
