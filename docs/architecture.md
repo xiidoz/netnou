@@ -99,9 +99,10 @@ Page (`public/`):
 | `sw.js`, `manifest.webmanifest`, `icons/` | installable app and offline start |
 | `vendor/maplibre-gl/` | the map library, vendored, see [its README](../public/vendor/maplibre-gl/README.md) |
 
-`tools/` holds two scripts that are run by hand: `build-vgn-area.mjs`
+`tools/` holds three scripts that are run by hand: `build-vgn-area.mjs`
 regenerates the default area, `build-icons.mjs` renders the app icons from
-`favicon.svg`.
+`favicon.svg`, and `build-social-preview.mjs` renders the image for link
+previews from the README screenshot.
 
 ## The area
 

@@ -165,6 +165,12 @@ earlier ones.
   `npm run build:icons`, which needs Chrome, Chromium or Edge (set `CHROME`
   to its path if it is not found). Run it after changing the favicon and
   commit the result.
+- **`docs/social-preview.png`**, the image shown where the repository is
+  linked in chats and on social media, is put together from
+  `docs/screenshot.png` and the favicon by `npm run build:social`, with the
+  same browser. Run it after renewing the screenshot and commit the result.
+  GitHub does not take the image from the repository: a maintainer uploads it
+  under Settings → General → Social preview.
 - **`public/vendor/maplibre-gl/`** holds unmodified files of the MapLibre GL
   JS release. Do not edit them; see
   [public/vendor/maplibre-gl/README.md](public/vendor/maplibre-gl/README.md)

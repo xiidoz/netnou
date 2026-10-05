@@ -33,9 +33,9 @@ running instance fetches and passes on.
 
 ### Screenshot
 
-`docs/screenshot.png` shows a map of OpenFreeMap (© OpenMapTiles, data from
-OpenStreetMap) and timetable data from gtfs.de / DELFI e.V., credited in the
-image.
+`docs/screenshot.png` and `docs/social-preview.png`, which is made from it,
+show a map of OpenFreeMap (© OpenMapTiles, data from OpenStreetMap) and
+timetable data from gtfs.de / DELFI e.V., credited in the images.
 
 ## Data fetched at run time
 
