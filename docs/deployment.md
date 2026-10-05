@@ -13,7 +13,9 @@
 - Docker with Compose, or Node.js 22 or newer. Nothing else: no database, no
   npm packages.
 - Outbound HTTPS from the server to the feeds: with the defaults
-  `download.gtfs.de`, `realtime.gtfs.de` and `download.geofabrik.de`.
+  `download.gtfs.de`, `realtime.gtfs.de` and `download.geofabrik.de`. Once a
+  day it also asks `api.github.com` for a newer release, unless that is
+  switched off ([Version and updates](configuration.md#version-and-updates)).
 - Memory: about 1.5 GB for a minute or two while a timetable is imported, a
   few hundred MB otherwise.
 - Disk: less than 1 GB in the data directory during an import, about 35 MB

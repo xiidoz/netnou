@@ -8,6 +8,7 @@ export default {
   'map.zoomIn': 'Vergrößern',
   'map.zoomOut': 'Verkleinern',
   'map.credits': 'Quellenangaben ein- oder ausblenden',
+  'update.available': 'Version {version} ist verfügbar: Versionshinweise',
   'map.unsupported': 'Dieser Browser kann die Karte nicht darstellen. Sie braucht WebGL 2, das hier abgeschaltet oder nicht verfügbar ist.',
   'attribution.data': 'Fahrplan- und Echtzeitdaten, aufbereitet:',
 

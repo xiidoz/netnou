@@ -10,6 +10,7 @@ gtfs.de feeds on port 8080.
 - [Realtime polling and traffic](#realtime-polling-and-traffic)
 - [The map](#the-map)
 - [Attribution](#attribution)
+- [Version and updates](#version-and-updates)
 - [Other feeds and other countries](#other-feeds-and-other-countries)
 
 ## Settings
@@ -57,6 +58,7 @@ services:
 | `MAP_ORIGINS` | – | comma-separated http(s) URLs | further servers the map is loaded from, if the style does not take everything from its own |
 | `TILE_URL` | – | http(s) URL template with `{z}`, `{x}`, `{y}` | raster tiles as the map, instead of `MAP_STYLE_URL` |
 | `TILE_ATTRIBUTION` | `© OpenStreetMap` with a link if `TILE_URL` is set, otherwise nothing | HTML | credit shown for the map, besides what a style names itself |
+| `UPDATE_CHECK` | `on` | `on` or `off` | whether the server asks GitHub once a day for a newer release, see [Version and updates](#version-and-updates) |
 | `DATA_ATTRIBUTION` | `GTFS.DE / DELFI e.V. (CC BY-SA 4.0)` with links | HTML | credit shown on the map for the timetable and realtime data |
 
 Rules that apply to all of them:
@@ -247,6 +249,30 @@ rest. Only put text there that you control. If you change the feeds or the
 map, change the credit with them; the licences of the default sources
 require it to be visible (see
 [THIRD-PARTY-NOTICES.md](../THIRD-PARTY-NOTICES.md)).
+
+## Version and updates
+
+The page names the version it runs at the end of the credits in the corner
+of the map, and `/api/status` reports it as `version`:
+
+| Shown | What runs |
+| --- | --- |
+| `0.2.0` | the image of a release |
+| `edge · 479e29c` | an image of the main branch between two releases, with the commit it was built from |
+| `0.2.0+dev` | a checkout or an image built by hand: release 0.2.0 or anything after it |
+
+Once a day, and when it starts, the server asks `api.github.com` for the
+latest release of the repository named in `package.json`. If that release is
+newer than what runs, the page shows a small marker next to the version, to
+every visitor, which leads to the release notes. The server also says so once
+in its log (`Update: version … is available`) and in `update` of
+`/api/status`. Below 1.0 a new minor version may change settings; the release
+notes say what.
+
+`UPDATE_CHECK=off` switches this off: no request, no marker. GitHub learns
+nothing from the request but the address of the server and the name and
+version of the software. A check that fails is silent and repeated the next
+day. An `edge` build does not ask at all, since it is ahead of every release.
 
 ## Other feeds and other countries
 

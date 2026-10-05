@@ -39,6 +39,7 @@ test('defaults: the VGN, its OSM extracts, the gtfs.de feeds and OpenStreetMap t
   assert.equal(config.downloadTimeoutMs, 30 * 60_000);
   assert.equal(config.realtimeIntervalMs, 30_000);
   assert.equal(config.realtimeIdleMs, 120_000);
+  assert.equal(config.updateCheck, true);
 
   assert.equal(config.timeZone, 'Europe/Berlin');
   assert.equal(config.styleUrl, 'https://tiles.openfreemap.org/styles/bright');
@@ -89,6 +90,7 @@ test('every setting can be given', () => {
     DOWNLOAD_TIMEOUT_MINUTES: '2.5',
     REALTIME_INTERVAL_SECONDS: '10',
     REALTIME_IDLE_SECONDS: '30',
+    UPDATE_CHECK: ' Off ',
   });
   assert.equal(config.port, 0);
   assert.equal(config.host, '127.0.0.1');
@@ -109,6 +111,7 @@ test('every setting can be given', () => {
   assert.equal(config.downloadTimeoutMs, 150_000);
   assert.equal(config.realtimeIntervalMs, 10_000);
   assert.equal(config.realtimeIdleMs, 30_000);
+  assert.equal(config.updateCheck, false);
 });
 
 test('empty values count as not set, except for AREA_NAME and OSM_PBF_URLS', () => {
@@ -201,6 +204,7 @@ test('wrong settings are refused with a message that names the variable', () => 
     [{ TILE_URL: '/tiles/{z}/{x}/{y}.png' }, /^TILE_URL must be /],
     [{ TILE_URL: 'file:///tiles/{z}/{x}/{y}.png' }, /^TILE_URL must be /],
     [{ TILE_URL: 'https://tile.{s}.example.org/{z}/{x}/{y}.png' }, /^TILE_URL must be /], // only the first label can be a wildcard
+    [{ UPDATE_CHECK: 'false' }, /^UPDATE_CHECK must be "on" or "off" \(got "false"\)$/],
     [{ TIMEZONE: 'Europe/Nuernberg' }, /^TIMEZONE must be an IANA time zone name such as Europe\/Berlin \(got "Europe\/Nuernberg"\)$/],
   ];
   for (const [env, message] of cases) {

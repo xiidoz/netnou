@@ -29,7 +29,7 @@ body:
     id: version
     attributes:
       label: Version
-      description: The "version" field of /api/status, the image tag or the commit. For the public instance it is at https://netnou.xiidoz.com/api/status.
+      description: As the page shows it at the end of the credits in the corner of the map, for example 0.2.0 or edge · 479e29c. It is also the "version" field of /api/status.
     validations:
       required: true
   - type: input

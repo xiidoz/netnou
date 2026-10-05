@@ -775,8 +775,26 @@ let stationSeq = 0;
 // What the server covers and how to show it: the area and its name, the map
 // section to start with, the map behind it and the time zone. It does not
 // change while the server runs, so it is asked for until it has answered once.
+const escapeHtml = (text) => String(text).replace(/[&<>"']/g, (char) => `&#${char.charCodeAt(0)};`);
+
+/**
+ * What is running, for the credits: the name with a link to where it comes
+ * from and the version, "edge" together with its commit. If the server knows
+ * of a newer release, a marker follows that leads to the release notes.
+ * @param about the answer of api/status, or null if there was none
+ */
+function versionCredit(about) {
+  if (typeof about?.version !== 'string' || typeof about.homepage !== 'string') return '';
+  const version = about.version === 'edge' && about.commit ? `edge · ${about.commit.slice(0, 7)}` : about.version;
+  const credit = `<a href="${escapeHtml(about.homepage)}" target="_blank" rel="noopener">${APP_NAME}</a> ${escapeHtml(version)}`;
+  if (!about.update) return credit;
+  const note = escapeHtml(t('update.available', { version: about.update.version }));
+  return `${credit} <a class="update" href="${escapeHtml(about.update.url)}" title="${note}" target="_blank" rel="noopener">↑ ${escapeHtml(about.update.version)}</a>`;
+}
+
 async function loadArea() {
-  const res = await fetch('api/area');
+  // (api/status says which version runs; the map does without it if need be)
+  const [res, about] = await Promise.all([fetch('api/area'), fetch('api/status').then((status) => (status.ok ? status.json() : null)).catch(() => null)]);
   if (!res.ok) throw new Error(`api/area: HTTP ${res.status}`);
   const area = await res.json();
   if (state.areaKnown) return; // asked twice at the same time
@@ -802,7 +820,11 @@ async function loadArea() {
   // style names its sources itself; what the server adds for the map and for
   // the data is HTML and may contain links.
   map.setStyle(area.styleUrl ?? rasterStyle(area.tileUrl), { transformStyle: (previous, next) => localizedStyle(next) });
-  const credits = [area.attribution.map, `${t('attribution.data')} ${area.attribution.data}`].filter(Boolean);
+  // The version goes into one credit with the data: MapLibre puts the credits
+  // in the order of their length, and this way the version is always the last
+  // thing in the corner, with a marker or without.
+  const data = [`${t('attribution.data')} ${area.attribution.data}`, versionCredit(about)].filter(Boolean).join(' | ');
+  const credits = [area.attribution.map, data].filter(Boolean);
   // (the credits first: of the controls in a bottom corner, the one added last is on top)
   map.addControl(new AttributionControl({ customAttribution: credits }), 'bottom-right');
   map.addControl(new NavigationControl({ showCompass: false }), 'bottom-right');

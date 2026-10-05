@@ -105,3 +105,8 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+          # What the server reports as its version: the number of the release,
+          # or "edge" with this commit (see the Dockerfile).
+          build-args: |
+            COMMIT=${{ github.sha }}
+            RELEASE=${{ steps.release.outputs.tag != '' }}

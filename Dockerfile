@@ -20,6 +20,14 @@ RUN mkdir /data && chown node:node /data
 VOLUME /data
 
 ENV DATA_DIR=/data PORT=8080
+
+# What this image was built from, for the version the server reports: the
+# release workflow passes the commit and whether it is that of a release.
+# Built without them, the image calls itself a development build.
+ARG COMMIT=""
+ARG RELEASE=""
+ENV NETNOU_COMMIT=$COMMIT NETNOU_RELEASE=$RELEASE
+
 EXPOSE 8080
 USER node
 

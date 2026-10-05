@@ -8,6 +8,7 @@ import { FeedUpdater } from './lib/feed.js';
 import { RealtimePoller } from './lib/realtime.js';
 import { setTimeZone } from './lib/time.js';
 import { lite } from './lib/timetable.js';
+import { describeBuild, githubReleases, UpdateChecker } from './lib/update.js';
 
 const log = (message) => console.log(`${new Date().toISOString()} ${message}`);
 
@@ -20,7 +21,11 @@ try {
   process.exit(1);
 }
 setTimeZone(config.timeZone);
-const { version, homepage } = JSON.parse(fs.readFileSync(new URL('../package.json', import.meta.url), 'utf8'));
+const pkg = JSON.parse(fs.readFileSync(new URL('../package.json', import.meta.url), 'utf8'));
+const build = describeBuild(pkg);
+const homepage = pkg.homepage.replace(/#.*$/, '');
+// Those the server asks for data can tell what is asking and where to read about it.
+const userAgent = `Netnou/${build.version} (+${homepage})`;
 
 let timetable = null;
 
@@ -30,8 +35,14 @@ const realtime = new RealtimePoller({
   idleMs: config.realtimeIdleMs,
   getTimetable: () => timetable,
   log,
-  // The provider of the feed can tell what is asking and where to read about it.
-  userAgent: `Netnou/${version} (+${homepage.replace(/#.*$/, '')})`,
+  userAgent,
+});
+
+const updates = new UpdateChecker({
+  current: build.version,
+  releases: config.updateCheck ? githubReleases(pkg.repository) : null,
+  userAgent,
+  log,
 });
 
 const feed = new FeedUpdater({
@@ -152,7 +163,12 @@ const inBox = (box, lat, lon) => lat >= box[0] && lat <= box[2] && lon >= box[1]
 
 function status() {
   return {
-    version,
+    // What is running (see describeBuild), where it comes from and, if one is
+    // known, the newer release: { version, url }.
+    version: build.version,
+    commit: build.commit,
+    homepage,
+    update: updates.update,
     now: Math.floor(Date.now() / 1000),
     timetable: {
       ...feed.status,
@@ -282,6 +298,7 @@ server.listen(config.port, config.host, () => {
     log(`Timetable: cannot start: ${err.message}`);
     process.exit(1);
   });
+  updates.start();
 });
 
 for (const signal of ['SIGTERM', 'SIGINT']) {
