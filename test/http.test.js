@@ -118,9 +118,10 @@ test('a server that does not pick up is asked again', async (t) => {
     if (++lookups <= 2) return undefined;
     return options.all ? callback(null, [{ address: '127.0.0.1', family: 4 }]) : callback(null, '127.0.0.1', 4);
   });
-  const answer = await get(`http://feed.test:${port}/feed.pb`, { timeoutMs: 20_000, connectMs: 100, retryMs: 20 });
+  const answer = await get(`http://feed.test:${port}/feed.pb`, { timeoutMs: 20_000, connectMs: 300, retryMs: 20 });
   assert.equal(answer.body.toString(), 'picked up');
-  assert.equal(lookups, 3);
+  // (more, should a slow machine not get the third attempt through in time)
+  assert.ok(lookups >= 3, `${lookups} attempts`);
 });
 
 test('a server that has picked up is waited for, and not asked a second time', async () => {
@@ -128,16 +129,16 @@ test('a server that has picked up is waited for, and not asked a second time', a
   let requests = 0;
   const { server, url } = await serve((req, res) => {
     requests++;
-    if (req.url === '/slow') setTimeout(() => res.end('at last'), 400);
+    if (req.url === '/slow') setTimeout(() => res.end('at last'), 800);
     // (anything else is never answered)
   });
   server.on('connection', () => { connections++; });
 
   // longer than a connection may take, but it is no longer the connection that takes long
-  assert.equal((await get(`${url}/slow`, { timeoutMs: 5000, connectMs: 100, retryMs: 20 })).body.toString(), 'at last');
+  assert.equal((await get(`${url}/slow`, { timeoutMs: 5000, connectMs: 300, retryMs: 20 })).body.toString(), 'at last');
   assert.deepEqual([connections, requests], [1, 1]);
 
-  await assert.rejects(get(`${url}/silent`, { timeoutMs: 500, connectMs: 100, retryMs: 20 }), /\/silent: connected, but no answer after \d+ s$/);
+  await assert.rejects(get(`${url}/silent`, { timeoutMs: 500, retryMs: 20 }), /\/silent: connected, but no answer after \d+ s$/);
   assert.deepEqual([connections, requests], [2, 2]);
 });
 

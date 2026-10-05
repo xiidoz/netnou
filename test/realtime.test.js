@@ -47,16 +47,18 @@ test('a fetch that takes longer than the interval is waited for, and the turns i
   upstream.delay = 400;
   instance.touch();
   await sleep(200);
+  // No further turns from here on: one that came right after the answer would
+  // begin a fetch of its own, which this test and the next would trip over.
+  stop();
   // several turns have come and gone, and the first fetch is still the only one
   assert.equal(upstream.requests, 1);
+  assert.equal(instance.status.fetches, 1);
   assert.equal(instance.snapshot, null);
   await until(() => instance.snapshot, 'the slow answer');
-  stop();
   assert.equal(instance.status.feedTimestamp, 1791148698);
   assert.equal(instance.status.error, null);
-  assert.equal(instance.status.failures, 0);
-  assert.equal(instance.status.fetches, upstream.requests);
-  assert.equal(upstream.agents[0], 'Netnou/test');
+  assert.deepEqual([instance.status.fetches, instance.status.failures], [1, 0]);
+  assert.deepEqual(upstream.agents, ['Netnou/test']);
   assert.deepEqual(lines, ['Realtime: polling started']);
 });
 
