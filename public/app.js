@@ -548,6 +548,30 @@ map.on('click', (event) => {
 
 const chipCounts = new Map();
 
+/**
+ * Shows where the row of chips goes on. On a narrow screen it is one row that
+ * scrolls sideways (style.css): each of the two arrows is there while chips
+ * are out of sight on its side, and moves the row that way.
+ */
+function watchChipRow(row, back, on) {
+  const update = () => {
+    back.hidden = row.scrollLeft < 1;
+    on.hidden = row.scrollLeft + row.clientWidth > row.scrollWidth - 1;
+  };
+  const move = (direction) => row.scrollBy({ left: direction * row.clientWidth * 0.7 });
+  back.addEventListener('click', () => move(-1));
+  on.addEventListener('click', () => move(1));
+  row.addEventListener('scroll', update, { passive: true });
+  // A chip that gets the focus is to be seen whole and clear of the arrows
+  // (the scroll-padding of the row); left to themselves, browsers are content
+  // with a part of it.
+  row.addEventListener('focusin', (event) => event.target.scrollIntoView({ block: 'nearest', inline: 'nearest' }));
+  // The row gets wider or narrower with the window, what is in it with the numbers on the chips.
+  const sizes = new ResizeObserver(update);
+  for (const node of [row, ...row.children]) sizes.observe(node);
+  update();
+}
+
 function buildControls() {
   languagePicker($('language'));
 
@@ -571,6 +595,7 @@ function buildControls() {
     });
     container.append(chip);
   }
+  watchChipRow(container, $('modes-back'), $('modes-on'));
 
   const from = (seconds) => t('delay.from', { minutes: seconds / 60 });
   const legend = [['ok', t('delay.onTime')], ['minor', from(DELAY_MINOR_S)], ['major', from(DELAY_MAJOR_S)], ['severe', from(DELAY_SEVERE_S)], ['none', t('delay.none')]];

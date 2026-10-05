@@ -163,9 +163,14 @@ button { font: inherit; color: inherit; }
 }
 @media (prefers-reduced-motion: reduce) {
   .status .dot { animation: none !important; }
+  .chips { scroll-behavior: auto !important; }
 }
 
 .chips { display: flex; flex-wrap: wrap; gap: 6px; }
+/* the arrows at the ends of the row where it scrolls, see the small screens below */
+/* (min-width: or the card would grow as wide as the row instead of the row scrolling) */
+.chips-row { position: relative; min-width: 0; }
+.chips-more { display: none; }
 
 .chip {
   display: inline-flex;
@@ -414,8 +419,50 @@ li:last-child > .row.stop .rail::before { bottom: 50%; }
     gap: 7px;
   }
   .title h1 { font-size: 16px; }
-  .chips { flex-wrap: nowrap; overflow-x: auto; margin: 0 -12px; padding: 0 12px 2px; scrollbar-width: none; }
+  /* One row of chips that scrolls sideways, out to the edges of the card. */
+  .chips-row { margin: 0 -12px; }
+  /* (scroll-padding: a chip that gets the keyboard focus comes to rest clear of the arrows) */
+  .chips { flex-wrap: nowrap; overflow-x: auto; padding: 0 12px 2px; scrollbar-width: none; scroll-behavior: smooth; scroll-padding-inline: 64px; }
   .chips::-webkit-scrollbar { display: none; }
+  /* Where the row goes on (app.js knows), the chips fade out under an arrow
+     that moves the row on: without it nothing shows that there are more. */
+  .chips-more {
+    position: absolute;
+    top: 0;
+    bottom: 2px;
+    right: 0;
+    width: 60px;
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    padding: 0 6px;
+    border: 0;
+    border-radius: 0 12px 12px 0;
+    background: linear-gradient(to right, transparent, var(--bg) 50%);
+    /* Only the round button takes the finger: a swipe that begins on the fade still moves the row. */
+    pointer-events: none;
+  }
+  .chips-more.back {
+    right: auto;
+    left: 0;
+    justify-content: flex-start;
+    border-radius: 12px 0 0 12px;
+    background: linear-gradient(to left, transparent, var(--bg) 50%);
+  }
+  .chips-more span {
+    pointer-events: auto;
+    cursor: pointer;
+    width: 28px;
+    height: 28px;
+    border: 1px solid var(--border);
+    border-radius: 50%;
+    background: var(--bg);
+    box-shadow: 0 1px 4px rgb(0 0 0 / 0.2);
+    font-size: 19px;
+    font-weight: 700;
+    line-height: 24px;
+    text-align: center;
+  }
 
   .panel {
     top: auto;

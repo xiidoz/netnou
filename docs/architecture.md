@@ -295,6 +295,9 @@ otherwise a server would load a file written by older code:
 - **Accessibility.** Filters, the language picker, the detail panel and its
   lists are ordinary controls and work with the keyboard. Vehicles and
   stations exist only on the canvas and can be selected with a pointer only.
+  On a narrow screen the filters are one row that scrolls sideways; arrows at
+  its ends show that it goes on and move it. They are left out of the tab
+  order and hidden from screen readers, which reach every filter directly.
 
 ## Known limits
 
