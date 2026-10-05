@@ -6,6 +6,9 @@ delays and OpenStreetMap.
 [![CI](https://github.com/xiidoz/netnou/actions/workflows/ci.yml/badge.svg)](https://github.com/xiidoz/netnou/actions/workflows/ci.yml)
 [![Licence: MIT](https://img.shields.io/badge/licence-MIT-blue.svg)](LICENSE)
 
+**Try it:** [netnou.xiidoz.com](https://netnou.xiidoz.com) runs Netnou for the
+default area. It is a demonstration, without a promise that it is always up.
+
 ![Map of central Nürnberg with buses, trams and trains as coloured markers; a panel lists the stops of tram 10 with its delays](docs/screenshot.png)
 
 Netnou shows buses, trams, underground, suburban, regional and long-distance

@@ -18,6 +18,7 @@ body:
     attributes:
       label: How do you run Netnou?
       options:
+        - I use the public instance (netnou.xiidoz.com)
         - Docker, published image (ghcr.io/xiidoz/netnou)
         - Docker, image built from a checkout
         - Node.js (npm start)
@@ -28,30 +29,30 @@ body:
     id: version
     attributes:
       label: Version
-      description: The "version" field of /api/status, the image tag or the commit.
+      description: The "version" field of /api/status, the image tag or the commit. For the public instance it is at https://netnou.xiidoz.com/api/status.
     validations:
       required: true
   - type: input
     id: environment
     attributes:
       label: Environment
-      description: Operating system, Node.js or Docker version, and the browser if the problem is in the page.
+      description: Operating system, Node.js or Docker version, and the browser if the problem is in the page. For the public instance, the browser and the device are enough.
       placeholder: Debian 13, Docker 29, Firefox 143
   - type: textarea
     id: settings
     attributes:
       label: Settings
-      description: The environment variables you have set (BBOX, AREA_FILE, OSM_PBF_URLS, ...). Leave empty for the defaults.
+      description: The environment variables you have set (BBOX, AREA_FILE, OSM_PBF_URLS, ...). Leave empty for the defaults and for the public instance.
       render: shell
   - type: textarea
     id: status
     attributes:
       label: Output of /api/status
-      description: Open /api/status on your instance and paste the answer.
+      description: Open /api/status on your instance, or https://netnou.xiidoz.com/api/status for the public one, and paste the answer.
       render: json
   - type: textarea
     id: log
     attributes:
       label: Log output
-      description: The lines the server printed around the problem (docker compose logs netnou).
+      description: The lines the server printed around the problem (docker compose logs netnou). Leave empty for the public instance.
       render: text
