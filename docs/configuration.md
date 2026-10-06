@@ -43,7 +43,9 @@ services:
 | `DATA_DIR` | `data` in the project folder (`/data` in the image) | path | where the caches are kept; must be writable |
 | `AREA_FILE` | the built-in VGN outline | path | GeoJSON file with the polygons of the area, see [Choosing an area](#choosing-an-area) |
 | `BBOX` | – | `south,west,north,east` | a rectangle as the area, instead of `AREA_FILE` |
-| `AREA_NAME` | `Großraum Nürnberg (VGN)`; empty for a custom area | text | shown next to the title of the page |
+| `AREA_NAME` | `Großraum Nürnberg (VGN)`; empty for a custom area | text | shown next to the title of the page, and what search engines find the instance by, see [Being found](#being-found) |
+| `LANGUAGE` | `de` | a language of the page: `de`, `en` | the main language of the instance: what the page says about itself to search engines and in previews of links is in it. Visitors still get their own |
+| `PUBLIC_URL` | – | http(s) URL | the address under which visitors reach the instance, e.g. `https://transit.example.org/`, see [Being found](#being-found) |
 | `VIEW` | Nürnberg, Fürth and Erlangen; the whole area for a custom one | `south,west,north,east` | map section on a visitor's first visit; afterwards the browser remembers the last one |
 | `TIMEZONE` | `Europe/Berlin` | IANA time zone | the zone the times of the feed are in; times in the page are shown in it |
 | `FEED_URL` | `https://download.gtfs.de/germany/free/latest.zip` | http(s) URL | the GTFS timetable (zip) |
@@ -134,6 +136,40 @@ the log says:
 ```text
 Routes: OSM data could not be updated (no roads or tracks found in the area; do the extracts in OSM_PBF_URLS cover it?), keeping straight lines
 ```
+
+## Being found
+
+What a search engine reads, and what a chat shows of a link, is the page as
+the server sends it, before any script has run. The server therefore writes
+into it what the instance is:
+
+- **`AREA_NAME`** goes into the title, the description and the heading of
+  the page. It is what people look for, so name the area as they would:
+  "Großraum Nürnberg (VGN)" rather than "Area 1".
+- **`LANGUAGE`** is the language these texts are in. A visitor still gets
+  the page in the language they chose or in that of their browser.
+- **`PUBLIC_URL`** is the address of the instance as visitors type it, with
+  the path if it lives under one (`https://example.org/netnou/`). With it
+  the page names its canonical address, its versions in the other languages
+  and the picture for previews of links, and the server answers
+  `/sitemap.xml`. Without it all of that is left out, because each needs a
+  full address; the texts are there all the same.
+
+The page chooses its language in the browser, and the browser of a search
+engine speaks English. So there is an address per language, `?lang=de`,
+which shows the page in that language to whoever has not chosen one in the
+page themselves. The page names these addresses as its versions in other
+languages, and the sitemap lists them.
+
+`/robots.txt` lets search engines read everything and names the sitemap.
+The answers of the API tell them not to list data as pages
+(`X-Robots-Tag: noindex`). The API is deliberately not closed to them: a
+search engine that runs the page asks for data as a browser does, and a page
+it cannot load data for tells it that there is no connection. The price is
+that such a visit keeps the realtime feed being fetched for a while, like
+any other (see [Realtime polling and traffic](#realtime-polling-and-traffic)).
+An instance under a path has no say in the `robots.txt` of its host: that
+one is read at the root of the host only.
 
 ## Realtime polling and traffic
 

@@ -4,9 +4,12 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { LANGUAGES } from '../public/i18n.js';
 import { Area } from './lib/area.js';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+// The languages the page has texts in.
+const LANGUAGE_CODES = LANGUAGES.map(([code]) => code);
 
 // The built-in area: the VGN, the transit network around Nürnberg (see
 // tools/build-vgn-area.mjs).
@@ -25,6 +28,17 @@ const DECIMAL = /^[+-]?(\d+\.?\d*|\.\d+)$/;
 export function parseBox(text) {
   const fields = (text ?? '').split(',').map((s) => s.trim());
   return fields.length === 4 && fields.every((s) => DECIMAL.test(s)) ? fields.map(Number) : null;
+}
+
+/** An address as PUBLIC_URL may be: http(s), and nothing after the path. With a slash at its end, null if it is none. */
+function pageAddress(value) {
+  try {
+    const url = new URL(value);
+    if (!/^https?:$/.test(url.protocol) || url.search || url.hash || url.username || url.password) return null;
+    return `${url.origin}${url.pathname.replace(/\/*$/, '/')}`;
+  } catch {
+    return null;
+  }
 }
 
 function isHttpUrl(value) {
@@ -157,6 +171,11 @@ export function loadConfig(env = process.env) {
   // geometry between stops is computed from them. A custom area has to name
   // its own; without any, vehicles move in straight lines between stops. An
   // empty OSM_PBF_URLS turns the route geometry off for the VGN as well.
+  const language = text('LANGUAGE').toLowerCase() || 'de';
+  if (!LANGUAGE_CODES.includes(language)) throw invalid('LANGUAGE', `one of the languages of the page: ${LANGUAGE_CODES.join(', ')}`);
+  const publicUrl = text('PUBLIC_URL') ? pageAddress(text('PUBLIC_URL')) : null;
+  if (text('PUBLIC_URL') && !publicUrl) throw invalid('PUBLIC_URL', 'the http(s) address of the page, without a query, e.g. https://transit.example.org/');
+
   const osmUrls = env.OSM_PBF_URLS === undefined
     ? (custom ? [] : VGN.osmUrls)
     : env.OSM_PBF_URLS.split(',').map((s) => s.trim()).filter(Boolean).map((url) => httpUrl('OSM_PBF_URLS', url));
@@ -208,5 +227,11 @@ export function loadConfig(env = process.env) {
 
     // Whether to ask once a day if there is a newer release (lib/update.js).
     updateCheck: onOff('UPDATE_CHECK', true),
+
+    // What the page says about itself before any script runs, for search
+    // engines and previews of links (lib/page.js): the language it says it
+    // in, and the address under which visitors reach the instance.
+    language,
+    publicUrl,
   };
 }

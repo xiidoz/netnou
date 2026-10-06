@@ -6,6 +6,7 @@ import zlib from 'node:zlib';
 import { loadConfig, parseBox } from './config.js';
 import { FeedUpdater } from './lib/feed.js';
 import { RealtimePoller } from './lib/realtime.js';
+import { LANGUAGE_CODES, renderPage, robotsTxt, sitemapXml } from './lib/page.js';
 import { setTimeZone } from './lib/time.js';
 import { lite } from './lib/timetable.js';
 import { describeBuild, githubReleases, UpdateChecker } from './lib/update.js';
@@ -73,8 +74,9 @@ const MIME = {
   '.ico': 'image/x-icon',
   '.txt': 'text/plain; charset=utf-8',
   '.webmanifest': 'application/manifest+json',
+  '.xml': 'application/xml; charset=utf-8',
 };
-const COMPRESSIBLE = /^(text\/|application\/(json|manifest\+json)|image\/svg)/;
+const COMPRESSIBLE = /^(text\/|application\/(json|manifest\+json|xml)|image\/svg)/;
 
 const MAP_ORIGINS = config.mapOrigins.join(' ');
 const SECURITY_HEADERS = {
@@ -104,8 +106,12 @@ function send(req, res, status, type, body, headers = {}, compress = gzip) {
   res.end(req.method === 'HEAD' ? undefined : body);
 }
 
+// Data is no page for the results of a search engine. It may be read all the
+// same: a search engine that runs the page asks for it as a browser does.
+const NOT_LISTED = { 'X-Robots-Tag': 'noindex' };
+
 function sendJson(req, res, status, value, headers = {}) {
-  send(req, res, status, MIME['.json'], Buffer.from(JSON.stringify(value)), { 'Cache-Control': 'no-store', ...headers });
+  send(req, res, status, MIME['.json'], Buffer.from(JSON.stringify(value)), { 'Cache-Control': 'no-store', ...NOT_LISTED, ...headers });
 }
 
 /** Whether If-None-Match names `etag`: a list of tags, any of them possibly weak (W/"…"), or "*". */
@@ -117,6 +123,33 @@ function etagMatches(req, etag) {
 // The compressed form of each static file, by path: the map library is over a
 // megabyte, too much to compress again for every visitor.
 const compressed = new Map();
+
+// The page is index.html with what the instance is written into it
+// (lib/page.js), in its main language or the one the address asks for. Put
+// together once for each and again when the file has changed.
+const texts = Object.fromEntries(await Promise.all(LANGUAGE_CODES.map(async (code) => [code, (await import(`../public/locales/${code}.js`)).default])));
+const pages = new Map();
+
+function servePage(req, res, url) {
+  const file = path.join(config.publicDir, 'index.html');
+  const stat = fs.statSync(file);
+  const stamp = `${stat.size}-${stat.mtimeMs}`;
+  const asked = LANGUAGE_CODES.includes(url.searchParams.get('lang')) ? url.searchParams.get('lang') : null;
+  let page = pages.get(asked);
+  if (page?.stamp !== stamp) {
+    const language = asked ?? config.language;
+    const body = Buffer.from(renderPage(fs.readFileSync(file, 'utf8'), { language, asked, texts: texts[language], areaName: config.areaName, publicUrl: config.publicUrl }));
+    page = { stamp, body, etag: `"${crypto.createHash('sha1').update(body).digest('hex').slice(0, 16)}"`, packed: null };
+    pages.set(asked, page);
+  }
+  // Always revalidate, as the files are: a deploy shows up immediately.
+  const headers = { ETag: page.etag, 'Cache-Control': 'no-cache' };
+  if (etagMatches(req, page.etag)) {
+    res.writeHead(304, { ...headers, Vary: 'Accept-Encoding' });
+    return res.end();
+  }
+  return send(req, res, 200, MIME['.html'], page.body, headers, (body) => (page.packed ??= gzip(body)));
+}
 
 function serveStatic(req, res, pathname) {
   const relative = pathname.endsWith('/') ? `${pathname}index.html` : pathname;
@@ -261,7 +294,7 @@ function handleApi(req, res, url) {
     // to see.
     case '/api/search': {
       const index = searchIndex();
-      const headers = { ETag: index.etag, 'Cache-Control': 'no-cache' };
+      const headers = { ETag: index.etag, 'Cache-Control': 'no-cache', ...NOT_LISTED };
       if (etagMatches(req, index.etag)) {
         res.writeHead(304, { ...headers, Vary: 'Accept-Encoding' });
         return res.end();
@@ -310,6 +343,10 @@ const server = http.createServer((req, res) => {
     }
     const url = new URL(req.url, 'http://localhost');
     if (url.pathname.startsWith('/api/')) return handleApi(req, res, url);
+    if (url.pathname === '/' || url.pathname === '/index.html') return servePage(req, res, url);
+    if (url.pathname === '/robots.txt') return send(req, res, 200, MIME['.txt'], Buffer.from(robotsTxt(config.publicUrl)), { 'Cache-Control': 'no-cache' });
+    // (a sitemap lists full addresses, so there is none without the address of the instance)
+    if (url.pathname === '/sitemap.xml' && config.publicUrl) return send(req, res, 200, MIME['.xml'], Buffer.from(sitemapXml(config.publicUrl)), { 'Cache-Control': 'no-cache' });
     return serveStatic(req, res, decodeURIComponent(url.pathname));
   } catch (err) {
     // A URL that cannot be decoded is the client's mistake and not worth a log

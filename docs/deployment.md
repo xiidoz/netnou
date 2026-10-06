@@ -181,6 +181,11 @@ reachable through the proxy.
   }
   ```
 
+- **The public address**: tell the server under which address visitors reach
+  it, `PUBLIC_URL=https://transit.example.org/`. It cannot know that behind
+  a proxy, and without it the page cannot name its own address to search
+  engines or carry a picture for previews of links
+  ([Being found](configuration.md#being-found)).
 - **Compression and caching** need no configuration: the server compresses
   its answers and sets cache headers itself.
 - **Embedding** the page in a frame on another site is not possible: the
@@ -215,6 +220,13 @@ Worth watching:
   availability. While it is down, the vehicles move on an empty background.
   For an instance that has to be dependable, use a provider with a service
   agreement or your own tile server ([The map](configuration.md#the-map)).
+- **Being found.** Set `PUBLIC_URL`, and `AREA_NAME` to what people call
+  the area ([Being found](configuration.md#being-found)). Then tell the
+  search engines about the instance: add it to the Google Search Console and
+  the Bing Webmaster Tools and hand in `/sitemap.xml` there. Both also show
+  what people searched for when the instance was shown to them, without
+  anything being added to the page. What helps most is not in the page at
+  all: links to the instance from other sites.
 - **Load.** The API has no rate limiting of its own. Limit requests to
   `/api/` at the reverse proxy if the instance is exposed to the internet.
   Every client that asks for vehicles also keeps the server fetching the

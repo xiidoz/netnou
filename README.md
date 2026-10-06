@@ -45,6 +45,8 @@ changes as breaking.
   their browser.
 - User interface in German and English, chosen per visitor; further languages
   are one file each.
+- Tells search engines and link previews what it shows and where, in the
+  instance's own language.
 - Installable as an app (PWA).
 - One Node.js process, no database, no npm dependencies at run time, no build
   step.
@@ -101,6 +103,7 @@ ones most people touch:
 | `BBOX` | – | area to cover as `south,west,north,east`, instead of the VGN |
 | `AREA_FILE` | built-in VGN | GeoJSON file with the polygons of the area |
 | `AREA_NAME` | `Großraum Nürnberg (VGN)` | shown next to the title |
+| `PUBLIC_URL` | – | the address visitors reach the instance under, for search engines and previews of links |
 | `OSM_PBF_URLS` | five Bavarian extracts | OpenStreetMap extracts covering the area |
 | `MAP_STYLE_URL` | OpenFreeMap, style `bright` | the map behind the vehicles, as a MapLibre style |
 

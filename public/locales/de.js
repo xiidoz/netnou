@@ -1,7 +1,9 @@
 // Deutsch. Same keys as en.js, which also explains the format.
 
 export default {
+  'page.title': 'ÖPNV-Live-Karte',
   'page.description': 'Live-Karte des öffentlichen Nahverkehrs: Busse, Straßenbahnen, U-, S- und Regionalbahnen mit aktuellen Verspätungen.',
+  'page.descriptionIn': '{area}: Busse, Straßenbahnen, U-, S- und Regionalbahnen live auf der Karte, mit aktuellen Verspätungen und Abfahrten in Echtzeit.',
   'language.label': 'Sprache',
 
   'map.label': 'Karte mit den aktuellen Positionen der Fahrzeuge',
