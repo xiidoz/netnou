@@ -34,6 +34,17 @@ test('the service worker precaches files that exist', () => {
   for (const file of ['app.js', 'i18n.js', 'search.js', 'style.css']) assert.ok(shell.includes(file), `${file} is missing in SHELL of sw.js`);
 });
 
+// An installed app starts from the shell alone: a script in it that imports
+// one that is not would leave the page blank without a connection.
+test('what the scripts of the page import is precached with them', () => {
+  for (const file of shell.filter((name) => name.endsWith('.js') || name.endsWith('.mjs'))) {
+    const folder = file.includes('/') ? file.slice(0, file.lastIndexOf('/') + 1) : '';
+    for (const [, target] of withoutComments(read(file)).matchAll(/\bfrom\s*['"]\.\/([^'"]+)['"]/g)) {
+      assert.ok(shell.includes(folder + target), `${file} imports ${folder}${target}, which is not in SHELL of sw.js`);
+    }
+  }
+});
+
 test('a language is a file in locales/, an entry in LANGUAGES and one in the shell of the service worker', () => {
   const files = fs.readdirSync(new URL('locales/', publicDir)).map((name) => name.replace(/\.js$/, ''));
   const precached = shell.filter((file) => file.startsWith('locales/')).map((file) => file.slice('locales/'.length, -'.js'.length));

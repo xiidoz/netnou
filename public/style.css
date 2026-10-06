@@ -72,6 +72,10 @@ body {
 }
 
 button { font: inherit; color: inherit; }
+
+/* The icons on the page's own buttons (ICONS in app.js): shapes in the colour
+   of the text around them, in a box that whatever holds it centres as a whole. */
+.icon { display: block; flex: none; width: 20px; height: 20px; fill: currentColor; }
 [hidden] { display: none !important; }
 
 #map {
@@ -143,36 +147,9 @@ button { font: inherit; color: inherit; }
 
 /* ---------- search ---------- */
 
-/* A lens, drawn: a ring and its handle. The box is that of both together, so
-   that what centres it centres the whole of it and not the ring. */
-.lens { position: relative; display: block; width: 16px; height: 16px; }
-.lens::before {
-  content: "";
-  position: absolute;
-  left: 0;
-  top: 0;
-  /* (the rule for all elements above does not reach what CSS itself adds to them) */
-  box-sizing: border-box;
-  width: 11px;
-  height: 11px;
-  border: 2px solid currentColor;
-  border-radius: 50%;
-}
-.lens::after {
-  content: "";
-  position: absolute;
-  left: 8px;
-  top: 9px;
-  width: 2px;
-  height: 7px;
-  border-radius: 1px;
-  background: currentColor;
-  transform: rotate(-45deg);
-  transform-origin: top center;
-}
-
 .search { position: relative; display: flex; gap: 6px; color: var(--text-muted); }
-.search > .lens { position: absolute; left: 9px; top: calc(50% - 8px); pointer-events: none; }
+/* the lens in the field */
+.search-sign { position: absolute; left: 7px; top: calc(50% - 10px); pointer-events: none; }
 .search input {
   flex: 1;
   min-width: 0;
@@ -369,11 +346,12 @@ button:focus-visible, select:focus-visible, .row:focus-visible, .panel:focus-vis
   right: 8px;
   width: 32px;
   height: 32px;
+  display: grid;
+  place-items: center;
+  padding: 0;
   border: 0;
   border-radius: 50%;
   background: var(--bg-subtle);
-  font-size: 20px;
-  line-height: 1;
   cursor: pointer;
 }
 
@@ -438,8 +416,6 @@ button:focus-visible, select:focus-visible, .row:focus-visible, .panel:focus-vis
   border: 0;
   background: none;
   color: var(--text-muted);
-  font-size: 17px;
-  line-height: 1;
   cursor: pointer;
 }
 
@@ -547,7 +523,7 @@ li:last-child > .row.stop .rail::before { bottom: 50%; }
     cursor: pointer;
   }
   .search-open { margin: -4px 0; color: var(--text-muted); }
-  .search-close { width: 34px; height: 34px; font-size: 20px; line-height: 1; color: var(--text); }
+  .search-close { width: 34px; height: 34px; color: var(--text); }
   .search { display: none; }
   .controls.searching .title { display: none; }
   .controls.searching .search { display: flex; }
@@ -594,10 +570,8 @@ li:last-child > .row.stop .rail::before { bottom: 50%; }
     border-radius: 50%;
     background: var(--bg);
     box-shadow: 0 1px 4px rgb(0 0 0 / 0.2);
-    font-size: 19px;
-    font-weight: 700;
-    line-height: 24px;
-    text-align: center;
+    display: grid;
+    place-items: center;
   }
 
   .panel {

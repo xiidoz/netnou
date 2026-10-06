@@ -26,6 +26,7 @@ const SHELL = [
   'vendor/maplibre-gl/maplibre-gl-shared.mjs',
   'vendor/maplibre-gl/maplibre-gl-worker.mjs',
   'vendor/maplibre-gl/maplibre-gl.css',
+  'vendor/material-design-icons/icons.js',
 ];
 
 self.addEventListener('install', (event) => {
