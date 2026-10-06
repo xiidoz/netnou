@@ -143,10 +143,16 @@ button { font: inherit; color: inherit; }
 
 /* ---------- search ---------- */
 
-/* a lens, drawn: a ring and its handle */
-.lens {
-  position: relative;
-  display: block;
+/* A lens, drawn: a ring and its handle. The box is that of both together, so
+   that what centres it centres the whole of it and not the ring. */
+.lens { position: relative; display: block; width: 16px; height: 16px; }
+.lens::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0;
+  /* (the rule for all elements above does not reach what CSS itself adds to them) */
+  box-sizing: border-box;
   width: 11px;
   height: 11px;
   border: 2px solid currentColor;
@@ -155,10 +161,10 @@ button { font: inherit; color: inherit; }
 .lens::after {
   content: "";
   position: absolute;
-  left: 7px;
-  top: 7px;
+  left: 8px;
+  top: 9px;
   width: 2px;
-  height: 6px;
+  height: 7px;
   border-radius: 1px;
   background: currentColor;
   transform: rotate(-45deg);
@@ -166,7 +172,7 @@ button { font: inherit; color: inherit; }
 }
 
 .search { position: relative; display: flex; gap: 6px; color: var(--text-muted); }
-.search > .lens { position: absolute; left: 10px; top: 9px; pointer-events: none; }
+.search > .lens { position: absolute; left: 9px; top: calc(50% - 8px); pointer-events: none; }
 .search input {
   flex: 1;
   min-width: 0;
