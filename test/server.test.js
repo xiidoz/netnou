@@ -48,7 +48,7 @@ const REALTIME = encodeFeed({
 // Every setting the server reads; none may leak in from the shell running the tests.
 const SETTINGS = ['PORT', 'HOST', 'DATA_DIR', 'AREA_FILE', 'BBOX', 'AREA_NAME', 'VIEW', 'TIMEZONE', 'MAP_STYLE_URL', 'MAP_ORIGINS', 'TILE_URL', 'TILE_ATTRIBUTION', 'DATA_ATTRIBUTION',
   'OSM_PBF_URLS', 'OSM_MAX_AGE_DAYS', 'FEED_URL', 'FEED_CHECK_MINUTES', 'DOWNLOAD_TIMEOUT_MINUTES', 'REALTIME_URL', 'REALTIME_INTERVAL_SECONDS', 'REALTIME_IDLE_SECONDS', 'UPDATE_CHECK',
-  'LANGUAGE', 'PUBLIC_URL'];
+  'LANGUAGE', 'PUBLIC_URL', 'SEARCH_ENGINES'];
 // What an image carries about its build, which a checkout does not have.
 const BUILD = ['NETNOU_COMMIT', 'NETNOU_RELEASE'];
 
@@ -500,6 +500,35 @@ test('the server stops when asked to', async () => {
   } else {
     assert.equal(code, 0);
     assert.match(output, /SIGTERM received, shutting down/);
+  }
+});
+
+// (the server of the tests above knows its address and is therefore one that may be listed)
+test('an instance that is not to be listed says so with every answer', async () => {
+  for (const [settings, address] of [[{}, null], [{ PUBLIC_URL: 'https://test.example.org/', SEARCH_ENGINES: 'off' }, 'https://test.example.org/']]) {
+    const proc = start({ PORT: '0', HOST: '127.0.0.1', DATA_DIR: path.join(dir, 'unlisted'), BBOX: BBOX.join(','), FEED_URL: `${upstream.url}/feed.zip`, REALTIME_URL: `${upstream.url}/realtime.pb`, ...settings });
+    let text = '';
+    proc.stdout.on('data', (chunk) => { text += chunk; });
+    proc.stderr.on('data', (chunk) => { text += chunk; });
+    try {
+      port = Number((await until(() => /Netnou listening on http:\/\/127\.0\.0\.1:(\d+)/.exec(text), 'the second server to listen'))[1]);
+      for (const pathname of ['/', '/?lang=en', '/app.js', '/icons/icon-192.png', '/robots.txt', '/api/status', '/nothing-there']) {
+        assert.equal((await request(pathname)).headers['x-robots-tag'], 'noindex', `${pathname} with ${JSON.stringify(settings)}`);
+      }
+      const page = (await request('/')).body.toString();
+      assert.ok(page.includes('<meta name="robots" content="noindex">'));
+      assert.ok(!page.includes('rel="canonical"') && !page.includes('hreflang'));
+      // a link to it still shows what it is, with a picture if it knows its address
+      assert.match(page, /<meta property="og:title" content="ÖPNV-Live-Karte – Netnou">/);
+      assert.equal(page.includes('og:image'), address !== null);
+      if (address) assert.ok(page.includes(`<meta property="og:image" content="${address}icons/icon-512.png">`));
+      // it may be read, or nobody would see the request; but it is not handed out
+      assert.equal((await request('/robots.txt')).body.toString(), 'User-agent: *\nAllow: /\n');
+      assert.equal((await request('/sitemap.xml')).status, 404);
+    } finally {
+      proc.kill();
+      await once(proc, 'exit');
+    }
   }
 });
 

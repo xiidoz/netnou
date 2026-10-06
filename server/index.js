@@ -79,7 +79,16 @@ const MIME = {
 const COMPRESSIBLE = /^(text\/|application\/(json|manifest\+json|xml)|image\/svg)/;
 
 const MAP_ORIGINS = config.mapOrigins.join(' ');
+// Data is no page for the results of a search engine, and on an instance that
+// is not to be found (SEARCH_ENGINES) nothing is. It may be read all the same:
+// a search engine that runs the page asks for data as a browser does, and one
+// that may not read an answer never sees that it is asked not to list it.
+const NOT_LISTED = { 'X-Robots-Tag': 'noindex' };
+// A sitemap lists full addresses, and it is an invitation.
+const sitemapAt = config.searchEngines ? config.publicUrl : null;
+
 const SECURITY_HEADERS = {
+  ...(config.searchEngines ? {} : NOT_LISTED),
   'X-Content-Type-Options': 'nosniff',
   'Referrer-Policy': 'strict-origin-when-cross-origin',
   // The map is the only thing the page loads from elsewhere: MapLibre fetches
@@ -105,10 +114,6 @@ function send(req, res, status, type, body, headers = {}, compress = gzip) {
   res.writeHead(status, head);
   res.end(req.method === 'HEAD' ? undefined : body);
 }
-
-// Data is no page for the results of a search engine. It may be read all the
-// same: a search engine that runs the page asks for it as a browser does.
-const NOT_LISTED = { 'X-Robots-Tag': 'noindex' };
 
 function sendJson(req, res, status, value, headers = {}) {
   send(req, res, status, MIME['.json'], Buffer.from(JSON.stringify(value)), { 'Cache-Control': 'no-store', ...NOT_LISTED, ...headers });
@@ -138,7 +143,7 @@ function servePage(req, res, url) {
   let page = pages.get(asked);
   if (page?.stamp !== stamp) {
     const language = asked ?? config.language;
-    const body = Buffer.from(renderPage(fs.readFileSync(file, 'utf8'), { language, asked, texts: texts[language], areaName: config.areaName, publicUrl: config.publicUrl }));
+    const body = Buffer.from(renderPage(fs.readFileSync(file, 'utf8'), { language, asked, texts: texts[language], areaName: config.areaName, publicUrl: config.publicUrl, listed: config.searchEngines }));
     page = { stamp, body, etag: `"${crypto.createHash('sha1').update(body).digest('hex').slice(0, 16)}"`, packed: null };
     pages.set(asked, page);
   }
@@ -344,9 +349,8 @@ const server = http.createServer((req, res) => {
     const url = new URL(req.url, 'http://localhost');
     if (url.pathname.startsWith('/api/')) return handleApi(req, res, url);
     if (url.pathname === '/' || url.pathname === '/index.html') return servePage(req, res, url);
-    if (url.pathname === '/robots.txt') return send(req, res, 200, MIME['.txt'], Buffer.from(robotsTxt(config.publicUrl)), { 'Cache-Control': 'no-cache' });
-    // (a sitemap lists full addresses, so there is none without the address of the instance)
-    if (url.pathname === '/sitemap.xml' && config.publicUrl) return send(req, res, 200, MIME['.xml'], Buffer.from(sitemapXml(config.publicUrl)), { 'Cache-Control': 'no-cache' });
+    if (url.pathname === '/robots.txt') return send(req, res, 200, MIME['.txt'], Buffer.from(robotsTxt(sitemapAt)), { 'Cache-Control': 'no-cache' });
+    if (url.pathname === '/sitemap.xml' && sitemapAt) return send(req, res, 200, MIME['.xml'], Buffer.from(sitemapXml(sitemapAt)), { 'Cache-Control': 'no-cache' });
     return serveStatic(req, res, decodeURIComponent(url.pathname));
   } catch (err) {
     // A URL that cannot be decoded is the client's mistake and not worth a log

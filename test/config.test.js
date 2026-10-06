@@ -29,6 +29,14 @@ test('what the page says about itself: its main language and the address of the 
     assert.equal(loadConfig({ PUBLIC_URL: given }).publicUrl, taken, given);
   }
   assert.equal(loadConfig({ PUBLIC_URL: ' ' }).publicUrl, null);
+
+  // Search engines may list an instance that knows its address, and no other, unless the operator says so.
+  assert.equal(loadConfig({}).searchEngines, false);
+  assert.equal(loadConfig({ PUBLIC_URL: 'https://karte.example.org/' }).searchEngines, true);
+  assert.equal(loadConfig({ PUBLIC_URL: 'https://karte.example.org/', SEARCH_ENGINES: 'off' }).searchEngines, false);
+  assert.equal(loadConfig({ SEARCH_ENGINES: 'ON' }).searchEngines, true);
+  assert.equal(loadConfig({ SEARCH_ENGINES: 'off' }).searchEngines, false);
+  assert.throws(() => loadConfig({ SEARCH_ENGINES: 'no' }), /^Error: SEARCH_ENGINES must be "on" or "off" \(got "no"\)$/);
   for (const wrong of ['karte.example.org', 'ftp://example.org/', 'https://example.org/?lang=de', 'https://example.org/#map', 'https://user:secret@example.org/']) {
     assert.throws(() => loadConfig({ PUBLIC_URL: wrong }), /^Error: PUBLIC_URL must be the http\(s\) address of the page, without a query, /, wrong);
   }

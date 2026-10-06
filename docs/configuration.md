@@ -46,6 +46,7 @@ services:
 | `AREA_NAME` | `Großraum Nürnberg (VGN)`; empty for a custom area | text | shown next to the title of the page, and what search engines find the instance by, see [Being found](#being-found) |
 | `LANGUAGE` | `de` | a language of the page: `de`, `en` | the main language of the instance: what the page says about itself to search engines and in previews of links is in it. Visitors still get their own |
 | `PUBLIC_URL` | – | http(s) URL | the address under which visitors reach the instance, e.g. `https://transit.example.org/`, see [Being found](#being-found) |
+| `SEARCH_ENGINES` | `on` if `PUBLIC_URL` is set, otherwise `off` | `on` or `off` | whether search engines may list the instance, see [Being found](#being-found) |
 | `VIEW` | Nürnberg, Fürth and Erlangen; the whole area for a custom one | `south,west,north,east` | map section on a visitor's first visit; afterwards the browser remembers the last one |
 | `TIMEZONE` | `Europe/Berlin` | IANA time zone | the zone the times of the feed are in; times in the page are shown in it |
 | `FEED_URL` | `https://download.gtfs.de/germany/free/latest.zip` | http(s) URL | the GTFS timetable (zip) |
@@ -161,7 +162,20 @@ which shows the page in that language to whoever has not chosen one in the
 page themselves. The page names these addresses as its versions in other
 languages, and the sitemap lists them.
 
-`/robots.txt` lets search engines read everything and names the sitemap.
+Whether search engines may list the instance at all is `SEARCH_ENGINES`.
+If nothing is set, an instance that knows its address is listed and any
+other is not: most instances are private or for trying things out, and one
+that is reachable under several names cannot say which of them it is. Set
+`SEARCH_ENGINES=off` for an instance that has an address and is not meant
+to be found, such as a test instance next to the real one; without it the
+two compete in the results, with the same content. An instance that is not
+listed asks for that with every answer (`X-Robots-Tag: noindex`) and in
+the page, has no sitemap, and leaves out what is in the page for search
+engines alone. A link to it still shows a preview.
+
+`/robots.txt` lets search engines read everything, also on an instance that
+is not listed: one that may not read a page never sees that it is asked not
+to list it. Where there is a sitemap, `/robots.txt` names it.
 The answers of the API tell them not to list data as pages
 (`X-Robots-Tag: noindex`). The API is deliberately not closed to them: a
 search engine that runs the page asks for data as a browser does, and a page
