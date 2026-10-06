@@ -6,7 +6,8 @@ name: Release
 #    next version from the commit messages since the last release (see
 #    CONTRIBUTING.md), sets it in package.json and writes CHANGELOG.md. Merging
 #    that pull request is the release: release-please then tags the commit
-#    vX.Y.Z and publishes a GitHub release.
+#    vX.Y.Z and publishes a GitHub release. Whatever the push was, the pull
+#    request ends up on top of it (see the second step of the first job).
 # 2. The container image is built and pushed to ghcr.io/xiidoz/netnou: always
 #    as "edge", and for a release also as "latest", X.Y.Z, X.Y and - from
 #    1.0.0 on - X. So "latest" is the newest release and "edge" is main.
@@ -48,6 +49,37 @@ jobs:
           # request. A personal access token or app token in this secret
           # changes that; without the secret everything else works the same.
           token: ${{ secrets.RELEASE_PLEASE_TOKEN || secrets.GITHUB_TOKEN }}
+
+      # release-please writes its pull request anew only when a push adds
+      # something to the notes. After any other push (docs, tests, CI) it
+      # leaves it as it is, behind main, and main takes no pull request that
+      # does not contain its latest commit. So it is put on top of main here,
+      # as release-please itself leaves it: the same change, moved. Version
+      # and changelog stay what release-please made them.
+      - name: Keep the release pull request on top of main
+        run: |
+          # the one release-please made: by its label and the name of its branch here, not in a fork
+          own='map(select((.isCrossRepository | not) and (.headRefName | startswith("release-please--"))))[0].number // empty'
+          number=$(gh pr list --state open --base "$GITHUB_REF_NAME" --label 'autorelease: pending' --json number,headRefName,isCrossRepository --jq "$own")
+          if [ -z "$number" ]; then
+            echo "No release pull request is open."
+            exit 0
+          fi
+          head=$(gh pr view "$number" --json headRefName --jq .headRefName)
+          behind=$(gh api "repos/$GH_REPO/compare/$head...$GITHUB_REF_NAME" --jq .ahead_by)
+          if [ "$behind" = 0 ]; then
+            echo "Pull request #$number contains the latest commit of $GITHUB_REF_NAME."
+            exit 0
+          fi
+          echo "Pull request #$number is behind $GITHUB_REF_NAME by $behind."
+          # Not worth a failed release run: until it is brought up to date by
+          # hand, the pull request just cannot be merged.
+          if ! gh pr update-branch "$number" --rebase; then
+            echo "::warning title=Release pull request left behind::Pull request #$number could not be put on top of $GITHUB_REF_NAME. Use \"Update branch\" on it before merging it."
+          fi
+        env:
+          GH_TOKEN: ${{ secrets.RELEASE_PLEASE_TOKEN || secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
 
   image:
     name: Container image

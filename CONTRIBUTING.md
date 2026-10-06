@@ -256,16 +256,21 @@ without one of its fixes in the notes because GitHub had started no workflow
 for a merge, and nothing kept the release pull request from being merged as
 it was.
 
-release-please writes the pull request anew, on top of the latest `main`,
-when a merge adds something to the notes. After a merge that adds nothing to
-them (docs, tests, CI) it leaves the pull request as it is, which is then
-behind `main`. So when the release pull request is behind:
+The workflow sees to it that the release pull request contains the latest
+commit of `main` after every push, whatever was pushed. release-please
+writes it anew when a merge adds something to the notes; after a merge that
+adds nothing to them (docs, tests, CI) it leaves the pull request as it is,
+and a second step of the workflow moves it on top of `main`, with the
+version and the changelog as release-please made them.
+
+Should the release pull request be behind `main` all the same:
 
 1. See under Actions that the workflow "Release" has run for the latest
    commit of `main`. If it has not, start it by hand for `main` (Actions →
    Release → Run workflow) and wait for it.
-2. If the pull request is still behind after that, what it lacks adds
-   nothing to the notes: bring it up to date with "Update branch".
+2. If the pull request is still behind after that, the run says so in a
+   warning, and what the pull request lacks adds nothing to the notes: bring
+   it up to date with "Update branch".
 
 Not the other way round: "Update branch" brings in the commits but not their
 lines in the changelog, so it must not stand in for a run of the workflow
@@ -278,9 +283,9 @@ For maintainers, three things outside the repository files:
   its pull request.
 - GitHub does not start workflows for what a workflow does with its own
   token, so the checks of the release pull request do not run by themselves.
-  They are needed for merging it: start them by hand each time
-  release-please has written it anew, or store a personal access token (or
-  an app token) with write access to contents and pull requests as the
+  They are needed for merging it: start them by hand each time the workflow
+  has written or moved it, or store a personal access token (or an app
+  token) with write access to contents, pull requests and issues as the
   secret `RELEASE_PLEASE_TOKEN`, with which they start by themselves.
 - The rule for `main` is a ruleset under Settings → Rules: a pull request is
   required, and so are the status checks "CI passed" and "Conventional
