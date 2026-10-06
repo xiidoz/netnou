@@ -13,7 +13,7 @@ import { LANGUAGE_CODES, renderPage, robotsTxt, sitemapXml } from '../server/lib
 const html = fs.readFileSync(new URL('../public/index.html', import.meta.url), 'utf8');
 const URL_ = 'https://karte.example.org/live/';
 const tag = (page, pattern) => pattern.exec(page)?.[1];
-const german = { language: 'de', asked: null, texts: de, areaName: 'Großraum Nürnberg (VGN)', publicUrl: URL_ };
+const german = { language: 'de', asked: null, texts: de, areaName: 'Großraum Nürnberg (VGN)', publicUrl: URL_, listed: true };
 
 test('the languages of the page are those of its texts', () => {
   assert.deepEqual(LANGUAGE_CODES, LANGUAGES.map(([code]) => code));
@@ -66,6 +66,22 @@ test('without the address of the instance, nothing that needs one', () => {
   assert.equal(tag(page, /<title>([^<]*)<\/title>/), 'ÖPNV-Live-Karte: Großraum Nürnberg (VGN) – Netnou');
   assert.match(page, /<meta property="og:title"/);
   for (const part of ['rel="canonical"', 'hreflang', 'og:url', 'og:image']) assert.ok(!page.includes(part), part);
+});
+
+test('a page that is not to be listed says so and keeps what a preview of a link needs', () => {
+  const page = renderPage(html, { ...german, listed: false });
+  assert.ok(page.includes('<meta name="robots" content="noindex">'));
+  // what is there for search engines alone is left out
+  for (const part of ['rel="canonical"', 'hreflang']) assert.ok(!page.includes(part), part);
+  // texts and the picture are as on any other
+  assert.equal(tag(page, /<title>([^<]*)<\/title>/), 'ÖPNV-Live-Karte: Großraum Nürnberg (VGN) – Netnou');
+  assert.equal(tag(page, /<meta property="og:url" content="([^"]*)"/), URL_);
+  assert.equal(tag(page, /<meta property="og:image" content="([^"]*)"/), `${URL_}icons/icon-512.png`);
+  assert.ok(!renderPage(html, german).includes('name="robots"'));
+  // not listed and without an address: the texts and the request, nothing else
+  const bare = renderPage(html, { ...german, listed: false, publicUrl: null });
+  assert.ok(bare.includes('<meta name="robots" content="noindex">'));
+  for (const part of ['og:url', 'og:image', 'rel="canonical"', 'hreflang']) assert.ok(!bare.includes(part), part);
 });
 
 test('an area without a name, and a name that is not plain text', () => {

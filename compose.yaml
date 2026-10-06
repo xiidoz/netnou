@@ -45,6 +45,10 @@ services:
       # name its own address to search engines and carry a picture for
       # previews of links, and there is a /sitemap.xml.
       # PUBLIC_URL: "https://transit.example.org/"
+      # For an instance with an address that search engines are not to list,
+      # such as a test instance next to the real one. Without an address an
+      # instance is not listed anyway.
+      # SEARCH_ENGINES: "off"
       # No daily question to GitHub whether there is a newer release, and no
       # marker in the page when there is one.
       # UPDATE_CHECK: "off"

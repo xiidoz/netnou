@@ -227,6 +227,11 @@ Worth watching:
   what people searched for when the instance was shown to them, without
   anything being added to the page. What helps most is not in the page at
   all: links to the instance from other sites.
+- **A test instance next to it,** one that runs the `edge` image for
+  example, gets `SEARCH_ENGINES=off`. It stays open to everybody, and a link
+  to it keeps its preview if it has its own `PUBLIC_URL`, but search engines
+  are asked not to list it. Otherwise they find the same content under two
+  addresses and choose one themselves.
 - **Load.** The API has no rate limiting of its own. Limit requests to
   `/api/` at the reverse proxy if the instance is exposed to the internet.
   Every client that asks for vehicles also keeps the server fetching the

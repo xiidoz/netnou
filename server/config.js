@@ -233,5 +233,10 @@ export function loadConfig(env = process.env) {
     // in, and the address under which visitors reach the instance.
     language,
     publicUrl,
+    // Whether search engines may list the instance. If nothing is said, one
+    // that knows its own address is listed and any other is not: most
+    // instances are private or for trying things out, and whoever names the
+    // address wants to be found.
+    searchEngines: onOff('SEARCH_ENGINES', Boolean(publicUrl)),
   };
 }

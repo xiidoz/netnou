@@ -32,8 +32,10 @@ const versions = (publicUrl) => [...LANGUAGE_CODES.map((code) => [code, addressI
  * @param areaName may be empty
  * @param publicUrl the address of the instance with a slash at its end, or
  *   null: then all that needs a full address is left out
+ * @param listed whether search engines may list the page; if not, it asks
+ *   them not to and leaves out what is there for them alone
  */
-export function renderPage(html, { language, asked, texts, areaName, publicUrl }) {
+export function renderPage(html, { language, asked, texts, areaName, publicUrl, listed }) {
   const { title, description } = pageTexts(areaName, texts);
   let page = html;
   const put = (pattern, replacement) => {
@@ -54,11 +56,17 @@ export function renderPage(html, { language, asked, texts, areaName, publicUrl }
     `<meta property="og:description" content="${escapeHtml(description)}">`,
     '<meta name="twitter:card" content="summary">',
   ];
+  // (also said with every answer of the server, see NOT_LISTED in index.js)
+  if (!listed) tags.push('<meta name="robots" content="noindex">');
   if (publicUrl) {
     const address = escapeHtml(addressIn(publicUrl, asked));
+    if (listed) {
+      tags.push(
+        `<link rel="canonical" href="${address}">`,
+        ...versions(publicUrl).map(([code, href]) => `<link rel="alternate" hreflang="${code}" href="${escapeHtml(href)}">`),
+      );
+    }
     tags.push(
-      `<link rel="canonical" href="${address}">`,
-      ...versions(publicUrl).map(([code, href]) => `<link rel="alternate" hreflang="${code}" href="${escapeHtml(href)}">`),
       `<meta property="og:url" content="${address}">`,
       `<meta property="og:image" content="${escapeHtml(publicUrl + PREVIEW_IMAGE.path)}">`,
       `<meta property="og:image:width" content="${PREVIEW_IMAGE.size}">`,
@@ -69,9 +77,14 @@ export function renderPage(html, { language, asked, texts, areaName, publicUrl }
   return page;
 }
 
-/** Search engines may read everything; what is not to be listed says so itself (X-Robots-Tag on the answers of the API). */
-export function robotsTxt(publicUrl) {
-  return `User-agent: *\nAllow: /\n${publicUrl ? `\nSitemap: ${publicUrl}sitemap.xml\n` : ''}`;
+/**
+ * Search engines may read everything, also on an instance that is not to be
+ * listed: what is not to be listed says so itself, in a header of the answer,
+ * and a search engine that may not read it would never get to see that.
+ * @param sitemapAt the address of the instance if it has a sitemap, else null
+ */
+export function robotsTxt(sitemapAt) {
+  return `User-agent: *\nAllow: /\n${sitemapAt ? `\nSitemap: ${sitemapAt}sitemap.xml\n` : ''}`;
 }
 
 /** The addresses of the page, each with the others as its versions in other languages. */
