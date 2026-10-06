@@ -342,6 +342,8 @@ button:focus-visible, select:focus-visible, .row:focus-visible, .panel:focus-vis
 
 .close {
   position: absolute;
+  /* (above the row that stays at the top of what scrolls below it, see .back-row) */
+  z-index: 2;
   top: 8px;
   right: 8px;
   width: 32px;
@@ -406,12 +408,15 @@ button:focus-visible, select:focus-visible, .row:focus-visible, .panel:focus-vis
 /* the vehicles of a line: the stop ahead and the delay, under a heading that says where they go */
 .row.vehicle { grid-template-columns: 1fr auto; }
 .rows-head { margin: 0; padding: 10px 14px 0; color: var(--text-muted); font-size: 13px; font-weight: 650; }
-/* from a trip back to the line it was chosen from */
+/* From a trip back to the line it was chosen from: a row that stays at the top
+   of the panel while the stops scroll below it, left of the button that closes. */
+.back-row { position: sticky; top: 0; z-index: 1; padding: 10px 48px 0 12px; background: var(--bg); }
+.back-row + .panel-head { padding-top: 8px; }
 .back {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
-  margin: 0 0 8px;
+  gap: 3px;
+  margin: 0;
   padding: 0;
   border: 0;
   background: none;
