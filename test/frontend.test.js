@@ -136,7 +136,7 @@ test('app.js has no text for visitors of its own', () => {
     /\.font = $/, // a canvas font
   ];
   // Where a literal is written out as it is.
-  const SINKS = /(\.textContent = |\btext: |\btitle: |'aria-label': |showBanner\(|\.fillText\()$/;
+  const SINKS = /(\.textContent = |\btext: |\btitle: |'aria-label': |showBanner\(|showNote\(|\.fillText\()$/;
   const nonAsciiLetter = (text) => [...text].some((char) => char > '\x7f' && /\p{L}/u.test(char));
 
   let literals = 0;
@@ -161,6 +161,15 @@ test('the mode ids of the server, the page, the style sheet and the texts are th
   assert.deepEqual([...new Set([...read('style.css').matchAll(/^\s*--mode-([a-z]+):/gm)].map((match) => match[1]))].sort(), expected, '--mode-* in style.css');
   assert.deepEqual(Object.keys(en).filter((key) => key.startsWith('mode.')).map((key) => key.slice('mode.'.length)).sort(), expected, 'mode.* in locales/en.js');
   for (const name of ['MODES', 'RAIL_MODES']) for (const mode of arrayIn(app, name)) assert.ok(MODES.includes(mode), `${mode} in ${name} of app.js`);
+});
+
+// The button for the visitor's own position is the page's, its icons are the
+// library's: an update of the library that renames them would leave it blank.
+test('the classes app.js borrows from the map library are in its style sheet', () => {
+  const css = read('vendor/maplibre-gl/maplibre-gl.css');
+  const borrowed = new Set(read('app.js').match(/\bmaplibregl-[a-z-]+/g));
+  assert.ok(borrowed.size > 0, 'the classes were not found in app.js');
+  for (const name of borrowed) assert.match(css, new RegExp(`\\.${name}(?![\\w-])`), `.${name} is not in the style sheet of MapLibre`);
 });
 
 // ('xx' stands for a language the page does not have, whatever is added to it)

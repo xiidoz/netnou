@@ -266,8 +266,8 @@ otherwise a server would load a file written by older code:
 - **Map.** MapLibre GL JS draws the map with WebGL, from the vector tiles of
   the configured style or from raster tiles. Everything else is drawn by
   `app.js` on one canvas lying on top: the veil outside the area, stations,
-  the route of the selected trip, vehicles. The map is never rotated or
-  tilted.
+  the route of the selected trip, the visitor's own position, vehicles. The
+  map is never rotated or tilted.
 - **Polling.** Every 10 seconds the page asks for the vehicles in the visible
   section plus a margin, in full detail from zoom level 12 and in the reduced
   form below. (Zoom levels are those of MapLibre, one less than the number in
@@ -278,6 +278,15 @@ otherwise a server would load a file written by older code:
   clock, and eased towards a new position when a changed delay moves them.
 - **Detail panel.** A click on a vehicle shows its trip, a click on a station
   its departures; both refresh every 15 seconds.
+- **Own position.** A button above the zoom buttons shows where the visitor
+  is and has the map follow them, until they move the map themselves or
+  switch it off. It is off at every start, and a visitor outside the area is
+  told so while the map stays where it is. The marker lies under the
+  vehicles, with a ring wider than their markers, so that both show when the
+  visitor is in one. The button and the following are the page's own, only
+  the icons are those of MapLibre's `GeolocateControl`: that control moves
+  the map before it says where the visitor is. The position stays in the
+  browser ([what the server gets to see](deployment.md#running-a-public-instance)).
 - **Offline start.** The service worker fetches from the network first and
   falls back to its cache, so an update shows up immediately and the
   installed app can still start without a connection (and then says that it

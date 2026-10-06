@@ -52,6 +52,12 @@ const BADGE_DELAY_S = 180; // from here a marker carries its delay as a badge
 // fail, the server keeps the last delays up to the same age (STALE_AFTER_S in
 // server/lib/realtime.js).
 const LIVE_MAX_AGE_S = 180;
+// The visitor's own position: the first one brings the map in to LOCATE_ZOOM,
+// and one that takes longer than LOCATE_TIMEOUT_MS to find counts as not found.
+const LOCATE_ZOOM = 15;
+const LOCATE_TIMEOUT_MS = 15_000;
+const NOTE_MS = 6000; // a note on what the visitor just did goes away after this
+const EQUATOR_M = 40_075_017; // its length; what a pixel of the map stands for follows from it
 
 const $ = (id) => document.getElementById(id);
 
@@ -111,6 +117,10 @@ const state = {
   colorBy: loadSetting('colorBy', 'mode') === 'delay' ? 'delay' : 'mode',
   selection: null, // { type: 'trip' | 'station', id, data }
   hits: [],
+  position: null, // the visitor's own while they have it shown: { lat, lon, accuracy in metres, stale }
+  follow: false, // the map stays centred on it
+  banner: null, // what the banner says for as long as it is so
+  note: null, // what it says in its place for a moment, on something the visitor did
 };
 // Stored are the modes switched off, so that a mode added later starts switched on.
 const hiddenModes = loadSetting('hiddenModes', []);
@@ -138,7 +148,7 @@ let colors = {};
 function readColors() {
   const style = getComputedStyle(document.documentElement);
   const get = (name) => style.getPropertyValue(name).trim();
-  colors = { mode: {}, delay: {}, text: get('--text'), bg: get('--bg'), accent: get('--accent'), muted: get('--text-muted'), veil: get('--veil'), veilLine: get('--veil-line') };
+  colors = { mode: {}, delay: {}, text: get('--text'), bg: get('--bg'), accent: get('--accent'), muted: get('--text-muted'), veil: get('--veil'), veilLine: get('--veil-line'), location: get('--location') };
   for (const mode of DRAW_ORDER) colors.mode[mode] = get(`--mode-${mode}`);
   for (const cls of ['ok', 'minor', 'major', 'severe', 'none']) colors.delay[cls] = get(`--delay-${cls}`);
 }
@@ -222,6 +232,8 @@ function boxAround(bounds, margin) {
 const boxQuery = (box) => box.map((v) => v.toFixed(4)).join(',');
 const boxCovers = (box, bounds) => box[0] <= bounds.getSouth() && box[1] <= bounds.getWest() && box[2] >= bounds.getNorth() && box[3] >= bounds.getEast();
 const detailWanted = () => (map.getZoom() >= LABEL_ZOOM ? 'full' : 'lite');
+/** How many metres a pixel of the map stands for at a latitude and a zoom level. */
+const metresPerPixel = (lat, zoom) => (EQUATOR_M * Math.cos((lat * Math.PI) / 180)) / (512 * 2 ** zoom);
 
 // All that is Netnou's own is drawn on one canvas lying on the map. The mouse
 // and the fingers go through it to the map (see .overlay-canvas in style.css).
@@ -400,9 +412,47 @@ function draw() {
     }
   }
 
-  // vehicles
+  // how large the vehicles are
   const labeled = zoom >= LABEL_ZOOM;
   const r = labeled ? (zoom >= 14 ? 11 : 10) : 4.5;
+
+  // The visitor's own position, under the vehicles. The ring around it is
+  // wider than their markers, the arrow and the ring of the selected one
+  // included, so that it shows around a vehicle the visitor is in.
+  if (state.position) {
+    const { lat, lon, accuracy, stale } = state.position;
+    const [x, y] = project(lat, lon);
+    const ring = r + 9;
+    const color = stale ? colors.muted : colors.location;
+    // how far off it may be, in its true size – where that is more than the ring shows anyway
+    const spread = accuracy / metresPerPixel(lat, zoom);
+    if (spread > ring) {
+      ctx.beginPath();
+      ctx.arc(x, y, spread, 0, 2 * Math.PI);
+      ctx.fillStyle = color;
+      ctx.globalAlpha = 0.16;
+      ctx.fill();
+      ctx.globalAlpha = 1;
+    }
+    // (white under the colour and around the dot, as around the vehicles: it shows on any map)
+    ctx.beginPath();
+    ctx.arc(x, y, ring, 0, 2 * Math.PI);
+    ctx.strokeStyle = '#fff';
+    ctx.lineWidth = 4.5;
+    ctx.stroke();
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 2.5;
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.arc(x, y, 7, 0, 2 * Math.PI);
+    ctx.fillStyle = color;
+    ctx.fill();
+    ctx.strokeStyle = '#fff';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+  }
+
+  // vehicles
   // Ease towards the computed position so that a changed delay does not make
   // the marker jump.
   const ease = 1 - Math.exp(-dt / EASE_MS);
@@ -544,6 +594,142 @@ map.on('click', (event) => {
   else closePanel();
 });
 
+// ---------- the visitor's own position ----------
+
+// Nothing asks for it before the visitor touches the button, and at the next
+// visit the function is off again. The position stays in the browser: what
+// the server and the map get to see is the section of the map, as always.
+
+let watch = null; // the running navigator.geolocation.watchPosition; null while the function is off
+// The map is on its way to the first position. Those that come meanwhile do
+// not move it: following them at once would end the flight halfway in.
+let arriving = false;
+
+// The button wears the classes of MapLibre's own control for this, and with
+// them its icons (vendor/maplibre-gl/maplibre-gl.css). The control itself is
+// not used: it moves the map before it says where the visitor is, and for a
+// visitor outside the area the map is to stay where it is.
+const locateButton = el('button', { type: 'button', class: 'maplibregl-ctrl-geolocate', title: t('map.locate'), 'aria-label': t('map.locate'), 'aria-pressed': 'false', onclick: toggleLocating }, [
+  el('span', { class: 'maplibregl-ctrl-icon', 'aria-hidden': 'true' }),
+]);
+/** For map.addControl: the button as a group of its own, like the zoom buttons. */
+const locateControl = {
+  onAdd: () => el('div', { class: 'maplibregl-ctrl maplibregl-ctrl-group' }, [locateButton]),
+  onRemove: () => locateButton.parentNode.remove(),
+};
+
+/** Brings the button in line with what is going on. */
+function showLocating() {
+  const on = watch !== null;
+  const { position, follow } = state;
+  // no position yet, or none any more: the icon turns
+  const waiting = on && (!position || !!position.stale);
+  const failing = on && !!position?.stale;
+  locateButton.setAttribute('aria-pressed', String(on));
+  // The icon is blue while the function is on and red while positions fail to
+  // come, with a dot in its middle while the map follows.
+  const classes = locateButton.classList;
+  classes.toggle('maplibregl-ctrl-geolocate-waiting', waiting);
+  classes.toggle('maplibregl-ctrl-geolocate-active', on && follow && !failing);
+  classes.toggle('maplibregl-ctrl-geolocate-active-error', follow && failing);
+  classes.toggle('maplibregl-ctrl-geolocate-background', on && !follow && !failing);
+  classes.toggle('maplibregl-ctrl-geolocate-background-error', !follow && failing);
+}
+
+/** Whether a place is inside the outline of the area – by the even-odd rule, as the veil is drawn. */
+function inArea(lat, lon) {
+  let inside = false;
+  for (const ring of state.outline) {
+    for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+      const [lat1, lon1] = ring[i];
+      const [lat2, lon2] = ring[j];
+      if ((lat1 > lat) !== (lat2 > lat) && lon < lon1 + ((lat - lat1) / (lat2 - lat1)) * (lon2 - lon1)) inside = !inside;
+    }
+  }
+  return inside;
+}
+
+const centreOnPosition = () => map.easeTo({ center: [state.position.lon, state.position.lat] });
+
+function stopLocating() {
+  navigator.geolocation.clearWatch(watch);
+  watch = null;
+  state.position = null;
+  state.follow = false;
+  showLocating();
+  draw();
+}
+
+function onPosition({ coords }) {
+  if (watch === null) return; // was on its way when the function was switched off
+  const { latitude: lat, longitude: lon, accuracy } = coords;
+  const first = !state.position;
+  // Whoever is outside the area would be led to an empty map, and find it
+  // again at the next visit as the section last looked at.
+  if (first && !inArea(lat, lon)) {
+    stopLocating();
+    showNote(t('locate.outside'));
+    return;
+  }
+  state.position = { lat, lon, accuracy, stale: false };
+  if (first) {
+    // In to LOCATE_ZOOM – less far if the whole of an uncertain position would
+    // not be in view then, and never out. After that the zoom is the visitor's.
+    const fit = Math.log2((Math.min(viewSize.x, viewSize.y) * metresPerPixel(lat, 0)) / (2 * accuracy));
+    map.flyTo({ center: [lon, lat], zoom: Math.max(map.getZoom(), Math.min(LOCATE_ZOOM, fit)) }, { arriving: true });
+    // (not where motion is reduced: there the map is at the position at once)
+    arriving = map.isMoving();
+  } else if (state.follow && !arriving) {
+    centreOnPosition();
+  }
+  showLocating();
+  draw();
+}
+
+function onPositionError(error) {
+  if (watch === null) return;
+  // Once there is a position, one that fails to come is waited out: the next
+  // may come, after a tunnel for instance. Until then the marker is grey.
+  if (state.position && error.code !== error.PERMISSION_DENIED) {
+    state.position.stale = true;
+    showLocating();
+    draw();
+    return;
+  }
+  stopLocating();
+  showNote(error.code === error.PERMISSION_DENIED ? t('locate.denied') : t('locate.failed'));
+}
+
+// One touch switches the function on and has the map follow the visitor, the
+// next one switches it off – unless the visitor has moved the map away
+// meanwhile: then it brings the map back first.
+function toggleLocating() {
+  if (watch !== null && state.follow) {
+    stopLocating();
+    return;
+  }
+  state.follow = true;
+  // (a position up to ten seconds old will do: the first one is there sooner)
+  if (watch === null) watch = navigator.geolocation.watchPosition(onPosition, onPositionError, { enableHighAccuracy: true, maximumAge: 10_000, timeout: LOCATE_TIMEOUT_MS });
+  else if (state.position) centreOnPosition();
+  showLocating();
+}
+
+// Moving the map by hand ends the following; the marker stays. Zooming does
+// not end it, and neither does what moves the map without a hand: the window
+// changing its size, or the following itself.
+map.on('movestart', (event) => {
+  if (!state.follow || !state.position || !event.originalEvent || map.isZooming()) return;
+  state.follow = false;
+  showLocating();
+});
+map.on('moveend', (event) => {
+  if (!event.arriving) return;
+  arriving = false;
+  // (the position may have become a better one during the flight)
+  if (state.follow && state.position) centreOnPosition();
+});
+
 // ---------- controls ----------
 
 const chipCounts = new Map();
@@ -632,11 +818,30 @@ function updateStatus() {
   $('status-text').textContent = `${t('status.vehicles', { count: shown })} · ${realtime}`;
 }
 
-function showBanner(message) {
+function renderBanner() {
   const banner = $('banner');
+  const text = state.note ?? state.banner ?? '';
   // It is an alert: written only when it changes, so that it is read out once.
-  if (banner.textContent !== (message ?? '')) banner.textContent = message ?? '';
-  banner.hidden = !message;
+  if (banner.textContent !== text) banner.textContent = text;
+  banner.hidden = !text;
+}
+
+/** What the visitor has to know for as long as it is so; null takes it away. */
+function showBanner(message) {
+  state.banner = message;
+  renderBanner();
+}
+
+let noteTimer = null;
+/** A note on something the visitor just did: it takes the place of the banner and goes away by itself. */
+function showNote(message) {
+  state.note = message;
+  renderBanner();
+  clearTimeout(noteTimer);
+  noteTimer = setTimeout(() => {
+    state.note = null;
+    renderBanner();
+  }, NOTE_MS);
 }
 
 /** What to tell the visitor while the server has no timetable yet, by the state and step of its 503 answer. */
@@ -853,6 +1058,8 @@ async function loadArea() {
   // (the credits first: of the controls in a bottom corner, the one added last is on top)
   map.addControl(new AttributionControl({ customAttribution: credits }), 'bottom-right');
   map.addControl(new NavigationControl({ showCompass: false }), 'bottom-right');
+  // (a browser tells where it is to pages with HTTPS only)
+  if (window.isSecureContext && navigator.geolocation) map.addControl(locateControl, 'bottom-right');
   state.outline = area.outline;
   $('area-hint').hidden = false;
   state.areaKnown = true;

@@ -23,6 +23,9 @@
   --delay-severe: #d32f2f;
   --delay-none: #8a9099;
 
+  /* the visitor's own position; lighter than the blue of the U-Bahn, which may be right under it */
+  --location: #1a8ef0;
+
   /* laid over the map outside the area, and the line along its edge */
   --veil: rgb(226 229 233 / 0.66);
   --veil-line: rgb(11 92 173 / 0.55);
@@ -95,8 +98,8 @@ button { font: inherit; color: inherit; }
 .maplibregl-ctrl-attrib a.update { font-weight: 650; white-space: nowrap; }
 .maplibregl-ctrl-bottom-right { bottom: var(--safe-bottom); right: var(--safe-right); }
 @media (prefers-color-scheme: dark) {
-  /* their icons are dark drawings */
-  .maplibregl-ctrl-icon, .maplibregl-ctrl-attrib-button { filter: invert(1); }
+  /* Their icons are dark drawings. The hues stay: the one for the visitor's position is blue while it is on, and red while it fails. */
+  .maplibregl-ctrl-icon, .maplibregl-ctrl-attrib-button { filter: invert(1) hue-rotate(180deg); }
 }
 
 /* ---------- cards ---------- */
@@ -164,6 +167,8 @@ button { font: inherit; color: inherit; }
 @media (prefers-reduced-motion: reduce) {
   .status .dot { animation: none !important; }
   .chips { scroll-behavior: auto !important; }
+  /* the icon that turns while the visitor's position is looked for */
+  .maplibregl-ctrl-geolocate-waiting .maplibregl-ctrl-icon { animation: none !important; }
 }
 
 .chips { display: flex; flex-wrap: wrap; gap: 6px; }
