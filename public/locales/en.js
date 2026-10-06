@@ -17,6 +17,8 @@ export default {
   'map.zoomOut': 'Zoom out',
   // the button that folds the credits in the corner of the map away, on narrow screens
   'map.credits': 'Show or hide the credits',
+  // the button above the zoom buttons: it shows where the visitor is, and has the map follow them
+  'map.locate': 'Show my location',
   // on the marker next to the version in the credits; it leads to the release notes
   'update.available': 'Version {version} is available: release notes',
   'map.unsupported': 'This browser cannot draw the map. It needs WebGL 2, which is switched off or not available here.',
@@ -39,6 +41,11 @@ export default {
   'loading.timetable': 'The timetable data is being loaded …',
   'loading.error': 'The timetable data could not be loaded.',
   'banner.offline': 'No internet connection – the live map needs one.',
+
+  // Why the visitor's location is not shown after all; these go away by themselves.
+  'locate.denied': 'This page may not see your location. The settings of the browser or of the device can change that.',
+  'locate.failed': 'Your location could not be found.',
+  'locate.outside': 'Your location is outside the area of this map.',
 
   'modes.label': 'Show or hide modes of transport',
   // U-Bahn and S-Bahn are what the signs say

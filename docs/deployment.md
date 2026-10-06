@@ -167,8 +167,10 @@ The server speaks plain HTTP. Put it behind a reverse proxy for HTTPS and set
 `HOST=127.0.0.1` (or do not publish the container port) so that it is only
 reachable through the proxy.
 
-- **HTTPS** is needed for installing the page as an app and for its offline
-  start. The map itself also works over plain HTTP.
+- **HTTPS** is needed for installing the page as an app, for its offline
+  start and for showing visitors where they are: browsers tell a page its
+  location only over HTTPS, so over plain HTTP the page has no button for it.
+  The map itself also works over plain HTTP.
 - **Sub-paths** work because the page uses relative URLs only. The proxy has
   to strip the prefix, and the address has to end in a slash:
 
@@ -228,6 +230,13 @@ Worth watching:
   the defaults they go to `tiles.openfreemap.org`, which is served through
   Cloudflare; both see the visitor's IP address and the address of your
   site. A reverse proxy in front may log more.
+- **The visitor's location.** The page asks for it only when the visitor
+  touches the button for it, reads it in the browser and sends it nowhere as
+  such. While the map is centred on the visitor, though, the requests for
+  vehicles, stations and the map are those for the section around them, as
+  for any section somebody looks at, and that section is what `netnou.view`
+  holds as the last view. Whoever can see these requests, a reverse proxy or
+  the provider of the map, can tell roughly where that is.
 - **Legal notices.** An imprint or a privacy notice, where the law requires
   one, is your responsibility. The page has no dedicated place for such
   links. `TILE_ATTRIBUTION` and `DATA_ATTRIBUTION` accept HTML, so a link can
