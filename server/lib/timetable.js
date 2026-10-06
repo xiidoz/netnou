@@ -109,6 +109,9 @@ export class Timetable {
       lon: round5(this.stops.lon[s]),
       modes: MODES.filter((_, bit) => stationModes.get(s) & (1 << bit)),
     }));
+    // How often a trip stops at each station, over the whole timetable: it
+    // says how much is going on there compared with the others.
+    this.stationService = [...this.visits.values()].map((list) => list.length / 2);
 
     // Route geometry per hop (see shapes.js); absent until OSM data was loaded.
     // segFrac holds, for every point, the share of the hop's length covered so
@@ -312,6 +315,16 @@ export class Timetable {
       }
     }
     return out;
+  }
+
+  /**
+   * What the page searches the stops in: all stations with their service, as
+   * one column per property, which is a quarter less to send than one object
+   * per station.
+   */
+  searchIndex() {
+    const column = (key) => this.stations.map((station) => station[key]);
+    return { stations: { id: column('id'), name: column('name'), lat: column('lat'), lon: column('lon'), modes: column('modes'), service: this.stationService } };
   }
 
   trip(tripId, date, realtime) {

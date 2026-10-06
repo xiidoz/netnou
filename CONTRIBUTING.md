@@ -45,6 +45,7 @@ server/
   areas/vgn.geojson   outline of the default area (generated)
 public/
   index.html, app.js, style.css   the page
+  search.js           finding stops by name
   i18n.js, locales/   texts per language
   sw.js, manifest.webmanifest, icons/   installable app
   vendor/maplibre-gl/ vendored map library

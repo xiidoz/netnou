@@ -141,6 +141,75 @@ button { font: inherit; color: inherit; }
 }
 .language:hover, .language:focus-visible { border-color: var(--border); color: var(--text); }
 
+/* ---------- search ---------- */
+
+/* a lens, drawn: a ring and its handle */
+.lens {
+  position: relative;
+  display: block;
+  width: 11px;
+  height: 11px;
+  border: 2px solid currentColor;
+  border-radius: 50%;
+}
+.lens::after {
+  content: "";
+  position: absolute;
+  left: 7px;
+  top: 7px;
+  width: 2px;
+  height: 6px;
+  border-radius: 1px;
+  background: currentColor;
+  transform: rotate(-45deg);
+  transform-origin: top center;
+}
+
+.search { position: relative; display: flex; gap: 6px; color: var(--text-muted); }
+.search > .lens { position: absolute; left: 10px; top: 9px; pointer-events: none; }
+.search input {
+  flex: 1;
+  min-width: 0;
+  padding: 6px 8px 6px 31px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg);
+  color: var(--text);
+  font: inherit;
+}
+.search input::placeholder { color: var(--text-muted); opacity: 1; }
+.search input:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+/* the two buttons that open and shut the search where it is not always there, see the small screens below */
+.search-open, .search-close { display: none; }
+
+/* what is found, hanging below the field over the rest of the card and the map */
+.search-drop {
+  display: none;
+  position: absolute;
+  z-index: 1;
+  top: calc(100% + 5px);
+  left: 0;
+  right: 0;
+  max-height: min(50vh, 330px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--bg);
+  box-shadow: var(--shadow);
+  color: var(--text);
+}
+.search.open .search-drop { display: block; }
+.search-results { list-style: none; margin: 0; padding: 4px 0; }
+.search-results:empty, .search-note:empty { display: none; }
+.search-results li { display: flex; align-items: center; gap: 9px; padding: 7px 10px; cursor: pointer; }
+.search-results li:hover, .search-results li[aria-selected="true"] { background: var(--bg-subtle); }
+/* up to six dots in three columns, so that the names begin below one another */
+.search-results .dots { display: grid; flex: none; grid-template-columns: repeat(3, 8px); gap: 2px; }
+.search-results .swatch { width: 8px; height: 8px; background: var(--chip-color); }
+.search-results .name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.search-note { margin: 0; padding: 9px 10px; color: var(--text-muted); font-size: 13px; }
+
 .status {
   margin: 0;
   display: flex;
@@ -424,6 +493,30 @@ li:last-child > .row.stop .rail::before { bottom: 50%; }
     gap: 7px;
   }
   .title h1 { font-size: 16px; }
+  /* The search is a button with a lens in the title row. Opened, the field
+     takes the place of that row, with a button to shut it again. */
+  .search-open, .search-close {
+    display: grid;
+    place-items: center;
+    flex: none;
+    align-self: center;
+    width: 30px;
+    height: 30px;
+    padding: 0;
+    border: 0;
+    border-radius: 50%;
+    background: var(--bg-subtle);
+    cursor: pointer;
+  }
+  .search-open { margin: -4px 0; color: var(--text-muted); }
+  .search-close { width: 34px; height: 34px; font-size: 20px; line-height: 1; color: var(--text); }
+  .search { display: none; }
+  .controls.searching .title { display: none; }
+  .controls.searching .search { display: flex; }
+  /* (16 px: with less, Safari on a phone zooms the page in when the field gets the focus) */
+  .search input { padding-top: 5px; padding-bottom: 5px; font-size: 16px; }
+  /* clear of the departures, which cover the lower half */
+  .search-drop { max-height: min(40vh, 330px); }
   /* One row of chips that scrolls sideways, out to the edges of the card. */
   .chips-row { margin: 0 -12px; }
   /* (scroll-padding: a chip that gets the keyboard focus comes to rest clear of the arrows) */

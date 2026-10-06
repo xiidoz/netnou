@@ -33,6 +33,14 @@ export default {
   'locate.failed': 'Der Standort konnte nicht ermittelt werden.',
   'locate.outside': 'Der Standort liegt außerhalb des Gebiets dieser Karte.',
 
+  'search.label': 'Haltestelle suchen',
+  'search.open': 'Suche',
+  'search.close': 'Suche schließen',
+  'search.results': 'Gefundene Haltestellen',
+  'search.none': 'Keine Haltestelle mit diesem Namen.',
+  'search.loading': 'Haltestellen werden geladen …',
+  'search.failed': 'Haltestellen konnten nicht geladen werden.',
+
   'modes.label': 'Verkehrsmittel ein- und ausblenden',
   'mode.subway': 'U-Bahn',
   'mode.tram': 'Tram',

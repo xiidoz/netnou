@@ -1,6 +1,6 @@
 # HTTP API
 
-The page talks to the server through six read-only JSON endpoints. They are
+The page talks to the server through seven read-only JSON endpoints. They are
 open to other clients as well.
 
 - [Conventions](#conventions)
@@ -9,6 +9,7 @@ open to other clients as well.
 - [`GET /api/area`](#get-apiarea)
 - [`GET /api/vehicles`](#get-apivehicles)
 - [`GET /api/stations`](#get-apistations)
+- [`GET /api/search`](#get-apisearch)
 - [`GET /api/trip`](#get-apitrip)
 - [`GET /api/departures`](#get-apidepartures)
 - [Knots](#knots)
@@ -43,7 +44,7 @@ shortened where marked with `…`.
 | Code | When | Body |
 | --- | --- | --- |
 | 200 | success | see the endpoints |
-| 304 | `/api/area` with a matching `If-None-Match` | none |
+| 304 | `/api/area` or `/api/search` with a matching `If-None-Match` | none |
 | 400 | the URL cannot be decoded | none |
 | 404 | unknown trip, station or path | `{ "error": "…" }` |
 | 405 | any method other than `GET` and `HEAD`; the `Allow` header names them | none |
@@ -219,6 +220,38 @@ platforms of one stop. Does not touch the realtime feed.
 
 The answer is a plain array. `id` is for `/api/departures`; `modes` lists the
 modes that call at the station.
+
+## `GET /api/search`
+
+All stations of the area at once, for the search of the page. The search
+itself happens in the browser, so the endpoint takes no query: what somebody
+types is nothing the server gets to see. Does not touch the realtime feed.
+
+```json
+{
+  "stations": {
+    "id": ["258216", "435287", …],
+    "name": ["Nürnberg Tiergärtnertor", "Nürnberg Hallertor", …],
+    "lat": [49.45812, 49.45518, …],
+    "lon": [11.07301, 11.07032, …],
+    "modes": [["tram", "bus"], ["tram", "bus"], …],
+    "service": [1634, 3446, …]
+  }
+}
+```
+
+The stations are those of `/api/stations`, in the same order, as one array
+per property: the n-th entries of all arrays belong to one station. That is
+a quarter less to transfer than one object per station, about 250 kB
+compressed for the default area.
+
+| Field | Type | Meaning |
+| --- | --- | --- |
+| `id`, `name`, `lat`, `lon`, `modes` | arrays | as in [`/api/stations`](#get-apistations) |
+| `service` | array of integers | how often a trip stops at the station over the whole timetable; a measure of how much is going on there compared with other stations, not a number of departures per day |
+
+The answer only changes with the timetable. It carries an `ETag`, and a
+request with a matching `If-None-Match` is answered with 304.
 
 ## `GET /api/trip`
 

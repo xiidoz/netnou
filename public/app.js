@@ -9,6 +9,7 @@
 // lines, stops and operators, and the notes of the feed.
 
 import { formatNumber, formatTime, languagePicker, loadLanguage, setTimeZone, t, translatePage } from './i18n.js';
+import { buildIndex, search } from './search.js';
 import { AttributionControl, MapLibreMap, NavigationControl } from './vendor/maplibre-gl/maplibre-gl.mjs';
 
 const APP_NAME = 'Netnou';
@@ -57,6 +58,9 @@ const LIVE_MAX_AGE_S = 180;
 const LOCATE_ZOOM = 15;
 const LOCATE_TIMEOUT_MS = 15_000;
 const NOTE_MS = 6000; // a note on what the visitor just did goes away after this
+// The search: how many stops it lists, and the zoom a chosen one brings the map in to.
+const SEARCH_LIMIT = 8;
+const SEARCH_ZOOM = 16;
 const EQUATOR_M = 40_075_017; // its length; what a pixel of the map stands for follows from it
 
 const $ = (id) => document.getElementById(id);
@@ -729,6 +733,137 @@ map.on('moveend', (event) => {
   // (the position may have become a better one during the flight)
   if (state.follow && state.position) centreOnPosition();
 });
+
+// ---------- search ----------
+
+// Stops are searched for in the browser (search.js): what is typed is sent
+// nowhere, and neither is the visitor's position, which puts the stops around
+// them first. The list of stops is fetched when the field is first used.
+
+const searchBox = $('search');
+const searchField = $('search-field');
+const searchResults = $('search-results');
+const narrowScreen = matchMedia('(max-width: 720px)'); // as in style.css
+let stops = null; // what search.js looks through, once it is there
+let stopsLoading = null; // the request for it while it is under way
+let found = []; // the stops listed
+let active = -1; // the one the arrow keys have reached, as an index into them
+
+function loadStops() {
+  stopsLoading ??= fetch('api/search')
+    .then((res) => (res.ok ? res.json() : Promise.reject(new Error(`HTTP ${res.status}`))))
+    .then((data) => { stops = buildIndex(data.stations); })
+    .catch((err) => {
+      // (also while the server has no timetable yet; asked for again with the next letter)
+      console.warn('stops not loaded:', err);
+      stopsLoading = null;
+    });
+  return stopsLoading;
+}
+
+/** Marks the result the arrow keys have reached, for the eye and for a screen reader; -1 for none. */
+function setActive(index) {
+  active = index;
+  [...searchResults.children].forEach((row, i) => row.setAttribute('aria-selected', String(i === index)));
+  const row = searchResults.children[index];
+  if (row) {
+    searchField.setAttribute('aria-activedescendant', row.id);
+    row.scrollIntoView({ block: 'nearest' });
+  } else {
+    searchField.removeAttribute('aria-activedescendant');
+  }
+}
+
+/** Shows the stops found below the field, or a note in their place. */
+function listStops(list, note = '') {
+  found = list;
+  searchResults.replaceChildren(...list.map((stop, i) => {
+    // The dots say what stops there, as the chips do.
+    const dots = stop.modes.map((mode) => {
+      const dot = el('span', { class: 'swatch' });
+      dot.style.setProperty('--chip-color', `var(--mode-${mode})`);
+      return dot;
+    });
+    return el('li', { id: `search-result-${i}`, role: 'option', 'aria-selected': 'false', title: stop.modes.map((mode) => t(`mode.${mode}`)).join(', '), onclick: () => chooseStop(stop) }, [
+      el('span', { class: 'dots' }, dots),
+      el('span', { class: 'name', text: stop.name }),
+    ]);
+  }));
+  $('search-note').textContent = note;
+  setActive(-1);
+  searchBox.classList.toggle('open', list.length > 0 || note !== '');
+  searchField.setAttribute('aria-expanded', String(list.length > 0));
+}
+
+async function runSearch() {
+  const query = searchField.value;
+  if (!query.trim()) return listStops([]);
+  if (!stops) {
+    listStops([], t('search.loading'));
+    await loadStops();
+    // typed on meanwhile: that letter has its own turn
+    if (searchField.value !== query) return undefined;
+    if (!stops) return listStops([], t('search.failed'));
+  }
+  const list = search(stops, query, { near: state.position, limit: SEARCH_LIMIT });
+  return listStops(list, list.length ? '' : t('search.none'));
+}
+
+/** Shuts the list, and on a narrow screen the field with it. */
+function closeSearch() {
+  listStops([]);
+  $('controls').classList.remove('searching');
+}
+
+function chooseStop(stop) {
+  closeSearch();
+  searchField.value = stop.name;
+  searchField.blur(); // a keyboard on the screen goes away
+  // (following the visitor would bring the map straight back)
+  if (state.follow) {
+    state.follow = false;
+    showLocating();
+  }
+  // On a narrow screen the departures cover the lower half: the stop goes above the middle.
+  map.flyTo({ center: [stop.lon, stop.lat], zoom: Math.max(map.getZoom(), SEARCH_ZOOM), offset: [0, narrowScreen.matches ? -0.12 * viewSize.y : 0] });
+  select('station', stop.id);
+}
+
+searchField.addEventListener('input', runSearch);
+searchField.addEventListener('focus', () => {
+  loadStops();
+  // what is in the field from last time is typed over, and found again until then
+  searchField.select();
+  runSearch();
+});
+searchField.addEventListener('keydown', (event) => {
+  if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+    if (!found.length) return;
+    event.preventDefault();
+    const step = event.key === 'ArrowDown' ? 1 : -1;
+    setActive(active < 0 && step < 0 ? found.length - 1 : (active + step + found.length) % found.length);
+  } else if (event.key === 'Enter') {
+    // without the arrow keys it is the first one, the most likely
+    const stop = found[Math.max(active, 0)];
+    if (stop) chooseStop(stop);
+  } else if (event.key === 'Escape') {
+    // (and not the details as well, which the same key closes otherwise)
+    event.stopPropagation();
+    closeSearch();
+    searchField.blur();
+  }
+});
+// A click on a result must not take the focus from the field first: the list
+// would be shut before the click arrives.
+searchResults.addEventListener('mousedown', (event) => event.preventDefault());
+searchBox.addEventListener('focusout', (event) => {
+  if (!searchBox.contains(event.relatedTarget)) closeSearch();
+});
+$('search-open').addEventListener('click', () => {
+  $('controls').classList.add('searching');
+  searchField.focus();
+});
+$('search-close').addEventListener('click', closeSearch);
 
 // ---------- controls ----------
 

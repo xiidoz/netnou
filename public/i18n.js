@@ -19,7 +19,7 @@ export const LANGUAGES = [
 const FALLBACK = 'en';
 const STORAGE_KEY = 'netnou.lang';
 // The attributes data-i18n-<attribute> can fill in, see translatePage().
-export const ATTRIBUTES = ['aria-label', 'title', 'content'];
+export const ATTRIBUTES = ['aria-label', 'title', 'content', 'placeholder'];
 
 const primary = (tag) => tag.toLowerCase().split('-')[0];
 
