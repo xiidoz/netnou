@@ -86,6 +86,7 @@ Server (`server/`):
 | `lib/pb.js` | decodes the GTFS-Realtime message (`decodeFeed`) |
 | `lib/update.js` | what the server calls itself (`describeBuild`) and the daily look-out for a newer release (`UpdateChecker`) |
 | `lib/time.js` | service days and the time zone of the feed |
+| `lib/page.js` | what the server writes into the page before it sends it, for search engines and previews of links; `robots.txt` and the sitemap |
 | `lib/files.js` | downloads, gzipped JSON files, error texts |
 | `areas/vgn.geojson` | outline of the default area, see [its README](../server/areas/README.md) |
 
@@ -312,6 +313,14 @@ otherwise a server would load a file written by older code:
 - **Texts** come from locale files through `t()`; nothing a visitor reads is
   written out in `app.js` or sent by the server, apart from data such as
   names of stops and notes of the feed. See [translating.md](translating.md).
+- **Before any script runs** the page already says what and where the
+  instance is: the server writes the title, the description and the name of
+  the area into `index.html` when it sends it, in the main language of the
+  instance or the one the address asks for (`?lang=de`), with the tags for
+  previews of links and, if it knows its public address, the canonical
+  address and the versions in other languages. That is what search engines
+  and chats read. The script puts the same texts in for the visitor, in
+  their language; both take them from `pageTexts` in `i18n.js`.
 - **Security.** The Content-Security-Policy allows scripts, styles, workers
   and connections from the page's own origin only. The one exception is the
   map, which may be fetched from the server of its style or tiles and from

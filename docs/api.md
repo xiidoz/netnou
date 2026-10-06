@@ -26,8 +26,11 @@ shortened where marked with `…`.
   headers, so a page on another origin cannot call the API from a browser.
 - Answers are JSON in UTF-8, compressed with gzip when the client accepts it
   and the body is larger than 1 kB.
-- Answers carry `Cache-Control: no-store`, except `/api/area`, which has an
-  `ETag` and answers `304` to a matching `If-None-Match`.
+- Answers carry `Cache-Control: no-store`, except `/api/area` and
+  `/api/search`, which have an `ETag` and answer `304` to a matching
+  `If-None-Match`.
+- Answers carry `X-Robots-Tag: noindex`: search engines may fetch them, as
+  the page does, but are asked not to list them.
 - **Times** are Unix time in seconds. **Delays** are in seconds, positive when
   late. **Coordinates** are WGS 84 degrees. A **box** is
   `south,west,north,east`.

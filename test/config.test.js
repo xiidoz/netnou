@@ -17,6 +17,23 @@ const file = (name, content) => {
 const BBOX = '49.3,10.8,49.7,11.3';
 const SQUARE = { type: 'Polygon', coordinates: [[[10.8, 49.3], [11.3, 49.3], [11.3, 49.7], [10.8, 49.7], [10.8, 49.3]]] };
 
+test('what the page says about itself: its main language and the address of the instance', () => {
+  // German, as the default area and its feed are, and no address: nothing in the page then needs one
+  assert.deepEqual([loadConfig({}).language, loadConfig({}).publicUrl], ['de', null]);
+  assert.equal(loadConfig({ LANGUAGE: ' EN ' }).language, 'en');
+  assert.throws(() => loadConfig({ LANGUAGE: 'fr' }), /^Error: LANGUAGE must be one of the languages of the page: de, en \(got "fr"\)$/);
+
+  // always with a slash at its end, with a path if the instance is under one
+  for (const [given, taken] of [['https://karte.example.org', 'https://karte.example.org/'], ['https://karte.example.org/', 'https://karte.example.org/'],
+    ['http://example.org:8080/netnou', 'http://example.org:8080/netnou/'], [' https://example.org/a/b// ', 'https://example.org/a/b/']]) {
+    assert.equal(loadConfig({ PUBLIC_URL: given }).publicUrl, taken, given);
+  }
+  assert.equal(loadConfig({ PUBLIC_URL: ' ' }).publicUrl, null);
+  for (const wrong of ['karte.example.org', 'ftp://example.org/', 'https://example.org/?lang=de', 'https://example.org/#map', 'https://user:secret@example.org/']) {
+    assert.throws(() => loadConfig({ PUBLIC_URL: wrong }), /^Error: PUBLIC_URL must be the http\(s\) address of the page, without a query, /, wrong);
+  }
+});
+
 test('defaults: the VGN, its OSM extracts, the gtfs.de feeds and OpenStreetMap tiles', () => {
   const config = loadConfig({});
   assert.equal(config.port, 8080);

@@ -9,7 +9,11 @@
 // test/frontend.test.js compares the languages and checks that every key is used.
 
 export default {
+  // What the page is called, in the tab of the browser and in the results of a search engine. The name of the area follows it.
+  'page.title': 'Live map of public transport',
+  // What it says about itself there, without and with the name of the area ({area}).
   'page.description': 'Live map of public transport: buses, trams, metro, suburban and regional trains with their current delays.',
+  'page.descriptionIn': '{area}: buses, trams, metro, suburban and regional trains live on a map, with their current delays and departures.',
   'language.label': 'Language',
 
   'map.label': 'Map with the current positions of the vehicles',

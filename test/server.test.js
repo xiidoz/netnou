@@ -47,7 +47,8 @@ const REALTIME = encodeFeed({
 
 // Every setting the server reads; none may leak in from the shell running the tests.
 const SETTINGS = ['PORT', 'HOST', 'DATA_DIR', 'AREA_FILE', 'BBOX', 'AREA_NAME', 'VIEW', 'TIMEZONE', 'MAP_STYLE_URL', 'MAP_ORIGINS', 'TILE_URL', 'TILE_ATTRIBUTION', 'DATA_ATTRIBUTION',
-  'OSM_PBF_URLS', 'OSM_MAX_AGE_DAYS', 'FEED_URL', 'FEED_CHECK_MINUTES', 'DOWNLOAD_TIMEOUT_MINUTES', 'REALTIME_URL', 'REALTIME_INTERVAL_SECONDS', 'REALTIME_IDLE_SECONDS', 'UPDATE_CHECK'];
+  'OSM_PBF_URLS', 'OSM_MAX_AGE_DAYS', 'FEED_URL', 'FEED_CHECK_MINUTES', 'DOWNLOAD_TIMEOUT_MINUTES', 'REALTIME_URL', 'REALTIME_INTERVAL_SECONDS', 'REALTIME_IDLE_SECONDS', 'UPDATE_CHECK',
+  'LANGUAGE', 'PUBLIC_URL'];
 // What an image carries about its build, which a checkout does not have.
 const BUILD = ['NETNOU_COMMIT', 'NETNOU_RELEASE'];
 
@@ -113,6 +114,8 @@ before(async () => {
     FEED_URL: `${upstream.url}/feed.zip`,
     REALTIME_URL: `${upstream.url}/realtime.pb`,
     REALTIME_INTERVAL_SECONDS: '10',
+    // (given without the slash at its end)
+    PUBLIC_URL: 'https://karte.example.org/live',
   });
   child.stdout.on('data', (text) => { output += text; });
   child.stderr.on('data', (text) => { output += text; });
@@ -385,7 +388,10 @@ test('static files: types, revalidation, HEAD and gzip', async () => {
   assert.equal(page.headers.vary, 'Accept-Encoding');
   assert.equal(page.headers['content-encoding'], undefined);
   assert.equal(Number(page.headers['content-length']), page.body.length);
-  assert.ok(page.body.equals(fs.readFileSync(path.join(root, 'public', 'index.html'))));
+  // index.html with what the instance is written into it, see the next test
+  assert.ok(page.body.length > fs.statSync(path.join(root, 'public', 'index.html')).size);
+  assert.ok(page.body.includes('<script type="module" src="app.js"></script>'));
+  assert.ok((await request('/index.html')).body.equals(page.body));
   // the map is the only thing allowed from elsewhere
   const map = 'https://maps.example.org https://tiles.example.org';
   assert.equal(page.headers['content-security-policy'], `default-src 'self'; img-src 'self' data: blob: ${map}; style-src 'self'; script-src 'self'; worker-src 'self'; connect-src 'self' ${map}; frame-ancestors 'none'`);
@@ -424,6 +430,46 @@ test('static files: types, revalidation, HEAD and gzip', async () => {
 
   const icon = await request('/icons/icon-192.png', { headers: { 'Accept-Encoding': 'gzip' } });
   assert.deepEqual([icon.status, icon.headers['content-type'], icon.headers['content-encoding'], icon.headers.vary], [200, 'image/png', undefined, undefined]);
+});
+
+test('the page says what and where the instance is before any script runs', async () => {
+  const text = async (pathname) => (await request(pathname)).body.toString();
+  const address = 'https://karte.example.org/live/';
+  // in the main language, German unless LANGUAGE says otherwise
+  const page = await text('/');
+  assert.match(page, /<html lang="de">/);
+  assert.match(page, /<title>ÖPNV-Live-Karte: Testland – Netnou<\/title>/);
+  assert.match(page, /<meta name="description" content="Testland: Busse, /);
+  assert.match(page, /<p id="area-name">Testland<\/p>/);
+  assert.ok(page.includes(`<link rel="canonical" href="${address}">`));
+  assert.ok(page.includes(`<link rel="alternate" hreflang="en" href="${address}?lang=en">`));
+  assert.ok(page.includes(`<meta property="og:image" content="${address}icons/icon-512.png">`));
+  assert.equal((await request('/icons/icon-512.png')).status, 200);
+
+  // in the language the address asks for
+  const english = await request('/?lang=en');
+  assert.match(english.body.toString(), /<html lang="en">/);
+  assert.match(english.body.toString(), /<title>Live map of public transport: Testland – Netnou<\/title>/);
+  assert.ok(english.body.toString().includes(`<link rel="canonical" href="${address}?lang=en">`));
+  assert.equal((await request('/?lang=en', { headers: { 'If-None-Match': english.headers.etag } })).status, 304);
+  // each version has its own tag: one is not taken for the other
+  assert.equal((await request('/', { headers: { 'If-None-Match': english.headers.etag } })).status, 200);
+  // a language the page does not have is none
+  assert.equal(await text('/?lang=xx'), page);
+  assert.equal(await text('/?lang='), page);
+
+  const robots = await request('/robots.txt');
+  assert.deepEqual([robots.status, robots.headers['content-type']], [200, 'text/plain; charset=utf-8']);
+  assert.equal(robots.body.toString(), `User-agent: *\nAllow: /\n\nSitemap: ${address}sitemap.xml\n`);
+  const sitemap = await request('/sitemap.xml');
+  assert.deepEqual([sitemap.status, sitemap.headers['content-type']], [200, 'application/xml; charset=utf-8']);
+  assert.deepEqual([...sitemap.body.toString().matchAll(/<loc>([^<]*)<\/loc>/g)].map(([, loc]) => loc), [address, `${address}?lang=de`, `${address}?lang=en`]);
+
+  // data may be read by a search engine that runs the page, but is not for its results
+  for (const pathname of ['/api/area', '/api/status', '/api/vehicles', '/api/search', '/api/stations', '/api/nothing']) {
+    assert.equal((await request(pathname)).headers['x-robots-tag'], 'noindex', pathname);
+  }
+  for (const pathname of ['/', '/app.js', '/robots.txt']) assert.equal((await request(pathname)).headers['x-robots-tag'], undefined, pathname);
 });
 
 test('what is not there, not allowed or not a URL', async () => {

@@ -8,11 +8,22 @@ the server.
 
 1. The language they chose in the page, if any. The choice is stored in the
    browser (`localStorage`, key `netnou.lang`).
-2. Otherwise the first of the browser's preferred languages that exists. A
+2. Otherwise the language the address asks for, if it names one the page
+   has: `?lang=de`.
+3. Otherwise the first of the browser's preferred languages that exists. A
    browser asking for `de-AT` gets `de`.
-3. Otherwise English.
+4. Otherwise English.
 
-Changing the language in the page reloads it.
+Changing the language in the page reloads it, from the address without
+`?lang=…`.
+
+The address with a language is there for search engines, whose browser
+speaks English and chooses nothing: it is how they get to read the page in
+each language. What they read before any script runs is written into the
+page by the server, in the main language of the instance (`LANGUAGE`) or
+the one the address asks for; see
+[Being found](configuration.md#being-found). A new language is one of these
+addresses by itself.
 
 ## Adding a language
 

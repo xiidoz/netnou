@@ -18,6 +18,10 @@ export const LANGUAGES = [
 ];
 const FALLBACK = 'en';
 const STORAGE_KEY = 'netnou.lang';
+// An address may ask for a language: ?lang=de. That is how a search engine
+// gets to read the page in each of them (see server/lib/page.js).
+const ADDRESS_KEY = 'lang';
+export const APP_NAME = 'Netnou';
 // The attributes data-i18n-<attribute> can fill in, see translatePage().
 export const ATTRIBUTES = ['aria-label', 'title', 'content', 'placeholder'];
 
@@ -48,20 +52,26 @@ function storedLanguage() {
   }
 }
 
+/** The language the address of the page asks for, if it names one. */
+function askedLanguage() {
+  return typeof location === 'undefined' ? null : new URLSearchParams(location.search).get(ADDRESS_KEY);
+}
+
 /**
- * The language to show: the one chosen with the picker, else the first of the
- * browser's languages (navigator.languages, most wanted first) that exists
- * here, else English.
+ * The language to show: the one chosen with the picker, else the one the
+ * address asks for, else the first of the browser's languages
+ * (navigator.languages, most wanted first) that exists here, else English.
  */
-export function pickLanguage(stored, preferred) {
+export function pickLanguage(stored, preferred, asked = null) {
   const available = LANGUAGES.map(([code]) => code);
   if (available.includes(stored)) return stored;
+  if (available.includes(asked)) return asked;
   return preferred.map(primary).find((code) => available.includes(code)) ?? FALLBACK;
 }
 
 /** Loads the texts of the visitor's language and returns its code. Before that, t() answers in English. */
-export async function loadLanguage(stored = storedLanguage(), preferred = navigator.languages ?? []) {
-  language = pickLanguage(stored, preferred);
+export async function loadLanguage(stored = storedLanguage(), preferred = navigator.languages ?? [], asked = askedLanguage()) {
+  language = pickLanguage(stored, preferred, asked);
   messages = en;
   if (language !== FALLBACK) {
     try {
@@ -79,9 +89,10 @@ export async function loadLanguage(stored = storedLanguage(), preferred = naviga
 /**
  * The text for a key of locales/en.js. {name} in it is replaced by params.name,
  * numbers formatted for the language; plural forms are chosen by params.count.
+ * @param texts those of another language than the visitor's, for the server
  */
-export function t(key, params = {}) {
-  let message = messages[key] ?? en[key];
+export function t(key, params = {}, texts = messages) {
+  let message = texts[key] ?? en[key];
   if (message === undefined) return key;
   if (typeof message === 'object') message = message[pluralRules.select(params.count)] ?? message.other;
   return message.replace(/\{(\w+)\}/g, (placeholder, name) => {
@@ -89,6 +100,16 @@ export function t(key, params = {}) {
     if (value === undefined) return placeholder;
     return typeof value === 'number' ? formatNumber(value) : value;
   });
+}
+
+/**
+ * What the page is called and what it says about itself, with the name of the
+ * area it shows if it has one. The server writes the same into the page before
+ * it sends it, in the language of `texts` (server/lib/page.js).
+ */
+export function pageTexts(area, texts = messages) {
+  const title = area ? `${t('page.title', {}, texts)}: ${area}` : t('page.title', {}, texts);
+  return { title: `${title} – ${APP_NAME}`, description: area ? t('page.descriptionIn', { area }, texts) : t('page.description', {}, texts) };
 }
 
 export const formatNumber = (value) => numberFormat.format(value);
@@ -127,7 +148,11 @@ export function translatePage() {
   }
 }
 
-/** Fills the language picker. Choosing a language stores it and reloads the page, which then starts in it. */
+/**
+ * Fills the language picker. Choosing a language stores it and loads the page
+ * again, which then starts in it – from the address without a language of its
+ * own, which would say something else than what was just chosen.
+ */
 export function languagePicker(select) {
   for (const [code, name] of LANGUAGES) {
     const option = new Option(name, code, false, code === language);
@@ -142,6 +167,8 @@ export function languagePicker(select) {
       select.value = language;
       return;
     }
-    location.reload();
+    const address = new URL(location.href);
+    address.searchParams.delete(ADDRESS_KEY);
+    location.replace(address);
   });
 }

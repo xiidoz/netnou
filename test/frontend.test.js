@@ -6,7 +6,7 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import { test } from 'node:test';
-import { ATTRIBUTES, LANGUAGES, formatNumber, formatTime, loadLanguage, pickLanguage, setTimeZone, t } from '../public/i18n.js';
+import { ATTRIBUTES, LANGUAGES, formatNumber, formatTime, loadLanguage, pageTexts, pickLanguage, setTimeZone, t } from '../public/i18n.js';
 import en from '../public/locales/en.js';
 import { MODES } from '../server/lib/timetable.js';
 
@@ -192,6 +192,27 @@ test('the language is the stored choice, else the first language of the browser 
   assert.equal(pickLanguage('xx', ['DE-de']), 'de'); // stored by another version of the page
   assert.equal(pickLanguage(null, ['xx']), 'en');
   assert.equal(pickLanguage(null, []), 'en');
+});
+
+// ?lang=de is how a search engine, whose browser speaks English, reads the page in German.
+test('an address that asks for a language gets it, unless the visitor chose one themselves', () => {
+  assert.equal(pickLanguage(null, ['en-US'], 'de'), 'de');
+  assert.equal(pickLanguage(null, [], 'de'), 'de');
+  assert.equal(pickLanguage('en', ['de-DE'], 'de'), 'en');
+  assert.equal(pickLanguage(null, ['de-DE'], 'xx'), 'de');
+  assert.equal(pickLanguage(null, ['de-DE'], ''), 'de');
+  assert.equal(pickLanguage(null, ['xx'], null), 'en');
+});
+
+test('what the page is called and says about itself, with and without the name of its area', async () => {
+  const de = (await import(new URL('locales/de.js', publicDir))).default;
+  await loadLanguage('en', []);
+  assert.deepEqual(pageTexts('Testland'), { title: 'Live map of public transport: Testland – Netnou', description: en['page.descriptionIn'].replace('{area}', 'Testland') });
+  assert.deepEqual(pageTexts(''), { title: 'Live map of public transport – Netnou', description: en['page.description'] });
+  // in another language than the visitor's, as the server asks for it
+  assert.deepEqual(pageTexts('Testland', de), { title: 'ÖPNV-Live-Karte: Testland – Netnou', description: de['page.descriptionIn'].replace('{area}', 'Testland') });
+  assert.equal(t('page.title', {}, de), 'ÖPNV-Live-Karte');
+  assert.equal(t('page.title'), 'Live map of public transport');
 });
 
 test('texts with placeholders and plural forms, numbers and times in the language', async () => {

@@ -8,12 +8,10 @@
 // (see i18n.js). Of what the server sends only data is shown – the names of
 // lines, stops and operators, and the notes of the feed.
 
-import { formatNumber, formatTime, languagePicker, loadLanguage, setTimeZone, t, translatePage } from './i18n.js';
+import { APP_NAME, formatNumber, formatTime, languagePicker, loadLanguage, pageTexts, setTimeZone, t, translatePage } from './i18n.js';
 import { buildIndex, search, searchLines } from './search.js';
 import { mdiChevronLeft, mdiChevronRight, mdiClose, mdiMagnify } from './vendor/material-design-icons/icons.js';
 import { AttributionControl, MapLibreMap, NavigationControl } from './vendor/maplibre-gl/maplibre-gl.mjs';
-
-const APP_NAME = 'Netnou';
 
 // The modes with a chip. Same ids as MODES in server/lib/timetable.js, the
 // --mode-* colors in style.css and the mode.* texts in locales/ – all of which
@@ -1293,7 +1291,10 @@ async function loadArea() {
 
   setTimeZone(area.timeZone);
   $('area-name').textContent = area.name;
-  document.title = area.name ? `${APP_NAME} – ${area.name}` : APP_NAME;
+  // What the server wrote into the page before it sent it (server/lib/page.js), now in the visitor's language.
+  const page = pageTexts(area.name);
+  document.title = page.title;
+  document.querySelector('meta[name="description"]').content = page.description;
 
   const [south, west, north, east] = area.bbox;
   // Lines are followed beyond the area, so the map reaches well beyond it too
