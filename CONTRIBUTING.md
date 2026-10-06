@@ -211,6 +211,12 @@ running instances will load data written by older code:
 - A cache format version is bumped where needed (see above).
 - New text in the page is added to every locale file.
 
+`main` only takes pull requests, and only those that contain its latest
+commit and have passed the checks "CI passed" and "Conventional Commits". A
+pull request that was opened before another one was merged has to be brought
+up to date first, with "Update branch" or by rebasing it; its checks then
+run again.
+
 ## Releases
 
 Releases are made by
@@ -243,15 +249,35 @@ changes raise the minor version, fixes the patch version
 proposes that version. The same footer works for any other version you want
 to choose yourself.
 
-For maintainers, two things outside the repository files:
+The rule for `main` (see [Pull requests](#pull-requests)) holds for the
+release pull request too, and there it matters most: it cannot be merged
+while `main` has a commit that it does not contain. That is the case for the
+moment between a merge and release-please writing the pull request anew, and
+it stays the case if that does not happen. Release 0.3.0 went out without one
+of its fixes in the notes because GitHub had started no workflow for a
+merge, and nothing kept the release pull request from being merged as it
+was.
+
+If the release pull request is behind `main` and stays so, start the
+workflow "Release" by hand for `main` (Actions → Release → Run workflow).
+Do not use "Update branch" on it: that brings in the commits but not their
+lines in the changelog.
+
+For maintainers, three things outside the repository files:
 
 - Under Settings → Actions → General, "Allow GitHub Actions to create and
   approve pull requests" has to be switched on, or release-please cannot open
   its pull request.
 - GitHub does not start workflows for what a workflow does with its own
-  token, so CI does not run on the release pull request by default. To change
-  that, store a personal access token (or an app token) with write access to
-  contents and pull requests as the secret `RELEASE_PLEASE_TOKEN`.
+  token, so the checks of the release pull request do not run by themselves.
+  They are needed for merging it: start them by hand each time
+  release-please has written it anew, or store a personal access token (or
+  an app token) with write access to contents and pull requests as the
+  secret `RELEASE_PLEASE_TOKEN`, with which they start by themselves.
+- The rule for `main` is a ruleset under Settings → Rules: a pull request is
+  required, and so are the status checks "CI passed" and "Conventional
+  Commits" together with "Require branches to be up to date before merging".
+  Nobody is exempt from it.
 
 ## Reporting bugs
 
