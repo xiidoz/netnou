@@ -251,17 +251,25 @@ to choose yourself.
 
 The rule for `main` (see [Pull requests](#pull-requests)) holds for the
 release pull request too, and there it matters most: it cannot be merged
-while `main` has a commit that it does not contain. That is the case for the
-moment between a merge and release-please writing the pull request anew, and
-it stays the case if that does not happen. Release 0.3.0 went out without one
-of its fixes in the notes because GitHub had started no workflow for a
-merge, and nothing kept the release pull request from being merged as it
-was.
+while `main` has a commit that it does not contain. Release 0.3.0 went out
+without one of its fixes in the notes because GitHub had started no workflow
+for a merge, and nothing kept the release pull request from being merged as
+it was.
 
-If the release pull request is behind `main` and stays so, start the
-workflow "Release" by hand for `main` (Actions → Release → Run workflow).
-Do not use "Update branch" on it: that brings in the commits but not their
-lines in the changelog.
+release-please writes the pull request anew, on top of the latest `main`,
+when a merge adds something to the notes. After a merge that adds nothing to
+them (docs, tests, CI) it leaves the pull request as it is, which is then
+behind `main`. So when the release pull request is behind:
+
+1. See under Actions that the workflow "Release" has run for the latest
+   commit of `main`. If it has not, start it by hand for `main` (Actions →
+   Release → Run workflow) and wait for it.
+2. If the pull request is still behind after that, what it lacks adds
+   nothing to the notes: bring it up to date with "Update branch".
+
+Not the other way round: "Update branch" brings in the commits but not their
+lines in the changelog, so it must not stand in for a run of the workflow
+that did not happen.
 
 For maintainers, three things outside the repository files:
 
