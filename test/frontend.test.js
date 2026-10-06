@@ -31,7 +31,7 @@ const arrayIn = (source, name) => new RegExp(`const ${name} = \\[([^\\]]*)\\]`).
 test('the service worker precaches files that exist', () => {
   assert.ok(shell.length > 0);
   for (const file of shell) assert.ok(fs.existsSync(new URL(file === './' ? 'index.html' : file, publicDir)), `${file} in SHELL of sw.js does not exist`);
-  for (const file of ['app.js', 'i18n.js', 'style.css']) assert.ok(shell.includes(file), `${file} is missing in SHELL of sw.js`);
+  for (const file of ['app.js', 'i18n.js', 'search.js', 'style.css']) assert.ok(shell.includes(file), `${file} is missing in SHELL of sw.js`);
 });
 
 test('a language is a file in locales/, an entry in LANGUAGES and one in the shell of the service worker', () => {

@@ -58,6 +58,7 @@ const feed = new FeedUpdater({
     // Trip ids are only valid within one feed version.
     realtime.reset();
     vehicleCache = null;
+    searchCache = null;
   },
 });
 
@@ -159,6 +160,20 @@ function vehicles() {
   return vehicleCache;
 }
 
+// What the page searches the stops in is the same for every browser and only
+// changes with the timetable. It is a quarter of a megabyte even compressed,
+// so it is put together and compressed once, and its ETag lets a browser that
+// has it keep it.
+let searchCache = null;
+
+function searchIndex() {
+  if (!searchCache) {
+    const body = Buffer.from(JSON.stringify(timetable.searchIndex()));
+    searchCache = { body, etag: `"${crypto.createHash('sha1').update(body).digest('hex').slice(0, 16)}"`, packed: null };
+  }
+  return searchCache;
+}
+
 const inBox = (box, lat, lon) => lat >= box[0] && lat <= box[2] && lon >= box[1] && lon <= box[3];
 
 function status() {
@@ -239,6 +254,18 @@ function handleApi(req, res, url) {
     case '/api/stations': {
       const box = parseBox(url.searchParams.get('bbox'));
       return sendJson(req, res, 200, box ? timetable.stations.filter((s) => inBox(box, s.lat, s.lon)) : timetable.stations);
+    }
+
+    // All stations at once, for the search of the page, which happens in the
+    // browser: what somebody types is nothing the server gets to see.
+    case '/api/search': {
+      const index = searchIndex();
+      const headers = { ETag: index.etag, 'Cache-Control': 'no-cache' };
+      if (etagMatches(req, index.etag)) {
+        res.writeHead(304, { ...headers, Vary: 'Accept-Encoding' });
+        return res.end();
+      }
+      return send(req, res, 200, MIME['.json'], index.body, headers, (body) => (index.packed ??= gzip(body)));
     }
 
     case '/api/trip': {

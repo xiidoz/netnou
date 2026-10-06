@@ -47,6 +47,16 @@ export default {
   'locate.failed': 'Your location could not be found.',
   'locate.outside': 'Your location is outside the area of this map.',
 
+  // The search for stops, in the card with the filters. The label is also what the empty field says.
+  'search.label': 'Search for a stop',
+  // the button with the lens that opens the search on a narrow screen, and the one that shuts it again
+  'search.open': 'Search',
+  'search.close': 'Close the search',
+  'search.results': 'Stops found',
+  'search.none': 'No stop of that name.',
+  'search.loading': 'Loading the stops …',
+  'search.failed': 'The stops could not be loaded.',
+
   'modes.label': 'Show or hide modes of transport',
   // U-Bahn and S-Bahn are what the signs say
   'mode.subway': 'U-Bahn',

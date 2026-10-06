@@ -75,9 +75,9 @@ otherwise. Use it in `public/app.js` through `t('some.key', { … })`, or in
 ```
 
 `data-i18n` sets the text of the element, `data-i18n-aria-label`,
-`data-i18n-title` and `data-i18n-content` set the attribute of that name. The
-English text in the HTML is what shows until the script has run, and the test
-keeps it equal to `en.js`.
+`data-i18n-title`, `data-i18n-content` and `data-i18n-placeholder` set the
+attribute of that name. The English text in the HTML is what shows until the
+script has run, and the test keeps it equal to `en.js`.
 
 The test also fails when a key is no longer used anywhere, and when `app.js`
 contains text for visitors that does not go through `t()`.

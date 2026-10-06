@@ -95,6 +95,7 @@ Page (`public/`):
 | --- | --- |
 | `index.html`, `style.css` | structure and appearance; colours for canvas and DOM live in the style sheet |
 | `app.js` | map, polling, animation, drawing on a canvas, detail panel |
+| `search.js` | finding stops by name: matching and order, without the page around it |
 | `i18n.js`, `locales/` | texts in the visitor's language, see [translating.md](translating.md) |
 | `sw.js`, `manifest.webmanifest`, `icons/` | installable app and offline start |
 | `vendor/maplibre-gl/` | the map library, vendored, see [its README](../public/vendor/maplibre-gl/README.md) |
@@ -278,6 +279,17 @@ otherwise a server would load a file written by older code:
   clock, and eased towards a new position when a changed delay moves them.
 - **Detail panel.** A click on a vehicle shows its trip, a click on a station
   its departures; both refresh every 15 seconds.
+- **Search.** The field in the header card finds stops by name. The list of
+  all stops is fetched when the field is first used, and searched in the
+  browser: what is typed stays there, and so does the visitor's position,
+  which the order of the results makes use of. A stop matches if every word
+  typed begins one of the words of its name, in any order; matches inside a
+  word come after those, and close spellings are tried where nothing else is
+  found. Among equally close matches the stop with more service comes
+  first, and with the visitor's position known, service counts for less the
+  further away a stop is. `search.js` holds all of that and knows nothing of
+  the page, so the tests run it as it is. Choosing a stop moves the map
+  there and opens its departure board.
 - **Own position.** A button above the zoom buttons shows where the visitor
   is and has the map follow them, until they move the map themselves or
   switch it off. It is off at every start, and a visitor outside the area is
@@ -301,9 +313,10 @@ otherwise a server would load a file written by older code:
 - **Browsers.** There is no build step, so the page runs as written. The map
   library sets the floor: it needs WebGL 2 and the JavaScript of 2022,
   roughly Chrome and Edge 94, Firefox 114, Safari 16.4 and newer.
-- **Accessibility.** Filters, the language picker, the detail panel and its
-  lists are ordinary controls and work with the keyboard. Vehicles and
-  stations exist only on the canvas and can be selected with a pointer only.
+- **Accessibility.** Filters, the language picker, the search, the detail
+  panel and its lists are ordinary controls and work with the keyboard; the
+  search is the way to a station without a pointer. On the canvas, vehicles
+  and stations can be selected with a pointer only.
   On a narrow screen the filters are one row that scrolls sideways; arrows at
   its ends show that it goes on and move it. They are left out of the tab
   order and hidden from screen readers, which reach every filter directly.
