@@ -49,6 +49,7 @@ public/
   i18n.js, locales/   texts per language
   sw.js, manifest.webmanifest, icons/   installable app
   vendor/maplibre-gl/ vendored map library
+  vendor/material-design-icons/   the icons of the buttons
 test/                 tests and their fixtures (helpers.js)
 tools/                scripts run by hand: default area, app icons
 docs/                 documentation
@@ -176,6 +177,12 @@ earlier ones.
   JS release. Do not edit them; see
   [public/vendor/maplibre-gl/README.md](public/vendor/maplibre-gl/README.md)
   for updating.
+- **`public/vendor/material-design-icons/`** holds the shapes of the icons
+  on the page's own buttons, taken from Material Design Icons. An icon is
+  never a character or drawn by hand: where a character sits depends on the
+  device's font. Its
+  [README](public/vendor/material-design-icons/README.md) says how to add
+  one.
 
 ## Cache formats
 

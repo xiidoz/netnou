@@ -179,10 +179,12 @@ See [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## Data sources, licences and attribution
 
-The code is under the [MIT License](LICENSE). Two things in the repository
+The code is under the [MIT License](LICENSE). Three things in the repository
 are not: the vendored map library MapLibre GL JS
-(`public/vendor/maplibre-gl`, BSD-3-Clause) and the outline of the default
-area (`server/areas/vgn.geojson`, © OpenStreetMap contributors, ODbL 1.0).
+(`public/vendor/maplibre-gl`, BSD-3-Clause), the icons taken from Material
+Design Icons (`public/vendor/material-design-icons`, Apache-2.0) and the
+outline of the default area (`server/areas/vgn.geojson`, © OpenStreetMap
+contributors, ODbL 1.0).
 
 A running instance works with data that it fetches itself and that has its own
 terms:

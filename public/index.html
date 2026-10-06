@@ -19,7 +19,8 @@
        replaces them with the visitor's language: data-i18n names the key for the
        text of an element, data-i18n-<attribute> the key for an attribute (see
        i18n.js). No inline scripts or styles: the Content-Security-Policy of the
-       server forbids them. -->
+       server forbids them. data-icon names the drawing the script puts into
+       an element (see ICONS in app.js). -->
   <div id="map" role="application" aria-label="Map with the current positions of the vehicles" data-i18n-aria-label="map.label"></div>
 
   <!-- hidden until the texts are in the visitor's language -->
@@ -27,16 +28,16 @@
     <div class="title">
       <h1>Netnou</h1>
       <p id="area-name"></p>
-      <button type="button" class="search-open" id="search-open" aria-label="Search" data-i18n-aria-label="search.open"><span class="lens"></span></button>
+      <button type="button" class="search-open" id="search-open" aria-label="Search" data-i18n-aria-label="search.open" data-icon="search"></button>
       <select class="language" id="language" aria-label="Language" data-i18n-aria-label="language.label"></select>
     </div>
     <!-- The search for stops and lines. On a narrow screen it is shut until the button
          with the lens opens it, and then takes the place of the title. What
          is found drops down below the field (app.js fills it in). -->
     <div class="search" id="search" role="search">
-      <span class="lens"></span>
+      <span class="search-sign" data-icon="search"></span>
       <input type="search" id="search-field" role="combobox" aria-expanded="false" aria-controls="search-results" aria-autocomplete="list" autocomplete="off" autocapitalize="off" spellcheck="false" enterkeyhint="search" placeholder="Search for a stop or a line" data-i18n-placeholder="search.label" aria-label="Search for a stop or a line" data-i18n-aria-label="search.label">
-      <button type="button" class="search-close" id="search-close" aria-label="Close the search" data-i18n-aria-label="search.close">×</button>
+      <button type="button" class="search-close" id="search-close" aria-label="Close the search" data-i18n-aria-label="search.close" data-icon="close"></button>
       <div class="search-drop">
         <ul class="search-results" id="search-results" role="listbox" aria-label="Stops and lines found" data-i18n-aria-label="search.results"></ul>
         <p class="search-note" id="search-note" role="status"></p>
@@ -47,9 +48,9 @@
          arrows show where it goes on and move it there. They are for eyes and
          fingers only: the keyboard and a screen reader reach every chip itself. -->
     <div class="chips-row">
-      <button type="button" class="chips-more back" id="modes-back" tabindex="-1" aria-hidden="true" hidden><span>‹</span></button>
+      <button type="button" class="chips-more back" id="modes-back" tabindex="-1" aria-hidden="true" hidden><span data-icon="left"></span></button>
       <div class="chips" id="modes" role="group" aria-label="Show or hide modes of transport" data-i18n-aria-label="modes.label"></div>
-      <button type="button" class="chips-more" id="modes-on" tabindex="-1" aria-hidden="true" hidden><span>›</span></button>
+      <button type="button" class="chips-more" id="modes-on" tabindex="-1" aria-hidden="true" hidden><span data-icon="right"></span></button>
     </div>
     <div class="segmented" role="group" aria-label="Colour of the vehicles" data-i18n-aria-label="colorBy.label">
       <span class="segmented-label" data-i18n="colorBy.title">Colour by</span>
@@ -61,7 +62,7 @@
   </header>
 
   <aside class="card panel" id="panel" hidden tabindex="-1" aria-label="Details" data-i18n-aria-label="panel.label">
-    <button type="button" class="close" id="panel-close" aria-label="Close" data-i18n-aria-label="panel.close">×</button>
+    <button type="button" class="close" id="panel-close" aria-label="Close" data-i18n-aria-label="panel.close" data-icon="close"></button>
     <div id="panel-body"></div>
   </aside>
 

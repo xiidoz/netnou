@@ -99,6 +99,7 @@ Page (`public/`):
 | `i18n.js`, `locales/` | texts in the visitor's language, see [translating.md](translating.md) |
 | `sw.js`, `manifest.webmanifest`, `icons/` | installable app and offline start |
 | `vendor/maplibre-gl/` | the map library, vendored, see [its README](../public/vendor/maplibre-gl/README.md) |
+| `vendor/material-design-icons/` | the shapes of the icons on the page's own buttons, see [its README](../public/vendor/material-design-icons/README.md) |
 
 `tools/` holds three scripts that are run by hand: `build-vgn-area.mjs`
 regenerates the default area, `build-icons.mjs` renders the app icons from

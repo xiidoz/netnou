@@ -10,6 +10,7 @@
 
 import { formatNumber, formatTime, languagePicker, loadLanguage, setTimeZone, t, translatePage } from './i18n.js';
 import { buildIndex, search, searchLines } from './search.js';
+import { mdiChevronLeft, mdiChevronRight, mdiClose, mdiMagnify } from './vendor/material-design-icons/icons.js';
 import { AttributionControl, MapLibreMap, NavigationControl } from './vendor/maplibre-gl/maplibre-gl.mjs';
 
 const APP_NAME = 'Netnou';
@@ -82,6 +83,26 @@ function el(tag, props = {}, children = []) {
   node.append(...children);
   return node;
 }
+
+// The icons on the page's own buttons, by the name data-icon asks for them in
+// index.html. They are from Material Design Icons (vendor/material-design-icons),
+// each the shape of one icon in a box of 24 by 24; style.css gives it its size
+// and its colour. Shapes and not characters: where a character sits in its box
+// is up to the font, and the font is the device's.
+const ICONS = { close: mdiClose, left: mdiChevronLeft, right: mdiChevronRight, search: mdiMagnify };
+
+function icon(name) {
+  const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  svg.setAttribute('class', 'icon');
+  svg.setAttribute('viewBox', '0 0 24 24');
+  // (what it is on says what it is for)
+  svg.setAttribute('aria-hidden', 'true');
+  const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+  path.setAttribute('d', ICONS[name]);
+  svg.append(path);
+  return svg;
+}
+for (const node of document.querySelectorAll('[data-icon]')) node.append(icon(node.dataset.icon));
 
 // What is stored may be anything – written by another version of the page or
 // by hand – so whoever reads a setting checks its shape.
@@ -1142,7 +1163,7 @@ function renderTrip(trip, scrollToNext) {
   const notes = trip.realtime && trip.source ? [t('trip.source', { source: trip.source }), ...trip.notes] : trip.notes;
   // A trip chosen from the vehicles of a line leads back to them.
   const from = state.selection.from;
-  const back = from ? el('button', { type: 'button', class: 'back', 'aria-label': t('line.back', { line: from.name }), onclick: () => selectLine(from) }, ['‹', badge(from.name, from.mode)]) : '';
+  const back = from ? el('button', { type: 'button', class: 'back', 'aria-label': t('line.back', { line: from.name }), onclick: () => selectLine(from) }, [icon('left'), badge(from.name, from.mode)]) : '';
   fillPanel(
     el('div', { class: 'panel-head' }, [
       back,
