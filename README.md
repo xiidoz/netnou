@@ -38,8 +38,9 @@ changes as breaking.
   places in the visitor's language.
 - Stop list with delays, skipped stops and cancellations for every trip;
   departure board for every station; notes from the feed.
-- Search for stops by name that forgives abbreviations, missing umlauts and
-  typing slips, and runs in the browser.
+- Search for stops and lines that runs in the browser. For stops it forgives
+  abbreviations, missing umlauts and typing slips; a line shows its vehicles
+  under way, alone on the map.
 - The visitor's own location on the map, if they ask for it; it stays in
   their browser.
 - User interface in German and English, chosen per visitor; further languages

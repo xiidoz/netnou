@@ -1,6 +1,6 @@
 # HTTP API
 
-The page talks to the server through seven read-only JSON endpoints. They are
+The page talks to the server through eight read-only JSON endpoints. They are
 open to other clients as well.
 
 - [Conventions](#conventions)
@@ -10,6 +10,7 @@ open to other clients as well.
 - [`GET /api/vehicles`](#get-apivehicles)
 - [`GET /api/stations`](#get-apistations)
 - [`GET /api/search`](#get-apisearch)
+- [`GET /api/line`](#get-apiline)
 - [`GET /api/trip`](#get-apitrip)
 - [`GET /api/departures`](#get-apidepartures)
 - [Knots](#knots)
@@ -46,7 +47,7 @@ shortened where marked with `…`.
 | 200 | success | see the endpoints |
 | 304 | `/api/area` or `/api/search` with a matching `If-None-Match` | none |
 | 400 | the URL cannot be decoded | none |
-| 404 | unknown trip, station or path | `{ "error": "…" }` |
+| 404 | unknown trip, station, line or path | `{ "error": "…" }` |
 | 405 | any method other than `GET` and `HEAD`; the `Allow` header names them | none |
 | 500 | an error in the server | none |
 | 503 | no timetable is loaded yet | see below |
@@ -223,9 +224,10 @@ modes that call at the station.
 
 ## `GET /api/search`
 
-All stations of the area at once, for the search of the page. The search
-itself happens in the browser, so the endpoint takes no query: what somebody
-types is nothing the server gets to see. Does not touch the realtime feed.
+All stations and lines of the area at once, for the search of the page. The
+search itself happens in the browser, so the endpoint takes no query: what
+somebody types is nothing the server gets to see. Does not touch the
+realtime feed.
 
 ```json
 {
@@ -236,22 +238,82 @@ types is nothing the server gets to see. Does not touch the realtime feed.
     "lon": [11.07301, 11.07032, …],
     "modes": [["tram", "bus"], ["tram", "bus"], …],
     "service": [1634, 3446, …]
+  },
+  "lines": {
+    "name": ["U1", "33", …],
+    "mode": ["subway", "bus", …],
+    "agency": ["VerkehrsAG Nürnberg", "Stadtverkehr Fürth", …],
+    "to": [["Fürth Hardhöhe", "Langwasser Süd"], ["Fürth Hauptbahnhof", "Flughafen N U E"], …],
+    "lat": [49.44428, 49.48582, …],
+    "lon": [11.05986, 11.03156, …],
+    "service": [1911, 296, …]
   }
 }
 ```
 
-The stations are those of `/api/stations`, in the same order, as one array
-per property: the n-th entries of all arrays belong to one station. That is
-a quarter less to transfer than one object per station, about 250 kB
-compressed for the default area.
+Both are sent as one array per property: the n-th entries of all arrays of
+`stations` belong to one station, those of `lines` to one line. That is a
+quarter less to transfer than one object for each, about 290 kB compressed
+for the default area with its 13,489 stations and 1,506 lines.
+
+The stations are those of `/api/stations`, in the same order.
 
 | Field | Type | Meaning |
 | --- | --- | --- |
 | `id`, `name`, `lat`, `lon`, `modes` | arrays | as in [`/api/stations`](#get-apistations) |
 | `service` | array of integers | how often a trip stops at the station over the whole timetable; a measure of how much is going on there compared with other stations, not a number of departures per day |
 
+A line is the routes of the feed that have the same name, the same mode and
+the same agency. The name alone does not say which line it is: agencies
+number their lines independently, and a replacement bus runs under the name
+of its train. Lines without a stop in the area are left out.
+
+| Field | Type | Meaning |
+| --- | --- | --- |
+| `name` | array of strings | what the line is called, as `line` of a vehicle |
+| `mode` | array of strings | one of the [modes](#modes) |
+| `agency` | array of strings | who runs it |
+| `to` | array of arrays | the one or two destinations most of its trips have; the feed has no other description of a line |
+| `lat`, `lon` | arrays of numbers | the middle of its stops inside the area |
+| `service` | array of integers | the number of its trips in the whole timetable |
+
 The answer only changes with the timetable. It carries an `ETag`, and a
 request with a matching `If-None-Match` is answered with 304.
+
+## `GET /api/line`
+
+The vehicles of one line that are under way.
+
+| Parameter | Meaning |
+| --- | --- |
+| `name`, `mode`, `agency` | the line, as [`/api/search`](#get-apisearch) lists it; all three are needed |
+
+```json
+{
+  "now": 1791287110,
+  "name": "U1",
+  "mode": "subway",
+  "agency": "VerkehrsAG Nürnberg",
+  "vehicles": [
+    { "id": "1441544_20261006", "to": "Eberhardshof", "next": "Nürnberg Plärrer", "delay": null, "lat": 49.44936, "lon": 11.06877 },
+    { "id": "1362834_20261006", "to": "Eberhardshof", "next": "Nürnberg Hasenbuck", "delay": null, "lat": 49.42065, "lon": 11.09807 },
+    …
+  ]
+}
+```
+
+| Field | Type | Meaning |
+| --- | --- | --- |
+| `id` | string | for `/api/trip` |
+| `to` | string | where the vehicle goes |
+| `next` | string | the name of the stop ahead of it |
+| `delay` | integer or `null` | seconds at that stop; `null` without realtime data |
+| `lat`, `lon` | numbers | where it is at `now` |
+
+The vehicles are sorted by destination and, among those with the same one,
+by how many stops they have left. A line with no vehicle under way answers
+with an empty list; a line that does not exist with 404. Asking keeps the
+server fetching the realtime feed, like `/api/vehicles`.
 
 ## `GET /api/trip`
 

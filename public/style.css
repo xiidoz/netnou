@@ -214,6 +214,20 @@ button { font: inherit; color: inherit; }
 .search-results .dots { display: grid; flex: none; grid-template-columns: repeat(3, 8px); gap: 2px; }
 .search-results .swatch { width: 8px; height: 8px; background: var(--chip-color); }
 .search-results .name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* a line: where it goes, and below that in small print who runs it */
+.search-results .line .name { display: grid; min-width: 0; line-height: 1.25; }
+.search-results .line .to, .search-results .line .agency { overflow: hidden; text-overflow: ellipsis; }
+.search-results .line .agency { color: var(--text-muted); font-size: 12px; }
+.search-results .badge { flex: none; }
+/* the headings of lines and stops, where both were found */
+.search-heading {
+  padding: 6px 10px 2px;
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 650;
+  cursor: default;
+}
+.search-results li.search-heading:hover { background: none; }
 .search-note { margin: 0; padding: 9px 10px; color: var(--text-muted); font-size: 13px; }
 
 .status {
@@ -410,6 +424,24 @@ button:focus-visible, select:focus-visible, .row:focus-visible, .panel:focus-vis
 .row .name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .row .platform { color: var(--text-muted); font-size: 12.5px; white-space: nowrap; }
 .row.cancelled .name, .row.cancelled .time { text-decoration: line-through; color: var(--text-muted); }
+
+/* the vehicles of a line: the stop ahead and the delay, under a heading that says where they go */
+.row.vehicle { grid-template-columns: 1fr auto; }
+.rows-head { margin: 0; padding: 10px 14px 0; color: var(--text-muted); font-size: 13px; font-weight: 650; }
+/* from a trip back to the line it was chosen from */
+.back {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  margin: 0 0 8px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--text-muted);
+  font-size: 17px;
+  line-height: 1;
+  cursor: pointer;
+}
 
 /* --time-chars: how many characters a clock time has at most in the visitor's language (app.js sets it) */
 .row { --time-width: calc(var(--time-chars, 5) * 1ch + 4px); }

@@ -47,15 +47,18 @@ export default {
   'locate.failed': 'Your location could not be found.',
   'locate.outside': 'Your location is outside the area of this map.',
 
-  // The search for stops, in the card with the filters. The label is also what the empty field says.
-  'search.label': 'Search for a stop',
+  // The search for stops and lines, in the card with the filters. The label is also what the empty field says.
+  'search.label': 'Search for a stop or a line',
   // the button with the lens that opens the search on a narrow screen, and the one that shuts it again
   'search.open': 'Search',
   'search.close': 'Close the search',
-  'search.results': 'Stops found',
-  'search.none': 'No stop of that name.',
-  'search.loading': 'Loading the stops …',
-  'search.failed': 'The stops could not be loaded.',
+  'search.results': 'Stops and lines found',
+  // the headings in the list of what was found, where it is both
+  'search.lines': 'Lines',
+  'search.stops': 'Stops',
+  'search.none': 'No stop or line of that name.',
+  'search.loading': 'Loading stops and lines …',
+  'search.failed': 'Stops and lines could not be loaded.',
 
   'modes.label': 'Show or hide modes of transport',
   // U-Bahn and S-Bahn are what the signs say
@@ -91,6 +94,14 @@ export default {
   // {source} is the operator the realtime data of the trip comes from
   'trip.source': 'Realtime data: {source}',
   'trip.cancelled': 'Trip cancelled',
+
+  // The view of a line: its vehicles that are under way, under where they go ({destination}), each with the stop ahead of it.
+  'line.vehicles': { one: '{count} vehicle under way', other: '{count} vehicles under way' },
+  'line.none': 'No vehicle of this line is under way right now.',
+  'line.to': 'to {destination}',
+  'line.next': 'next: {stop}',
+  // on the button that leads from a trip back to the line it was chosen from
+  'line.back': 'Back to line {line}',
 
   'stop.platform': 'Plat. {platform}',
   'stop.skipped': 'skipped',
