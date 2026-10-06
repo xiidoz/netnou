@@ -1161,12 +1161,16 @@ function renderTrip(trip, scrollToNext) {
   const mode = t(`mode.${DRAW_ORDER.includes(trip.mode) ? trip.mode : 'other'}`);
   // Who provides the realtime data shown leads the notes, which are feed content and stay as they are.
   const notes = trip.realtime && trip.source ? [t('trip.source', { source: trip.source }), ...trip.notes] : trip.notes;
-  // A trip chosen from the vehicles of a line leads back to them.
+  // A trip chosen from the vehicles of a line leads back to them. The button
+  // is in a row of its own that stays at the top: the list opens at the stop
+  // ahead, which may be far down.
   const from = state.selection.from;
-  const back = from ? el('button', { type: 'button', class: 'back', 'aria-label': t('line.back', { line: from.name }), onclick: () => selectLine(from) }, [icon('left'), badge(from.name, from.mode)]) : '';
+  const back = from ? el('div', { class: 'back-row' }, [
+    el('button', { type: 'button', class: 'back', 'aria-label': t('line.back', { line: from.name }), onclick: () => selectLine(from) }, [icon('left'), badge(from.name, from.mode)]),
+  ]) : '';
   fillPanel(
+    back,
     el('div', { class: 'panel-head' }, [
-      back,
       el('h2', {}, [badge(trip.line, trip.mode), el('span', { text: `→ ${trip.to}` })]),
       el('p', { class: 'sub', text: [mode, trip.agency, trip.realtime ? t('trip.realtime') : t('trip.scheduleOnly')].filter(Boolean).join(' · ') }),
       notesList(notes, trip.cancelled ? t('trip.cancelled') : null),
