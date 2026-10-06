@@ -10,9 +10,14 @@ name: Release
 # 2. The container image is built and pushed to ghcr.io/xiidoz/netnou: always
 #    as "edge", and for a release also as "latest", X.Y.Z, X.Y and - from
 #    1.0.0 on - X. So "latest" is the newest release and "edge" is main.
+#
+# It can also be started by hand, for main: should GitHub start no workflow for
+# a push, which has happened, the release pull request would otherwise stay as
+# it was, one merge behind, until the next push.
 on:
   push:
     branches: [main]
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -25,8 +30,9 @@ concurrency:
 jobs:
   release-please:
     name: Release pull request
-    # Forks inherit this file but do not make releases of their own.
-    if: github.repository == 'xiidoz/netnou'
+    # Forks inherit this file but do not make releases of their own. Started
+    # by hand for another branch, there is nothing to release either.
+    if: github.repository == 'xiidoz/netnou' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -47,7 +53,7 @@ jobs:
     name: Container image
     needs: release-please
     # Also when release-please failed: "edge" does not depend on it.
-    if: ${{ !cancelled() && github.repository == 'xiidoz/netnou' }}
+    if: ${{ !cancelled() && github.repository == 'xiidoz/netnou' && github.ref == 'refs/heads/main' }}
     runs-on: ubuntu-latest
     permissions:
       contents: read

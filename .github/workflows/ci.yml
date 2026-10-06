@@ -68,3 +68,20 @@ jobs:
           context: .
           platforms: linux/amd64,linux/arm64
           push: false
+
+  # The one check that the rule protecting main asks for, so that it need not
+  # name the jobs above, which change with the versions of Node.js. It runs
+  # also when one of them failed or was cancelled, and then fails itself: a
+  # check that was skipped would count as passed.
+  passed:
+    name: CI passed
+    needs: [test, lint, docker]
+    if: ${{ always() }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Every job above succeeded
+        run: |
+          echo "$RESULTS"
+          ! echo "$RESULTS" | grep -q -E 'failure|cancelled|skipped'
+        env:
+          RESULTS: ${{ join(needs.*.result, ' ') }}
