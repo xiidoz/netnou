@@ -1,7 +1,7 @@
-// Finds stops by their name, in the browser: what a visitor types stays
-// there, and so does their position, which the order of the results makes use
-// of. Nothing in here knows the page, so that test/search.test.js runs it as
-// it is.
+// Finds stops and lines by their name, in the browser: what a visitor types
+// stays there, and so does their position, which the order of the results
+// makes use of. Nothing in here knows the page, so that test/search.test.js
+// runs it as it is.
 //
 // A stop is found if every word typed is the beginning of a word of its name,
 // in any order, or stands inside one. Where no stop is found that way, the
@@ -32,6 +32,9 @@ const split = (text) => text.split(/[^\p{L}\p{N}]+/u).filter(Boolean);
 /** The words somebody typed, each once: "Nürnberg, Plärrer" becomes ["nurnberg", "plarrer"]. */
 export const wordsOf = (text) => [...new Set(split(fold(text)))];
 
+/** A name as one word: "ICE 12" becomes "ice12", "U-Bahn" becomes "ubahn". */
+const compact = (text) => split(fold(text)).join('');
+
 /** The words a stop answers to: those of its name and what else they may be typed as. */
 function wordsOfStop(name, modes) {
   const words = new Set();
@@ -49,13 +52,21 @@ function wordsOfStop(name, modes) {
 }
 
 /**
- * Makes the stations of api/search searchable.
- * @param stations their columns: id, name, lat, lon, modes and service
+ * Makes what api/search sends searchable.
+ * @param data its answer: the columns of the stations and those of the lines
+ * @param modeNames what the visitor reads the modes called, by mode: with
+ *   { bus: 'Bus' } somebody may type "bus 33" for line 33 of the buses
  */
-export function buildIndex(stations) {
+export function buildIndex({ stations, lines }, modeNames = {}) {
   const words = stations.name.map((name, i) => wordsOfStop(name, stations.modes[i]));
-  // every word once: among them the close spellings are looked for
-  return { ...stations, words, vocabulary: [...new Set(words.flat())] };
+  return {
+    ...stations,
+    words,
+    // every word once: among them the close spellings are looked for
+    vocabulary: [...new Set(words.flat())],
+    lines: { ...lines, compact: lines.name.map(compact) },
+    modeOf: new Map(Object.entries(modeNames).map(([mode, name]) => [compact(name), mode])),
+  };
 }
 
 /** How many slips a word of this length may contain and still be taken for another. */
@@ -111,6 +122,9 @@ function closeness(words, typed, spellings) {
 
 const kilometres = (lat1, lon1, lat2, lon2) => Math.hypot(lat1 - lat2, (lon1 - lon2) * Math.cos((lat1 * Math.PI) / 180)) * 111.2;
 
+/** What the service of a stop or a line counts for: all of it, or less the further it is from `near`. */
+const weigh = (service, lat, lon, near) => (near ? service / (kilometres(near.lat, near.lon, lat, lon) + NEAR_KM) ** 2 : service);
+
 /**
  * The stops that match what was typed, the most likely first: the closer
  * matches before the others, and among equally close ones those with more
@@ -136,10 +150,50 @@ export function search(index, query, { near = null, limit = 8 } = {}) {
   // what was not meant as well ("feuer" is nearly the beginning of "Fürth").
   if (!found.length) found = collect(typed.map((word) => closeSpellings(index.vocabulary, word)));
 
-  const weight = (i) => (near ? index.service[i] / (kilometres(near.lat, near.lon, index.lat[i], index.lon[i]) + NEAR_KM) ** 2 : index.service[i]);
   return found
-    .map(({ i, match }) => ({ i, match, weight: weight(i) }))
+    .map(({ i, match }) => ({ i, match, weight: weigh(index.service[i], index.lat[i], index.lon[i], near) }))
     .sort((a, b) => a.match - b.match || b.weight - a.weight || index.name[a.i].localeCompare(index.name[b.i]))
     .slice(0, limit)
     .map(({ i }) => ({ id: index.id[i], name: index.name[i], lat: index.lat[i], lon: index.lon[i], modes: index.modes[i] }));
+}
+
+/**
+ * The lines whose name begins with what was typed, spaces left out: "u1" and
+ * "s 1" are the U1 and the S1, "33" is line 33 and after it 330 and 331. The
+ * name of a mode in front narrows it down, and then the letter of the line
+ * may be left out: "bus 33", "U-Bahn 1". A line of exactly that name comes
+ * first, one of that number after it, then the one with more trips, which
+ * count for less the further from `near` the line runs.
+ * @param index from buildIndex
+ * @param near { lat, lon } of the visitor, if they have it shown
+ * @returns up to `limit` of { name, mode, agency, to }
+ */
+export function searchLines(index, query, { near = null, limit = 3 } = {}) {
+  const typed = split(fold(query));
+  if (!typed.length) return [];
+  // what a name may begin with: all that was typed, or what follows the name of a mode
+  const wanted = [{ mode: null, begin: typed.join('') }];
+  for (let k = 1; k < typed.length; k++) {
+    const mode = index.modeOf.get(typed.slice(0, k).join(''));
+    if (mode) wanted.push({ mode, begin: typed.slice(k).join('') });
+  }
+
+  const { lines } = index;
+  const found = [];
+  for (let i = 0; i < lines.name.length; i++) {
+    const name = lines.compact[i];
+    const number = name.replace(/^\p{L}+/u, '');
+    // -1: not found; 0: begins with it; 1: its number is that; 2: its name is
+    let exact = -1;
+    for (const { mode, begin } of wanted) {
+      if (mode && mode !== lines.mode[i]) continue;
+      if (name.startsWith(begin)) exact = Math.max(exact, name === begin ? 2 : 0);
+      else if (mode && number.startsWith(begin)) exact = Math.max(exact, number === begin ? 1 : 0);
+    }
+    if (exact >= 0) found.push({ i, exact, weight: weigh(lines.service[i], lines.lat[i], lines.lon[i], near) });
+  }
+  return found
+    .sort((a, b) => b.exact - a.exact || b.weight - a.weight || lines.name[a.i].localeCompare(lines.name[b.i], undefined, { numeric: true }))
+    .slice(0, limit)
+    .map(({ i }) => ({ name: lines.name[i], mode: lines.mode[i], agency: lines.agency[i], to: lines.to[i] }));
 }

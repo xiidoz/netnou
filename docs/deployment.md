@@ -230,8 +230,9 @@ Worth watching:
   the defaults they go to `tiles.openfreemap.org`, which is served through
   Cloudflare; both see the visitor's IP address and the address of your
   site. A reverse proxy in front may log more. What a visitor types into the
-  search is matched in the browser against a list of all stops and is sent
-  nowhere.
+  search is matched in the browser against a list of all stops and lines
+  and is sent nowhere; a stop or a line they choose from it is asked for
+  like one chosen on the map.
 - **The visitor's location.** The page asks for it only when the visitor
   touches the button for it, reads it in the browser and sends it nowhere as
   such. While the map is centred on the visitor, though, the requests for

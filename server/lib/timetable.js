@@ -53,6 +53,9 @@ const LITE_AHEAD_S = 60;
 
 const round5 = (x) => Math.round(x * 1e5) / 1e5;
 
+/** What tells one line from another: its name, its mode and its operator together. */
+const lineKey = ({ name, mode, agency }) => JSON.stringify([name, mode, agency]);
+
 export class Timetable {
   /**
    * @param data dataset from importer.js (plus segments from shapes.js)
@@ -86,12 +89,33 @@ export class Timetable {
     for (let i = 0; i < stopCount; i++) this.stationOf[i] = this.stops.parent[i] >= 0 ? this.stops.parent[i] : i;
     this.stopIndex = new Map(this.stops.id.map((id, i) => [id, i]));
 
+    // A line is what its passengers take for one: the routes of the feed with
+    // the same name, mode and operator. The name alone does not say which line
+    // it is – several operators number their lines from 1, and a replacement
+    // bus runs under the name of its train.
+    this.lines = [];
+    this.lineIndex = new Map();
+    this.lineOf = this.routes.type.map((_, route) => {
+      const line = { name: this.lineName(route), mode: this.routeModes[route], agency: this.routes.agency[route] };
+      const key = lineKey(line);
+      if (!this.lineIndex.has(key)) {
+        this.lineIndex.set(key, this.lines.length);
+        // (trips, where they go, and where in the area they stop: filled in below)
+        this.lines.push({ ...line, trips: 0, headsigns: new Map(), lat: 0, lon: 0, stops: 0 });
+      }
+      return this.lineIndex.get(key);
+    });
+
     // visits[station] = flat [trip, position, trip, position, …]
     this.visits = new Map();
     const stationModes = new Map();
     for (let t = 0; t < tripCount; t++) {
       const stops = this.trips.stops[t];
       const modeBit = 1 << MODES.indexOf(this.routeModes[this.trips.route[t]]);
+      const line = this.lines[this.lineOf[this.trips.route[t]]];
+      const headsign = this.headsign(t);
+      line.trips++;
+      line.headsigns.set(headsign, (line.headsigns.get(headsign) ?? 0) + 1);
       for (let p = 0; p < stops.length; p++) {
         if (!this.stops.region[stops[p]]) continue;
         const station = this.stationOf[stops[p]];
@@ -99,6 +123,9 @@ export class Timetable {
         if (!list) this.visits.set(station, (list = []));
         list.push(t, p);
         stationModes.set(station, (stationModes.get(station) ?? 0) | modeBit);
+        line.lat += this.stops.lat[stops[p]];
+        line.lon += this.stops.lon[stops[p]];
+        line.stops++;
       }
     }
 
@@ -311,6 +338,10 @@ export class Timetable {
           // current position, for filtering by map section (not sent to the browser)
           lat,
           lon,
+          // for the vehicles of one line: which it is, the stop ahead and how many are left
+          lineIndex: this.lineOf[route],
+          next: this.stops.name[this.trips.stops[t][next]],
+          stopsLeft: last - next,
         });
       }
     }
@@ -318,13 +349,44 @@ export class Timetable {
   }
 
   /**
-   * What the page searches the stops in: all stations with their service, as
-   * one column per property, which is a quarter less to send than one object
-   * per station.
+   * What the page searches in: all stations with their service and all lines,
+   * as one column per property, which is a quarter less to send than one
+   * object for each.
    */
   searchIndex() {
     const column = (key) => this.stations.map((station) => station[key]);
-    return { stations: { id: column('id'), name: column('name'), lat: column('lat'), lon: column('lon'), modes: column('modes'), service: this.stationService } };
+    // A line that only passes the area without a stop in it has no place there.
+    const lines = this.lines.filter((line) => line.stops > 0);
+    return {
+      stations: { id: column('id'), name: column('name'), lat: column('lat'), lon: column('lon'), modes: column('modes'), service: this.stationService },
+      lines: {
+        name: lines.map((line) => line.name),
+        mode: lines.map((line) => line.mode),
+        agency: lines.map((line) => line.agency),
+        // The feed has no word on where a line runs: the two destinations most of its trips have say it best.
+        to: lines.map((line) => [...line.headsigns].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).slice(0, 2).map(([headsign]) => headsign)),
+        // the middle of its stops in the area
+        lat: lines.map((line) => round5(line.lat / line.stops)),
+        lon: lines.map((line) => round5(line.lon / line.stops)),
+        service: lines.map((line) => line.trips),
+      },
+    };
+  }
+
+  /**
+   * The vehicles of one line among those under way, by where they go and how
+   * far they have got, or null if there is no such line.
+   * @param vehicles from vehicles()
+   */
+  lineVehicles(line, vehicles) {
+    const index = this.lineIndex.get(lineKey(line));
+    if (index === undefined) return null;
+    const { name, mode, agency } = this.lines[index];
+    const list = vehicles
+      .filter((v) => v.lineIndex === index)
+      .sort((a, b) => a.to.localeCompare(b.to) || a.stopsLeft - b.stopsLeft)
+      .map((v) => ({ id: v.id, to: v.to, next: v.next, delay: v.delay, lat: round5(v.lat), lon: round5(v.lon) }));
+    return { name, mode, agency, vehicles: list };
   }
 
   trip(tripId, date, realtime) {

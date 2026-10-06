@@ -160,8 +160,8 @@ function vehicles() {
   return vehicleCache;
 }
 
-// What the page searches the stops in is the same for every browser and only
-// changes with the timetable. It is a quarter of a megabyte even compressed,
+// What the page searches stops and lines in is the same for every browser and
+// only changes with the timetable. It is a quarter of a megabyte even compressed,
 // so it is put together and compressed once, and its ETag lets a browser that
 // has it keep it.
 let searchCache = null;
@@ -256,8 +256,9 @@ function handleApi(req, res, url) {
       return sendJson(req, res, 200, box ? timetable.stations.filter((s) => inBox(box, s.lat, s.lon)) : timetable.stations);
     }
 
-    // All stations at once, for the search of the page, which happens in the
-    // browser: what somebody types is nothing the server gets to see.
+    // All stations and lines at once, for the search of the page, which
+    // happens in the browser: what somebody types is nothing the server gets
+    // to see.
     case '/api/search': {
       const index = searchIndex();
       const headers = { ETag: index.etag, 'Cache-Control': 'no-cache' };
@@ -266,6 +267,17 @@ function handleApi(req, res, url) {
         return res.end();
       }
       return send(req, res, 200, MIME['.json'], index.body, headers, (body) => (index.packed ??= gzip(body)));
+    }
+
+    // The vehicles of one line that are under way. A line is named as
+    // /api/search lists it: by name, mode and agency together.
+    case '/api/line': {
+      const line = { name: url.searchParams.get('name') ?? '', mode: url.searchParams.get('mode') ?? '', agency: url.searchParams.get('agency') ?? '' };
+      const { now: at, all } = vehicles();
+      const found = timetable.lineVehicles(line, all);
+      if (!found) return sendJson(req, res, 404, { error: 'line not found' });
+      realtime.touch();
+      return sendJson(req, res, 200, { now: at, ...found });
     }
 
     case '/api/trip': {

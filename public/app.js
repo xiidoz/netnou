@@ -9,7 +9,7 @@
 // lines, stops and operators, and the notes of the feed.
 
 import { formatNumber, formatTime, languagePicker, loadLanguage, setTimeZone, t, translatePage } from './i18n.js';
-import { buildIndex, search } from './search.js';
+import { buildIndex, search, searchLines } from './search.js';
 import { AttributionControl, MapLibreMap, NavigationControl } from './vendor/maplibre-gl/maplibre-gl.mjs';
 
 const APP_NAME = 'Netnou';
@@ -58,9 +58,12 @@ const LIVE_MAX_AGE_S = 180;
 const LOCATE_ZOOM = 15;
 const LOCATE_TIMEOUT_MS = 15_000;
 const NOTE_MS = 6000; // a note on what the visitor just did goes away after this
-// The search: how many stops it lists, and the zoom a chosen one brings the map in to.
+// The search: how many lines and stops it lists, the zoom a chosen stop brings
+// the map in to, and how far in the map goes at most to show a line.
+const LINE_LIMIT = 3;
 const SEARCH_LIMIT = 8;
 const SEARCH_ZOOM = 16;
+const LINE_ZOOM = 15;
 const EQUATOR_M = 40_075_017; // its length; what a pixel of the map stands for follows from it
 
 const $ = (id) => document.getElementById(id);
@@ -119,7 +122,7 @@ const state = {
   outline: [], // the edge of the area: rings of [lat, lon]
   enabled: new Set([...MODES, 'other']),
   colorBy: loadSetting('colorBy', 'mode') === 'delay' ? 'delay' : 'mode',
-  selection: null, // { type: 'trip' | 'station', id, data }
+  selection: null, // { type: 'trip' | 'station' | 'line', id, data }, see select()
   hits: [],
   position: null, // the visitor's own while they have it shown: { lat, lon, accuracy in metres, stale }
   follow: false, // the map stays centred on it
@@ -416,8 +419,11 @@ function draw() {
     }
   }
 
-  // how large the vehicles are
-  const labeled = zoom >= LABEL_ZOOM;
+  // While a line is looked at, its vehicles are the only ones, whatever the filters say.
+  const only = selection?.type === 'line' ? selection.ids : null;
+  // How large the vehicles are. Those of a line that is looked at are few and
+  // what the map is about: they carry their name at any zoom.
+  const labeled = zoom >= LABEL_ZOOM || Boolean(only);
   const r = labeled ? (zoom >= 14 ? 11 : 10) : 4.5;
 
   // The visitor's own position, under the vehicles. The ring around it is
@@ -465,7 +471,7 @@ function draw() {
   let selectedVehicle = null;
 
   for (const v of state.drawList) {
-    if (!state.enabled.has(v.mode)) continue;
+    if (only ? !only.has(v.id) : !state.enabled.has(v.mode)) continue;
     const target = positionAt(v.knots, time);
     if (v.lat === null || Math.abs(target.lat - v.lat) + Math.abs(target.lon - v.lon) > JUMP_DEG) {
       v.lat = target.lat;
@@ -736,36 +742,38 @@ map.on('moveend', (event) => {
 
 // ---------- search ----------
 
-// Stops are searched for in the browser (search.js): what is typed is sent
-// nowhere, and neither is the visitor's position, which puts the stops around
-// them first. The list of stops is fetched when the field is first used.
+// Stops and lines are searched for in the browser (search.js): what is typed
+// is sent nowhere, and neither is the visitor's position, which puts what is
+// around them first. The list of both is fetched when the field is first used.
 
 const searchBox = $('search');
 const searchField = $('search-field');
 const searchResults = $('search-results');
 const narrowScreen = matchMedia('(max-width: 720px)'); // as in style.css
-let stops = null; // what search.js looks through, once it is there
-let stopsLoading = null; // the request for it while it is under way
-let found = []; // the stops listed
+let searchable = null; // what search.js looks through, once it is there
+let searchableLoading = null; // the request for it while it is under way
+let found = []; // what choosing each of the results listed does
 let active = -1; // the one the arrow keys have reached, as an index into them
 
-function loadStops() {
-  stopsLoading ??= fetch('api/search')
+function loadSearchable() {
+  searchableLoading ??= fetch('api/search')
     .then((res) => (res.ok ? res.json() : Promise.reject(new Error(`HTTP ${res.status}`))))
-    .then((data) => { stops = buildIndex(data.stations); })
+    // (with the names of the modes as the visitor reads them: "bus 33" is a line of the buses)
+    .then((data) => { searchable = buildIndex(data, Object.fromEntries(DRAW_ORDER.map((mode) => [mode, t(`mode.${mode}`)]))); })
     .catch((err) => {
       // (also while the server has no timetable yet; asked for again with the next letter)
-      console.warn('stops not loaded:', err);
-      stopsLoading = null;
+      console.warn('stops and lines not loaded:', err);
+      searchableLoading = null;
     });
-  return stopsLoading;
+  return searchableLoading;
 }
 
 /** Marks the result the arrow keys have reached, for the eye and for a screen reader; -1 for none. */
 function setActive(index) {
   active = index;
-  [...searchResults.children].forEach((row, i) => row.setAttribute('aria-selected', String(i === index)));
-  const row = searchResults.children[index];
+  const rows = [...searchResults.querySelectorAll('[role="option"]')];
+  rows.forEach((row, i) => row.setAttribute('aria-selected', String(i === index)));
+  const row = rows[index];
   if (row) {
     searchField.setAttribute('aria-activedescendant', row.id);
     row.scrollIntoView({ block: 'nearest' });
@@ -774,56 +782,79 @@ function setActive(index) {
   }
 }
 
-/** Shows the stops found below the field, or a note in their place. */
-function listStops(list, note = '') {
-  found = list;
-  searchResults.replaceChildren(...list.map((stop, i) => {
+/** Shows the lines and the stops found below the field, or a note in their place. */
+function listResults(lines, stops, note = '') {
+  const option = (choose, props, children) => {
+    found.push(choose);
+    return el('li', { id: `search-result-${found.length - 1}`, role: 'option', 'aria-selected': 'false', onclick: choose, ...props }, children);
+  };
+  found = [];
+  // A line begins with its name on the colour of its mode, as in the departures.
+  const lineRows = lines.map((line) => option(() => chooseLine(line), { class: 'line' }, [
+    badge(line.name, line.mode),
+    el('span', { class: 'name' }, [el('span', { class: 'to', text: line.to.join(' – ') }), el('span', { class: 'agency', text: line.agency })]),
+  ]));
+  const stopRows = stops.map((stop) => {
     // The dots say what stops there, as the chips do.
     const dots = stop.modes.map((mode) => {
       const dot = el('span', { class: 'swatch' });
       dot.style.setProperty('--chip-color', `var(--mode-${mode})`);
       return dot;
     });
-    return el('li', { id: `search-result-${i}`, role: 'option', 'aria-selected': 'false', title: stop.modes.map((mode) => t(`mode.${mode}`)).join(', '), onclick: () => chooseStop(stop) }, [
+    return option(() => chooseStop(stop), { title: stop.modes.map((mode) => t(`mode.${mode}`)).join(', ') }, [
       el('span', { class: 'dots' }, dots),
       el('span', { class: 'name', text: stop.name }),
     ]);
-  }));
+  });
+  // (each kind under its heading where there are both)
+  const heading = (text) => (lines.length && stops.length ? [el('li', { class: 'search-heading', role: 'presentation', text })] : []);
+  searchResults.replaceChildren(...heading(t('search.lines')), ...lineRows, ...heading(t('search.stops')), ...stopRows);
   $('search-note').textContent = note;
   setActive(-1);
-  searchBox.classList.toggle('open', list.length > 0 || note !== '');
-  searchField.setAttribute('aria-expanded', String(list.length > 0));
+  searchBox.classList.toggle('open', found.length > 0 || note !== '');
+  searchField.setAttribute('aria-expanded', String(found.length > 0));
 }
 
 async function runSearch() {
   const query = searchField.value;
-  if (!query.trim()) return listStops([]);
-  if (!stops) {
-    listStops([], t('search.loading'));
-    await loadStops();
+  if (!query.trim()) return listResults([], []);
+  if (!searchable) {
+    listResults([], [], t('search.loading'));
+    await loadSearchable();
     // typed on meanwhile: that letter has its own turn
     if (searchField.value !== query) return undefined;
-    if (!stops) return listStops([], t('search.failed'));
+    if (!searchable) return listResults([], [], t('search.failed'));
   }
-  const list = search(stops, query, { near: state.position, limit: SEARCH_LIMIT });
-  return listStops(list, list.length ? '' : t('search.none'));
+  const lines = searchLines(searchable, query, { near: state.position, limit: LINE_LIMIT });
+  const stops = search(searchable, query, { near: state.position, limit: SEARCH_LIMIT });
+  return listResults(lines, stops, lines.length || stops.length ? '' : t('search.none'));
 }
 
 /** Shuts the list, and on a narrow screen the field with it. */
 function closeSearch() {
-  listStops([]);
+  listResults([], []);
   $('controls').classList.remove('searching');
 }
 
-function chooseStop(stop) {
+/** What choosing any result begins with: the search is done with, and the map is no longer led by the visitor's position. */
+function leaveSearch(text) {
   closeSearch();
-  searchField.value = stop.name;
+  searchField.value = text;
   searchField.blur(); // a keyboard on the screen goes away
   // (following the visitor would bring the map straight back)
   if (state.follow) {
     state.follow = false;
     showLocating();
   }
+}
+
+function chooseLine(line) {
+  leaveSearch(line.name);
+  selectLine(line);
+}
+
+function chooseStop(stop) {
+  leaveSearch(stop.name);
   // On a narrow screen the departures cover the lower half: the stop goes above the middle.
   map.flyTo({ center: [stop.lon, stop.lat], zoom: Math.max(map.getZoom(), SEARCH_ZOOM), offset: [0, narrowScreen.matches ? -0.12 * viewSize.y : 0] });
   select('station', stop.id);
@@ -831,7 +862,7 @@ function chooseStop(stop) {
 
 searchField.addEventListener('input', runSearch);
 searchField.addEventListener('focus', () => {
-  loadStops();
+  loadSearchable();
   // what is in the field from last time is typed over, and found again until then
   searchField.select();
   runSearch();
@@ -844,8 +875,7 @@ searchField.addEventListener('keydown', (event) => {
     setActive(active < 0 && step < 0 ? found.length - 1 : (active + step + found.length) % found.length);
   } else if (event.key === 'Enter') {
     // without the arrow keys it is the first one, the most likely
-    const stop = found[Math.max(active, 0)];
-    if (stop) chooseStop(stop);
+    found[Math.max(active, 0)]?.();
   } else if (event.key === 'Escape') {
     // (and not the details as well, which the same key closes otherwise)
     event.stopPropagation();
@@ -1006,13 +1036,25 @@ document.addEventListener('keydown', (event) => {
   if (event.key === 'Escape' && state.selection) closePanel();
 });
 
-function select(type, id) {
+/**
+ * Opens the details of a trip, a station or a line.
+ * @param more what else there is to know: of a line what it is ({ line }),
+ *   of a trip the line it was chosen from ({ from }), to which the way leads back
+ */
+function select(type, id, more = {}) {
   // The row that was activated is about to go: keep the keyboard focus in the panel.
   if (panelBody.contains(document.activeElement)) panel.focus({ preventScroll: true });
-  state.selection = { type, id, data: null };
+  state.selection = { type, id, data: null, ...more };
   panel.hidden = false;
   panelBody.replaceChildren(el('p', { class: 'panel-empty', text: t('panel.loading') }));
   loadSelection(true);
+}
+
+function selectionUrl({ type, id, line }) {
+  if (type === 'trip') return `api/trip?id=${encodeURIComponent(id)}`;
+  // (a line is its name, its mode and its operator together)
+  if (type === 'line') return `api/line?${new URLSearchParams({ name: line.name, mode: line.mode, agency: line.agency })}`;
+  return `api/departures?station=${encodeURIComponent(id)}`;
 }
 
 async function loadSelection(first = false) {
@@ -1020,13 +1062,13 @@ async function loadSelection(first = false) {
   if (!selection) return;
   clearTimeout(panelTimer);
   try {
-    const url = selection.type === 'trip' ? `api/trip?id=${encodeURIComponent(selection.id)}` : `api/departures?station=${encodeURIComponent(selection.id)}`;
-    const res = await fetch(url);
+    const res = await fetch(selectionUrl(selection));
     const data = res.ok ? await res.json() : null;
     if (state.selection !== selection) return; // user moved on meanwhile
     if (data) {
       selection.data = data;
       if (selection.type === 'trip') renderTrip(data, first);
+      else if (selection.type === 'line') renderLine(data, first);
       else renderStation(data);
       draw();
     } else if (first) {
@@ -1098,8 +1140,12 @@ function renderTrip(trip, scrollToNext) {
   const mode = t(`mode.${DRAW_ORDER.includes(trip.mode) ? trip.mode : 'other'}`);
   // Who provides the realtime data shown leads the notes, which are feed content and stay as they are.
   const notes = trip.realtime && trip.source ? [t('trip.source', { source: trip.source }), ...trip.notes] : trip.notes;
+  // A trip chosen from the vehicles of a line leads back to them.
+  const from = state.selection.from;
+  const back = from ? el('button', { type: 'button', class: 'back', 'aria-label': t('line.back', { line: from.name }), onclick: () => selectLine(from) }, ['‹', badge(from.name, from.mode)]) : '';
   fillPanel(
     el('div', { class: 'panel-head' }, [
+      back,
       el('h2', {}, [badge(trip.line, trip.mode), el('span', { text: `→ ${trip.to}` })]),
       el('p', { class: 'sub', text: [mode, trip.agency, trip.realtime ? t('trip.realtime') : t('trip.scheduleOnly')].filter(Boolean).join(' · ') }),
       notesList(notes, trip.cancelled ? t('trip.cancelled') : null),
@@ -1108,6 +1154,60 @@ function renderTrip(trip, scrollToNext) {
   );
   if (scrollToNext) nextRow?.scrollIntoView({ block: 'center' });
   else panelBody.scrollTop = scrollTop;
+}
+
+/** Opens the view of a line: its vehicles under way in the panel and, alone, on the map. */
+function selectLine(line) {
+  select('line', JSON.stringify([line.name, line.mode, line.agency]), { line });
+}
+
+/** What of each edge of the map is to stay free, so that the cards do not cover what is shown in between. */
+function clearOfCards() {
+  const margin = 40;
+  const card = $('controls').getBoundingClientRect();
+  const details = panel.getBoundingClientRect();
+  // on a narrow screen the cards are above and below, else to the left and the right
+  const padding = narrowScreen.matches
+    ? { top: card.bottom + margin, bottom: viewSize.y - details.top + margin, left: margin, right: margin }
+    : { top: margin, bottom: margin, left: card.right + margin, right: viewSize.x - details.left + margin };
+  // (in a window too small for that, better covered in part than not shown)
+  const fits = padding.left + padding.right < 0.8 * viewSize.x && padding.top + padding.bottom < 0.8 * viewSize.y;
+  return fits ? padding : { top: margin, bottom: margin, left: margin, right: margin };
+}
+
+function renderLine(line, first) {
+  const scrollTop = panelBody.scrollTop;
+  const selection = state.selection;
+  selection.ids = new Set(line.vehicles.map((v) => v.id)); // the map shows these alone, see draw()
+
+  // under where they go, in the order of the server: the one with the fewest stops left first
+  const byDestination = new Map();
+  for (const v of line.vehicles) byDestination.set(v.to, [...(byDestination.get(v.to) ?? []), v]);
+  const lists = [...byDestination].flatMap(([destination, vehicles]) => [
+    el('h3', { class: 'rows-head', text: t('line.to', { destination }) }),
+    el('ul', { class: 'rows' }, vehicles.map((v) => el('li', {}, [
+      el('button', { type: 'button', class: 'row vehicle', onclick: () => select('trip', v.id, { from: selection.line }) }, [
+        el('span', { class: 'name', text: t('line.next', { stop: v.next }), title: v.next }),
+        delayNode(v.delay),
+      ]),
+    ]))),
+  ]);
+  const mode = t(`mode.${DRAW_ORDER.includes(line.mode) ? line.mode : 'other'}`);
+  fillPanel(
+    el('div', { class: 'panel-head' }, [
+      el('h2', {}, [badge(line.name, line.mode), el('span', { text: mode })]),
+      el('p', { class: 'sub', text: [line.agency, line.vehicles.length ? t('line.vehicles', { count: line.vehicles.length }) : ''].filter(Boolean).join(' · ') }),
+    ]),
+    ...(lists.length ? lists : [el('p', { class: 'panel-empty', text: t('line.none') })]),
+  );
+  panelBody.scrollTop = scrollTop;
+
+  // Once, when the line is chosen: all its vehicles into view, between the cards.
+  if (first && line.vehicles.length) {
+    const lats = line.vehicles.map((v) => v.lat);
+    const lons = line.vehicles.map((v) => v.lon);
+    map.fitBounds([[Math.min(...lons), Math.min(...lats)], [Math.max(...lons), Math.max(...lats)]], { padding: clearOfCards(), maxZoom: LINE_ZOOM });
+  }
 }
 
 function renderStation(board) {

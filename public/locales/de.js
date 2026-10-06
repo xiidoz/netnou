@@ -33,13 +33,15 @@ export default {
   'locate.failed': 'Der Standort konnte nicht ermittelt werden.',
   'locate.outside': 'Der Standort liegt außerhalb des Gebiets dieser Karte.',
 
-  'search.label': 'Haltestelle suchen',
+  'search.label': 'Haltestelle oder Linie suchen',
   'search.open': 'Suche',
   'search.close': 'Suche schließen',
-  'search.results': 'Gefundene Haltestellen',
-  'search.none': 'Keine Haltestelle mit diesem Namen.',
-  'search.loading': 'Haltestellen werden geladen …',
-  'search.failed': 'Haltestellen konnten nicht geladen werden.',
+  'search.results': 'Gefundene Haltestellen und Linien',
+  'search.lines': 'Linien',
+  'search.stops': 'Haltestellen',
+  'search.none': 'Keine Haltestelle oder Linie mit diesem Namen.',
+  'search.loading': 'Haltestellen und Linien werden geladen …',
+  'search.failed': 'Haltestellen und Linien konnten nicht geladen werden.',
 
   'modes.label': 'Verkehrsmittel ein- und ausblenden',
   'mode.subway': 'U-Bahn',
@@ -72,6 +74,12 @@ export default {
   'trip.scheduleOnly': 'nur Fahrplandaten',
   'trip.source': 'Echtzeitdaten: {source}',
   'trip.cancelled': 'Fahrt fällt aus',
+
+  'line.vehicles': { one: '{count} Fahrzeug unterwegs', other: '{count} Fahrzeuge unterwegs' },
+  'line.none': 'Von dieser Linie ist gerade kein Fahrzeug unterwegs.',
+  'line.to': 'nach {destination}',
+  'line.next': 'nächster Halt: {stop}',
+  'line.back': 'Zurück zur Linie {line}',
 
   'stop.platform': 'Gl. {platform}',
   'stop.skipped': 'entfällt',

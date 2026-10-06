@@ -139,7 +139,7 @@ test('while the timetable is loading the API says so', async () => {
   assert.equal(loading.json.step, 'download');
   assert.match(loading.json.message, /^downloading http/);
   assert.equal(loading.headers['cache-control'], 'no-store');
-  for (const pathname of ['/api/stations', '/api/search', '/api/trip?id=T1_20261003', '/api/departures?station=A', '/api/nothing']) {
+  for (const pathname of ['/api/stations', '/api/search', '/api/line?name=U1&mode=subway&agency=Testbetrieb', '/api/trip?id=T1_20261003', '/api/departures?station=A', '/api/nothing']) {
     assert.equal((await get(pathname)).status, 503, pathname);
   }
 
@@ -271,12 +271,14 @@ test('/api/stations', async () => {
   assert.equal((await get('/api/stations?bbox=,,,')).json.length, 2);
 });
 
-test('/api/search: all stations as columns, sent again only when they have changed', async () => {
+test('/api/search: all stations and lines as columns, sent again only when they have changed', async () => {
   const { status, headers, json } = await get('/api/search');
   assert.equal(status, 200);
-  // T1 stops 51 times at each of the two, T2 once more at B
   assert.deepEqual(json, {
+    // T1 stops 51 times at each of the two, T2 once more at B
     stations: { id: ['A', 'B'], name: ['Alpha', 'Beta'], lat: [49.4, 49.5], lon: [11, 11], modes: [['subway'], ['subway', 'longdistance']], service: [51, 52] },
+    // each with its one trip and where that goes; the place is the middle of the stops inside the area
+    lines: { name: ['U1', 'ICE 5'], mode: ['subway', 'longdistance'], agency: ['Testbetrieb', 'Testbetrieb'], to: [['Rundkurs'], ['Beta']], lat: [49.45, 49.5], lon: [11, 11], service: [1, 1] },
   });
   // in the order of /api/stations
   assert.deepEqual(json.stations.id, (await get('/api/stations')).json.map((station) => station.id));
@@ -287,6 +289,33 @@ test('/api/search: all stations as columns, sent again only when they have chang
   assert.equal((await request('/api/search', { headers: { 'If-None-Match': '"something-else"' } })).status, 200);
   // (the search happens in the browser: a query is not looked at)
   assert.deepEqual((await get('/api/search?q=alp')).json, json);
+});
+
+test('/api/line: the vehicles of one line that are under way', async () => {
+  const { status, json } = await get('/api/line?name=U1&mode=subway&agency=Testbetrieb');
+  assert.equal(status, 200);
+  assert.deepEqual(Object.keys(json).sort(), ['agency', 'mode', 'name', 'now', 'vehicles']);
+  assert.deepEqual([json.name, json.mode, json.agency], ['U1', 'subway', 'Testbetrieb']);
+  assert.ok(Math.abs(json.now - Date.now() / 1000) < 5);
+  // yesterday's run and today's, both somewhere between A and B
+  assert.deepEqual(json.vehicles.map((v) => v.id).sort(), [`T1_${addDays(today, -1)}`, `T1_${today}`]);
+  for (const v of json.vehicles) {
+    assert.deepEqual(Object.keys(v).sort(), ['delay', 'id', 'lat', 'lon', 'next', 'to']);
+    assert.equal(v.to, 'Rundkurs');
+    assert.ok(['Alpha', 'Beta'].includes(v.next), v.next);
+    assert.ok(v.lat >= 49.4 && v.lat <= 49.5 && v.lon === 11);
+  }
+  assert.equal(json.vehicles.find((v) => v.id === `T1_${today}`).delay, 120);
+
+  // the ICE is under way too, far outside the area
+  const { json: ice } = await get('/api/line?name=ICE%205&mode=longdistance&agency=Testbetrieb');
+  assert.deepEqual(ice.vehicles.map((v) => [v.to, v.next]), [['Beta', 'Fern Mitte'], ['Beta', 'Fern Mitte']]);
+  // name, mode and agency together are the line
+  for (const query of ['name=U1&mode=bus&agency=Testbetrieb', 'name=U1&mode=subway&agency=Anderer', 'name=U2&mode=subway&agency=Testbetrieb', 'name=U1', '']) {
+    const res = await get(`/api/line?${query}`);
+    assert.equal(res.status, 404, query);
+    assert.deepEqual(res.json, { error: 'line not found' });
+  }
 });
 
 test('/api/trip', async () => {
