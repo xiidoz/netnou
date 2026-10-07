@@ -270,6 +270,49 @@ test('vehicles are interpolated between stops along the schedule', () => {
   assert.deepEqual(timetable.vehicles(at('12:00'), null), []);
 });
 
+// The feed knows nothing of trains that run coupled. What gives them away is
+// that they share the way from stop to stop, at the same times.
+test('trains that share their way and its times are one unit until they part', async () => {
+  // RE14 and RE28 leave A as one train and part at B; two buses have the same times all the way.
+  const coupled = await importFeed({
+    'routes.txt': FEED['routes.txt'] + ',RE14,1,2,R4,,\n,RE28,1,2,R5,,\n',
+    'trips.txt': FEED['trips.txt'] + 'R4,DAILY,T5\nR5,DAILY,T6\nR3,DAILY,T7\nR3,DAILY,T8\n',
+    'stop_times.txt': FEED['stop_times.txt'] + [
+      'T5,10:30:00,10:30:00,A,0,Gamma,,',
+      'T5,10:40:00,10:44:00,B,1,Gamma,,',
+      'T5,10:55:00,10:55:00,C,2,Gamma,,',
+      'T6,10:30:00,10:30:00,A,0,Fern Nord,,',
+      'T6,10:40:00,10:46:00,B,1,Fern Nord,,',
+      'T6,12:00:00,12:00:00,X,2,Fern Nord,,',
+      'T7,10:30:00,10:30:00,A,0,Gamma,,',
+      'T7,10:40:00,10:40:00,B,1,Gamma,,',
+      'T8,10:30:00,10:30:00,A,0,Gamma,,',
+      'T8,10:40:00,10:40:00,B,1,Gamma,,',
+    ].join('\n') + '\n',
+  }, 'coupled.zip');
+  const unitsAt = (hhmm) => Object.fromEntries(coupled.vehicles(at(hhmm), null).map((v) => [v.id.split('_')[0], v.unit]));
+
+  // under way from A to B, and before that at A, about to leave
+  for (const time of ['10:35', '10:30']) {
+    const units = unitsAt(time);
+    assert.ok(units.T5, `${time}: the RE14 is part of a unit`);
+    assert.equal(units.T5, units.T6, `${time}: the same one as the RE28`);
+    // buses are not coupled, whatever their times
+    assert.equal(units.T7, undefined);
+    assert.equal(units.T8, undefined);
+  }
+  // standing at B, where they arrived together
+  assert.equal(unitsAt('10:42').T5, unitsAt('10:42').T6);
+  assert.ok(unitsAt('10:42').T5);
+  // the RE14 has left, the RE28 still stands there: two trains
+  assert.equal(unitsAt('10:45').T5, undefined);
+  assert.equal(unitsAt('10:45').T6, undefined);
+  // the U1 runs the same way at other times and belongs to nobody
+  assert.equal(unitsAt('10:05').T1, undefined);
+  // none of this is sent for a vehicle that is on its own
+  assert.ok(!('unit' in JSON.parse(JSON.stringify(coupled.vehicles(at('10:05'), null)[0]))));
+});
+
 test('trips after midnight belong to the previous service day', () => {
   const now = at('25:15', '20261002'); // Saturday 01:15 local time
   assert.equal(localDate(now), '20261003');

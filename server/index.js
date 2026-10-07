@@ -314,7 +314,8 @@ function handleApi(req, res, url) {
       const list = [];
       for (const v of all) {
         if (box && !inBox(box, v.lat, v.lon)) continue;
-        list.push({ id: v.id, line: v.line, mode: v.mode, to: v.to, delay: v.delay, knots: reduced ? lite(v, at) : v.knots });
+        // (unit: only there for trains that run coupled, and then the same for each of them)
+        list.push({ id: v.id, line: v.line, mode: v.mode, to: v.to, delay: v.delay, unit: v.unit, knots: reduced ? lite(v, at) : v.knots });
       }
       return sendJson(req, res, 200, { now: at, realtime: feedTime, counts, vehicles: list });
     }

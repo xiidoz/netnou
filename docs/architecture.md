@@ -282,6 +282,17 @@ otherwise a server would load a file written by older code:
   feed.
 - **Animation.** Vehicles are placed along their knots against the server's
   clock, and eased towards a new position when a changed delay moves them.
+- **Several at one place.** Markers that would hide each other are drawn as
+  one. Trains that run coupled are a trip each in the feed, which has no
+  word on that they belong together; the server finds them by the way from
+  stop to stop that they share at the same times of the timetable, and
+  gives them the same `unit`. The page draws such a unit as one marker with
+  the name of each train, one arrow and one delay, and each name opens its
+  own trip. Whatever else is at one place, buses at a stop or trains at the
+  same platform, is in a bubble above a dot that marks the place. "At one
+  place" means at most 4 px apart on the screen, and standing there or
+  heading the same way: vehicles that only pass each other are not, and
+  those that stand near each other part when the map is zoomed in.
 - **Detail panel.** A click on a vehicle shows its trip, a click on a station
   its departures, a line chosen in the search its vehicles under way; all
   refresh every 15 seconds. While a line is shown, the map draws its

@@ -48,6 +48,13 @@ const DELAY_MINOR_S = 120;
 const DELAY_MAJOR_S = 300;
 const DELAY_SEVERE_S = 600;
 const BADGE_DELAY_S = 180; // from here a marker carries its delay as a badge
+// Vehicles count as being at one place when their markers are at most
+// NEAR_IN_PX apart: one would hide the other. Once they do, they go on doing
+// so up to NEAR_OUT_PX, or two that are about NEAR_IN_PX apart would be
+// together in one frame and apart in the next.
+const NEAR_IN_PX = 4;
+const NEAR_OUT_PX = 8;
+const PLACE_R = 5; // the dot that marks such a place, under the bubble with the vehicles
 // Realtime data older than this counts as timetable only. When its fetches
 // fail, the server keeps the last delays up to the same age (STALE_AFTER_S in
 // server/lib/realtime.js).
@@ -152,7 +159,8 @@ const state = {
   colorBy: loadSetting('colorBy', 'mode') === 'delay' ? 'delay' : 'mode',
   theme: 'auto', // one of THEMES, see there
   selection: null, // { type: 'trip' | 'station' | 'line', id, data }, see select()
-  hits: [],
+  hits: [], // what can be pointed at on the map: { x, y, r, vehicle or station }, see draw()
+  covers: [], // the boxes of the bubbles, which hide what is under them: [x, y, width, height]
   position: null, // the visitor's own while they have it shown: { lat, lon, accuracy in metres, stale }
   follow: false, // the map stays centred on it
   banner: null, // what the banner says for as long as it is so
@@ -184,7 +192,7 @@ let colors = {};
 function readColors() {
   const style = getComputedStyle(document.documentElement);
   const get = (name) => style.getPropertyValue(name).trim();
-  colors = { mode: {}, delay: {}, unknown: get('--delay-unknown'), text: get('--text'), bg: get('--bg'), accent: get('--accent'), muted: get('--text-muted'), veil: get('--veil'), veilLine: get('--veil-line'), location: get('--location') };
+  colors = { mode: {}, delay: {}, unknown: get('--delay-unknown'), text: get('--text'), bg: get('--bg'), border: get('--border'), accent: get('--accent'), muted: get('--text-muted'), veil: get('--veil'), veilLine: get('--veil-line'), location: get('--location') };
   for (const mode of DRAW_ORDER) colors.mode[mode] = get(`--mode-${mode}`);
   for (const cls of ['ok', 'minor', 'major', 'severe', 'none']) colors.delay[cls] = get(`--delay-${cls}`);
 }
@@ -358,6 +366,76 @@ function vehicleColor(v) {
   return state.colorBy === 'delay' ? colors.delay[delayClass(v.delay)] : colors.mode[v.mode] ?? colors.mode.other;
 }
 
+/** The names in a marker are white – except on the yellow of a minor delay, which does not carry white text. */
+const labelColor = (v) => (state.colorBy === 'delay' && delayClass(v.delay) === 'minor' ? '#1b1f24' : '#fff');
+/** By name, numbers by their value: N2 before N10. For the order within a group, which must not change from frame to frame. */
+const byLabel = (a, b) => a.label.localeCompare(b.label, undefined, { numeric: true }) || (a.id < b.id ? -1 : 1);
+
+function setLabelFont(label) {
+  ctx.font = `700 ${label.length > 3 ? 8 : label.length > 2 ? 9.5 : 11}px system-ui, sans-serif`;
+}
+
+/** The path of a box with round corners. */
+function roundedBox(x, y, w, h, radius) {
+  ctx.beginPath();
+  if (ctx.roundRect) ctx.roundRect(x, y, w, h, radius);
+  else ctx.rect(x, y, w, h);
+}
+
+/**
+ * The arrowhead of what is under way, pointing along the angle a from a
+ * circle of radius r around (x, y). In the colours set; drawn before what it
+ * belongs to, which covers its base.
+ */
+function drawArrow(x, y, r, a) {
+  ctx.beginPath();
+  ctx.moveTo(x + Math.cos(a) * (r + 6), y + Math.sin(a) * (r + 6));
+  ctx.lineTo(x + Math.cos(a + 0.6) * r, y + Math.sin(a + 0.6) * r);
+  ctx.lineTo(x + Math.cos(a - 0.6) * r, y + Math.sin(a - 0.6) * r);
+  ctx.closePath();
+  ctx.stroke();
+  ctx.fill();
+}
+
+/** The round marker of a vehicle, with its name where there is room for one. */
+function drawDisc(x, y, r, v, labeled) {
+  // outline and label are white in both themes
+  ctx.strokeStyle = '#fff';
+  ctx.fillStyle = vehicleColor(v);
+  ctx.lineWidth = labeled ? 1.5 : 1;
+  ctx.beginPath();
+  ctx.arc(x, y, r, 0, 2 * Math.PI);
+  ctx.fill();
+  ctx.stroke();
+  if (!labeled) return;
+  ctx.fillStyle = labelColor(v);
+  setLabelFont(v.label);
+  ctx.fillText(v.label, x, y + 0.5);
+}
+
+/**
+ * The flag a vehicle carries at its shoulder: its delay from BADGE_DELAY_S,
+ * or a question mark where none is reported while others have one (`live`).
+ * None when the vehicles are coloured by delay: the colour says both then.
+ */
+function flagOf(v, live) {
+  if (state.colorBy !== 'mode') return null;
+  if (v.delay === null) return live ? { text: '?', color: colors.unknown } : null;
+  if (v.delay < BADGE_DELAY_S) return null;
+  // one class "hotter" than the dots, for the same reason (see .delay in style.css)
+  return { text: delayText(v.delay), color: colors.delay[delayClass(v.delay) === 'minor' ? 'major' : 'severe'] };
+}
+
+function drawFlag(x, y, flag) {
+  ctx.font = '700 9px system-ui, sans-serif';
+  const w = flag.text === '?' ? 12 : ctx.measureText(flag.text).width + 6;
+  ctx.fillStyle = flag.color;
+  roundedBox(x, y, w, 12, 4);
+  ctx.fill();
+  ctx.fillStyle = '#fff';
+  ctx.fillText(flag.text, x + w / 2, y + 6.5);
+}
+
 function stationShown(station, zoom) {
   if (zoom >= ALL_STATIONS_ZOOM) return station.modes.some((mode) => state.enabled.has(mode));
   if (zoom >= STATION_ZOOM) return station.modes.some((mode) => RAIL_MODES.includes(mode) && state.enabled.has(mode));
@@ -516,7 +594,10 @@ function draw() {
   const ease = 1 - Math.exp(-dt / EASE_MS);
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
-  let selectedVehicle = null;
+  // the chosen one, for the ring around it: where it is and, in a marker for several, how wide that is
+  let chosen = null;
+  const isChosen = (v) => selection?.type === 'trip' && selection.id === v.id;
+  const named = []; // those that are drawn with their name: { v, x, y, a }
 
   for (const v of state.drawList) {
     if (only ? !only.has(v.id) : !state.enabled.has(v.mode)) continue;
@@ -531,70 +612,198 @@ function draw() {
     const [x, y] = project(v.lat, v.lon);
     if (!onScreen(x, y)) continue;
 
-    const color = vehicleColor(v);
-    // outline and label are white in both themes
-    ctx.strokeStyle = '#fff';
-    ctx.fillStyle = color;
-    ctx.lineWidth = labeled ? 1.5 : 1;
-
-    if (labeled && target.k > 0) {
-      // arrowhead pointing towards the next stop
+    if (!labeled) {
+      drawDisc(x, y, r, v, false);
+      hits.push({ x, y, r: Math.max(r + 3, 10), vehicle: v });
+      if (isChosen(v)) chosen = { x, y };
+      continue;
+    }
+    // under way: the direction, towards the next stop
+    let a = null;
+    if (target.k > 0) {
       const [ax, ay] = project(v.knots[target.k - 2], v.knots[target.k - 1]);
       const [bx, by] = project(v.knots[target.k + 1], v.knots[target.k + 2]);
-      const a = Math.atan2(by - ay, bx - ax);
-      ctx.beginPath();
-      ctx.moveTo(x + Math.cos(a) * (r + 6), y + Math.sin(a) * (r + 6));
-      ctx.lineTo(x + Math.cos(a + 0.6) * r, y + Math.sin(a + 0.6) * r);
-      ctx.lineTo(x + Math.cos(a - 0.6) * r, y + Math.sin(a - 0.6) * r);
-      ctx.closePath();
-      ctx.stroke();
-      ctx.fill();
+      a = Math.atan2(by - ay, bx - ax);
     }
-
-    ctx.beginPath();
-    ctx.arc(x, y, r, 0, 2 * Math.PI);
-    ctx.fill();
-    ctx.stroke();
-
-    if (labeled) {
-      // (except on the yellow of a minor delay, which does not carry white text)
-      ctx.fillStyle = state.colorBy === 'delay' && delayClass(v.delay) === 'minor' ? '#1b1f24' : '#fff';
-      ctx.font = `700 ${v.label.length > 3 ? 8 : v.label.length > 2 ? 9.5 : 11}px system-ui, sans-serif`;
-      ctx.fillText(v.label, x, y + 0.5);
-
-      // The flag at its shoulder: the delay from BADGE_DELAY_S, or a question
-      // mark where none is reported. (Coloured by delay, the colour says both.)
-      const unknown = v.delay === null && live;
-      if (state.colorBy === 'mode' && (v.delay >= BADGE_DELAY_S || unknown)) {
-        const text = unknown ? '?' : delayText(v.delay);
-        ctx.font = '700 9px system-ui, sans-serif';
-        const w = unknown ? 12 : ctx.measureText(text).width + 6;
-        const bx = x + r * 0.55;
-        const by = y - r - 5;
-        // one class "hotter" than the dots, for the same reason (see .delay in style.css)
-        ctx.fillStyle = unknown ? colors.unknown : colors.delay[delayClass(v.delay) === 'minor' ? 'major' : 'severe'];
-        ctx.beginPath();
-        if (ctx.roundRect) ctx.roundRect(bx, by, w, 12, 4);
-        else ctx.rect(bx, by, w, 12);
-        ctx.fill();
-        ctx.fillStyle = '#fff';
-        ctx.fillText(text, bx + w / 2, by + 6.5);
-      }
-    }
-
-    hits.push({ x, y, r: Math.max(r + 3, 10), vehicle: v });
-    if (selection?.type === 'trip' && selection.id === v.id) selectedVehicle = { x, y };
+    named.push({ v, x, y, a });
   }
 
-  if (selectedVehicle) {
+  // Which of them are at one place: so close that one would hide the other,
+  // and standing there together or heading the same way. Two that only pass
+  // each other are not. The first one found at a place stands for it.
+  const groups = [];
+  for (const entry of named) {
+    const home = groups.find(([first]) => {
+      const limit = entry.v.near === first.v.id ? NEAR_OUT_PX : NEAR_IN_PX;
+      if (Math.abs(entry.x - first.x) > limit || Math.abs(entry.y - first.y) > limit) return false;
+      if (entry.a === null || first.a === null) return entry.a === first.a;
+      return Math.cos(entry.a - first.a) > 0.85; // within about 30 degrees
+    });
+    if (home) home.push(entry);
+    else groups.push([entry]);
+  }
+  for (const group of groups) for (const { v } of group) v.near = group.length > 1 ? group[0].v.id : null;
+
+  // One vehicle at a place is a round marker. Trains that run coupled (the
+  // server says which, see `unit` in docs/api.md) are one marker with the name
+  // of each. Whatever else is at one place – buses at a stop, trains that
+  // stand at the same platform – is in a bubble above it, drawn last and so
+  // on top of all else.
+  const bubbles = [];
+  for (const group of groups) {
+    const [{ v, x, y, a }] = group;
+    if (group.length > 1 && !group.every((other) => other.v.unit && other.v.unit === v.unit)) {
+      bubbles.push(group);
+      continue;
+    }
+    ctx.strokeStyle = '#fff';
+    ctx.fillStyle = vehicleColor(v);
+    ctx.lineWidth = 1.5;
+    if (group.length === 1) {
+      if (a !== null) drawArrow(x, y, r, a);
+      drawDisc(x, y, r, v, true);
+      const flag = flagOf(v, live);
+      if (flag) drawFlag(x + r * 0.55, y - r - 5, flag);
+      hits.push({ x, y, r: Math.max(r + 3, 10), vehicle: v });
+      if (isChosen(v)) chosen = { x, y };
+      continue;
+    }
+
+    // coupled: one marker in the colour of the mode, as long as its names need
+    const members = group.map((member) => member.v).sort(byLabel);
+    const widths = members.map((member) => {
+      setLabelFont(member.label);
+      return Math.max(2 * r - 2, ctx.measureText(member.label).width + 8);
+    });
+    const w = widths.reduce((sum, width) => sum + width, 2);
+    // (the arrowhead leaves it where it is heading: at an end, or in between for up and down)
+    if (a !== null) drawArrow(x + (w / 2 - r) * Math.cos(a), y, r, a);
+    roundedBox(x - w / 2, y - r, w, 2 * r, r);
+    ctx.fill();
+    ctx.stroke();
+    let left = x - w / 2 + 1;
+    members.forEach((member, i) => {
+      const middle = left + widths[i] / 2;
+      ctx.fillStyle = labelColor(member);
+      setLabelFont(member.label);
+      ctx.fillText(member.label, middle, y + 0.5);
+      // each name is its own to point at
+      hits.push({ x: middle, y, r: Math.max(widths[i] / 2 + 2, 10), vehicle: member });
+      if (isChosen(member)) chosen = { x, y, w };
+      left += widths[i];
+      if (i === members.length - 1) return;
+      ctx.beginPath();
+      ctx.moveTo(left, y - r + 4);
+      ctx.lineTo(left, y + r - 4);
+      ctx.strokeStyle = 'rgb(255 255 255 / 0.55)';
+      ctx.lineWidth = 1;
+      ctx.stroke();
+    });
+    // (they run by the same times: the delay of one is that of all)
+    const flag = flagOf(members[0], live);
+    if (flag) drawFlag(x + w / 2 - r * 0.45, y - r - 5, flag);
+  }
+
+  // What a bubble covers cannot be pointed at through it (hitTest).
+  const covers = [];
+  for (const group of bubbles) {
+    const [{ x, y, a }] = group;
+    const members = group.map((member) => member.v).sort(byLabel);
+    const flags = members.map((member) => flagOf(member, live));
+    // One flag on the bubble where it is the same for all in it; else each has its own, which takes some room.
+    const shared = flags[0] && flags.every((flag) => flag?.text === flags[0].text) ? flags[0] : null;
+    const own = !shared && flags.some(Boolean);
+    const perRow = members.length <= 3 ? members.length : Math.ceil(Math.sqrt(members.length));
+    const rows = Math.ceil(members.length / perRow);
+    const cell = 2 * r + 3;
+    const across = cell + (own ? 11 : 0);
+    const down = cell + (own ? 5 : 0);
+    const pad = 5;
+    const padTop = pad + (own ? 2 : 0);
+    const w = perRow * across + 2 * pad + (own ? 4 : 0);
+    const h = rows * down + padTop + pad;
+    // above the place, or below it where there is no room above; and within the sides of the map
+    const below = y - 14 - h < 4;
+    const bx = Math.max(4, Math.min(viewSize.x - w - 4, x - w / 2));
+    const by = below ? y + 14 : y - 14 - h;
+    const tip = Math.max(bx + 12, Math.min(bx + w - 12, x));
+    const edge = below ? by : by + h;
+    const out = below ? -7 : 7;
+
+    ctx.save();
+    ctx.shadowColor = 'rgb(0 0 0 / 0.3)';
+    ctx.shadowBlur = 8;
+    ctx.shadowOffsetY = 2;
+    ctx.fillStyle = colors.bg;
+    roundedBox(bx, by, w, h, 9);
+    ctx.fill();
+    ctx.restore();
+    ctx.strokeStyle = colors.border;
+    ctx.lineWidth = 1;
+    roundedBox(bx + 0.5, by + 0.5, w - 1, h - 1, 9);
+    ctx.stroke();
+    // its tip, pointing at the place
+    ctx.fillStyle = colors.bg;
     ctx.beginPath();
-    ctx.arc(selectedVehicle.x, selectedVehicle.y, r + 5, 0, 2 * Math.PI);
+    ctx.moveTo(tip - 6, edge - Math.sign(out));
+    ctx.lineTo(tip, edge + out);
+    ctx.lineTo(tip + 6, edge - Math.sign(out));
+    ctx.closePath();
+    ctx.fill();
+    ctx.beginPath();
+    ctx.moveTo(tip - 6, edge - Math.sign(out) * 0.5);
+    ctx.lineTo(tip, edge + out);
+    ctx.lineTo(tip + 6, edge - Math.sign(out) * 0.5);
+    ctx.stroke();
+
+    members.forEach((member, i) => {
+      const cx = bx + pad + cell / 2 + (i % perRow) * across;
+      const cy = by + padTop + down - cell / 2 + Math.floor(i / perRow) * down;
+      drawDisc(cx, cy, r, member, true);
+      if (own && flags[i]) drawFlag(cx + r * 0.55, cy - r - 5, flags[i]);
+      hits.push({ x: cx, y: cy, r: cell / 2, vehicle: member, top: true });
+      if (isChosen(member)) chosen = { x: cx, y: cy };
+    });
+    if (shared) drawFlag(bx + w - 8, by - 6, shared);
+    covers.push([bx, Math.min(by, edge + out), w, h + 7]);
+
+    // The place itself: the small dot a vehicle is on a map zoomed out, with a
+    // slice in each of the colours of those in the bubble – and with the
+    // direction if all of them are under way together.
+    const kinds = [...new Set(group.map((member) => vehicleColor(member.v)))];
+    ctx.strokeStyle = '#fff';
+    ctx.lineWidth = 1;
+    if (group.every((member) => member.a !== null)) {
+      ctx.fillStyle = kinds[0];
+      drawArrow(x, y, PLACE_R, a);
+    }
+    kinds.forEach((color, i) => {
+      // (from the top, clockwise; one kind is the whole dot)
+      ctx.beginPath();
+      ctx.moveTo(x, y);
+      ctx.arc(x, y, PLACE_R, (i / kinds.length - 0.25) * 2 * Math.PI, ((i + 1) / kinds.length - 0.25) * 2 * Math.PI);
+      ctx.closePath();
+      ctx.fillStyle = color;
+      ctx.fill();
+    });
+    ctx.beginPath();
+    ctx.arc(x, y, PLACE_R, 0, 2 * Math.PI);
+    ctx.stroke();
+  }
+
+  if (chosen) {
     ctx.strokeStyle = colors.text;
     ctx.lineWidth = 2.5;
+    if (chosen.w) roundedBox(chosen.x - chosen.w / 2 - 5, chosen.y - r - 5, chosen.w + 10, 2 * r + 10, r + 5);
+    else {
+      ctx.beginPath();
+      ctx.arc(chosen.x, chosen.y, r + 5, 0, 2 * Math.PI);
+    }
     ctx.stroke();
   }
 
   state.hits = hits;
+  state.covers = covers;
 }
 
 function frame() {
@@ -607,7 +816,10 @@ function frame() {
 function hitTest(point) {
   let best = null;
   let bestScore = Infinity;
+  // Under a bubble nothing can be pointed at but what is in it.
+  const covered = state.covers.some(([x, y, w, h]) => point.x >= x && point.x <= x + w && point.y >= y && point.y <= y + h);
   for (const hit of state.hits) {
+    if (covered && !hit.top) continue;
     const d = Math.hypot(hit.x - point.x, hit.y - point.y);
     if (d > hit.r) continue;
     // vehicles win over the station they are standing at
