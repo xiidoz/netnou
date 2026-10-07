@@ -32,7 +32,9 @@ export default {
   'status.connecting': 'Connecting …',
   'status.vehicles': { one: '{count} vehicle', other: '{count} vehicles' },
   'status.live': 'realtime {seconds} s ago',
-  'status.scheduleOnly': 'timetable data only',
+  // Without any realtime data: while it may still be on its way, and once it is clear that there is none.
+  'status.waiting': 'loading realtime …',
+  'status.outage': 'no realtime data right now, all by timetable',
   'status.loading': 'Loading timetable data',
   'status.noTimetable': 'No timetable data',
   'status.noConnection': 'No connection to the server',
@@ -93,7 +95,7 @@ export default {
   // … and, on the button after it and as the heading of the dialog it opens, the way to how the page comes by them.
   'about.title': 'How it works',
   'about.positions': 'Positions',
-  'about.positionsText': 'No vehicle reports its position to this map. Each one is drawn where the timetable says it should be right now, moved by the delay reported for it. So a vehicle can be somewhat ahead of or behind its marker. Vehicles without a reported delay are drawn paler and run by the timetable here.',
+  'about.positionsText': 'No vehicle reports its position to this map. Each one is drawn where the timetable says it should be right now, moved by the delay reported for it. So a vehicle can be somewhat ahead of or behind its marker. Vehicles without a reported delay carry a question mark and run by the timetable here.',
   'about.routes': 'Routes',
   'about.routesText': 'The route between two stops is computed too: the shortest plausible way along the roads and tracks of OpenStreetMap, not the official one of the operator. Between stops close to each other it is almost always the same. Where it differs, a vehicle takes another way on the map than in reality; where none is found, it moves in a straight line.',
   'about.outside': 'Outside the area',

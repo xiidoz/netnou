@@ -10,7 +10,7 @@
 
 import { APP_NAME, formatNumber, formatTime, languagePicker, loadLanguage, pageTexts, setTimeZone, t, translatePage } from './i18n.js';
 import { buildIndex, search, searchLines } from './search.js';
-import { mdiChevronLeft, mdiChevronRight, mdiClose, mdiMagnify } from './vendor/material-design-icons/icons.js';
+import { mdiAlert, mdiChevronLeft, mdiChevronRight, mdiClose, mdiMagnify } from './vendor/material-design-icons/icons.js';
 import { AttributionControl, MapLibreMap, NavigationControl } from './vendor/maplibre-gl/maplibre-gl.mjs';
 
 // The modes with a chip. Same ids as MODES in server/lib/timetable.js, the
@@ -52,6 +52,11 @@ const BADGE_DELAY_S = 180; // from here a marker carries its delay as a badge
 // fail, the server keeps the last delays up to the same age (STALE_AFTER_S in
 // server/lib/realtime.js).
 const LIVE_MAX_AGE_S = 180;
+// Without any realtime data the page waits this long before it calls that an
+// outage: the server may be fetching the feed for the first time, or again
+// after a pause, and gives one fetch as long (FETCH_LIMIT_MS in
+// server/lib/realtime.js).
+const REALTIME_GRACE_MS = 90_000;
 // The visitor's own position: the first one brings the map in to LOCATE_ZOOM,
 // and one that takes longer than LOCATE_TIMEOUT_MS to find counts as not found.
 const LOCATE_ZOOM = 15;
@@ -87,7 +92,7 @@ function el(tag, props = {}, children = []) {
 // each the shape of one icon in a box of 24 by 24; style.css gives it its size
 // and its colour. Shapes and not characters: where a character sits in its box
 // is up to the font, and the font is the device's.
-const ICONS = { close: mdiClose, left: mdiChevronLeft, right: mdiChevronRight, search: mdiMagnify };
+const ICONS = { alert: mdiAlert, close: mdiClose, left: mdiChevronLeft, right: mdiChevronRight, search: mdiMagnify };
 
 function icon(name) {
   const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
@@ -136,6 +141,10 @@ const state = {
   stationsLoaded: null, // map section the stations were requested for
   realtimeAt: null,
   scheduleOnly: 0, // answers without realtime data in a row
+  // For telling an outage from a start, see realtimeState(): since when (browser clock, ms)
+  // the page has been asking, and whether it has had current realtime data since then.
+  askingSince: Date.now(),
+  wasLive: false,
   online: false, // last poll delivered vehicles
   areaKnown: false, // api/area has answered: the map shows the area
   outline: [], // the edge of the area: rings of [lat, lon]
@@ -174,7 +183,7 @@ let colors = {};
 function readColors() {
   const style = getComputedStyle(document.documentElement);
   const get = (name) => style.getPropertyValue(name).trim();
-  colors = { mode: {}, delay: {}, text: get('--text'), bg: get('--bg'), accent: get('--accent'), muted: get('--text-muted'), veil: get('--veil'), veilLine: get('--veil-line'), location: get('--location') };
+  colors = { mode: {}, delay: {}, unknown: get('--delay-unknown'), text: get('--text'), bg: get('--bg'), accent: get('--accent'), muted: get('--text-muted'), veil: get('--veil'), veilLine: get('--veil-line'), location: get('--location') };
   for (const mode of DRAW_ORDER) colors.mode[mode] = get(`--mode-${mode}`);
   for (const cls of ['ok', 'minor', 'major', 'severe', 'none']) colors.delay[cls] = get(`--delay-${cls}`);
 }
@@ -444,6 +453,9 @@ function draw() {
   // what the map is about: they carry their name at any zoom.
   const labeled = zoom >= LABEL_ZOOM || Boolean(only);
   const r = labeled ? (zoom >= 14 ? 11 : 10) : 4.5;
+  // A vehicle without a reported delay carries a sign of that – while others
+  // have one. Without any realtime data the card says so once (updateStatus).
+  const live = realtimeState() === 'live';
 
   // The visitor's own position, under the vehicles. The ring around it is
   // wider than their markers, the arrow and the ring of the selected one
@@ -503,7 +515,6 @@ function draw() {
     if (!onScreen(x, y)) continue;
 
     const color = vehicleColor(v);
-    const fillAlpha = v.delay === null && state.colorBy === 'mode' ? 0.55 : 1;
     // outline and label are white in both themes
     ctx.strokeStyle = '#fff';
     ctx.fillStyle = color;
@@ -525,15 +536,7 @@ function draw() {
 
     ctx.beginPath();
     ctx.arc(x, y, r, 0, 2 * Math.PI);
-    if (fillAlpha < 1) {
-      // schedule-only vehicles: paler, on an opaque base so the map does not shine through
-      ctx.fillStyle = colors.bg;
-      ctx.fill();
-      ctx.fillStyle = color;
-      ctx.globalAlpha = fillAlpha;
-    }
     ctx.fill();
-    ctx.globalAlpha = 1;
     ctx.stroke();
 
     if (labeled) {
@@ -542,14 +545,17 @@ function draw() {
       ctx.font = `700 ${v.label.length > 3 ? 8 : v.label.length > 2 ? 9.5 : 11}px system-ui, sans-serif`;
       ctx.fillText(v.label, x, y + 0.5);
 
-      if (state.colorBy === 'mode' && v.delay >= BADGE_DELAY_S) {
-        const text = delayText(v.delay);
+      // The flag at its shoulder: the delay from BADGE_DELAY_S, or a question
+      // mark where none is reported. (Coloured by delay, the colour says both.)
+      const unknown = v.delay === null && live;
+      if (state.colorBy === 'mode' && (v.delay >= BADGE_DELAY_S || unknown)) {
+        const text = unknown ? '?' : delayText(v.delay);
         ctx.font = '700 9px system-ui, sans-serif';
-        const w = ctx.measureText(text).width + 6;
+        const w = unknown ? 12 : ctx.measureText(text).width + 6;
         const bx = x + r * 0.55;
         const by = y - r - 5;
         // one class "hotter" than the dots, for the same reason (see .delay in style.css)
-        ctx.fillStyle = colors.delay[delayClass(v.delay) === 'minor' ? 'major' : 'severe'];
+        ctx.fillStyle = unknown ? colors.unknown : colors.delay[delayClass(v.delay) === 'minor' ? 'major' : 'severe'];
         ctx.beginPath();
         if (ctx.roundRect) ctx.roundRect(bx, by, w, 12, 4);
         else ctx.rect(bx, by, w, 12);
@@ -995,11 +1001,36 @@ function updateStatus() {
   for (const [mode, count] of Object.entries(counts)) if (state.enabled.has(mode)) shown += count;
   for (const [mode, node] of chipCounts) node.textContent = formatNumber(counts[mode] ?? 0);
 
-  const age = state.realtimeAt === null ? null : Math.max(0, Math.round(now() - state.realtimeAt));
-  const live = age !== null && age < LIVE_MAX_AGE_S;
-  $('status').dataset.state = live ? 'live' : 'schedule';
-  const realtime = live ? t('status.live', { seconds: age }) : t('status.scheduleOnly');
-  $('status-text').textContent = `${t('status.vehicles', { count: shown })} · ${realtime}`;
+  // Without realtime data all positions are by the timetable alone. While it
+  // may still be on its way that is said calmly, after that as a warning.
+  const realtime = realtimeState();
+  $('status').dataset.state = { live: 'live', waiting: 'schedule', outage: 'outage' }[realtime];
+  const text = realtime === 'live' ? t('status.live', { seconds: realtimeAge() }) : realtime === 'outage' ? t('status.outage') : t('status.waiting');
+  $('status-text').textContent = `${t('status.vehicles', { count: shown })} · ${text}`;
+}
+
+/** How old the realtime data in use is, in whole seconds; null without any. */
+function realtimeAge() {
+  return state.realtimeAt === null ? null : Math.max(0, Math.round(now() - state.realtimeAt));
+}
+
+/**
+ * Where the page stands with realtime data: 'live' with current data. Without,
+ * 'waiting' while it may still come – the server fetches the feed only while
+ * somebody looks, so the first answers after opening the page or coming back
+ * to it are without – and 'outage' once it has been there and is gone, or has
+ * not come in REALTIME_GRACE_MS.
+ */
+function realtimeState() {
+  const age = realtimeAge();
+  if (age !== null && age < LIVE_MAX_AGE_S) return 'live';
+  return state.wasLive || Date.now() - state.askingSince > REALTIME_GRACE_MS ? 'outage' : 'waiting';
+}
+
+/** The page begins to ask for vehicles, or does so again after a pause: realtime data may take a while. */
+function startAsking() {
+  state.askingSince = Date.now();
+  state.wasLive = false;
 }
 
 function renderBanner() {
@@ -1389,6 +1420,9 @@ async function poll() {
       // The server clock arrives with up to ~1 s of jitter; follow it slowly so vehicles do not twitch.
       state.clockOffset = state.vehicles.size ? state.clockOffset * 0.8 + offset * 0.2 : offset;
       state.realtimeAt = data.realtime;
+      // (the first answer, or the first one again after the server or the connection was away)
+      if (!state.online) startAsking();
+      if (realtimeState() === 'live') state.wasLive = true;
       state.counts = data.counts;
       state.loaded = request;
       applyVehicles(data.vehicles);
@@ -1430,6 +1464,7 @@ map.on('moveend', () => {
 // A hidden tab stops polling, which in turn lets the server pause its realtime downloads.
 document.addEventListener('visibilitychange', () => {
   if (document.hidden) return;
+  startAsking();
   poll();
   loadSelection();
 });

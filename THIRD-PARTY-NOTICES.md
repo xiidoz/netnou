@@ -22,8 +22,8 @@ running instance fetches and passes on.
 ### Material Design Icons
 
 - Where: `public/vendor/material-design-icons/icons.js`, the shapes of the
-  icons on the page's own buttons (close, chevron-left, chevron-right,
-  magnify), from version 7.4.47 of the npm package `@mdi/js`, unmodified.
+  page's own icons (alert, chevron-left, chevron-right, close, magnify),
+  from version 7.4.47 of the npm package `@mdi/js`, unmodified.
 - Licence: the icons are under the Apache License 2.0, as the Pictogrammers
   Free License of the collection says. Both texts are next to the file:
   [LICENSE](public/vendor/material-design-icons/LICENSE) and

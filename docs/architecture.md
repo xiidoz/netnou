@@ -58,7 +58,9 @@ vehicle positions. A position is therefore derived:
 2. Between two stops the vehicle moves at constant speed along the route
    geometry of that hop, or along a straight line where there is none.
 3. Without realtime data for a trip, the timetable alone is used. The page
-   draws such vehicles paler.
+   marks such a vehicle with a question mark while others have a delay
+   reported. Without any realtime data it says so once, as a warning in the
+   header card.
 
 The server does not send positions but *knots*: points in time and space along
 the way ahead (see [Knots](api.md#knots)). The browser interpolates, so the

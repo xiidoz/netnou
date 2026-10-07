@@ -43,7 +43,8 @@
         <p class="search-note" id="search-note" role="status"></p>
       </div>
     </div>
-    <p class="status" id="status"><span class="dot"></span><span id="status-text" data-i18n="status.connecting">Connecting …</span></p>
+    <!-- (the sign takes the place of the dot where the line is a warning: no realtime data at all) -->
+    <p class="status" id="status"><span class="dot"></span><span class="warn" data-icon="alert"></span><span id="status-text" data-i18n="status.connecting">Connecting …</span></p>
     <!-- On a narrow screen the chips are one row that scrolls sideways. The two
          arrows show where it goes on and move it there. They are for eyes and
          fingers only: the keyboard and a screen reader reach every chip itself. -->
@@ -81,7 +82,7 @@
     <div class="about-body">
       <h2 id="about-title" data-i18n="about.title">How it works</h2>
       <h3 data-i18n="about.positions">Positions</h3>
-      <p data-i18n="about.positionsText">No vehicle reports its position to this map. Each one is drawn where the timetable says it should be right now, moved by the delay reported for it. So a vehicle can be somewhat ahead of or behind its marker. Vehicles without a reported delay are drawn paler and run by the timetable here.</p>
+      <p data-i18n="about.positionsText">No vehicle reports its position to this map. Each one is drawn where the timetable says it should be right now, moved by the delay reported for it. So a vehicle can be somewhat ahead of or behind its marker. Vehicles without a reported delay carry a question mark and run by the timetable here.</p>
       <h3 data-i18n="about.routes">Routes</h3>
       <p data-i18n="about.routesText">The route between two stops is computed too: the shortest plausible way along the roads and tracks of OpenStreetMap, not the official one of the operator. Between stops close to each other it is almost always the same. Where it differs, a vehicle takes another way on the map than in reality; where none is found, it moves in a straight line.</p>
       <h3 data-i18n="about.outside">Outside the area</h3>
