@@ -55,6 +55,11 @@ const BADGE_DELAY_S = 180; // from here a marker carries its delay as a badge
 const NEAR_IN_PX = 4;
 const NEAR_OUT_PX = 8;
 const PLACE_R = 5; // the dot that marks such a place, under the bubble with the vehicles
+// The ring around the chosen vehicle: how far its middle is from the edge of
+// the marker, how wide it is, and how wide the white edge on either side of it.
+const RING_GAP = 5;
+const RING_WIDTH = 2.5;
+const RING_EDGE = 1;
 // The details as a sheet on a narrow screen: the share of the screen it takes
 // at its middle height (as .panel in style.css), how far a finger has to
 // move to drag and not to tap, how far below its lowest height the sheet
@@ -170,7 +175,7 @@ const state = {
   selection: null, // { type: 'trip' | 'station' | 'line', id, data }, see select()
   hits: [], // what can be pointed at on the map: { x, y, r, vehicle or station }, see draw()
   covers: [], // the boxes of the bubbles, which hide what is under them: [x, y, width, height]
-  chosenAt: null, // where on the screen the chosen vehicle is drawn, if it is in view: { x, y }
+  chosenAt: null, // where on the screen the chosen vehicle is drawn, if it is in view: { x, y, … }
   position: null, // the visitor's own while they have it shown: { lat, lon, accuracy in metres, stale }
   follow: false, // the map stays centred on it
   banner: null, // what the banner says for as long as it is so
@@ -424,6 +429,29 @@ function drawDisc(x, y, r, v, labeled) {
 }
 
 /**
+ * The ring around the chosen vehicle, in its colour. Drawn before its marker,
+ * so that the arrow and the flag of the marker lie on it and not under it.
+ * The ring has a thin edge of white on its inside and its outside, as the
+ * markers have one: the route of the trip has the same colour and runs right
+ * under it, and the edges keep the two apart.
+ * @param w the width of a marker for several, 0 for a round one
+ */
+function drawRing(x, y, r, w, color) {
+  // (the outline of the marker, moved out by RING_GAP)
+  if (w) roundedBox(x - w / 2 - RING_GAP, y - r - RING_GAP, w + 2 * RING_GAP, 2 * (r + RING_GAP), r + RING_GAP);
+  else {
+    ctx.beginPath();
+    ctx.arc(x, y, r + RING_GAP, 0, 2 * Math.PI);
+  }
+  ctx.strokeStyle = '#fff';
+  ctx.lineWidth = RING_WIDTH + 2 * RING_EDGE;
+  ctx.stroke();
+  ctx.strokeStyle = color;
+  ctx.lineWidth = RING_WIDTH;
+  ctx.stroke();
+}
+
+/**
  * The flag a vehicle carries at its shoulder: its delay from BADGE_DELAY_S,
  * or a question mark where none is reported while others have one (`live`).
  * None when the vehicles are coloured by delay: the colour says both then.
@@ -604,7 +632,8 @@ function draw() {
   const ease = 1 - Math.exp(-dt / EASE_MS);
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
-  // the chosen one, for the ring around it: where it is and, in a marker for several, how wide that is
+  // The chosen one has a ring around it and is drawn after the others of its
+  // kind, so that none of them lies on it. Where it is drawn, if it is in view: { x, y }.
   let chosen = null;
   const isChosen = (v) => selection?.type === 'trip' && selection.id === v.id;
   const named = []; // those that are drawn with their name: { v, x, y, a }
@@ -623,9 +652,10 @@ function draw() {
     if (!onScreen(x, y)) continue;
 
     if (!labeled) {
-      drawDisc(x, y, r, v, false);
       hits.push({ x, y, r: Math.max(r + 3, 10), vehicle: v });
-      if (isChosen(v)) chosen = { x, y };
+      // (the chosen one after the loop)
+      if (isChosen(v)) chosen = { x, y, dot: v };
+      else drawDisc(x, y, r, v, false);
       continue;
     }
     // under way: the direction, towards the next stop
@@ -636,6 +666,10 @@ function draw() {
       a = Math.atan2(by - ay, bx - ax);
     }
     named.push({ v, x, y, a });
+  }
+  if (chosen?.dot) {
+    drawRing(chosen.x, chosen.y, r, 0, vehicleColor(chosen.dot));
+    drawDisc(chosen.x, chosen.y, r, chosen.dot, false);
   }
 
   // Which of them are at one place: so close that one would hide the other,
@@ -660,22 +694,28 @@ function draw() {
   // stand at the same platform – is in a bubble above it, drawn last and so
   // on top of all else.
   const bubbles = [];
-  for (const group of groups) {
+  const holdsChosen = (group) => group.some((member) => isChosen(member.v));
+  // (the one with the chosen vehicle last)
+  for (const group of [...groups].sort((one, other) => holdsChosen(one) - holdsChosen(other))) {
     const [{ v, x, y, a }] = group;
     if (group.length > 1 && !group.every((other) => other.v.unit && other.v.unit === v.unit)) {
       bubbles.push(group);
       continue;
     }
-    ctx.strokeStyle = '#fff';
-    ctx.fillStyle = vehicleColor(v);
-    ctx.lineWidth = 1.5;
+    const color = vehicleColor(v);
     if (group.length === 1) {
+      if (isChosen(v)) {
+        drawRing(x, y, r, 0, color);
+        chosen = { x, y };
+      }
+      ctx.strokeStyle = '#fff';
+      ctx.fillStyle = color;
+      ctx.lineWidth = 1.5;
       if (a !== null) drawArrow(x, y, r, a);
       drawDisc(x, y, r, v, true);
       const flag = flagOf(v, live);
       if (flag) drawFlag(x + r * 0.55, y - r - 5, flag);
       hits.push({ x, y, r: Math.max(r + 3, 10), vehicle: v });
-      if (isChosen(v)) chosen = { x, y };
       continue;
     }
 
@@ -686,6 +726,13 @@ function draw() {
       return Math.max(2 * r - 2, ctx.measureText(member.label).width + 8);
     });
     const w = widths.reduce((sum, width) => sum + width, 2);
+    if (holdsChosen(group)) {
+      drawRing(x, y, r, w, color);
+      chosen = { x, y };
+    }
+    ctx.strokeStyle = '#fff';
+    ctx.fillStyle = color;
+    ctx.lineWidth = 1.5;
     // (the arrowhead leaves it where it is heading: at an end, or in between for up and down)
     if (a !== null) drawArrow(x + (w / 2 - r) * Math.cos(a), y, r, a);
     roundedBox(x - w / 2, y - r, w, 2 * r, r);
@@ -699,7 +746,6 @@ function draw() {
       ctx.fillText(member.label, middle, y + 0.5);
       // each name is its own to point at
       hits.push({ x: middle, y, r: Math.max(widths[i] / 2 + 2, 10), vehicle: member });
-      if (isChosen(member)) chosen = { x, y, w };
       left += widths[i];
       if (i === members.length - 1) return;
       ctx.beginPath();
@@ -766,13 +812,24 @@ function draw() {
     ctx.lineTo(tip + 6, edge - Math.sign(out) * 0.5);
     ctx.stroke();
 
+    const cellAt = (i) => [bx + pad + cell / 2 + (i % perRow) * across, by + padTop + down - cell / 2 + Math.floor(i / perRow) * down];
+    // (its ring under all the markers: they are too close to each other for a ring to go between them)
+    const picked = members.findIndex(isChosen);
+    if (picked >= 0) {
+      const [cx, cy] = cellAt(picked);
+      // (kept within the bubble: at its edge the white of the ring would stand out over it by a hair)
+      ctx.save();
+      roundedBox(bx, by, w, h, 9);
+      ctx.clip();
+      drawRing(cx, cy, r, 0, vehicleColor(members[picked]));
+      ctx.restore();
+      chosen = { x: cx, y: cy };
+    }
     members.forEach((member, i) => {
-      const cx = bx + pad + cell / 2 + (i % perRow) * across;
-      const cy = by + padTop + down - cell / 2 + Math.floor(i / perRow) * down;
+      const [cx, cy] = cellAt(i);
       drawDisc(cx, cy, r, member, true);
       if (own && flags[i]) drawFlag(cx + r * 0.55, cy - r - 5, flags[i]);
       hits.push({ x: cx, y: cy, r: cell / 2, vehicle: member, top: true });
-      if (isChosen(member)) chosen = { x: cx, y: cy };
     });
     if (shared) drawFlag(bx + w - 8, by - 6, shared);
     covers.push([bx, Math.min(by, edge + out), w, h + 7]);
@@ -798,17 +855,6 @@ function draw() {
     });
     ctx.beginPath();
     ctx.arc(x, y, PLACE_R, 0, 2 * Math.PI);
-    ctx.stroke();
-  }
-
-  if (chosen) {
-    ctx.strokeStyle = colors.text;
-    ctx.lineWidth = 2.5;
-    if (chosen.w) roundedBox(chosen.x - chosen.w / 2 - 5, chosen.y - r - 5, chosen.w + 10, 2 * r + 10, r + 5);
-    else {
-      ctx.beginPath();
-      ctx.arc(chosen.x, chosen.y, r + 5, 0, 2 * Math.PI);
-    }
     ctx.stroke();
   }
 
