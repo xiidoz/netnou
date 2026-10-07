@@ -65,6 +65,7 @@ export default {
   'colorBy.mode': 'Verkehrsmittel',
   'colorBy.delay': 'Verspätung',
 
+  'delay.early': 'zu früh',
   'delay.onTime': 'pünktlich',
   'delay.from': 'ab {minutes} min',
   'delay.minutes': '{delay} min',
