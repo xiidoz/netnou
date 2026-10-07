@@ -34,6 +34,11 @@ test('what the page says about itself: its main language and the address of the 
   assert.equal(loadConfig({ SITE_NAME: ' Bus & Bahn live ' }).siteName, 'Bus & Bahn live');
   assert.equal(loadConfig({ SITE_NAME: ' ' }).siteName, 'Netnou');
 
+  // a folder with icons of the operator's own: none unless it is named
+  assert.equal(loadConfig({}).brandDir, null);
+  assert.equal(loadConfig({ BRAND_DIR: ' ' }).brandDir, null);
+  assert.equal(loadConfig({ BRAND_DIR: 'brand' }).brandDir, path.resolve('brand'));
+
   // links of the operator's own: none by default, else a text and an address each
   assert.deepEqual(loadConfig({}).links, []);
   assert.deepEqual(loadConfig({ LINKS: ' , ' }).links, []);

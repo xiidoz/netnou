@@ -48,7 +48,7 @@ const REALTIME = encodeFeed({
 // Every setting the server reads; none may leak in from the shell running the tests.
 const SETTINGS = ['PORT', 'HOST', 'DATA_DIR', 'AREA_FILE', 'BBOX', 'AREA_NAME', 'VIEW', 'TIMEZONE', 'MAP_STYLE_URL', 'MAP_ORIGINS', 'TILE_URL', 'TILE_ATTRIBUTION', 'DATA_ATTRIBUTION',
   'OSM_PBF_URLS', 'OSM_MAX_AGE_DAYS', 'FEED_URL', 'FEED_CHECK_MINUTES', 'DOWNLOAD_TIMEOUT_MINUTES', 'REALTIME_URL', 'REALTIME_INTERVAL_SECONDS', 'REALTIME_IDLE_SECONDS', 'UPDATE_CHECK',
-  'LANGUAGE', 'PUBLIC_URL', 'SEARCH_ENGINES', 'SITE_NAME', 'LINKS'];
+  'LANGUAGE', 'PUBLIC_URL', 'SEARCH_ENGINES', 'SITE_NAME', 'LINKS', 'BRAND_DIR'];
 // What an image carries about its build, which a checkout does not have.
 const BUILD = ['NETNOU_COMMIT', 'NETNOU_RELEASE'];
 
@@ -514,8 +514,12 @@ test('the server stops when asked to', async () => {
 
 // (the server of the tests above knows its address and is therefore one that may be listed)
 test('an instance that is not to be listed says so with every answer', async () => {
-  // (the second one also has a name and links of its own)
-  for (const [settings, address] of [[{}, null], [{ PUBLIC_URL: 'https://test.example.org/', SEARCH_ENGINES: 'off', SITE_NAME: 'Bus & Bahn live', LINKS: 'Impressum=/impressum' }, 'https://test.example.org/']]) {
+  // (the second one also has a name, links and files of its own)
+  const brand = path.join(dir, 'brand');
+  fs.mkdirSync(brand);
+  fs.writeFileSync(path.join(brand, 'favicon.svg'), '<svg xmlns="http://www.w3.org/2000/svg"/>');
+  fs.writeFileSync(path.join(brand, 'preview.png'), 'not really a picture');
+  for (const [settings, address] of [[{}, null], [{ PUBLIC_URL: 'https://test.example.org/', SEARCH_ENGINES: 'off', SITE_NAME: 'Bus & Bahn live', LINKS: 'Impressum=/impressum', BRAND_DIR: brand }, 'https://test.example.org/']]) {
     const proc = start({ PORT: '0', HOST: '127.0.0.1', DATA_DIR: path.join(dir, 'unlisted'), BBOX: BBOX.join(','), FEED_URL: `${upstream.url}/feed.zip`, REALTIME_URL: `${upstream.url}/realtime.pb`, ...settings });
     let text = '';
     proc.stdout.on('data', (chunk) => { text += chunk; });
@@ -537,7 +541,17 @@ test('an instance that is not to be listed says so with every answer', async () 
       assert.equal(page.includes('<a href="/impressum" target="_blank" rel="noopener">Impressum</a></nav>'), Boolean(settings.LINKS));
       assert.equal(/<nav class="links"[^>]* hidden>/.test(page), !settings.LINKS);
       assert.equal(page.includes('og:image'), address !== null);
-      if (address) assert.ok(page.includes(`<meta property="og:image" content="${address}icons/icon-512.png">`));
+      if (address) assert.ok(page.includes(`<meta property="og:image" content="${address}preview.png">`));
+      // files of its own take the place of the built-in ones of that name, and of those alone
+      const builtIn = (name) => fs.readFileSync(path.join(root, 'public', name));
+      const icon = await request('/favicon.svg');
+      assert.equal(icon.headers['content-type'], 'image/svg+xml');
+      assert.equal(icon.body.equals(builtIn('favicon.svg')), !settings.BRAND_DIR);
+      if (settings.BRAND_DIR) assert.equal(icon.body.toString(), '<svg xmlns="http://www.w3.org/2000/svg"/>');
+      assert.ok((await request('/icons/icon-192.png')).body.equals(builtIn('icons/icon-192.png')));
+      const preview = await request('/preview.png');
+      assert.deepEqual([preview.status, preview.headers['content-type']], settings.BRAND_DIR ? [200, 'image/png'] : [404, 'application/json; charset=utf-8']);
+      assert.equal(text.includes('Own files from '), Boolean(settings.BRAND_DIR));
       // it may be read, or nobody would see the request; but it is not handed out
       assert.equal((await request('/robots.txt')).body.toString(), 'User-agent: *\nAllow: /\n');
       assert.equal((await request('/sitemap.xml')).status, 404);

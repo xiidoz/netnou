@@ -19,7 +19,9 @@ COPY public ./public
 RUN mkdir /data && chown node:node /data
 VOLUME /data
 
-ENV DATA_DIR=/data PORT=8080
+# An operator's own icons are looked for in /brand: mounting a folder there is
+# all it takes (see docs/configuration.md). Nothing is there otherwise.
+ENV DATA_DIR=/data PORT=8080 BRAND_DIR=/brand
 
 # What this image was built from, for the version the server reports: the
 # release workflow passes the commit and whether it is that of a release.

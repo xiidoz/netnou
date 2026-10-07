@@ -9,11 +9,42 @@
 // gets to see in another language than that of its own browser. Hence an
 // address per language, ?lang=de, which the page names as its other versions.
 
+import fs from 'node:fs';
+import path from 'node:path';
 import { LANGUAGES, pageTexts } from '../../public/i18n.js';
 
 export const LANGUAGE_CODES = LANGUAGES.map(([code]) => code);
-// The picture of a link's preview: the icon, which says nothing about a place.
-const PREVIEW_IMAGE = { path: 'icons/icon-512.png', size: 512 };
+// The picture of a link's preview: the icon, unless the operator has one of
+// their own, wide as chats show it.
+const PREVIEW_ICON = { path: 'icons/icon-512.png', size: 512 };
+
+// What an operator may bring files of their own for, in a folder outside the
+// repository: by the name of the file there, the address it is served under.
+// The icons take the place of the built-in ones; the preview is theirs alone.
+const OWN_ICONS = {
+  'favicon.svg': 'favicon.svg',
+  'icon-192.png': 'icons/icon-192.png',
+  'icon-512.png': 'icons/icon-512.png',
+  'icon-maskable-512.png': 'icons/icon-maskable-512.png',
+  'apple-touch-icon.png': 'icons/apple-touch-icon.png',
+};
+const OWN_PREVIEWS = ['preview.png', 'preview.jpg'];
+
+/**
+ * The operator's own files in `dir`, as far as they are there.
+ * @param dir the folder, or null; one that does not exist is one without files
+ * @returns { files, preview }: the files by the address they are served
+ *   under, and the address of the picture for previews, null without one
+ */
+export function ownFiles(dir) {
+  const files = new Map();
+  const isFile = (name) => fs.statSync(path.join(dir, name), { throwIfNoEntry: false })?.isFile() ?? false;
+  if (!dir) return { files, preview: null };
+  for (const [name, address] of Object.entries(OWN_ICONS)) if (isFile(name)) files.set(address, path.join(dir, name));
+  const preview = OWN_PREVIEWS.find(isFile) ?? null;
+  if (preview) files.set(preview, path.join(dir, preview));
+  return { files, preview };
+}
 
 const escapeHtml = (text) => String(text).replace(/[&<>"']/g, (char) => `&#${char.charCodeAt(0)};`);
 
@@ -32,12 +63,14 @@ const versions = (publicUrl) => [...LANGUAGE_CODES.map((code) => [code, addressI
  * @param siteName what the instance calls itself
  * @param areaName may be empty
  * @param links the operator's own, [{ text, href }], at the foot of the header card
+ * @param preview the address of the operator's picture for previews of
+ *   links (ownFiles), null to show the icon
  * @param publicUrl the address of the instance with a slash at its end, or
  *   null: then all that needs a full address is left out
  * @param listed whether search engines may list the page; if not, it asks
  *   them not to and leaves out what is there for them alone
  */
-export function renderPage(html, { language, asked, texts, siteName, areaName, links = [], publicUrl, listed }) {
+export function renderPage(html, { language, asked, texts, siteName, areaName, links = [], preview = null, publicUrl, listed }) {
   const { title, description } = pageTexts(areaName, texts, siteName);
   let page = html;
   const put = (pattern, replacement) => {
@@ -61,7 +94,8 @@ export function renderPage(html, { language, asked, texts, siteName, areaName, l
     `<meta property="og:site_name" content="${escapeHtml(siteName)}">`,
     `<meta property="og:title" content="${escapeHtml(title)}">`,
     `<meta property="og:description" content="${escapeHtml(description)}">`,
-    '<meta name="twitter:card" content="summary">',
+    // (a picture of the operator's own is a wide one and shown large; the icon is not)
+    `<meta name="twitter:card" content="${preview && publicUrl ? 'summary_large_image' : 'summary'}">`,
   ];
   // (also said with every answer of the server, see NOT_LISTED in index.js)
   if (!listed) tags.push('<meta name="robots" content="noindex">');
@@ -73,12 +107,16 @@ export function renderPage(html, { language, asked, texts, siteName, areaName, l
         ...versions(publicUrl).map(([code, href]) => `<link rel="alternate" hreflang="${code}" href="${escapeHtml(href)}">`),
       );
     }
-    tags.push(
-      `<meta property="og:url" content="${address}">`,
-      `<meta property="og:image" content="${escapeHtml(publicUrl + PREVIEW_IMAGE.path)}">`,
-      `<meta property="og:image:width" content="${PREVIEW_IMAGE.size}">`,
-      `<meta property="og:image:height" content="${PREVIEW_IMAGE.size}">`,
-    );
+    tags.push(`<meta property="og:url" content="${address}">`);
+    if (preview) {
+      tags.push(`<meta property="og:image" content="${escapeHtml(publicUrl + preview)}">`);
+    } else {
+      tags.push(
+        `<meta property="og:image" content="${escapeHtml(publicUrl + PREVIEW_ICON.path)}">`,
+        `<meta property="og:image:width" content="${PREVIEW_ICON.size}">`,
+        `<meta property="og:image:height" content="${PREVIEW_ICON.size}">`,
+      );
+    }
   }
   put(/\n<\/head>/, () => `\n${tags.map((tag) => `  ${tag}`).join('\n')}\n</head>`);
   return page;

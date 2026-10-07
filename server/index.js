@@ -6,7 +6,7 @@ import zlib from 'node:zlib';
 import { loadConfig, parseBox } from './config.js';
 import { FeedUpdater } from './lib/feed.js';
 import { RealtimePoller } from './lib/realtime.js';
-import { LANGUAGE_CODES, renderManifest, renderPage, robotsTxt, sitemapXml } from './lib/page.js';
+import { LANGUAGE_CODES, ownFiles, renderManifest, renderPage, robotsTxt, sitemapXml } from './lib/page.js';
 import { setTimeZone } from './lib/time.js';
 import { lite } from './lib/timetable.js';
 import { describeBuild, githubReleases, UpdateChecker } from './lib/update.js';
@@ -71,6 +71,7 @@ const MIME = {
   '.json': 'application/json; charset=utf-8',
   '.svg': 'image/svg+xml',
   '.png': 'image/png',
+  '.jpg': 'image/jpeg',
   '.ico': 'image/x-icon',
   '.txt': 'text/plain; charset=utf-8',
   '.webmanifest': 'application/manifest+json',
@@ -129,6 +130,11 @@ function etagMatches(req, etag) {
 // megabyte, too much to compress again for every visitor.
 const compressed = new Map();
 
+// The operator's own icons and picture for previews of links, if they have
+// put any into a folder for them (BRAND_DIR): looked for once, at the start.
+const own = ownFiles(config.brandDir);
+if (own.files.size) log(`Own files from ${config.brandDir}: ${[...own.files.keys()].join(', ')}`);
+
 // The page is index.html with what the instance is written into it
 // (lib/page.js), in its main language or the one the address asks for. Put
 // together once for each and again when the file has changed.
@@ -143,7 +149,7 @@ function servePage(req, res, url) {
   let page = pages.get(asked);
   if (page?.stamp !== stamp) {
     const language = asked ?? config.language;
-    const body = Buffer.from(renderPage(fs.readFileSync(file, 'utf8'), { language, asked, texts: texts[language], siteName: config.siteName, areaName: config.areaName, links: config.links, publicUrl: config.publicUrl, listed: config.searchEngines }));
+    const body = Buffer.from(renderPage(fs.readFileSync(file, 'utf8'), { language, asked, texts: texts[language], siteName: config.siteName, areaName: config.areaName, links: config.links, preview: own.preview, publicUrl: config.publicUrl, listed: config.searchEngines }));
     page = { stamp, body, etag: `"${crypto.createHash('sha1').update(body).digest('hex').slice(0, 16)}"`, packed: null };
     pages.set(asked, page);
   }
@@ -179,9 +185,10 @@ function serveManifest(req, res) {
 
 function serveStatic(req, res, pathname) {
   const relative = pathname.endsWith('/') ? `${pathname}index.html` : pathname;
-  const file = path.join(config.publicDir, path.normalize(relative));
+  // (a file of the operator's own takes the place of the built-in one of that address)
+  const file = own.files.get(relative.slice(1)) ?? path.join(config.publicDir, path.normalize(relative));
   // path.join resolves "..", so anything outside publicDir is a traversal attempt.
-  if (!file.startsWith(config.publicDir + path.sep)) return sendJson(req, res, 404, { error: 'not found' });
+  if (!own.files.has(relative.slice(1)) && !file.startsWith(config.publicDir + path.sep)) return sendJson(req, res, 404, { error: 'not found' });
   let stat;
   try {
     stat = fs.statSync(file);
