@@ -218,6 +218,10 @@ export function loadConfig(env = process.env) {
     // What the instance calls itself, where the page names itself: its
     // heading, its title, the installed app. The credits name the software.
     siteName: text('SITE_NAME') || APP_NAME,
+    // A folder with the operator's own icons and picture for previews of
+    // links, which take the place of the built-in ones (ownFiles in
+    // lib/page.js); null if there is to be none.
+    brandDir: text('BRAND_DIR') ? path.resolve(text('BRAND_DIR')) : null,
     // Links of the operator's own at the foot of the header card, e.g. to an
     // imprint and a privacy notice: [{ text, href }].
     links,

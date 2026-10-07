@@ -86,7 +86,7 @@ Server (`server/`):
 | `lib/pb.js` | decodes the GTFS-Realtime message (`decodeFeed`) |
 | `lib/update.js` | what the server calls itself (`describeBuild`) and the daily look-out for a newer release (`UpdateChecker`) |
 | `lib/time.js` | service days and the time zone of the feed |
-| `lib/page.js` | what the server writes into the page before it sends it, for search engines and previews of links; `robots.txt` and the sitemap |
+| `lib/page.js` | what the server writes into the page before it sends it, for search engines and previews of links; `robots.txt` and the sitemap; which files of the operator's own take the place of built-in icons |
 | `lib/files.js` | downloads, gzipped JSON files, error texts |
 | `areas/vgn.geojson` | outline of the default area, see [its README](../server/areas/README.md) |
 

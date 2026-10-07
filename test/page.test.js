@@ -4,11 +4,13 @@
 
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 import { test } from 'node:test';
 import { LANGUAGES, pageTexts } from '../public/i18n.js';
 import de from '../public/locales/de.js';
 import en from '../public/locales/en.js';
-import { LANGUAGE_CODES, renderManifest, renderPage, robotsTxt, sitemapXml } from '../server/lib/page.js';
+import { LANGUAGE_CODES, ownFiles, renderManifest, renderPage, robotsTxt, sitemapXml } from '../server/lib/page.js';
 
 const html = fs.readFileSync(new URL('../public/index.html', import.meta.url), 'utf8');
 const URL_ = 'https://karte.example.org/live/';
@@ -114,6 +116,47 @@ test('the operator\'s links stand at the foot of the header card, and nothing do
     assert.match(none, /<nav class="links" id="links"[^>]* hidden><\/nav>/);
     assert.ok(!none.includes('target="_blank"'));
   }
+});
+
+test('files of the operator\'s own are found by their names, and only those that are there', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'netnou-brand-'));
+  try {
+    assert.deepEqual(ownFiles(null), { files: new Map(), preview: null });
+    assert.deepEqual(ownFiles(path.join(dir, 'not-there')), { files: new Map(), preview: null });
+    assert.deepEqual(ownFiles(dir), { files: new Map(), preview: null });
+
+    for (const name of ['favicon.svg', 'icon-512.png', 'preview.jpg', 'style.css', 'index.html']) fs.writeFileSync(path.join(dir, name), name);
+    fs.mkdirSync(path.join(dir, 'icon-192.png')); // a folder of that name is no file
+    const own = ownFiles(dir);
+    // each under the address of the built-in one; nothing else of the page can be replaced
+    assert.deepEqual([...own.files], [['favicon.svg', path.join(dir, 'favicon.svg')], ['icons/icon-512.png', path.join(dir, 'icon-512.png')], ['preview.jpg', path.join(dir, 'preview.jpg')]]);
+    assert.equal(own.preview, 'preview.jpg');
+    // of two pictures for previews, the png
+    fs.writeFileSync(path.join(dir, 'preview.png'), 'png');
+    assert.equal(ownFiles(dir).preview, 'preview.png');
+    // every built-in icon there is to replace exists
+    for (const address of ['favicon.svg', 'icons/icon-192.png', 'icons/icon-512.png', 'icons/icon-maskable-512.png', 'icons/apple-touch-icon.png']) {
+      assert.ok(fs.existsSync(new URL(`../public/${address}`, import.meta.url)), address);
+    }
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('a picture of the operator\'s own is what a preview of a link shows, large', () => {
+  const page = renderPage(html, { ...german, preview: 'preview.png' });
+  assert.equal(tag(page, /<meta property="og:image" content="([^"]*)"/), `${URL_}preview.png`);
+  assert.equal(tag(page, /<meta name="twitter:card" content="([^"]*)"/), 'summary_large_image');
+  // its size is not known and not claimed
+  assert.ok(!page.includes('og:image:width'));
+  // without one it is the icon, small, as before
+  const plain = renderPage(html, german);
+  assert.equal(tag(plain, /<meta name="twitter:card" content="([^"]*)"/), 'summary');
+  assert.equal(tag(plain, /<meta property="og:image:width" content="([^"]*)"/), '512');
+  // and without an address there is no picture to name
+  const bare = renderPage(html, { ...german, preview: 'preview.png', publicUrl: null });
+  assert.ok(!bare.includes('og:image'));
+  assert.equal(tag(bare, /<meta name="twitter:card" content="([^"]*)"/), 'summary');
 });
 
 test('the installed app is called what the instance is called, in its language', () => {

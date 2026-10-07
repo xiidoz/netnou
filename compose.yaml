@@ -44,6 +44,7 @@ services:
       # A name of its own for this instance, where the page names itself.
       # The credits keep naming Netnou.
       # SITE_NAME: "Bus & Bahn live"
+      # (Icons of your own need no setting: see "volumes" below.)
       # Links of your own at the foot of the header card, such as an imprint
       # and a privacy notice: a text and an address each. The pages are yours.
       # LINKS: "Impressum=/impressum, Datenschutz=/datenschutz"
@@ -79,6 +80,13 @@ services:
       - type: "volume"
         source: "data"
         target: "/data"
+      # Icons and a preview picture of your own, in a folder next to this file
+      # (docs/configuration.md, "Icons of your own"). Read only: the server
+      # just looks at them.
+      # - type: "bind"
+      #   source: "./brand"
+      #   target: "/brand"
+      #   read_only: true
 
 volumes:
   data:

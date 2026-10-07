@@ -45,6 +45,7 @@ services:
 | `BBOX` | – | `south,west,north,east` | a rectangle as the area, instead of `AREA_FILE` |
 | `SITE_NAME` | `Netnou` | text | what the instance calls itself: in the heading and the title of the page, in previews of links and as the installed app. The credits on the map name Netnou and its version whatever is set here |
 | `AREA_NAME` | `Großraum Nürnberg (VGN)`; empty for a custom area | text | shown next to the title of the page, and what search engines find the instance by, see [Being found](#being-found) |
+| `BRAND_DIR` | – (`/brand` in the image) | path | a folder with icons and a preview picture of your own, see [Icons of your own](#icons-of-your-own) |
 | `LINKS` | – | `Text=address`, separated by commas | links of the operator at the foot of the header card, see [Links of your own](#links-of-your-own) |
 | `LANGUAGE` | `de` | a language of the page: `de`, `en` | the main language of the instance: what the page says about itself to search engines and in previews of links is in it. Visitors still get their own |
 | `PUBLIC_URL` | – | http(s) URL | the address under which visitors reach the instance, e.g. `https://transit.example.org/`, see [Being found](#being-found) |
@@ -190,6 +191,38 @@ that such a visit keeps the realtime feed being fetched for a while, like
 any other (see [Realtime polling and traffic](#realtime-polling-and-traffic)).
 An instance under a path has no say in the `robots.txt` of its host: that
 one is read at the root of the host only.
+
+## Icons of your own
+
+An instance with a name of its own (`SITE_NAME`) can have its own icons
+too. Put them into a folder outside the repository and tell the server where
+it is with `BRAND_DIR`. In the container the folder is `/brand`, so
+mounting one there is all it takes:
+
+```yaml
+    volumes:
+      - "./brand:/brand:ro"
+```
+
+A file in the folder takes the place of the built-in one of the same name:
+
+| File | What it is | Size |
+| --- | --- | --- |
+| `favicon.svg` | the icon in the tab of the browser | any, it is a drawing |
+| `icon-192.png` | the icon of the installed app | 192 × 192 |
+| `icon-512.png` | the same, large; also the picture of a link's preview if there is no other | 512 × 512 |
+| `icon-maskable-512.png` | the icon for home screens that cut it to their own shape: the drawing in the middle, with room around it | 512 × 512 |
+| `apple-touch-icon.png` | the icon on the home screen of Apple devices | 180 × 180 |
+| `preview.png` or `preview.jpg` | the picture a link to the instance shows in a chat or on social media, shown large; needs `PUBLIC_URL` | 1200 × 630 |
+
+Any of them may be missing; the built-in one is used then, and without a
+preview picture a link shows the icon. No other file of the page can be
+replaced this way. The server looks into the folder when it starts and names
+what it found in its log, so restart it after changing the files. Browsers
+and chats keep icons and previews for a long time; a change may take a
+while to show.
+
+The colours of the page are not yours to set: they stay as they are.
 
 ## Links of your own
 
