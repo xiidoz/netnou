@@ -55,6 +55,15 @@ const BADGE_DELAY_S = 180; // from here a marker carries its delay as a badge
 const NEAR_IN_PX = 4;
 const NEAR_OUT_PX = 8;
 const PLACE_R = 5; // the dot that marks such a place, under the bubble with the vehicles
+// The details as a sheet on a narrow screen: the share of the screen it takes
+// at its middle height (as .panel in style.css), how far a finger has to
+// move to drag and not to tap, how far below its lowest height the sheet
+// has to be let go of to close, and from what speed (px per ms) letting go of
+// it is a flick.
+const SHEET_MIDDLE = 0.48;
+const SHEET_DRAG_PX = 6;
+const SHEET_CLOSE_PX = 56;
+const SHEET_FLICK = 0.3;
 // Realtime data older than this counts as timetable only. When its fetches
 // fail, the server keeps the last delays up to the same age (STALE_AFTER_S in
 // server/lib/realtime.js).
@@ -161,6 +170,7 @@ const state = {
   selection: null, // { type: 'trip' | 'station' | 'line', id, data }, see select()
   hits: [], // what can be pointed at on the map: { x, y, r, vehicle or station }, see draw()
   covers: [], // the boxes of the bubbles, which hide what is under them: [x, y, width, height]
+  chosenAt: null, // where on the screen the chosen vehicle is drawn, if it is in view: { x, y }
   position: null, // the visitor's own while they have it shown: { lat, lon, accuracy in metres, stale }
   follow: false, // the map stays centred on it
   banner: null, // what the banner says for as long as it is so
@@ -804,6 +814,7 @@ function draw() {
 
   state.hits = hits;
   state.covers = covers;
+  state.chosenAt = chosen;
 }
 
 function frame() {
@@ -867,6 +878,8 @@ map.on('click', (event) => {
   if (hit?.vehicle) select('trip', hit.vehicle.id);
   else if (hit?.station) select('station', hit.station.id);
   else closePanel();
+  // (what was tapped is not to end up under its own details)
+  if (hit) clearOfSheet(hit.y);
 });
 
 // ---------- the visitor's own position ----------
@@ -1363,6 +1376,8 @@ document.addEventListener('pointerdown', (event) => {
 // ---------- detail panel ----------
 
 const panel = $('panel');
+// What the details are of stays at the top; what is listed scrolls below it.
+const panelHead = $('panel-head');
 const panelBody = $('panel-body');
 let panelTimer = null;
 
@@ -1370,6 +1385,8 @@ function closePanel() {
   state.selection = null;
   clearTimeout(panelTimer);
   panel.hidden = true;
+  // (opened again, the sheet is as high as it is by itself)
+  setSheetHeight(null);
   draw();
 }
 $('panel-close').addEventListener('click', closePanel);
@@ -1392,9 +1409,10 @@ document.addEventListener('keydown', (event) => {
  */
 function select(type, id, more = {}) {
   // The row that was activated is about to go: keep the keyboard focus in the panel.
-  if (panelBody.contains(document.activeElement)) panel.focus({ preventScroll: true });
+  if (panelBody.contains(document.activeElement) || panelHead.contains(document.activeElement)) panel.focus({ preventScroll: true });
   state.selection = { type, id, data: null, ...more };
   panel.hidden = false;
+  panelHead.replaceChildren();
   panelBody.replaceChildren(el('p', { class: 'panel-empty', text: t('panel.loading') }));
   loadSelection(true);
 }
@@ -1430,11 +1448,19 @@ async function loadSelection(first = false) {
   if (state.selection === selection && !document.hidden) panelTimer = setTimeout(loadSelection, PANEL_REFRESH_MS);
 }
 
-/** Replaces what the panel shows. It is rebuilt with every refresh, so the row that has the keyboard focus gets it back. */
-function fillPanel(...nodes) {
+/**
+ * Replaces what the panel shows: its head, which stays, and what scrolls
+ * below it. Both are rebuilt with every refresh, so the row that has the
+ * keyboard focus gets it back.
+ * @param head the nodes of the head
+ */
+function fillPanel(head, ...nodes) {
   const focused = [...panelBody.querySelectorAll('.row')].indexOf(document.activeElement);
+  const onBack = panelHead.contains(document.activeElement);
+  panelHead.replaceChildren(...head);
   panelBody.replaceChildren(...nodes);
   if (focused >= 0) panelBody.querySelectorAll('.row')[focused]?.focus({ preventScroll: true });
+  else if (onBack) (panelHead.querySelector('button') ?? panel).focus({ preventScroll: true });
 }
 
 const platformText = (platform) => (platform ? t('stop.platform', { platform }) : '');
@@ -1489,20 +1515,21 @@ function renderTrip(trip, scrollToNext) {
   const mode = t(`mode.${DRAW_ORDER.includes(trip.mode) ? trip.mode : 'other'}`);
   // Who provides the realtime data shown leads the notes, which are feed content and stay as they are.
   const notes = trip.realtime && trip.source ? [t('trip.source', { source: trip.source }), ...trip.notes] : trip.notes;
-  // A trip chosen from the vehicles of a line leads back to them. The button
-  // is in a row of its own that stays at the top: the list opens at the stop
-  // ahead, which may be far down.
+  // A trip chosen from the vehicles of a line leads back to them, with a
+  // button in a row of its own above the head.
   const from = state.selection.from;
   const back = from ? el('div', { class: 'back-row' }, [
     el('button', { type: 'button', class: 'back', 'aria-label': t('line.back', { line: from.name }), onclick: () => selectLine(from) }, [icon('left'), badge(from.name, from.mode)]),
   ]) : '';
   fillPanel(
-    back,
-    el('div', { class: 'panel-head' }, [
-      el('h2', {}, [badge(trip.line, trip.mode), el('span', { text: `→ ${trip.to}` })]),
-      el('p', { class: 'sub', text: [mode, trip.agency, trip.realtime ? t('trip.realtime') : t('trip.scheduleOnly')].filter(Boolean).join(' · ') }),
-      notesList(notes, trip.cancelled ? t('trip.cancelled') : null),
-    ]),
+    [
+      back,
+      el('div', { class: 'panel-head' }, [
+        el('h2', {}, [badge(trip.line, trip.mode), el('span', { text: `→ ${trip.to}` })]),
+        el('p', { class: 'sub', text: [mode, trip.agency, trip.realtime ? t('trip.realtime') : t('trip.scheduleOnly')].filter(Boolean).join(' · ') }),
+        notesList(notes, trip.cancelled ? t('trip.cancelled') : null),
+      ]),
+    ],
     list,
   );
   if (scrollToNext) nextRow?.scrollIntoView({ block: 'center' });
@@ -1547,10 +1574,10 @@ function renderLine(line, first) {
   ]);
   const mode = t(`mode.${DRAW_ORDER.includes(line.mode) ? line.mode : 'other'}`);
   fillPanel(
-    el('div', { class: 'panel-head' }, [
+    [el('div', { class: 'panel-head' }, [
       el('h2', {}, [badge(line.name, line.mode), el('span', { text: mode })]),
       el('p', { class: 'sub', text: [line.agency, line.vehicles.length ? t('line.vehicles', { count: line.vehicles.length }) : ''].filter(Boolean).join(' · ') }),
-    ]),
+    ])],
     ...(lists.length ? lists : [el('p', { class: 'panel-empty', text: t('line.none') })]),
   );
   panelBody.scrollTop = scrollTop;
@@ -1577,11 +1604,172 @@ function renderStation(board) {
     ]),
   );
   fillPanel(
-    el('div', { class: 'panel-head' }, [el('h2', { text: board.name }), el('p', { class: 'sub', text: t('departures.title') }), notesList(board.notes)]),
+    [el('div', { class: 'panel-head' }, [el('h2', { text: board.name }), el('p', { class: 'sub', text: t('departures.title') }), notesList(board.notes)])],
     // (the two hours the text speaks of are the default window of departures() in server/lib/timetable.js)
     rows.length ? el('ul', { class: 'rows' }, rows) : el('p', { class: 'panel-empty', text: t('departures.none') }),
   );
   panelBody.scrollTop = scrollTop;
+}
+
+// ---------- the details as a sheet ----------
+
+// On a narrow screen the details are a sheet from the bottom of the screen.
+// By itself it is as high as what it shows, up to the middle height. The bar
+// at its top and its head move it: dragged, it follows the finger and comes
+// to rest at one of three heights – its head alone, the middle, and up to
+// the header card. Let go of slowly, that is the nearest one, and it closes
+// well below the lowest; flicked, it is the next one in that direction, and
+// it closes if there is none below.
+// A tap on the bar takes it one height up, and from the highest back to the
+// middle. What is listed below the head scrolls and does not move the sheet.
+const sheetHandle = $('panel-handle');
+
+/** The height of the sheet in px, or null for as high as it is by itself. */
+function setSheetHeight(height) {
+  // (from the height it has by itself to one it is given: the style sheet can only glide between two numbers)
+  if (height !== null && !panel.classList.contains('sized')) {
+    panel.style.height = `${panel.offsetHeight}px`;
+    panel.classList.add('sized');
+    void panel.offsetHeight;
+  }
+  panel.style.height = height === null ? '' : `${Math.round(height)}px`;
+  panel.classList.toggle('sized', height !== null);
+}
+
+/** The heights the sheet rests at, lowest first. */
+function sheetHeights() {
+  const safe = parseFloat(getComputedStyle(panel).paddingBottom) || 0;
+  const low = sheetHandle.offsetHeight + panelHead.offsetHeight + safe;
+  const middle = Math.round(SHEET_MIDDLE * viewSize.y);
+  // (up to the header card, and a gap as between the card and the edge of the screen)
+  const high = Math.round(viewSize.y - $('controls').getBoundingClientRect().bottom - 8);
+  return [Math.min(low, middle), middle, Math.max(high, middle)];
+}
+
+/** Moves the map so that what is at the height y of the screen is not under the sheet, if there is room for it above. */
+function clearOfSheet(y) {
+  if (!narrowScreen.matches || panel.hidden) return;
+  const top = $('controls').getBoundingClientRect().bottom;
+  // (just opened, it is still filling up: as far as it may get by itself)
+  const bottom = panel.classList.contains('sized') ? panel.getBoundingClientRect().top : viewSize.y * (1 - SHEET_MIDDLE);
+  const margin = 44;
+  if (bottom - top < 3 * margin || y < bottom - margin) return;
+  map.panBy([0, y - (bottom - margin)], { duration: 300 });
+}
+
+/** The sheet comes to rest at a height, and what is chosen on the map stays in sight above it. */
+function restSheet(height) {
+  setSheetHeight(height);
+  // (once it has got there: the way up is a transition of the style sheet)
+  setTimeout(() => {
+    if (state.chosenAt && state.selection) clearOfSheet(state.chosenAt.y);
+  }, 220);
+}
+
+sheetHandle.addEventListener('click', () => {
+  const heights = sheetHeights();
+  const now = panel.offsetHeight;
+  // one up from where it is, and from the highest back to the middle
+  const next = heights.find((height) => height > now + 4) ?? heights[1];
+  restSheet(next);
+});
+
+{
+  let drag = null; // while a finger is down on the bar or the head: where it began and whether it has moved enough to drag
+  const begin = (event) => {
+    if (!narrowScreen.matches || !event.isPrimary || event.button !== 0) return;
+    drag = { id: event.pointerId, y: event.clientY, height: panel.offsetHeight, moved: false, last: [[event.timeStamp, event.clientY]] };
+    // From here on all of it comes to this part, wherever the pointer goes: a
+    // finger does that by itself, a mouse does not. Not from a button in the
+    // head, though: a click on it would then be one on the head.
+    if (event.currentTarget === sheetHandle || !event.target.closest('button')) event.currentTarget.setPointerCapture(drag.id);
+  };
+  const move = (event) => {
+    if (!drag || event.pointerId !== drag.id) return;
+    const by = drag.y - event.clientY;
+    if (!drag.moved) {
+      if (Math.abs(by) < SHEET_DRAG_PX) return;
+      drag.moved = true;
+      event.currentTarget.setPointerCapture(drag.id);
+      panel.classList.add('dragging');
+    }
+    const [, , high] = sheetHeights();
+    setSheetHeight(Math.max(24, Math.min(high + 16, drag.height + by)));
+    drag.last.push([event.timeStamp, event.clientY]);
+    if (drag.last.length > 5) drag.last.shift();
+  };
+  const end = (event) => {
+    if (!drag || event.pointerId !== drag.id) return;
+    const { moved, last } = drag;
+    drag = null;
+    if (!moved) return;
+    panel.classList.remove('dragging');
+    // A tap ends in a click, a drag must not: on the bar it would move the sheet again, on a button in the head press it.
+    const swallow = (click) => {
+      click.stopPropagation();
+      click.preventDefault();
+    };
+    panel.addEventListener('click', swallow, { capture: true, once: true });
+    setTimeout(() => panel.removeEventListener('click', swallow, { capture: true }), 300);
+    const [[t0, y0]] = last;
+    const [t1, y1] = last.at(-1);
+    const speed = t1 > t0 ? (y0 - y1) / (t1 - t0) : 0; // px per ms, upwards
+    const now = panel.offsetHeight;
+    const heights = sheetHeights();
+    let rest; // the height to come to rest at, or undefined to close
+    if (event.type === 'pointercancel') rest = heights[1];
+    else if (speed > SHEET_FLICK) rest = heights.find((height) => height > now) ?? heights.at(-1);
+    else if (speed < -SHEET_FLICK) rest = [...heights].reverse().find((height) => height < now);
+    else if (now >= heights[0] - SHEET_CLOSE_PX) rest = heights.reduce((best, height) => (Math.abs(height - now) < Math.abs(best - now) ? height : best));
+    if (rest === undefined) closePanel();
+    else restSheet(rest);
+  };
+  for (const part of [sheetHandle, panelHead]) {
+    part.addEventListener('pointerdown', begin);
+    part.addEventListener('pointermove', move);
+    part.addEventListener('pointerup', end);
+    part.addEventListener('pointercancel', end);
+  }
+}
+
+// On a wide screen the details are a card at the side, as high as they are by themselves.
+narrowScreen.addEventListener('change', () => setSheetHeight(null));
+
+// "How it works" is a sheet on a narrow screen as well: its bar and its
+// heading drag it down, and let go of far enough down it closes.
+{
+  let drag = null;
+  const shift = (px) => { aboutDialog.style.transform = px ? `translateY(${Math.round(px)}px)` : ''; };
+  const begin = (event) => {
+    if (!narrowScreen.matches || !event.isPrimary || event.button !== 0) return;
+    drag = { id: event.pointerId, y: event.clientY, moved: false };
+    event.currentTarget.setPointerCapture(drag.id);
+  };
+  const move = (event) => {
+    if (!drag || event.pointerId !== drag.id) return;
+    const by = event.clientY - drag.y;
+    if (!drag.moved) {
+      if (Math.abs(by) < SHEET_DRAG_PX) return;
+      drag.moved = true;
+      aboutDialog.classList.add('dragging');
+    }
+    shift(Math.max(0, by));
+  };
+  const end = (event) => {
+    if (!drag || event.pointerId !== drag.id) return;
+    const { moved, y } = drag;
+    drag = null;
+    if (!moved) return;
+    aboutDialog.classList.remove('dragging');
+    shift(0);
+    if (event.type !== 'pointercancel' && event.clientY - y > SHEET_CLOSE_PX) aboutDialog.close();
+  };
+  for (const part of [$('about-handle'), $('about-title')]) {
+    part.addEventListener('pointerdown', begin);
+    part.addEventListener('pointermove', move);
+    part.addEventListener('pointerup', end);
+    part.addEventListener('pointercancel', end);
+  }
 }
 
 // ---------- data loading ----------

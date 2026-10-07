@@ -120,6 +120,8 @@ button { font: inherit; color: inherit; }
 }
 
 .controls {
+  /* (above the details: on a narrow screen they may reach up to it, and what hangs at it goes over them) */
+  z-index: 1001;
   top: calc(var(--gap) + var(--safe-top));
   left: calc(var(--gap) + var(--safe-left));
   width: 324px;
@@ -300,6 +302,8 @@ button { font: inherit; color: inherit; }
 }
 @media (prefers-reduced-motion: reduce) {
   .status .dot { animation: none !important; }
+  /* the sheets come to rest at once */
+  .panel, .dialog { transition: none !important; }
   .chips { scroll-behavior: auto !important; }
   /* the icon that turns while the visitor's position is looked for */
   .maplibregl-ctrl-geolocate-waiting .maplibregl-ctrl-icon { animation: none !important; }
@@ -417,11 +421,14 @@ button:focus-visible, select:focus-visible, .row:focus-visible, .panel:focus-vis
   flex-direction: column;
   overflow: hidden;
 }
-#panel-body { overflow-y: auto; overscroll-behavior: contain; }
+/* What the details are of stays; what is listed scrolls below it. */
+#panel-head { flex: none; }
+#panel-body { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
+/* the bar that moves the details where they are a sheet, see the small screens below */
+.handle { display: none; }
 
 .close {
   position: absolute;
-  /* (above the row that stays at the top of what scrolls below it, see .back-row) */
   z-index: 2;
   top: 8px;
   right: 8px;
@@ -487,9 +494,8 @@ button:focus-visible, select:focus-visible, .row:focus-visible, .panel:focus-vis
 /* the vehicles of a line: the stop ahead and the delay, under a heading that says where they go */
 .row.vehicle { grid-template-columns: 1fr auto; }
 .rows-head { margin: 0; padding: 10px 14px 0; color: var(--text-muted); font-size: 13px; font-weight: 650; }
-/* From a trip back to the line it was chosen from: a row that stays at the top
-   of the panel while the stops scroll below it, left of the button that closes. */
-.back-row { position: sticky; top: 0; z-index: 1; padding: 10px 48px 0 12px; background: var(--bg); }
+/* From a trip back to the line it was chosen from: a row above the head, left of the button that closes. */
+.back-row { padding: 10px 48px 0 12px; }
 .back-row + .panel-head { padding-top: 8px; }
 .back {
   display: inline-flex;
@@ -672,6 +678,10 @@ li:last-child > .row.stop .rail::before { bottom: 50%; }
     place-items: center;
   }
 
+  /* The details are a sheet from the bottom: as high as what they show, up to
+     about half the screen (SHEET_MIDDLE in app.js), until the bar at its top
+     or its head has moved it. Then app.js gives it its height, and it glides
+     there – but follows a finger that drags it at once. */
   .panel {
     top: auto;
     left: 0;
@@ -681,8 +691,59 @@ li:last-child > .row.stop .rail::before { bottom: 50%; }
     max-height: 48%;
     border-radius: 14px 14px 0 0;
     padding-bottom: var(--safe-bottom);
+    transition: height 180ms ease;
   }
-  /* "How it works" is a sheet from the bottom too, over the details if they are open. */
+  .panel.sized { max-height: none; }
+  .panel.dragging, .dialog.dragging { transition: none; }
+  /* The bar: all of the top edge takes the finger, the stroke in its middle shows where. */
+  .handle {
+    display: block;
+    flex: none;
+    position: relative;
+    width: 100%;
+    height: 20px;
+    padding: 0;
+    border: 0;
+    border-radius: 14px 14px 0 0;
+    background: none;
+    cursor: grab;
+  }
+  .handle::before {
+    content: "";
+    position: absolute;
+    left: calc(50% - 18px);
+    top: 8px;
+    width: 36px;
+    height: 4px;
+    border-radius: 2px;
+    background: var(--border);
+  }
+  /* (a finger on these moves the sheet, not the page under it) */
+  .handle, #panel-head, #about-title { touch-action: none; }
+  /* No button to close on the sheets: they are dragged down, or the map
+     beside them is tapped. The button is still there for a screen reader and
+     for the keyboard, and shows itself when it has the focus. */
+  .panel .close, .dialog .close {
+    top: 18px;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+  }
+  .panel .close:focus-visible, .dialog .close:focus-visible {
+    width: 32px;
+    height: 32px;
+    overflow: visible;
+    clip-path: none;
+  }
+  /* (so what is at their top has the whole width) */
+  .panel .panel-head, .panel .back-row { padding-right: 14px; }
+  .dialog h2 { margin-right: 0; }
+  .panel .panel-head { padding-top: 2px; }
+  .panel .back-row { padding-top: 0; }
+  .panel .back-row + .panel-head { padding-top: 6px; }
+  /* "How it works" is a sheet from the bottom too, over the details if they
+     are open. Its bar and its heading drag it down to close it. */
   .dialog {
     top: auto;
     width: 100%;
@@ -691,6 +752,8 @@ li:last-child > .row.stop .rail::before { bottom: 50%; }
     margin: 0;
     border-radius: 14px 14px 0 0;
     padding-bottom: var(--safe-bottom);
+    transition: transform 180ms ease;
   }
+  .dialog .dialog-body { padding-top: 2px; }
   .banner { bottom: auto; top: 50%; }
 }
