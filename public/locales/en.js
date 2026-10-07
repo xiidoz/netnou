@@ -85,6 +85,9 @@ export default {
   'delay.minutes': '{delay} min',
   'delay.none': 'timetable only',
 
+  // the operator's own links at the foot of the card: who runs the instance, how it treats personal data and the like
+  'links.label': 'About this service',
+
   'area.hint': 'Grey: outside the area. Only lines that stop inside it are shown there, on a straight line between their stops.',
 
   'panel.label': 'Details',

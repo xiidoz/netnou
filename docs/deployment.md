@@ -258,9 +258,10 @@ Worth watching:
   holds as the last view. Whoever can see these requests, a reverse proxy or
   the provider of the map, can tell roughly where that is.
 - **Legal notices.** An imprint or a privacy notice, where the law requires
-  one, is your responsibility. The page has no dedicated place for such
-  links. `TILE_ATTRIBUTION` and `DATA_ATTRIBUTION` accept HTML, so a link can
-  be appended there.
+  one, is your responsibility: the pages are yours to write and to host.
+  `LINKS` puts links to them, and to any other page of your own, at the
+  foot of the header card, in view on a phone as well
+  ([Links of your own](configuration.md#links-of-your-own)).
 
 ## Troubleshooting
 

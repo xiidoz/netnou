@@ -41,6 +41,24 @@ function pageAddress(value) {
   }
 }
 
+/**
+ * The operator's links as LINKS gives them: "Text=address, Text=address".
+ * An address is a full http(s) one or a path on the same host ("/imprint").
+ * @returns [{ text, href }], or the part that is not understood as { wrong }
+ */
+function operatorLinks(value) {
+  const links = [];
+  for (const part of value.split(',').map((item) => item.trim()).filter(Boolean)) {
+    const at = part.indexOf('=');
+    const text = part.slice(0, Math.max(at, 0)).trim();
+    const href = part.slice(at + 1).trim();
+    const path = /^\/(?!\/)\S*$/.test(href);
+    if (!text || !(path || (isHttpUrl(href) && !/\s/.test(href)))) return { wrong: part };
+    links.push({ text, href });
+  }
+  return links;
+}
+
 function isHttpUrl(value) {
   try {
     return /^https?:$/.test(new URL(value).protocol);
@@ -176,6 +194,11 @@ export function loadConfig(env = process.env) {
   const publicUrl = text('PUBLIC_URL') ? pageAddress(text('PUBLIC_URL')) : null;
   if (text('PUBLIC_URL') && !publicUrl) throw invalid('PUBLIC_URL', 'the http(s) address of the page, without a query, e.g. https://transit.example.org/');
 
+  const links = operatorLinks(text('LINKS'));
+  if (links.wrong !== undefined) {
+    throw new Error(`LINKS must be links as "Text=address", separated by commas, each address an http(s) URL or a path that starts with "/" (not understood: "${links.wrong}")`);
+  }
+
   const osmUrls = env.OSM_PBF_URLS === undefined
     ? (custom ? [] : VGN.osmUrls)
     : env.OSM_PBF_URLS.split(',').map((s) => s.trim()).filter(Boolean).map((url) => httpUrl('OSM_PBF_URLS', url));
@@ -195,6 +218,9 @@ export function loadConfig(env = process.env) {
     // What the instance calls itself, where the page names itself: its
     // heading, its title, the installed app. The credits name the software.
     siteName: text('SITE_NAME') || APP_NAME,
+    // Links of the operator's own at the foot of the header card, e.g. to an
+    // imprint and a privacy notice: [{ text, href }].
+    links,
     // Shown next to the page title.
     areaName: env.AREA_NAME === undefined ? (custom ? '' : VGN.name) : env.AREA_NAME.trim(),
     // Map section on the first visit. Default: all of a custom area.

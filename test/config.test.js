@@ -34,6 +34,16 @@ test('what the page says about itself: its main language and the address of the 
   assert.equal(loadConfig({ SITE_NAME: ' Bus & Bahn live ' }).siteName, 'Bus & Bahn live');
   assert.equal(loadConfig({ SITE_NAME: ' ' }).siteName, 'Netnou');
 
+  // links of the operator's own: none by default, else a text and an address each
+  assert.deepEqual(loadConfig({}).links, []);
+  assert.deepEqual(loadConfig({ LINKS: ' , ' }).links, []);
+  assert.deepEqual(loadConfig({ LINKS: 'Über=/ueber, Impressum = https://example.org/impressum?x=1 ,Datenschutz=/datenschutz/' }).links, [
+    { text: 'Über', href: '/ueber' }, { text: 'Impressum', href: 'https://example.org/impressum?x=1' }, { text: 'Datenschutz', href: '/datenschutz/' },
+  ]);
+  for (const wrong of ['Impressum', '=/impressum', 'Impressum=', 'Impressum=impressum.html', 'Impressum=//example.org/', 'Impressum=javascript:alert(1)', 'Impressum=mailto:a@example.org', 'Über=/ueber, Impressum']) {
+    assert.throws(() => loadConfig({ LINKS: wrong }), /^Error: LINKS must be links as "Text=address", separated by commas, .+ \(not understood: ".+"\)$/, wrong);
+  }
+
   // Search engines may list an instance that knows its address, and no other, unless the operator says so.
   assert.equal(loadConfig({}).searchEngines, false);
   assert.equal(loadConfig({ PUBLIC_URL: 'https://karte.example.org/' }).searchEngines, true);

@@ -45,6 +45,7 @@ services:
 | `BBOX` | – | `south,west,north,east` | a rectangle as the area, instead of `AREA_FILE` |
 | `SITE_NAME` | `Netnou` | text | what the instance calls itself: in the heading and the title of the page, in previews of links and as the installed app. The credits on the map name Netnou and its version whatever is set here |
 | `AREA_NAME` | `Großraum Nürnberg (VGN)`; empty for a custom area | text | shown next to the title of the page, and what search engines find the instance by, see [Being found](#being-found) |
+| `LINKS` | – | `Text=address`, separated by commas | links of the operator at the foot of the header card, see [Links of your own](#links-of-your-own) |
 | `LANGUAGE` | `de` | a language of the page: `de`, `en` | the main language of the instance: what the page says about itself to search engines and in previews of links is in it. Visitors still get their own |
 | `PUBLIC_URL` | – | http(s) URL | the address under which visitors reach the instance, e.g. `https://transit.example.org/`, see [Being found](#being-found) |
 | `SEARCH_ENGINES` | `on` if `PUBLIC_URL` is set, otherwise `off` | `on` or `off` | whether search engines may list the instance, see [Being found](#being-found) |
@@ -189,6 +190,29 @@ that such a visit keeps the realtime feed being fetched for a while, like
 any other (see [Realtime polling and traffic](#realtime-polling-and-traffic)).
 An instance under a path has no say in the `robots.txt` of its host: that
 one is read at the root of the host only.
+
+## Links of your own
+
+Who runs the instance, how it treats personal data, what it is about, how to
+support it: these are the operator's to say, on pages of the operator's own.
+`LINKS` puts links to them at the foot of the header card, where they are in
+view without opening anything, on a phone as well.
+
+```sh
+LINKS="Über=/ueber, Impressum=/impressum, Datenschutz=https://example.org/datenschutz"
+```
+
+- Each link is a text, an equals sign and an address; links are separated
+  by commas. So neither a text nor an address can contain a comma.
+- An address is a full `http(s)` address, or a path on the same host that
+  starts with a slash. The second is for pages that live next to the
+  instance, for example on a site of your own at the root of the host while
+  the instance is under a path.
+- The texts are shown as they are, in one language.
+- The links open in a new tab.
+
+The pages themselves are not part of Netnou. Without `LINKS` nothing is
+shown.
 
 ## Realtime polling and traffic
 
