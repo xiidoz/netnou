@@ -113,6 +113,8 @@ export default {
 
   'panel.label': 'Details',
   'panel.close': 'Close',
+  // on the bar at the top of the details where they are a sheet from the bottom: a tap makes it one step higher, and lower again from the highest
+  'panel.resize': 'Make the details larger or smaller',
   'panel.loading': 'Loading …',
   'panel.noData': 'There is no data on this right now.',
   'panel.loadFailed': 'The data could not be loaded.',

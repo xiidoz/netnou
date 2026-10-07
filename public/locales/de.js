@@ -84,6 +84,7 @@ export default {
 
   'panel.label': 'Details',
   'panel.close': 'Schließen',
+  'panel.resize': 'Details größer oder kleiner machen',
   'panel.loading': 'Lade …',
   'panel.noData': 'Dazu liegen gerade keine Daten vor.',
   'panel.loadFailed': 'Daten konnten nicht geladen werden.',

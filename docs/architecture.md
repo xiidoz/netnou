@@ -297,7 +297,20 @@ otherwise a server would load a file written by older code:
   its departures, a line chosen in the search its vehicles under way; all
   refresh every 15 seconds. While a line is shown, the map draws its
   vehicles alone, with their names at any zoom and whatever the filters say.
-  A trip opened from the list of a line leads back to it.
+  A trip opened from the list of a line leads back to it. What the details
+  are of, their head, stays at the top while what is listed scrolls below it.
+- **The details as a sheet.** On a narrow screen the details are a sheet
+  from the bottom. The bar at its top and its head move it between three
+  heights: its head alone, about half the screen, and up to the header
+  card. Dragged and let go of slowly it comes to rest at the nearest of
+  them; flicked, at the next one in that direction. Below the lowest it
+  closes. A tap on the bar takes it one height up, and from the highest
+  back to the middle. The height holds while the details stay open, and
+  what is chosen on the map is moved into the part the sheet leaves free.
+  There is no button to close in sight: the one there is, is for the
+  keyboard and for screen readers and shows itself with the focus. "How it
+  works" is such a sheet too and closes when it is dragged down. All of
+  this is plain pointer events in `app.js`.
 - **Search.** The field in the header card finds stops and lines by name.
   The list of all of them is fetched when the field is first used, and
   searched in the browser: what is typed stays there, and so does the

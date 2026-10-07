@@ -87,8 +87,14 @@
     <nav class="links" id="links" aria-label="About this service" data-i18n-aria-label="links.label" hidden></nav>
   </header>
 
+  <!-- The details of a trip, a stop or a line: what they are stays at the top
+       (panel-head) and what is listed scrolls below it (panel-body). On a
+       narrow screen it is a sheet from the bottom that the bar at its top
+       and its head move, see "the details as a sheet" in app.js. -->
   <aside class="card panel" id="panel" hidden tabindex="-1" aria-label="Details" data-i18n-aria-label="panel.label">
+    <button type="button" class="handle" id="panel-handle" aria-label="Make the details larger or smaller" data-i18n-aria-label="panel.resize"></button>
     <button type="button" class="close" id="panel-close" aria-label="Close" data-i18n-aria-label="panel.close" data-icon="close"></button>
+    <div id="panel-head"></div>
     <div id="panel-body"></div>
   </aside>
 
@@ -97,6 +103,7 @@
        narrow one. Its last line names the software and where it comes from
        (app.js fills it in). -->
   <dialog class="dialog" id="about" aria-labelledby="about-title">
+    <div class="handle" id="about-handle"></div>
     <button type="button" class="close" id="about-close" aria-label="Close" data-i18n-aria-label="panel.close" data-icon="close"></button>
     <div class="dialog-body">
       <h2 id="about-title" data-i18n="about.title">How it works</h2>
