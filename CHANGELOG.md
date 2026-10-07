@@ -8,6 +8,29 @@ This file is written by
 messages when a release is made. Do not edit it by hand; see
 [Releases](CONTRIBUTING.md#releases).
 
+## [0.4.0](https://github.com/xiidoz/netnou/compare/v0.3.0...v0.4.0) (2026-10-07)
+
+
+### Features
+
+* let an instance have a name of its own ([#47](https://github.com/xiidoz/netnou/issues/47)) ([ba565f4](https://github.com/xiidoz/netnou/commit/ba565f40c450b5c51db1fa3b89358ca386399c4e)), closes [#42](https://github.com/xiidoz/netnou/issues/42)
+* let an operator bring icons and a preview picture of their own ([#49](https://github.com/xiidoz/netnou/issues/49)) ([9704de9](https://github.com/xiidoz/netnou/commit/9704de993c9212bfbd02f9872e8d99479e379be6)), closes [#44](https://github.com/xiidoz/netnou/issues/44)
+* let an operator keep an instance out of search engines ([#41](https://github.com/xiidoz/netnou/issues/41)) ([b9ae576](https://github.com/xiidoz/netnou/commit/b9ae5764d38d346406d373e6623d653f0d130206)), closes [#40](https://github.com/xiidoz/netnou/issues/40)
+* **map:** mark vehicles without a reported delay with a question mark, not a paler colour ([#54](https://github.com/xiidoz/netnou/issues/54)) ([5ea6f63](https://github.com/xiidoz/netnou/commit/5ea6f630887078d270668eee95b66f94f4a33245)), closes [#52](https://github.com/xiidoz/netnou/issues/52)
+* **map:** show coupled trains as one marker and other vehicles at one place in a bubble ([#58](https://github.com/xiidoz/netnou/issues/58)) ([0b77d52](https://github.com/xiidoz/netnou/commit/0b77d5265fb5309935e2773fb6ab3ec39c73cf1b)), closes [#56](https://github.com/xiidoz/netnou/issues/56)
+* **page:** keep the head of the details in sight and let the sheet on a phone be dragged ([#63](https://github.com/xiidoz/netnou/issues/63)) ([fa09e1f](https://github.com/xiidoz/netnou/commit/fa09e1f3be40b3fda19f5f4a5e4f37100d60102f)), closes [#46](https://github.com/xiidoz/netnou/issues/46)
+* **page:** let visitors choose light or dark, in settings that also hold the language ([#55](https://github.com/xiidoz/netnou/issues/55)) ([42456c4](https://github.com/xiidoz/netnou/commit/42456c4aa3144c6a9f8b03e60dbce25c385d0677)), closes [#53](https://github.com/xiidoz/netnou/issues/53)
+* **page:** say that the positions are estimated, and behind a link how it works ([#51](https://github.com/xiidoz/netnou/issues/51)) ([9a4e457](https://github.com/xiidoz/netnou/commit/9a4e457f3b1a7b3dd267df41a14a887063e37192)), closes [#45](https://github.com/xiidoz/netnou/issues/45)
+* **page:** show links of the operator at the foot of the header card ([#48](https://github.com/xiidoz/netnou/issues/48)) ([2623d91](https://github.com/xiidoz/netnou/commit/2623d9139e1daf5cd084b5a5425356a7b2dc79cf)), closes [#43](https://github.com/xiidoz/netnou/issues/43)
+* tell search engines and link previews what an instance shows ([#38](https://github.com/xiidoz/netnou/issues/38)) ([3196836](https://github.com/xiidoz/netnou/commit/3196836a663ce830d6f1676d1f3c0442d583a938)), closes [#35](https://github.com/xiidoz/netnou/issues/35)
+
+
+### Bug Fixes
+
+* **map:** draw the ring of the chosen vehicle in its colour, under its arrow and its flag ([#64](https://github.com/xiidoz/netnou/issues/64)) ([3c40dce](https://github.com/xiidoz/netnou/commit/3c40dce1138a0d31895d811becc421186f22f500))
+* **map:** take the tooltip away once a vehicle is chosen or the map moves ([#62](https://github.com/xiidoz/netnou/issues/62)) ([00a1fd1](https://github.com/xiidoz/netnou/commit/00a1fd1b571c893b4f8cae099712a0457dc94423))
+* **page:** show the settings as a small box at the gear and align the status line with the card ([#57](https://github.com/xiidoz/netnou/issues/57)) ([21f0505](https://github.com/xiidoz/netnou/commit/21f0505440972f460bc6aebcda79cf9452be19d3))
+
 ## [0.3.0](https://github.com/xiidoz/netnou/compare/v0.2.0...v0.3.0) (2026-10-06)
 
 
