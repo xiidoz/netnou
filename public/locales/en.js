@@ -88,7 +88,19 @@ export default {
   // the operator's own links at the foot of the card: who runs the instance, how it treats personal data and the like
   'links.label': 'About this service',
 
-  'area.hint': 'Grey: outside the area. Only lines that stop inside it are shown there, on a straight line between their stops.',
+  // The line at the foot of the card: what everybody should know about the markers …
+  'about.fact': 'Positions are estimated, not measured.',
+  // … and, on the button after it and as the heading of the dialog it opens, the way to how the page comes by them.
+  'about.title': 'How it works',
+  'about.positions': 'Positions',
+  'about.positionsText': 'No vehicle reports its position to this map. Each one is drawn where the timetable says it should be right now, moved by the delay reported for it. So a vehicle can be somewhat ahead of or behind its marker. Vehicles without a reported delay are drawn paler and run by the timetable here.',
+  'about.routes': 'Routes',
+  'about.routesText': 'The route between two stops is computed too: the shortest plausible way along the roads and tracks of OpenStreetMap, not the official one of the operator. Between stops close to each other it is almost always the same. Where it differs, a vehicle takes another way on the map than in reality; where none is found, it moves in a straight line.',
+  'about.outside': 'Outside the area',
+  // next to a sample of the grey that lies over the map there
+  'about.outsideText': 'Grey: only lines that stop inside the area are shown there, on a straight line between their stops.',
+  // {software} is the name of the software, as a link to where it comes from
+  'about.source': 'The full details are in the open source code of {software}, the software behind this map.',
 
   'panel.label': 'Details',
   'panel.close': 'Close',

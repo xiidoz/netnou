@@ -1038,6 +1038,20 @@ function loadingText({ state: phase, step }) {
   return t('loading.timetable');
 }
 
+// ---------- how it works ----------
+
+// How the page comes by what it shows, for whoever asks: a dialog over the
+// page, its text in index.html. The browser keeps the keyboard inside it while
+// it is open, closes it on Escape and gives the focus back to the button it
+// was opened with.
+const aboutDialog = $('about');
+$('about-open').addEventListener('click', () => aboutDialog.showModal());
+$('about-close').addEventListener('click', () => aboutDialog.close());
+// (a click beside it lands on the dialog itself: what it says fills it, see .about-body in style.css)
+aboutDialog.addEventListener('click', (event) => {
+  if (event.target === aboutDialog) aboutDialog.close();
+});
+
 // ---------- detail panel ----------
 
 const panel = $('panel');
@@ -1052,7 +1066,8 @@ function closePanel() {
 }
 $('panel-close').addEventListener('click', closePanel);
 document.addEventListener('keydown', (event) => {
-  if (event.key === 'Escape' && state.selection) closePanel();
+  // (Escape closes what is on top: the dialog lies over the details)
+  if (event.key === 'Escape' && state.selection && !aboutDialog.open) closePanel();
 });
 
 /**
@@ -1322,7 +1337,12 @@ async function loadArea() {
   // (a browser tells where it is to pages with HTTPS only)
   if (window.isSecureContext && navigator.geolocation) map.addControl(locateControl, 'bottom-right');
   state.outline = area.outline;
-  $('area-hint').hidden = false;
+  // What "how it works" ends with: the software by its name, as in the credits, with the way to its source.
+  if (typeof about?.homepage === 'string') {
+    const [before, after] = t('about.source').split('{software}');
+    $('about-source').replaceChildren(before, el('a', { href: about.homepage, target: '_blank', rel: 'noopener', text: APP_NAME }), after);
+    $('about-source').hidden = false;
+  }
   state.areaKnown = true;
 }
 

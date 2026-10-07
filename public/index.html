@@ -58,7 +58,9 @@
       <button type="button" data-color-by="delay" aria-pressed="false" data-i18n="colorBy.delay">Delay</button>
     </div>
     <ul class="legend" id="delay-legend" hidden></ul>
-    <p class="hint" id="area-hint" hidden><span class="swatch veil"></span><span data-i18n="area.hint">Grey: outside the area. Only lines that stop inside it are shown there, on a straight line between their stops.</span></p>
+    <!-- What everybody should know about the markers, and the way to how the
+         page comes by them (the dialog below). -->
+    <p class="hint" id="about-line"><span data-i18n="about.fact">Positions are estimated, not measured.</span> <button type="button" class="link" id="about-open" aria-haspopup="dialog" data-i18n="about.title">How it works</button></p>
     <!-- The operator's own links, such as who runs the instance and how it
          treats personal data. The server writes them in here (LINKS in
          docs/configuration.md); without any, this stays hidden. -->
@@ -69,6 +71,24 @@
     <button type="button" class="close" id="panel-close" aria-label="Close" data-i18n-aria-label="panel.close" data-icon="close"></button>
     <div id="panel-body"></div>
   </aside>
+
+  <!-- How the page comes by what it shows, for whoever asks. A dialog over the
+       page: in the middle of a wide screen, a sheet from the bottom on a
+       narrow one. Its last line names the software and where it comes from
+       (app.js fills it in). -->
+  <dialog class="about" id="about" aria-labelledby="about-title">
+    <button type="button" class="close" id="about-close" aria-label="Close" data-i18n-aria-label="panel.close" data-icon="close"></button>
+    <div class="about-body">
+      <h2 id="about-title" data-i18n="about.title">How it works</h2>
+      <h3 data-i18n="about.positions">Positions</h3>
+      <p data-i18n="about.positionsText">No vehicle reports its position to this map. Each one is drawn where the timetable says it should be right now, moved by the delay reported for it. So a vehicle can be somewhat ahead of or behind its marker. Vehicles without a reported delay are drawn paler and run by the timetable here.</p>
+      <h3 data-i18n="about.routes">Routes</h3>
+      <p data-i18n="about.routesText">The route between two stops is computed too: the shortest plausible way along the roads and tracks of OpenStreetMap, not the official one of the operator. Between stops close to each other it is almost always the same. Where it differs, a vehicle takes another way on the map than in reality; where none is found, it moves in a straight line.</p>
+      <h3 data-i18n="about.outside">Outside the area</h3>
+      <p><span class="swatch veil"></span><span data-i18n="about.outsideText">Grey: only lines that stop inside the area are shown there, on a straight line between their stops.</span></p>
+      <p class="about-source" id="about-source" hidden></p>
+    </div>
+  </dialog>
 
   <div class="tooltip" id="tooltip" hidden></div>
   <div class="banner" id="banner" hidden role="alert"></div>

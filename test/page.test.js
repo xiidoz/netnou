@@ -109,7 +109,7 @@ test('the operator\'s links stand at the foot of the header card, and nothing do
   assert.equal(nav[2], '<a href="/ueber" target="_blank" rel="noopener">Über</a>'
     + '<a href="https://example.org/impressum?a=1&#38;b=2" target="_blank" rel="noopener">Impressum &#38; Kontakt</a>');
   // inside the card, after everything else in it
-  assert.ok(page.indexOf('id="links"') > page.indexOf('id="area-hint"') && page.indexOf('id="links"') < page.indexOf('</header>'));
+  assert.ok(page.indexOf('id="links"') > page.indexOf('id="about-line"') && page.indexOf('id="links"') < page.indexOf('</header>'));
 
   // none: the row stays as the file has it, empty and hidden
   for (const none of [renderPage(html, german), renderPage(html, { ...german, links: [] })]) {
