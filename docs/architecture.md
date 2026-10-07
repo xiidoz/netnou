@@ -314,13 +314,15 @@ otherwise a server would load a file written by older code:
   written out in `app.js` or sent by the server, apart from data such as
   names of stops and notes of the feed. See [translating.md](translating.md).
 - **Before any script runs** the page already says what and where the
-  instance is: the server writes the title, the description and the name of
-  the area into `index.html` when it sends it, in the main language of the
+  instance is: the server writes the title, the description, the name of the
+  instance and the name of the area into `index.html` when it sends it, in the main language of the
   instance or the one the address asks for (`?lang=de`), with the tags for
   previews of links and, if it knows its public address, the canonical
   address and the versions in other languages. That is what search engines
   and chats read. The script puts the same texts in for the visitor, in
-  their language; both take them from `pageTexts` in `i18n.js`.
+  their language; both take them from `pageTexts` in `i18n.js`. The
+  manifest of the installed app gets the name, the language and the
+  description of the instance the same way.
 - **Security.** The Content-Security-Policy allows scripts, styles, workers
   and connections from the page's own origin only. The one exception is the
   map, which may be fetched from the server of its style or tiles and from

@@ -136,6 +136,7 @@ server runs and is available while the timetable is still loading.
 
 ```json
 {
+  "siteName": "Netnou",
   "name": "Großraum Nürnberg (VGN)",
   "bbox": [48.5842, 10.0399, 50.5232, 12.5939],
   "view": [49.376, 10.916, 49.604, 11.204],
@@ -152,6 +153,7 @@ server runs and is available while the timetable is still loading.
 
 | Field | Type | Meaning |
 | --- | --- | --- |
+| `siteName` | string | what the instance calls itself (`SITE_NAME`); "Netnou" unless the operator chose another name |
 | `name` | string | name of the area, `""` if it has none |
 | `bbox` | box | rectangle around the area |
 | `view` | box | map section to show first |

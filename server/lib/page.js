@@ -9,7 +9,7 @@
 // gets to see in another language than that of its own browser. Hence an
 // address per language, ?lang=de, which the page names as its other versions.
 
-import { APP_NAME, LANGUAGES, pageTexts } from '../../public/i18n.js';
+import { LANGUAGES, pageTexts } from '../../public/i18n.js';
 
 export const LANGUAGE_CODES = LANGUAGES.map(([code]) => code);
 // The picture of a link's preview: the icon, which says nothing about a place.
@@ -29,14 +29,15 @@ const versions = (publicUrl) => [...LANGUAGE_CODES.map((code) => [code, addressI
  * @param language what its texts are to be in
  * @param asked the language the address asked for, null if it named none
  * @param texts the texts of that language (a module of public/locales)
+ * @param siteName what the instance calls itself
  * @param areaName may be empty
  * @param publicUrl the address of the instance with a slash at its end, or
  *   null: then all that needs a full address is left out
  * @param listed whether search engines may list the page; if not, it asks
  *   them not to and leaves out what is there for them alone
  */
-export function renderPage(html, { language, asked, texts, areaName, publicUrl, listed }) {
-  const { title, description } = pageTexts(areaName, texts);
+export function renderPage(html, { language, asked, texts, siteName, areaName, publicUrl, listed }) {
+  const { title, description } = pageTexts(areaName, texts, siteName);
   let page = html;
   const put = (pattern, replacement) => {
     // (index.html has changed and this file has not: better no page than one that says the wrong thing)
@@ -46,12 +47,14 @@ export function renderPage(html, { language, asked, texts, areaName, publicUrl, 
   put(/<html lang="[^"]*">/, () => `<html lang="${language}">`);
   put(/<title>[^<]*<\/title>/, () => `<title>${escapeHtml(title)}</title>`);
   put(/(<meta name="description" content=")[^"]*"/, (_, start) => `${start}${escapeHtml(description)}"`);
+  put(/(<meta name="apple-mobile-web-app-title" content=")[^"]*"/, (_, start) => `${start}${escapeHtml(siteName)}"`);
+  put(/(<h1>)[^<]*/, (_, start) => `${start}${escapeHtml(siteName)}`);
   put(/(<p id="area-name">)[^<]*/, (_, start) => `${start}${escapeHtml(areaName)}`);
 
   // For previews of a link (Open Graph, which the others read as well).
   const tags = [
     '<meta property="og:type" content="website">',
-    `<meta property="og:site_name" content="${APP_NAME}">`,
+    `<meta property="og:site_name" content="${escapeHtml(siteName)}">`,
     `<meta property="og:title" content="${escapeHtml(title)}">`,
     `<meta property="og:description" content="${escapeHtml(description)}">`,
     '<meta name="twitter:card" content="summary">',
@@ -75,6 +78,16 @@ export function renderPage(html, { language, asked, texts, areaName, publicUrl, 
   }
   put(/\n<\/head>/, () => `\n${tags.map((tag) => `  ${tag}`).join('\n')}\n</head>`);
   return page;
+}
+
+/**
+ * The manifest of the installed app as it is sent: the file, with the name of
+ * the instance, and its language and description in place of the English ones.
+ * @param json the file
+ */
+export function renderManifest(json, { language, texts, siteName, areaName }) {
+  const manifest = JSON.parse(json);
+  return JSON.stringify({ ...manifest, name: siteName, short_name: siteName, description: pageTexts(areaName, texts, siteName).description, lang: language }, null, 2);
 }
 
 /**

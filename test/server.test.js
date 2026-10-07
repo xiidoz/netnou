@@ -48,7 +48,7 @@ const REALTIME = encodeFeed({
 // Every setting the server reads; none may leak in from the shell running the tests.
 const SETTINGS = ['PORT', 'HOST', 'DATA_DIR', 'AREA_FILE', 'BBOX', 'AREA_NAME', 'VIEW', 'TIMEZONE', 'MAP_STYLE_URL', 'MAP_ORIGINS', 'TILE_URL', 'TILE_ATTRIBUTION', 'DATA_ATTRIBUTION',
   'OSM_PBF_URLS', 'OSM_MAX_AGE_DAYS', 'FEED_URL', 'FEED_CHECK_MINUTES', 'DOWNLOAD_TIMEOUT_MINUTES', 'REALTIME_URL', 'REALTIME_INTERVAL_SECONDS', 'REALTIME_IDLE_SECONDS', 'UPDATE_CHECK',
-  'LANGUAGE', 'PUBLIC_URL', 'SEARCH_ENGINES'];
+  'LANGUAGE', 'PUBLIC_URL', 'SEARCH_ENGINES', 'SITE_NAME'];
 // What an image carries about its build, which a checkout does not have.
 const BUILD = ['NETNOU_COMMIT', 'NETNOU_RELEASE'];
 
@@ -171,6 +171,7 @@ test('/api/area', async () => {
   const { status, headers, json } = await get('/api/area');
   assert.equal(status, 200);
   assert.deepEqual(json, {
+    siteName: 'Netnou',
     name: 'Testland',
     bbox: BBOX,
     view: BBOX,
@@ -458,6 +459,14 @@ test('the page says what and where the instance is before any script runs', asyn
   assert.equal(await text('/?lang=xx'), page);
   assert.equal(await text('/?lang='), page);
 
+  // the installed app: named as the instance, in its language, sent again only when it has changed
+  const manifest = await get('/manifest.webmanifest');
+  assert.deepEqual([manifest.status, manifest.headers['content-type'], manifest.headers['cache-control']], [200, 'application/manifest+json', 'no-cache']);
+  assert.deepEqual([manifest.json.name, manifest.json.short_name, manifest.json.lang], ['Netnou', 'Netnou', 'de']);
+  assert.match(manifest.json.description, /^Testland: Busse, /);
+  assert.equal(manifest.json.icons.length, JSON.parse(fs.readFileSync(path.join(root, 'public', 'manifest.webmanifest'), 'utf8')).icons.length);
+  assert.equal((await request('/manifest.webmanifest', { headers: { 'If-None-Match': manifest.headers.etag } })).status, 304);
+
   const robots = await request('/robots.txt');
   assert.deepEqual([robots.status, robots.headers['content-type']], [200, 'text/plain; charset=utf-8']);
   assert.equal(robots.body.toString(), `User-agent: *\nAllow: /\n\nSitemap: ${address}sitemap.xml\n`);
@@ -505,7 +514,8 @@ test('the server stops when asked to', async () => {
 
 // (the server of the tests above knows its address and is therefore one that may be listed)
 test('an instance that is not to be listed says so with every answer', async () => {
-  for (const [settings, address] of [[{}, null], [{ PUBLIC_URL: 'https://test.example.org/', SEARCH_ENGINES: 'off' }, 'https://test.example.org/']]) {
+  // (the second one also has a name of its own)
+  for (const [settings, address] of [[{}, null], [{ PUBLIC_URL: 'https://test.example.org/', SEARCH_ENGINES: 'off', SITE_NAME: 'Bus & Bahn live' }, 'https://test.example.org/']]) {
     const proc = start({ PORT: '0', HOST: '127.0.0.1', DATA_DIR: path.join(dir, 'unlisted'), BBOX: BBOX.join(','), FEED_URL: `${upstream.url}/feed.zip`, REALTIME_URL: `${upstream.url}/realtime.pb`, ...settings });
     let text = '';
     proc.stdout.on('data', (chunk) => { text += chunk; });
@@ -519,7 +529,11 @@ test('an instance that is not to be listed says so with every answer', async () 
       assert.ok(page.includes('<meta name="robots" content="noindex">'));
       assert.ok(!page.includes('rel="canonical"') && !page.includes('hreflang'));
       // a link to it still shows what it is, with a picture if it knows its address
-      assert.match(page, /<meta property="og:title" content="ÖPNV-Live-Karte – Netnou">/);
+      assert.ok(page.includes(`<meta property="og:title" content="ÖPNV-Live-Karte – ${settings.SITE_NAME ? 'Bus &#38; Bahn live' : 'Netnou'}">`));
+      // what it calls itself: in the heading, for the script and for the installed app
+      assert.ok(page.includes(`<h1>${settings.SITE_NAME ? 'Bus &#38; Bahn live' : 'Netnou'}</h1>`));
+      assert.equal((await get('/api/area')).json.siteName, settings.SITE_NAME ?? 'Netnou');
+      assert.equal((await get('/manifest.webmanifest')).json.name, settings.SITE_NAME ?? 'Netnou');
       assert.equal(page.includes('og:image'), address !== null);
       if (address) assert.ok(page.includes(`<meta property="og:image" content="${address}icons/icon-512.png">`));
       // it may be read, or nobody would see the request; but it is not handed out

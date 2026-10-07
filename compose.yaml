@@ -41,6 +41,9 @@ services:
       # Another map behind the vehicles: the address of any style for MapLibre.
       # The default is the "bright" style of OpenFreeMap.
       # MAP_STYLE_URL: "https://tiles.openfreemap.org/styles/positron"
+      # A name of its own for this instance, where the page names itself.
+      # The credits keep naming Netnou.
+      # SITE_NAME: "Bus & Bahn live"
       # The address visitors reach this instance under. With it the page can
       # name its own address to search engines and carry a picture for
       # previews of links, and there is a /sitemap.xml.

@@ -8,12 +8,12 @@ import { test } from 'node:test';
 import { LANGUAGES, pageTexts } from '../public/i18n.js';
 import de from '../public/locales/de.js';
 import en from '../public/locales/en.js';
-import { LANGUAGE_CODES, renderPage, robotsTxt, sitemapXml } from '../server/lib/page.js';
+import { LANGUAGE_CODES, renderManifest, renderPage, robotsTxt, sitemapXml } from '../server/lib/page.js';
 
 const html = fs.readFileSync(new URL('../public/index.html', import.meta.url), 'utf8');
 const URL_ = 'https://karte.example.org/live/';
 const tag = (page, pattern) => pattern.exec(page)?.[1];
-const german = { language: 'de', asked: null, texts: de, areaName: 'Großraum Nürnberg (VGN)', publicUrl: URL_, listed: true };
+const german = { language: 'de', asked: null, texts: de, siteName: 'Netnou', areaName: 'Großraum Nürnberg (VGN)', publicUrl: URL_, listed: true };
 
 test('the languages of the page are those of its texts', () => {
   assert.deepEqual(LANGUAGE_CODES, LANGUAGES.map(([code]) => code));
@@ -39,6 +39,7 @@ test('the page says what and where it is, in the language of the instance', () =
 
   // nothing else of the file is touched: with what was added taken out and the four places put back, it is the file
   const added = page.slice(page.indexOf('  <meta property="og:type"'), page.indexOf('</head>'));
+  // (the name is the software's own here, as in the file)
   const back = page.replace(added, '').replace('<html lang="de">', '<html lang="en">').replace(/<title>[^<]*<\/title>/, '<title>Netnou</title>')
     .replace(description, en['page.description']).replace('<p id="area-name">Großraum Nürnberg (VGN)</p>', '<p id="area-name"></p>');
   assert.equal(back, html);
@@ -82,6 +83,33 @@ test('a page that is not to be listed says so and keeps what a preview of a link
   const bare = renderPage(html, { ...german, listed: false, publicUrl: null });
   assert.ok(bare.includes('<meta name="robots" content="noindex">'));
   for (const part of ['og:url', 'og:image', 'rel="canonical"', 'hreflang']) assert.ok(!bare.includes(part), part);
+});
+
+test('an instance with a name of its own carries it wherever the page names itself', () => {
+  const page = renderPage(html, { ...german, siteName: 'Bus & Bahn live' });
+  assert.equal(tag(page, /<h1>([^<]*)<\/h1>/), 'Bus &#38; Bahn live');
+  assert.equal(tag(page, /<title>([^<]*)<\/title>/), 'ÖPNV-Live-Karte: Großraum Nürnberg (VGN) – Bus &#38; Bahn live');
+  assert.equal(tag(page, /<meta property="og:site_name" content="([^"]*)"/), 'Bus &#38; Bahn live');
+  assert.equal(tag(page, /<meta property="og:title" content="([^"]*)"/), 'ÖPNV-Live-Karte: Großraum Nürnberg (VGN) – Bus &#38; Bahn live');
+  assert.equal(tag(page, /<meta name="apple-mobile-web-app-title" content="([^"]*)"/), 'Bus &#38; Bahn live');
+  // and nowhere else: the rest of the page is that of any instance
+  assert.equal(page.replaceAll('Bus &#38; Bahn live', 'Netnou'), renderPage(html, german));
+  // without a name of its own, the page is as it always was
+  assert.equal(tag(renderPage(html, german), /<h1>([^<]*)<\/h1>/), 'Netnou');
+});
+
+test('the installed app is called what the instance is called, in its language', () => {
+  const file = fs.readFileSync(new URL('../public/manifest.webmanifest', import.meta.url), 'utf8');
+  const original = JSON.parse(file);
+  const own = JSON.parse(renderManifest(file, { ...german, siteName: 'Bus & Bahn live' }));
+  assert.deepEqual([own.name, own.short_name, own.lang], ['Bus & Bahn live', 'Bus & Bahn live', 'de']);
+  assert.equal(own.description, de['page.descriptionIn'].replace('{area}', 'Großraum Nürnberg (VGN)'));
+  // everything else is the file's: where it starts, how it looks, its icons
+  assert.deepEqual({ ...own, name: 0, short_name: 0, lang: 0, description: 0 }, { ...original, name: 0, short_name: 0, lang: 0, description: 0 });
+  assert.ok(own.icons.length >= 3 && own.start_url === './');
+  // by default it is Netnou, in the main language of the instance
+  const plain = JSON.parse(renderManifest(file, { ...german, language: 'en', texts: en, areaName: '' }));
+  assert.deepEqual([plain.name, plain.short_name, plain.lang, plain.description], ['Netnou', 'Netnou', 'en', en['page.description']]);
 });
 
 test('an area without a name, and a name that is not plain text', () => {

@@ -4,7 +4,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { LANGUAGES } from '../public/i18n.js';
+import { APP_NAME, LANGUAGES } from '../public/i18n.js';
 import { Area } from './lib/area.js';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -192,6 +192,9 @@ export function loadConfig(env = process.env) {
     // file may bring its own as a top-level "outline" member (useful when its
     // polygons are adjacent parts whose inner borders should not show).
     areaOutline: outline ?? area.polygons.flat(),
+    // What the instance calls itself, where the page names itself: its
+    // heading, its title, the installed app. The credits name the software.
+    siteName: text('SITE_NAME') || APP_NAME,
     // Shown next to the page title.
     areaName: env.AREA_NAME === undefined ? (custom ? '' : VGN.name) : env.AREA_NAME.trim(),
     // Map section on the first visit. Default: all of a custom area.

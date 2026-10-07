@@ -30,6 +30,10 @@ test('what the page says about itself: its main language and the address of the 
   }
   assert.equal(loadConfig({ PUBLIC_URL: ' ' }).publicUrl, null);
 
+  // an instance may call itself something else than the software; an empty name is none
+  assert.equal(loadConfig({ SITE_NAME: ' Bus & Bahn live ' }).siteName, 'Bus & Bahn live');
+  assert.equal(loadConfig({ SITE_NAME: ' ' }).siteName, 'Netnou');
+
   // Search engines may list an instance that knows its address, and no other, unless the operator says so.
   assert.equal(loadConfig({}).searchEngines, false);
   assert.equal(loadConfig({ PUBLIC_URL: 'https://karte.example.org/' }).searchEngines, true);
@@ -49,6 +53,7 @@ test('defaults: the VGN, its OSM extracts, the gtfs.de feeds and OpenStreetMap t
   assert.equal(path.basename(config.dataDir), 'data');
   assert.ok(fs.existsSync(path.join(config.publicDir, 'index.html')));
 
+  assert.equal(config.siteName, 'Netnou');
   assert.equal(config.areaName, 'Großraum Nürnberg (VGN)');
   assert.deepEqual(config.view, [49.376, 10.916, 49.604, 11.204]);
   assert.equal(config.area.distance(49.4456, 11.083), 0); // Nürnberg Hbf
