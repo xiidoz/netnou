@@ -8,6 +8,13 @@ This file is written by
 messages when a release is made. Do not edit it by hand; see
 [Releases](CONTRIBUTING.md#releases).
 
+## [0.4.1](https://github.com/xiidoz/netnou/compare/v0.4.0...v0.4.1) (2026-10-07)
+
+
+### Bug Fixes
+
+* **realtime:** keep the portions of a coupled train together when their delays differ ([#67](https://github.com/xiidoz/netnou/issues/67)) ([cdbc638](https://github.com/xiidoz/netnou/commit/cdbc638b019578b29131049047cecfaef05add90)), closes [#66](https://github.com/xiidoz/netnou/issues/66)
+
 ## [0.4.0](https://github.com/xiidoz/netnou/compare/v0.3.0...v0.4.0) (2026-10-07)
 
 
