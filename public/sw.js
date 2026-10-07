@@ -16,6 +16,7 @@ const SHELL = [
   'app.js',
   'i18n.js',
   'search.js',
+  'theme.js',
   'locales/de.js',
   'locales/en.js',
   'style.css',
