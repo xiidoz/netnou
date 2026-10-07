@@ -43,11 +43,15 @@ const LABEL_ZOOM = 12;
 // Stations appear from STATION_ZOOM (rail only) and from ALL_STATIONS_ZOOM (all).
 const STATION_ZOOM = 12;
 const ALL_STATIONS_ZOOM = 14;
-// Delay classes in seconds; the legend is made from them.
+// Delay classes in seconds; the legend is made from them. A delay belongs to
+// the class of the whole minutes it is shown as: what reads "+2" is "from 2 min".
+const DELAY_EARLY_S = -60; // ahead of the timetable
 const DELAY_MINOR_S = 120;
 const DELAY_MAJOR_S = 300;
 const DELAY_SEVERE_S = 600;
-const BADGE_DELAY_S = 180; // from here a marker carries its delay as a badge
+// The colour of a delay as a flag on a marker, by its class. Late, it is one
+// class "hotter" than the dots, for the same reason (see .delay in style.css).
+const FLAG_COLOR = { early: 'early', ok: 'ok', minor: 'major', major: 'severe', severe: 'severe' };
 // Vehicles count as being at one place when their markers are at most
 // NEAR_IN_PX apart: one would hide the other. Once they do, they go on doing
 // so up to NEAR_OUT_PX, or two that are about NEAR_IN_PX apart would be
@@ -189,9 +193,12 @@ const now = () => Date.now() / 1000 + state.clockOffset;
 
 function delayClass(delay) {
   if (delay === null || delay === undefined) return 'none';
-  if (delay < DELAY_MINOR_S) return 'ok';
-  if (delay < DELAY_MAJOR_S) return 'minor';
-  if (delay < DELAY_SEVERE_S) return 'major';
+  // (as delayText shows it)
+  const shown = Math.round(delay / 60) * 60;
+  if (shown <= DELAY_EARLY_S) return 'early';
+  if (shown < DELAY_MINOR_S) return 'ok';
+  if (shown < DELAY_MAJOR_S) return 'minor';
+  if (shown < DELAY_SEVERE_S) return 'major';
   return 'severe';
 }
 
@@ -209,7 +216,7 @@ function readColors() {
   const get = (name) => style.getPropertyValue(name).trim();
   colors = { mode: {}, delay: {}, unknown: get('--delay-unknown'), text: get('--text'), bg: get('--bg'), border: get('--border'), accent: get('--accent'), muted: get('--text-muted'), veil: get('--veil'), veilLine: get('--veil-line'), location: get('--location') };
   for (const mode of DRAW_ORDER) colors.mode[mode] = get(`--mode-${mode}`);
-  for (const cls of ['ok', 'minor', 'major', 'severe', 'none']) colors.delay[cls] = get(`--delay-${cls}`);
+  for (const cls of ['early', 'ok', 'minor', 'major', 'severe', 'none']) colors.delay[cls] = get(`--delay-${cls}`);
 }
 readColors();
 
@@ -452,16 +459,16 @@ function drawRing(x, y, r, w, color) {
 }
 
 /**
- * The flag a vehicle carries at its shoulder: its delay from BADGE_DELAY_S,
- * or a question mark where none is reported while others have one (`live`).
+ * The flag a vehicle carries at its shoulder: its delay in minutes, early or
+ * late, or a question mark where none is reported while others have one
+ * (`live`). On time to the minute it carries none.
  * None when the vehicles are coloured by delay: the colour says both then.
  */
 function flagOf(v, live) {
   if (state.colorBy !== 'mode') return null;
   if (v.delay === null) return live ? { text: '?', color: colors.unknown } : null;
-  if (v.delay < BADGE_DELAY_S) return null;
-  // one class "hotter" than the dots, for the same reason (see .delay in style.css)
-  return { text: delayText(v.delay), color: colors.delay[delayClass(v.delay) === 'minor' ? 'major' : 'severe'] };
+  if (Math.round(v.delay / 60) === 0) return null;
+  return { text: delayText(v.delay), color: colors.delay[FLAG_COLOR[delayClass(v.delay)]] };
 }
 
 function drawFlag(x, y, flag) {
@@ -1273,7 +1280,7 @@ function buildControls() {
   watchChipRow(container, $('modes-back'), $('modes-on'));
 
   const from = (seconds) => t('delay.from', { minutes: seconds / 60 });
-  const legend = [['ok', t('delay.onTime')], ['minor', from(DELAY_MINOR_S)], ['major', from(DELAY_MAJOR_S)], ['severe', from(DELAY_SEVERE_S)], ['none', t('delay.none')]];
+  const legend = [['early', t('delay.early')], ['ok', t('delay.onTime')], ['minor', from(DELAY_MINOR_S)], ['major', from(DELAY_MAJOR_S)], ['severe', from(DELAY_SEVERE_S)], ['none', t('delay.none')]];
   $('delay-legend').append(...legend.map(([delay, text]) => el('li', {}, [el('span', { class: 'swatch', data: { delay } }), text])));
 
   const buttons = document.querySelectorAll('[data-color-by]');

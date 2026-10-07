@@ -20,6 +20,8 @@
   --mode-longdistance: #d97200;
   --mode-other: #7a7a7a;
 
+  /* ahead of the timetable: a cool colour, apart from the scale of the delays and from every mode */
+  --delay-early: #008fae;
   --delay-ok: #2a9d4b;
   --delay-minor: #d9a400;
   --delay-major: #e8710a;
@@ -340,6 +342,7 @@ button { font: inherit; color: inherit; }
   flex: none;
   display: inline-block;
 }
+.swatch[data-delay="early"] { background: var(--delay-early); }
 .swatch[data-delay="ok"] { background: var(--delay-ok); }
 .swatch[data-delay="minor"] { background: var(--delay-minor); }
 .swatch[data-delay="major"] { background: var(--delay-major); }
@@ -547,6 +550,7 @@ li:last-child > .row.stop .rail::before { bottom: 50%; }
 
 /* As text a delay is one class "hotter" than as a dot: the yellow is too pale to read on the card. */
 .delay { font-size: 12.5px; font-weight: 650; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.delay[data-delay="early"] { color: var(--delay-early); }
 .delay[data-delay="ok"] { color: var(--delay-ok); }
 .delay[data-delay="minor"] { color: var(--delay-major); }
 .delay[data-delay="major"], .delay[data-delay="severe"] { color: var(--delay-severe); }

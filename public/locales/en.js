@@ -88,6 +88,7 @@ export default {
   'colorBy.mode': 'Mode',
   'colorBy.delay': 'Delay',
 
+  'delay.early': 'early',
   'delay.onTime': 'on time',
   'delay.from': 'from {minutes} min',
   // {delay} is a signed number of minutes such as +3
