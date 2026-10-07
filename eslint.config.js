@@ -24,8 +24,13 @@ export default defineConfig([
   {
     // The page: ES modules.
     files: ['public/*.js', 'public/locales/**'],
-    ignores: ['public/sw.js'],
+    ignores: ['public/sw.js', 'public/theme.js'],
     languageOptions: { globals: globals.browser },
+  },
+  {
+    // Loaded as a classic script ahead of the rest, see the file.
+    files: ['public/theme.js'],
+    languageOptions: { sourceType: 'script', globals: globals.browser },
   },
   {
     // Registered as a classic script, so it may not use import or export.

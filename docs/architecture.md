@@ -100,6 +100,7 @@ Page (`public/`):
 | `app.js` | map, polling, animation, drawing on a canvas, detail panel |
 | `search.js` | finding stops and lines by name: matching and order, without the page around it |
 | `i18n.js`, `locales/` | texts in the visitor's language, see [translating.md](translating.md) |
+| `theme.js` | light or dark: puts the visitor's choice, or else the scheme of the device, on the page before it is drawn |
 | `sw.js`, `manifest.webmanifest`, `icons/` | installable app and offline start |
 | `vendor/maplibre-gl/` | the map library, vendored, see [its README](../public/vendor/maplibre-gl/README.md) |
 | `vendor/material-design-icons/` | the shapes of the icons on the page's own buttons, see [its README](../public/vendor/material-design-icons/README.md) |
@@ -332,7 +333,7 @@ otherwise a server would load a file written by older code:
 - **Browsers.** There is no build step, so the page runs as written. The map
   library sets the floor: it needs WebGL 2 and the JavaScript of 2022,
   roughly Chrome and Edge 94, Firefox 114, Safari 16.4 and newer.
-- **Accessibility.** Filters, the language picker, the search, the detail
+- **Accessibility.** Filters, the settings, the search, the dialogs, the detail
   panel and its lists are ordinary controls and work with the keyboard; the
   search is the way to a station without a pointer. On the canvas, vehicles
   and stations can be selected with a pointer only.

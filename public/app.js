@@ -10,7 +10,7 @@
 
 import { APP_NAME, formatNumber, formatTime, languagePicker, loadLanguage, pageTexts, setTimeZone, t, translatePage } from './i18n.js';
 import { buildIndex, search, searchLines } from './search.js';
-import { mdiAlert, mdiChevronLeft, mdiChevronRight, mdiClose, mdiMagnify } from './vendor/material-design-icons/icons.js';
+import { mdiAlert, mdiChevronLeft, mdiChevronRight, mdiClose, mdiCog, mdiMagnify } from './vendor/material-design-icons/icons.js';
 import { AttributionControl, MapLibreMap, NavigationControl } from './vendor/maplibre-gl/maplibre-gl.mjs';
 
 // The modes with a chip. Same ids as MODES in server/lib/timetable.js, the
@@ -92,7 +92,7 @@ function el(tag, props = {}, children = []) {
 // each the shape of one icon in a box of 24 by 24; style.css gives it its size
 // and its colour. Shapes and not characters: where a character sits in its box
 // is up to the font, and the font is the device's.
-const ICONS = { alert: mdiAlert, close: mdiClose, left: mdiChevronLeft, right: mdiChevronRight, search: mdiMagnify };
+const ICONS = { alert: mdiAlert, close: mdiClose, left: mdiChevronLeft, right: mdiChevronRight, search: mdiMagnify, settings: mdiCog };
 
 function icon(name) {
   const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
@@ -150,6 +150,7 @@ const state = {
   outline: [], // the edge of the area: rings of [lat, lon]
   enabled: new Set([...MODES, 'other']),
   colorBy: loadSetting('colorBy', 'mode') === 'delay' ? 'delay' : 'mode',
+  theme: 'auto', // one of THEMES, see there
   selection: null, // { type: 'trip' | 'station' | 'line', id, data }, see select()
   hits: [],
   position: null, // the visitor's own while they have it shown: { lat, lon, accuracy in metres, stale }
@@ -188,8 +189,24 @@ function readColors() {
   for (const cls of ['ok', 'minor', 'major', 'severe', 'none']) colors.delay[cls] = get(`--delay-${cls}`);
 }
 readColors();
-matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
+
+// Light or dark: the visitor's choice in the settings, or 'auto' for what the
+// device has. theme.js puts it on the page, before this script runs and again
+// whenever it changes; the colours drawn here follow.
+const THEMES = ['auto', 'light', 'dark'];
+// The colour a browser gives its own bars, one per scheme (index.html), each as the file has it.
+const barColors = [...document.querySelectorAll('meta[name="theme-color"]')].map((meta) => ({ meta, own: meta.content, scheme: meta.media.includes('dark') ? 'dark' : 'light' }));
+
+function applyTheme() {
+  // (without theme.js the page stays light)
+  window.applyColorScheme?.();
+  // (a browser picks the bar colour by the device's scheme: with a choice, both say the chosen one)
+  const chosen = barColors.find(({ scheme }) => scheme === state.theme)?.own;
+  for (const { meta, own } of barColors) meta.content = chosen ?? own;
   readColors();
+}
+matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
+  applyTheme();
   draw();
 });
 
@@ -1069,19 +1086,41 @@ function loadingText({ state: phase, step }) {
   return t('loading.timetable');
 }
 
-// ---------- how it works ----------
+// ---------- dialogs: how it works, settings ----------
 
-// How the page comes by what it shows, for whoever asks: a dialog over the
-// page, its text in index.html. The browser keeps the keyboard inside it while
-// it is open, closes it on Escape and gives the focus back to the button it
-// was opened with.
-const aboutDialog = $('about');
-$('about-open').addEventListener('click', () => aboutDialog.showModal());
-$('about-close').addEventListener('click', () => aboutDialog.close());
-// (a click beside it lands on the dialog itself: what it says fills it, see .about-body in style.css)
-aboutDialog.addEventListener('click', (event) => {
-  if (event.target === aboutDialog) aboutDialog.close();
-});
+// A dialog over the page, written out in index.html: how the page comes by
+// what it shows, for whoever asks, and what a visitor can set for themselves.
+// The browser keeps the keyboard inside a dialog while it is open, closes it
+// on Escape and gives the focus back to the button it was opened with.
+for (const name of ['about', 'settings']) {
+  const dialog = $(name);
+  $(`${name}-open`).addEventListener('click', () => dialog.showModal());
+  $(`${name}-close`).addEventListener('click', () => dialog.close());
+  // (a click beside it lands on the dialog itself: what is in it fills it, see .dialog-body in style.css)
+  dialog.addEventListener('click', (event) => {
+    if (event.target === dialog) dialog.close();
+  });
+}
+const dialogOpen = () => document.querySelector('dialog[open]') !== null;
+
+// Light, dark or as the device has it: chosen in the settings, kept in the browser.
+{
+  const buttons = [...document.querySelectorAll('[data-theme-choice]')];
+  const choose = (theme) => {
+    state.theme = THEMES.includes(theme) ? theme : 'auto';
+    for (const button of buttons) button.setAttribute('aria-pressed', String(button.dataset.themeChoice === state.theme));
+  };
+  choose(loadSetting('theme', 'auto'));
+  for (const button of buttons) {
+    button.addEventListener('click', () => {
+      choose(button.dataset.themeChoice);
+      saveSetting('theme', state.theme);
+      applyTheme();
+      draw();
+    });
+  }
+  applyTheme();
+}
 
 // ---------- detail panel ----------
 
@@ -1097,8 +1136,8 @@ function closePanel() {
 }
 $('panel-close').addEventListener('click', closePanel);
 document.addEventListener('keydown', (event) => {
-  // (Escape closes what is on top: the dialog lies over the details)
-  if (event.key === 'Escape' && state.selection && !aboutDialog.open) closePanel();
+  // (Escape closes what is on top: a dialog lies over the details)
+  if (event.key === 'Escape' && state.selection && !dialogOpen()) closePanel();
 });
 
 /**

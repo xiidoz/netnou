@@ -4,7 +4,12 @@ export default {
   'page.title': 'ÖPNV-Live-Karte',
   'page.description': 'Live-Karte des öffentlichen Nahverkehrs: Busse, Straßenbahnen, U-, S- und Regionalbahnen mit aktuellen Verspätungen.',
   'page.descriptionIn': '{area}: Busse, Straßenbahnen, U-, S- und Regionalbahnen live auf der Karte, mit aktuellen Verspätungen und Abfahrten in Echtzeit.',
+  'settings.title': 'Einstellungen',
   'language.label': 'Sprache',
+  'theme.label': 'Darstellung',
+  'theme.auto': 'Automatisch',
+  'theme.light': 'Hell',
+  'theme.dark': 'Dunkel',
 
   'map.label': 'Karte mit den aktuellen Positionen der Fahrzeuge',
   'map.zoomIn': 'Vergrößern',

@@ -151,6 +151,26 @@ test('the dialog that says how it works is named by its heading, in the words of
   assert.match(html, /<button [^>]*id="about-open"[^>]*data-i18n="about.title">/);
 });
 
+// Light or dark is the visitor's choice or else the device's scheme, and
+// theme.js is the one place that decides it.
+test('the colour scheme is put on the page first, and the style sheet follows it alone', () => {
+  const html = read('index.html');
+  const script = html.indexOf('<script src="theme.js"></script>');
+  assert.ok(script > 0, 'index.html loads theme.js as a script that is waited for');
+  assert.ok(script < html.indexOf('<link rel="stylesheet"'), 'theme.js comes before the style sheets');
+  assert.ok(shell.includes('theme.js'), 'theme.js is missing in SHELL of sw.js');
+  // (a media query would follow the device whatever the visitor chose)
+  assert.doesNotMatch(read('style.css'), /prefers-color-scheme/);
+  assert.match(read('style.css'), /^:root\[data-theme="dark"\] \{$/m);
+  assert.match(read('theme.js'), /dataset\.theme = dark \? 'dark' : 'light'/);
+  // the choices in the settings are the ones the script knows
+  const choices = [...html.matchAll(/\sdata-theme-choice="([^"]+)"/g)].map((match) => match[1]);
+  assert.deepEqual(choices, arrayIn(read('app.js'), 'THEMES'));
+  // what app.js stores is what theme.js reads
+  assert.match(read('app.js'), /saveSetting\('theme', /);
+  assert.match(read('theme.js'), /localStorage\.getItem\('netnou\.theme'\)/);
+});
+
 // A pragmatic check, not a proof: it reads the string literals of app.js and
 // knows nothing about where they end up.
 test('app.js has no text for visitors of its own', () => {

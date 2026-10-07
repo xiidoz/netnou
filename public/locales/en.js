@@ -14,7 +14,14 @@ export default {
   // What it says about itself there, without and with the name of the area ({area}).
   'page.description': 'Live map of public transport: buses, trams, metro, suburban and regional trains with their current delays.',
   'page.descriptionIn': '{area}: buses, trams, metro, suburban and regional trains live on a map, with their current delays and departures.',
+  // The settings, behind the gear in the title row: the language, and whether the page is light or dark.
+  'settings.title': 'Settings',
   'language.label': 'Language',
+  'theme.label': 'Appearance',
+  // as the device has it
+  'theme.auto': 'Automatic',
+  'theme.light': 'Light',
+  'theme.dark': 'Dark',
 
   'map.label': 'Map with the current positions of the vehicles',
   'map.zoomIn': 'Zoom in',
