@@ -205,6 +205,7 @@ form.
 | `vehicles[].mode` | string | see [Modes](#modes) |
 | `vehicles[].to` | string | destination |
 | `vehicles[].delay` | delay or null | delay at the next stop; `null` if there is no realtime data for the trip |
+| `vehicles[].unit` | string | only for a train that runs coupled with others right now: the same value for each of them, and no meaning beyond that. Such trains are a trip each and are at the same place |
 | `vehicles[].knots` | array of numbers | where the vehicle is from now on, see [Knots](#knots) |
 
 A vehicle appears 30 seconds before it leaves its first stop and disappears

@@ -44,6 +44,9 @@ export const hopKey = (net, from, to, stopCount) => (net * stopCount + from) * s
 // visible briefly after reaching its last stop.
 const LEAD_S = 30;
 const TRAIL_S = 15;
+// Whose vehicles can run coupled: trains of any kind. Two buses with the same
+// times are two buses, or one that the feed has twice.
+const COUPLED_MODES = new Set(['subway', 'tram', 'suburban', 'regional', 'longdistance']);
 // How far into the future the knots sent to the browser reach. Must comfortably
 // exceed the browser's polling interval so animation survives a missed poll.
 const HORIZON_S = 90;
@@ -292,10 +295,33 @@ export class Timetable {
    * positions, so each vehicle is described by "knots" – (time, lat, lon)
    * triples along its upcoming route – between which the browser interpolates.
    * `realtime` is a snapshot from buildRealtime() or null (schedule only).
+   *
+   * Trains that run coupled are a trip each in the feed, which has no word on
+   * that they belong together. They are found by what they share: the way
+   * from one stop to the next, at the same times of the timetable. Such
+   * vehicles get the same `unit`.
    */
   vehicles(now, realtime) {
     const today = localDate(now);
     const out = [];
+    const ways = new Map(); // a way from stop to stop at its times → the first vehicle found on it
+    const units = new Map(); // unit → its vehicles
+    const couple = (a, b) => {
+      if (a.unit && a.unit === b.unit) return;
+      const unit = a.unit ?? b.unit ?? a.id;
+      const members = units.get(unit) ?? [];
+      for (const v of [a, b]) {
+        // (one that is in another unit already brings that whole unit along)
+        const joining = v.unit && v.unit !== unit ? units.get(v.unit) : [v];
+        if (v.unit && v.unit !== unit) units.delete(v.unit);
+        for (const member of joining) {
+          if (member.unit === unit) continue;
+          member.unit = unit;
+          members.push(member);
+        }
+      }
+      units.set(unit, members);
+    };
 
     // Yesterday's service day is still running after midnight (times > 24:00).
     for (const date of [addDays(today, -1), today]) {
@@ -326,11 +352,12 @@ export class Timetable {
         const [lat, lon] = positionAt(knots, now);
 
         const route = this.trips.route[t];
+        const mode = this.routeModes[route];
         const next = Math.min(i + 1, last);
-        out.push({
+        const vehicle = {
           id: `${this.trips.id[t]}_${date}`,
           line: this.lineName(route),
-          mode: this.routeModes[route],
+          mode,
           to: this.headsign(t),
           // Delay at the next stop in seconds; null when there is no realtime data.
           delay: rt ? rt.arrDelay[next] : null,
@@ -342,7 +369,22 @@ export class Timetable {
           lineIndex: this.lineOf[route],
           next: this.stops.name[this.trips.stops[t][next]],
           stopsLeft: last - next,
-        });
+        };
+        out.push(vehicle);
+
+        if (!COUPLED_MODES.has(mode)) continue;
+        // The way it is on, or has just come: from the stop it left to the one
+        // ahead. Standing at that one, the way on from there counts as well,
+        // so that trains are coupled from when they stand together to when
+        // the first of them leaves.
+        const stops = this.trips.stops[t];
+        for (const from of next < last && arr[next] <= now ? [i, next] : [i]) {
+          if (from >= last) continue;
+          const way = `${date}|${mode}|${stops[from]}|${stops[from + 1]}|${schedDep[from]}|${schedArr[from + 1]}`;
+          const other = ways.get(way);
+          if (other) couple(other, vehicle);
+          else ways.set(way, vehicle);
+        }
       }
     }
     return out;
