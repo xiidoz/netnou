@@ -61,6 +61,16 @@ vehicle positions. A position is therefore derived:
    marks such a vehicle with a question mark while others have a delay
    reported. Without any realtime data it says so once, as a warning in the
    header card.
+4. Trains that run coupled are a trip each, in the timetable and in the
+   feed, and the feed may report a delay for one portion and not for the
+   others. One train cannot be at two places: on the way the portions share
+   from one stop to the next, all of them get the same delay at either end.
+   What the feed reports for that stop itself counts before what is carried
+   forward from an earlier stop. Of those that count it is the delay most
+   portions have, and the largest where as many have one as the other. A
+   portion the feed has no word on gets what the others say for that way.
+   The delays of a trip, at its stops and on a departure board, are these
+   too, so that they agree with the map.
 
 The server does not send positions but *knots*: points in time and space along
 the way ahead (see [Knots](api.md#knots)). The browser interpolates, so the
@@ -83,7 +93,7 @@ Server (`server/`):
 | `lib/network.js` | builds routable networks from the ways and finds paths (`classifyWay`, `Network`) |
 | `lib/shapes.js` | route geometry for every hop (`loadNetworks`, `buildSegments`) |
 | `lib/timetable.js` | the loaded dataset and the queries of the API (`Timetable`) |
-| `lib/realtime.js` | fetches the realtime feed and matches it to the trips (`RealtimePoller`) |
+| `lib/realtime.js` | fetches the realtime feed, matches it to the trips (`RealtimePoller`) and gives the portions of a coupled train the same delays where they share their way |
 | `lib/http.js` | the GET the realtime feed is fetched with: patient with a busy server (`get`) |
 | `lib/pb.js` | decodes the GTFS-Realtime message (`decodeFeed`) |
 | `lib/update.js` | what the server calls itself (`describeBuild`) and the daily look-out for a newer release (`UpdateChecker`) |

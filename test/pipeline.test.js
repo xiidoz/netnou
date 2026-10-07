@@ -7,7 +7,7 @@ import { Area } from '../server/lib/area.js';
 import { eachLine, parseCsvLine } from '../server/lib/csv.js';
 import { buildDataset } from '../server/lib/importer.js';
 import { decodeFeed } from '../server/lib/pb.js';
-import { buildRealtime } from '../server/lib/realtime.js';
+import { agreedDelay, buildRealtime } from '../server/lib/realtime.js';
 import { addDays, localDate, serviceDayStart, setTimeZone, weekday } from '../server/lib/time.js';
 import { Timetable, lite, positionAt, routeMode } from '../server/lib/timetable.js';
 import { openZip } from '../server/lib/zip.js';
@@ -272,24 +272,26 @@ test('vehicles are interpolated between stops along the schedule', () => {
 
 // The feed knows nothing of trains that run coupled. What gives them away is
 // that they share the way from stop to stop, at the same times.
+// RE14 (T5) and RE28 (T6) leave A as one train and part at B; two buses (T7, T8) have the same times all the way.
+const COUPLED = {
+  'routes.txt': FEED['routes.txt'] + ',RE14,1,2,R4,,\n,RE28,1,2,R5,,\n',
+  'trips.txt': FEED['trips.txt'] + 'R4,DAILY,T5\nR5,DAILY,T6\nR3,DAILY,T7\nR3,DAILY,T8\n',
+  'stop_times.txt': FEED['stop_times.txt'] + [
+    'T5,10:30:00,10:30:00,A,0,Gamma,,',
+    'T5,10:40:00,10:44:00,B,1,Gamma,,',
+    'T5,10:55:00,10:55:00,C,2,Gamma,,',
+    'T6,10:30:00,10:30:00,A,0,Fern Nord,,',
+    'T6,10:40:00,10:46:00,B,1,Fern Nord,,',
+    'T6,12:00:00,12:00:00,X,2,Fern Nord,,',
+    'T7,10:30:00,10:30:00,A,0,Gamma,,',
+    'T7,10:40:00,10:40:00,B,1,Gamma,,',
+    'T8,10:30:00,10:30:00,A,0,Gamma,,',
+    'T8,10:40:00,10:40:00,B,1,Gamma,,',
+  ].join('\n') + '\n',
+};
+
 test('trains that share their way and its times are one unit until they part', async () => {
-  // RE14 and RE28 leave A as one train and part at B; two buses have the same times all the way.
-  const coupled = await importFeed({
-    'routes.txt': FEED['routes.txt'] + ',RE14,1,2,R4,,\n,RE28,1,2,R5,,\n',
-    'trips.txt': FEED['trips.txt'] + 'R4,DAILY,T5\nR5,DAILY,T6\nR3,DAILY,T7\nR3,DAILY,T8\n',
-    'stop_times.txt': FEED['stop_times.txt'] + [
-      'T5,10:30:00,10:30:00,A,0,Gamma,,',
-      'T5,10:40:00,10:44:00,B,1,Gamma,,',
-      'T5,10:55:00,10:55:00,C,2,Gamma,,',
-      'T6,10:30:00,10:30:00,A,0,Fern Nord,,',
-      'T6,10:40:00,10:46:00,B,1,Fern Nord,,',
-      'T6,12:00:00,12:00:00,X,2,Fern Nord,,',
-      'T7,10:30:00,10:30:00,A,0,Gamma,,',
-      'T7,10:40:00,10:40:00,B,1,Gamma,,',
-      'T8,10:30:00,10:30:00,A,0,Gamma,,',
-      'T8,10:40:00,10:40:00,B,1,Gamma,,',
-    ].join('\n') + '\n',
-  }, 'coupled.zip');
+  const coupled = await importFeed(COUPLED, 'coupled.zip');
   const unitsAt = (hhmm) => Object.fromEntries(coupled.vehicles(at(hhmm), null).map((v) => [v.id.split('_')[0], v.unit]));
 
   // under way from A to B, and before that at A, about to leave
@@ -311,6 +313,73 @@ test('trains that share their way and its times are one unit until they part', a
   assert.equal(unitsAt('10:05').T1, undefined);
   // none of this is sent for a vehicle that is on its own
   assert.ok(!('unit' in JSON.parse(JSON.stringify(coupled.vehicles(at('10:05'), null)[0]))));
+});
+
+// One train cannot be at two places. Which of the delays its portions report counts for all of them:
+test('of the delays reported for the portions of a coupled train, one counts for all', () => {
+  const reported = (delay) => [delay, true];
+  const carried = (delay) => [delay, false];
+  // what is reported for the stop itself, before what is carried on from an earlier stop
+  assert.equal(agreedDelay([carried(0), reported(180), carried(0), carried(0)]), 180);
+  assert.equal(agreedDelay([carried(300), reported(0)]), 0);
+  // the one that several have, before a larger one
+  assert.equal(agreedDelay([reported(0), reported(0), reported(180)]), 0);
+  assert.equal(agreedDelay([reported(180), reported(60), reported(60)]), 60);
+  // no two the same, or as many of one as of the other: the largest
+  assert.equal(agreedDelay([reported(60), reported(180), reported(120)]), 180);
+  assert.equal(agreedDelay([reported(0), reported(180), reported(0), reported(180)]), 180);
+  assert.equal(agreedDelay([reported(-60), reported(-120)]), -60);
+  // nothing reported for the stop: the same among those carried on
+  assert.equal(agreedDelay([carried(0), carried(0), carried(300)]), 0);
+  assert.equal(agreedDelay([carried(null), carried(120)]), 120);
+  // nothing known of any of them
+  assert.equal(agreedDelay([carried(null), carried(null)]), null);
+});
+
+test('the portions of a coupled train stay together when the feed reports a delay for one of them only', async () => {
+  const coupled = await importFeed(COUPLED, 'coupled.zip');
+  const [re14, re28, bus] = ['T5', 'T6', 'T7'].map((id) => coupled.tripIndex.get(id));
+  // The RE14 left A on time, and that is all the feed says about it. The RE28
+  // is to reach B three minutes late and to leave it one minute late.
+  const feed = decodeFeed(encodeFeed({
+    timestamp: at('10:31'),
+    tripUpdates: [
+      { tripId: 'T5', startDate: DAY, stops: [{ seq: 0, stopId: 'A', dep: { delay: 0 } }] },
+      { tripId: 'T6', startDate: DAY, stops: [{ seq: 1, stopId: 'B', arr: { delay: 180 }, dep: { delay: 60 } }] },
+      { tripId: 'T7', startDate: DAY, stops: [{ seq: 1, stopId: 'B', arr: { delay: 180 } }] },
+    ],
+  }));
+  const rt = buildRealtime(coupled, feed);
+  const delays = rt.byDate.get(DAY);
+  // on the way they share, both have what is reported for its ends: on time at A, three minutes late at B
+  assert.deepEqual([delays.get(re14).depDelay[0], delays.get(re28).depDelay[0]], [0, 0]);
+  assert.deepEqual([delays.get(re14).arrDelay[1], delays.get(re28).arrDelay[1]], [180, 180]);
+  // from B on each goes its own way, with its own delays
+  assert.deepEqual([delays.get(re14).depDelay[1], delays.get(re28).depDelay[1]], [0, 60]);
+  // buses are not coupled: the other one, of which the feed says nothing, stays without
+  assert.equal(delays.get(bus).arrDelay[1], 180);
+  assert.ok(!delays.has(coupled.tripIndex.get('T8')));
+  assert.equal(rt.matched, 3);
+
+  // so they are at the same place all the way, and one unit
+  for (const time of ['10:31', '10:36', '10:42']) {
+    const [a, b] = ['T5', 'T6'].map((id) => coupled.vehicles(at(time), rt).find((v) => v.id === `${id}_${DAY}`));
+    assert.deepEqual([a.lat, a.lon], [b.lat, b.lon], `${time}: at the same place`);
+    assert.equal(a.delay, 180, `${time}: the RE14 with the delay that counts`);
+    assert.equal(b.delay, 180);
+    assert.ok(a.unit && a.unit === b.unit, `${time}: one unit`);
+  }
+  // they reach B at 10:43, not at 10:40: a minute before, both are still under way
+  const [early] = coupled.vehicles(at('10:42'), rt).filter((v) => v.id === `T5_${DAY}`);
+  assert.ok(early.lat < 49.5, `still south of B at ${early.lat}`);
+  // and what the details of the RE14 say agrees with the map
+  assert.equal(coupled.trip('T5', DAY, rt).stops[1].arrDelay, 180);
+
+  // a portion the feed has no word on gets what the other says about the way they share, and nothing else
+  const one = buildRealtime(coupled, decodeFeed(encodeFeed({ timestamp: at('10:31'), tripUpdates: [{ tripId: 'T6', startDate: DAY, stops: [{ seq: 1, stopId: 'B', arr: { delay: 120 }, dep: { delay: 120 } }] }] })));
+  assert.deepEqual(one.byDate.get(DAY).get(re14).arrDelay, [null, 120, null]);
+  assert.deepEqual(one.byDate.get(DAY).get(re14).depDelay, [null, null, null]);
+  assert.equal(one.matched, 1);
 });
 
 test('trips after midnight belong to the previous service day', () => {

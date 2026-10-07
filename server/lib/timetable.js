@@ -85,6 +85,45 @@ export class Timetable {
     });
     this.tripsOnDate = new Map();
 
+    // Trains that run coupled are a trip each, and nothing in the feed says
+    // that they belong together. What gives them away is that they share the
+    // way from one stop to the next at the same times (see way()).
+    // sharedWays lists every such way with the trips on it, each with the
+    // position in that trip of the stop the way begins at: [[trip, position], …].
+    // Most trips share their ways only with themselves on other days; kept
+    // are the ways on which two trips run on the same day at least once.
+    const ways = new Map();
+    for (let t = 0; t < tripCount; t++) {
+      if (!COUPLED_MODES.has(this.routeModes[this.trips.route[t]])) continue;
+      for (let p = 0; p + 1 < this.trips.stops[t].length; p++) {
+        const way = this.way(t, p);
+        const sharers = ways.get(way);
+        if (sharers) sharers.push([t, p]);
+        else ways.set(way, [[t, p]]);
+      }
+    }
+    const days = data.services.map((dateIdxs) => new Set(dateIdxs));
+    const meeting = new Map(); // two services → whether they have a day in common
+    const meet = (a, b) => {
+      if (a === b) return days[a].size > 0;
+      const pair = a < b ? a * days.length + b : b * days.length + a;
+      let known = meeting.get(pair);
+      if (known === undefined) {
+        const [few, many] = days[a].size < days[b].size ? [days[a], days[b]] : [days[b], days[a]];
+        known = false;
+        for (const day of few) {
+          if (many.has(day)) {
+            known = true;
+            break;
+          }
+        }
+        meeting.set(pair, known);
+      }
+      return known;
+    };
+    this.sharedWays = [...ways.values()].filter((sharers) =>
+      sharers.some(([one], i) => sharers.some(([other], j) => j > i && meet(this.trips.service[one], this.trips.service[other]))));
+
     // Stations group the platforms of one stop; they are what the map shows
     // and what a departure board is requested for.
     const stopCount = this.stops.id.length;
@@ -236,6 +275,16 @@ export class Timetable {
     return this.stops.name[this.trips.stops[t].at(-1)];
   }
 
+  /**
+   * The way of a trip from the stop at position p to the next one, with the
+   * times the timetable has for it. Trips with the same way are coupled
+   * there, if they are trains and run on the same day.
+   */
+  way(t, p) {
+    const stops = this.trips.stops[t];
+    return `${this.routeModes[this.trips.route[t]]}|${stops[p]}|${stops[p + 1]}|${this.trips.dep[t][p]}|${this.trips.arr[t][p + 1]}`;
+  }
+
   /** What a line is called: its short name ("U1") or, lacking one, the long name. */
   lineName(route) {
     return this.routes.short[route] || this.routes.long[route];
@@ -299,7 +348,8 @@ export class Timetable {
    * Trains that run coupled are a trip each in the feed, which has no word on
    * that they belong together. They are found by what they share: the way
    * from one stop to the next, at the same times of the timetable. Such
-   * vehicles get the same `unit`.
+   * vehicles get the same `unit`. (Their delays on that way are the same
+   * too: buildRealtime() in realtime.js sees to that.)
    */
   vehicles(now, realtime) {
     const today = localDate(now);
@@ -377,10 +427,9 @@ export class Timetable {
         // ahead. Standing at that one, the way on from there counts as well,
         // so that trains are coupled from when they stand together to when
         // the first of them leaves.
-        const stops = this.trips.stops[t];
         for (const from of next < last && arr[next] <= now ? [i, next] : [i]) {
           if (from >= last) continue;
-          const way = `${date}|${mode}|${stops[from]}|${stops[from + 1]}|${schedDep[from]}|${schedArr[from + 1]}`;
+          const way = `${date}|${this.way(t, from)}`;
           const other = ways.get(way);
           if (other) couple(other, vehicle);
           else ways.set(way, vehicle);

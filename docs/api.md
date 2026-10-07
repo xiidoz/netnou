@@ -204,7 +204,7 @@ form.
 | `vehicles[].line` | string | name of the line |
 | `vehicles[].mode` | string | see [Modes](#modes) |
 | `vehicles[].to` | string | destination |
-| `vehicles[].delay` | delay or null | delay at the next stop; `null` if there is no realtime data for the trip |
+| `vehicles[].delay` | delay or null | delay at the next stop; `null` if there is no realtime data for the trip. The portions of a coupled train have the same one on the way they share, whichever of them the feed reports it for |
 | `vehicles[].unit` | string | only for a train that runs coupled with others right now: the same value for each of them, and no meaning beyond that. Such trains are a trip each and are at the same place |
 | `vehicles[].knots` | array of numbers | where the vehicle is from now on, see [Knots](#knots) |
 
@@ -362,7 +362,7 @@ trip or a day on which the trip does not run.
 | `stops[].station` | string | id for `/api/departures` |
 | `stops[].name`, `platform` | string | name of the stop; platform, `""` if unknown |
 | `stops[].arr`, `dep` | time | arrival and departure according to the timetable |
-| `stops[].arrDelay`, `depDelay` | delay or null | reported delays; `null` where nothing is known |
+| `stops[].arrDelay`, `depDelay` | delay or null | reported delays; `null` where nothing is known. Where the trip runs coupled with others, the delays all of them share (see `unit` of [`/api/vehicles`](#get-apivehicles)) |
 | `stops[].skipped` | boolean | the run does not call here today |
 
 The expected time is the timetable time plus the delay.
