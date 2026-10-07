@@ -22,6 +22,8 @@
   --delay-major: #e8710a;
   --delay-severe: #d32f2f;
   --delay-none: #8a9099;
+  /* the flag with the question mark on a vehicle without a reported delay: dark enough for the white mark on it, on either map */
+  --delay-unknown: #5c6670;
 
   /* the visitor's own position; lighter than the blue of the U-Bahn, which may be right under it */
   --location: #1a8ef0;
@@ -225,6 +227,21 @@ button { font: inherit; color: inherit; }
 }
 .status[data-state="live"] .dot { background: var(--delay-ok); animation: pulse 2s ease-out infinite; }
 .status[data-state="error"] .dot { background: var(--delay-severe); }
+/* No realtime data at all: the line is a warning that is not overlooked, with
+   a sign in place of the dot. (The ground is --delay-major, thinned.) */
+.status .warn { display: none; color: var(--delay-major); }
+.status .warn .icon { width: 18px; height: 18px; }
+.status[data-state="outage"] {
+  align-items: flex-start;
+  margin: 0 -6px;
+  padding: 6px 8px 6px 6px;
+  border-radius: 8px;
+  background: rgb(232 113 10 / 0.16);
+  color: var(--text);
+  font-weight: 600;
+}
+.status[data-state="outage"] .dot { display: none; }
+.status[data-state="outage"] .warn { display: block; }
 
 @keyframes pulse {
   0% { box-shadow: 0 0 0 0 rgb(42 157 75 / 0.55); }
