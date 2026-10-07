@@ -44,6 +44,9 @@ services:
       # A name of its own for this instance, where the page names itself.
       # The credits keep naming Netnou.
       # SITE_NAME: "Bus & Bahn live"
+      # Links of your own at the foot of the header card, such as an imprint
+      # and a privacy notice: a text and an address each. The pages are yours.
+      # LINKS: "Impressum=/impressum, Datenschutz=/datenschutz"
       # The address visitors reach this instance under. With it the page can
       # name its own address to search engines and carry a picture for
       # previews of links, and there is a /sitemap.xml.

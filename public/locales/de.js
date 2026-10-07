@@ -64,6 +64,8 @@ export default {
   'delay.minutes': '{delay} min',
   'delay.none': 'nur Fahrplan',
 
+  'links.label': 'Über dieses Angebot',
+
   'area.hint': 'Grau: außerhalb des Gebiets. Dort nur Linien mit Halt im Gebiet, Position als Luftlinie zwischen den Halten.',
 
   'panel.label': 'Details',

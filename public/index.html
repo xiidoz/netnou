@@ -59,6 +59,10 @@
     </div>
     <ul class="legend" id="delay-legend" hidden></ul>
     <p class="hint" id="area-hint" hidden><span class="swatch veil"></span><span data-i18n="area.hint">Grey: outside the area. Only lines that stop inside it are shown there, on a straight line between their stops.</span></p>
+    <!-- The operator's own links, such as who runs the instance and how it
+         treats personal data. The server writes them in here (LINKS in
+         docs/configuration.md); without any, this stays hidden. -->
+    <nav class="links" id="links" aria-label="About this service" data-i18n-aria-label="links.label" hidden></nav>
   </header>
 
   <aside class="card panel" id="panel" hidden tabindex="-1" aria-label="Details" data-i18n-aria-label="panel.label">

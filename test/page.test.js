@@ -98,6 +98,24 @@ test('an instance with a name of its own carries it wherever the page names itse
   assert.equal(tag(renderPage(html, german), /<h1>([^<]*)<\/h1>/), 'Netnou');
 });
 
+test('the operator\'s links stand at the foot of the header card, and nothing does without any', () => {
+  const links = [{ text: 'Über', href: '/ueber' }, { text: 'Impressum & Kontakt', href: 'https://example.org/impressum?a=1&b=2' }];
+  const page = renderPage(html, { ...german, links });
+  const nav = /<nav class="links" id="links"([^>]*)>(.*?)<\/nav>/s.exec(page);
+  assert.ok(!/\shidden/.test(nav[1]), 'the row is shown');
+  assert.match(nav[1], /aria-label="About this service"/);
+  assert.equal(nav[2], '<a href="/ueber" target="_blank" rel="noopener">Über</a>'
+    + '<a href="https://example.org/impressum?a=1&#38;b=2" target="_blank" rel="noopener">Impressum &#38; Kontakt</a>');
+  // inside the card, after everything else in it
+  assert.ok(page.indexOf('id="links"') > page.indexOf('id="area-hint"') && page.indexOf('id="links"') < page.indexOf('</header>'));
+
+  // none: the row stays as the file has it, empty and hidden
+  for (const none of [renderPage(html, german), renderPage(html, { ...german, links: [] })]) {
+    assert.match(none, /<nav class="links" id="links"[^>]* hidden><\/nav>/);
+    assert.ok(!none.includes('target="_blank"'));
+  }
+});
+
 test('the installed app is called what the instance is called, in its language', () => {
   const file = fs.readFileSync(new URL('../public/manifest.webmanifest', import.meta.url), 'utf8');
   const original = JSON.parse(file);

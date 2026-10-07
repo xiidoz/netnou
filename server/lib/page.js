@@ -31,12 +31,13 @@ const versions = (publicUrl) => [...LANGUAGE_CODES.map((code) => [code, addressI
  * @param texts the texts of that language (a module of public/locales)
  * @param siteName what the instance calls itself
  * @param areaName may be empty
+ * @param links the operator's own, [{ text, href }], at the foot of the header card
  * @param publicUrl the address of the instance with a slash at its end, or
  *   null: then all that needs a full address is left out
  * @param listed whether search engines may list the page; if not, it asks
  *   them not to and leaves out what is there for them alone
  */
-export function renderPage(html, { language, asked, texts, siteName, areaName, publicUrl, listed }) {
+export function renderPage(html, { language, asked, texts, siteName, areaName, links = [], publicUrl, listed }) {
   const { title, description } = pageTexts(areaName, texts, siteName);
   let page = html;
   const put = (pattern, replacement) => {
@@ -50,6 +51,9 @@ export function renderPage(html, { language, asked, texts, siteName, areaName, p
   put(/(<meta name="apple-mobile-web-app-title" content=")[^"]*"/, (_, start) => `${start}${escapeHtml(siteName)}"`);
   put(/(<h1>)[^<]*/, (_, start) => `${start}${escapeHtml(siteName)}`);
   put(/(<p id="area-name">)[^<]*/, (_, start) => `${start}${escapeHtml(areaName)}`);
+  // (in a new tab, like the links of the credits: the map stays where it is)
+  const anchors = links.map(({ text, href }) => `<a href="${escapeHtml(href)}" target="_blank" rel="noopener">${escapeHtml(text)}</a>`).join('');
+  put(/(<nav class="links"[^>]*?) hidden><\/nav>/, (whole, start) => (links.length ? `${start}>${anchors}</nav>` : whole));
 
   // For previews of a link (Open Graph, which the others read as well).
   const tags = [
