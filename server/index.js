@@ -6,7 +6,7 @@ import zlib from 'node:zlib';
 import { loadConfig, parseBox } from './config.js';
 import { FeedUpdater } from './lib/feed.js';
 import { RealtimePoller } from './lib/realtime.js';
-import { LANGUAGE_CODES, renderPage, robotsTxt, sitemapXml } from './lib/page.js';
+import { LANGUAGE_CODES, renderManifest, renderPage, robotsTxt, sitemapXml } from './lib/page.js';
 import { setTimeZone } from './lib/time.js';
 import { lite } from './lib/timetable.js';
 import { describeBuild, githubReleases, UpdateChecker } from './lib/update.js';
@@ -143,7 +143,7 @@ function servePage(req, res, url) {
   let page = pages.get(asked);
   if (page?.stamp !== stamp) {
     const language = asked ?? config.language;
-    const body = Buffer.from(renderPage(fs.readFileSync(file, 'utf8'), { language, asked, texts: texts[language], areaName: config.areaName, publicUrl: config.publicUrl, listed: config.searchEngines }));
+    const body = Buffer.from(renderPage(fs.readFileSync(file, 'utf8'), { language, asked, texts: texts[language], siteName: config.siteName, areaName: config.areaName, publicUrl: config.publicUrl, listed: config.searchEngines }));
     page = { stamp, body, etag: `"${crypto.createHash('sha1').update(body).digest('hex').slice(0, 16)}"`, packed: null };
     pages.set(asked, page);
   }
@@ -154,6 +154,27 @@ function servePage(req, res, url) {
     return res.end();
   }
   return send(req, res, 200, MIME['.html'], page.body, headers, (body) => (page.packed ??= gzip(body)));
+}
+
+// The manifest of the installed app says what the instance is called, in its
+// main language (lib/page.js). Put together once and again when the file has
+// changed.
+let manifest = null;
+
+function serveManifest(req, res) {
+  const file = path.join(config.publicDir, 'manifest.webmanifest');
+  const stat = fs.statSync(file);
+  const stamp = `${stat.size}-${stat.mtimeMs}`;
+  if (manifest?.stamp !== stamp) {
+    const body = Buffer.from(renderManifest(fs.readFileSync(file, 'utf8'), { language: config.language, texts: texts[config.language], siteName: config.siteName, areaName: config.areaName }));
+    manifest = { stamp, body, etag: `"${crypto.createHash('sha1').update(body).digest('hex').slice(0, 16)}"` };
+  }
+  const headers = { ETag: manifest.etag, 'Cache-Control': 'no-cache' };
+  if (etagMatches(req, manifest.etag)) {
+    res.writeHead(304, { ...headers, Vary: 'Accept-Encoding' });
+    return res.end();
+  }
+  return send(req, res, 200, MIME['.webmanifest'], manifest.body, headers);
 }
 
 function serveStatic(req, res, pathname) {
@@ -242,6 +263,8 @@ function status() {
 // What the page needs to know about the area and the map; it does not change
 // while the server runs.
 const areaInfo = {
+  // What the instance calls itself, and the area it shows.
+  siteName: config.siteName,
   name: config.areaName,
   bbox: config.area.bbox,
   view: config.view,
@@ -349,6 +372,7 @@ const server = http.createServer((req, res) => {
     const url = new URL(req.url, 'http://localhost');
     if (url.pathname.startsWith('/api/')) return handleApi(req, res, url);
     if (url.pathname === '/' || url.pathname === '/index.html') return servePage(req, res, url);
+    if (url.pathname === '/manifest.webmanifest') return serveManifest(req, res);
     if (url.pathname === '/robots.txt') return send(req, res, 200, MIME['.txt'], Buffer.from(robotsTxt(sitemapAt)), { 'Cache-Control': 'no-cache' });
     if (url.pathname === '/sitemap.xml' && sitemapAt) return send(req, res, 200, MIME['.xml'], Buffer.from(sitemapXml(sitemapAt)), { 'Cache-Control': 'no-cache' });
     return serveStatic(req, res, decodeURIComponent(url.pathname));

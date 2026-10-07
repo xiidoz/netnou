@@ -43,6 +43,7 @@ services:
 | `DATA_DIR` | `data` in the project folder (`/data` in the image) | path | where the caches are kept; must be writable |
 | `AREA_FILE` | the built-in VGN outline | path | GeoJSON file with the polygons of the area, see [Choosing an area](#choosing-an-area) |
 | `BBOX` | – | `south,west,north,east` | a rectangle as the area, instead of `AREA_FILE` |
+| `SITE_NAME` | `Netnou` | text | what the instance calls itself: in the heading and the title of the page, in previews of links and as the installed app. The credits on the map name Netnou and its version whatever is set here |
 | `AREA_NAME` | `Großraum Nürnberg (VGN)`; empty for a custom area | text | shown next to the title of the page, and what search engines find the instance by, see [Being found](#being-found) |
 | `LANGUAGE` | `de` | a language of the page: `de`, `en` | the main language of the instance: what the page says about itself to search engines and in previews of links is in it. Visitors still get their own |
 | `PUBLIC_URL` | – | http(s) URL | the address under which visitors reach the instance, e.g. `https://transit.example.org/`, see [Being found](#being-found) |
@@ -144,6 +145,10 @@ What a search engine reads, and what a chat shows of a link, is the page as
 the server sends it, before any script has run. The server therefore writes
 into it what the instance is:
 
+- **`SITE_NAME`** is what the instance is called, if it is to be called
+  something else than "Netnou": a service for the people of a region may
+  want a name in their language. It stands in the heading and at the end of
+  the title.
 - **`AREA_NAME`** goes into the title, the description and the heading of
   the page. It is what people look for, so name the area as they would:
   "Großraum Nürnberg (VGN)" rather than "Area 1".

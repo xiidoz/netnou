@@ -21,6 +21,8 @@ const STORAGE_KEY = 'netnou.lang';
 // An address may ask for a language: ?lang=de. That is how a search engine
 // gets to read the page in each of them (see server/lib/page.js).
 const ADDRESS_KEY = 'lang';
+// What the software is called. An instance may call itself something else
+// (SITE_NAME of the server); the credits name the software all the same.
 export const APP_NAME = 'Netnou';
 // The attributes data-i18n-<attribute> can fill in, see translatePage().
 export const ATTRIBUTES = ['aria-label', 'title', 'content', 'placeholder'];
@@ -106,10 +108,11 @@ export function t(key, params = {}, texts = messages) {
  * What the page is called and what it says about itself, with the name of the
  * area it shows if it has one. The server writes the same into the page before
  * it sends it, in the language of `texts` (server/lib/page.js).
+ * @param site what the instance calls itself
  */
-export function pageTexts(area, texts = messages) {
+export function pageTexts(area, texts = messages, site = APP_NAME) {
   const title = area ? `${t('page.title', {}, texts)}: ${area}` : t('page.title', {}, texts);
-  return { title: `${title} – ${APP_NAME}`, description: area ? t('page.descriptionIn', { area }, texts) : t('page.description', {}, texts) };
+  return { title: `${title} – ${site}`, description: area ? t('page.descriptionIn', { area }, texts) : t('page.description', {}, texts) };
 }
 
 export const formatNumber = (value) => numberFormat.format(value);

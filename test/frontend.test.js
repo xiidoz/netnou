@@ -211,6 +211,9 @@ test('what the page is called and says about itself, with and without the name o
   assert.deepEqual(pageTexts(''), { title: 'Live map of public transport – Netnou', description: en['page.description'] });
   // in another language than the visitor's, as the server asks for it
   assert.deepEqual(pageTexts('Testland', de), { title: 'ÖPNV-Live-Karte: Testland – Netnou', description: de['page.descriptionIn'].replace('{area}', 'Testland') });
+  // an instance with a name of its own
+  assert.equal(pageTexts('Testland', de, 'Bus & Bahn live').title, 'ÖPNV-Live-Karte: Testland – Bus & Bahn live');
+  assert.equal(pageTexts('', undefined, 'Bus & Bahn live').title, 'Live map of public transport – Bus & Bahn live');
   assert.equal(t('page.title', {}, de), 'ÖPNV-Live-Karte');
   assert.equal(t('page.title'), 'Live map of public transport');
 });

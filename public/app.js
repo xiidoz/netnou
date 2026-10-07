@@ -1292,7 +1292,7 @@ async function loadArea() {
   setTimeZone(area.timeZone);
   $('area-name').textContent = area.name;
   // What the server wrote into the page before it sent it (server/lib/page.js), now in the visitor's language.
-  const page = pageTexts(area.name);
+  const page = pageTexts(area.name, undefined, area.siteName);
   document.title = page.title;
   document.querySelector('meta[name="description"]').content = page.description;
 
