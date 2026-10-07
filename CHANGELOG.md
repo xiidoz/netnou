@@ -8,6 +8,13 @@ This file is written by
 messages when a release is made. Do not edit it by hand; see
 [Releases](CONTRIBUTING.md#releases).
 
+## [0.5.0](https://github.com/xiidoz/netnou/compare/v0.4.1...v0.5.0) (2026-10-07)
+
+
+### Features
+
+* **map:** flag every vehicle that is early or late, from a single minute ([#72](https://github.com/xiidoz/netnou/issues/72)) ([366ea61](https://github.com/xiidoz/netnou/commit/366ea61380b4e7787591d592407dee2c11ea8cf0)), closes [#71](https://github.com/xiidoz/netnou/issues/71)
+
 ## [0.4.1](https://github.com/xiidoz/netnou/compare/v0.4.0...v0.4.1) (2026-10-07)
 
 
