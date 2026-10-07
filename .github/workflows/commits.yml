@@ -21,6 +21,10 @@ concurrency:
 jobs:
   commitlint:
     name: Conventional Commits
+    # Not for a pull request that is merged or closed. Its title and its
+    # description can still be edited, which starts this workflow, but its
+    # commits are gone with its branch and there is nothing left to check.
+    if: github.event_name != 'pull_request' || github.event.pull_request.state == 'open'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
