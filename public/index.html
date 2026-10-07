@@ -31,7 +31,24 @@
       <h1>Netnou</h1>
       <p id="area-name"></p>
       <button type="button" class="search-open" id="search-open" aria-label="Search" data-i18n-aria-label="search.open" data-icon="search"></button>
-      <button type="button" class="settings-open" id="settings-open" aria-label="Settings" data-i18n-aria-label="settings.title" aria-haspopup="dialog" data-icon="settings"></button>
+      <button type="button" class="settings-open" id="settings-open" aria-label="Settings" data-i18n-aria-label="settings.title" aria-expanded="false" aria-controls="settings" data-icon="settings"></button>
+    </div>
+    <!-- What a visitor can set for themselves, kept in their browser: the
+         language (app.js fills in the list) and whether the page is light or
+         dark. A small box that hangs at the gear, which opens and shuts it. -->
+    <div class="bubble" id="settings" role="group" aria-label="Settings" data-i18n-aria-label="settings.title" hidden>
+      <div class="setting">
+        <label for="language" data-i18n="language.label">Language</label>
+        <select class="language" id="language"></select>
+      </div>
+      <div class="setting" role="group" aria-labelledby="theme-label">
+        <span id="theme-label" data-i18n="theme.label">Appearance</span>
+        <div class="segmented">
+          <button type="button" data-theme-choice="auto" aria-pressed="true" data-i18n="theme.auto">Automatic</button>
+          <button type="button" data-theme-choice="light" aria-pressed="false" data-i18n="theme.light">Light</button>
+          <button type="button" data-theme-choice="dark" aria-pressed="false" data-i18n="theme.dark">Dark</button>
+        </div>
+      </div>
     </div>
     <!-- The search for stops and lines. On a narrow screen it is shut until the button
          with the lens opens it, and then takes the place of the title. What
@@ -93,27 +110,6 @@
     </div>
   </dialog>
 
-  <!-- What a visitor can set for themselves, kept in their browser: the
-       language (app.js fills in the list) and whether the page is light or
-       dark. A dialog like the one above, opened by the gear in the title row. -->
-  <dialog class="dialog" id="settings" aria-labelledby="settings-title">
-    <button type="button" class="close" id="settings-close" aria-label="Close" data-i18n-aria-label="panel.close" data-icon="close"></button>
-    <div class="dialog-body">
-      <h2 id="settings-title" data-i18n="settings.title">Settings</h2>
-      <div class="setting">
-        <label for="language" data-i18n="language.label">Language</label>
-        <select class="language" id="language"></select>
-      </div>
-      <div class="setting" role="group" aria-labelledby="theme-label">
-        <span id="theme-label" data-i18n="theme.label">Appearance</span>
-        <div class="segmented">
-          <button type="button" data-theme-choice="auto" aria-pressed="true" data-i18n="theme.auto">Automatic</button>
-          <button type="button" data-theme-choice="light" aria-pressed="false" data-i18n="theme.light">Light</button>
-          <button type="button" data-theme-choice="dark" aria-pressed="false" data-i18n="theme.dark">Dark</button>
-        </div>
-      </div>
-    </div>
-  </dialog>
 
   <div class="tooltip" id="tooltip" hidden></div>
   <div class="banner" id="banner" hidden role="alert"></div>

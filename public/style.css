@@ -149,7 +149,50 @@ button { font: inherit; color: inherit; }
   cursor: pointer;
 }
 .settings-open, .search-open { margin: -4px 0; color: var(--text-muted); }
-.settings-open:hover { color: var(--text); }
+.settings-open:hover, .settings-open[aria-expanded="true"] { color: var(--text); }
+
+/* The settings: a small box that hangs at the gear, with a tip that points to
+   it, over the rest of the card. (The gear is 30 wide and ends where the card's
+   padding begins: the tip sits under its middle.) */
+.bubble {
+  position: absolute;
+  z-index: 3;
+  top: 46px;
+  right: 6px;
+  width: 236px;
+  padding: 2px 12px 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--bg);
+  box-shadow: var(--shadow);
+  font-size: 13px;
+}
+.bubble::before {
+  content: "";
+  position: absolute;
+  top: -7px;
+  right: 16px;
+  width: 12px;
+  height: 12px;
+  border: solid var(--border);
+  border-width: 1px 0 0 1px;
+  background: var(--bg);
+  transform: rotate(45deg);
+}
+/* A setting: what it is called, and under it the choice. */
+.setting { display: grid; gap: 4px; margin-top: 10px; }
+.setting > :first-child { color: var(--text-muted); }
+.setting .segmented button { padding: 5px 6px; }
+.language {
+  padding: 5px 6px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg);
+  color: var(--text);
+  font: inherit;
+  cursor: pointer;
+}
+.language:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
 /* ---------- search ---------- */
 
@@ -213,18 +256,22 @@ button { font: inherit; color: inherit; }
 .search-results li.search-heading:hover { background: none; }
 .search-note { margin: 0; padding: 9px 10px; color: var(--text-muted); font-size: 13px; }
 
+/* Its dot stands in the column of the dots in the filters below it (a chip
+   has a border of 1 and a padding of 7 before its dot, of 11, and 6 after),
+   and so what it says begins where their names do. */
 .status {
   margin: 0;
+  padding-left: 8px;
   display: flex;
   align-items: center;
-  gap: 7px;
+  gap: 6px;
   color: var(--text-muted);
   font-size: 13px;
   font-variant-numeric: tabular-nums;
 }
 .status .dot {
-  width: 9px;
-  height: 9px;
+  width: 11px;
+  height: 11px;
   border-radius: 50%;
   background: var(--delay-none);
   flex: none;
@@ -235,10 +282,10 @@ button { font: inherit; color: inherit; }
    a sign in place of the dot. (The ground is --delay-major, thinned.) */
 .status .warn { display: none; color: var(--delay-major); }
 .status .warn .icon { width: 18px; height: 18px; }
+/* (as wide as the search field and the row of filters, not wider) */
 .status[data-state="outage"] {
   align-items: flex-start;
-  margin: 0 -6px;
-  padding: 6px 8px 6px 6px;
+  padding: 6px 8px;
   border-radius: 8px;
   background: rgb(232 113 10 / 0.16);
   color: var(--text);
@@ -532,7 +579,7 @@ li:last-child > .row.stop .rail::before { bottom: 50%; }
   text-align: center;
 }
 
-/* ---------- dialogs: how it works, settings ---------- */
+/* ---------- how it works ---------- */
 
 /* A dialog over the page, in the middle of it; the browser lays it and its
    backdrop on top of everything else. What is in it fills it to the edge and
@@ -557,20 +604,6 @@ li:last-child > .row.stop .rail::before { bottom: 50%; }
 .dialog h3 { margin: 14px 0 3px; font-size: 14px; font-weight: 650; }
 .dialog p { margin: 0; line-height: 1.45; }
 .dialog a { color: var(--accent); }
-/* A setting: what it is called, and under it the choice. */
-.setting { display: grid; gap: 5px; margin-top: 14px; }
-.setting > :first-child { font-weight: 650; }
-.setting .segmented button { padding: 7px 8px; }
-.language {
-  padding: 7px 8px;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  background: var(--bg);
-  color: var(--text);
-  font: inherit;
-  cursor: pointer;
-}
-.language:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .dialog .about-source { margin-top: 16px; padding-top: 12px; border-top: 1px solid var(--border); color: var(--text-muted); font-size: 13px; }
 
 /* ---------- small screens: controls on top, details as bottom sheet ---------- */
@@ -649,7 +682,7 @@ li:last-child > .row.stop .rail::before { bottom: 50%; }
     border-radius: 14px 14px 0 0;
     padding-bottom: var(--safe-bottom);
   }
-  /* The dialogs are sheets from the bottom too, over the details if they are open. */
+  /* "How it works" is a sheet from the bottom too, over the details if they are open. */
   .dialog {
     top: auto;
     width: 100%;

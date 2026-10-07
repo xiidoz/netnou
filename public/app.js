@@ -1086,22 +1086,37 @@ function loadingText({ state: phase, step }) {
   return t('loading.timetable');
 }
 
-// ---------- dialogs: how it works, settings ----------
+// ---------- how it works ----------
 
-// A dialog over the page, written out in index.html: how the page comes by
-// what it shows, for whoever asks, and what a visitor can set for themselves.
-// The browser keeps the keyboard inside a dialog while it is open, closes it
-// on Escape and gives the focus back to the button it was opened with.
-for (const name of ['about', 'settings']) {
-  const dialog = $(name);
-  $(`${name}-open`).addEventListener('click', () => dialog.showModal());
-  $(`${name}-close`).addEventListener('click', () => dialog.close());
-  // (a click beside it lands on the dialog itself: what is in it fills it, see .dialog-body in style.css)
-  dialog.addEventListener('click', (event) => {
-    if (event.target === dialog) dialog.close();
-  });
+// How the page comes by what it shows, for whoever asks: a dialog over the
+// page, its text in index.html. The browser keeps the keyboard inside it while
+// it is open, closes it on Escape and gives the focus back to the button it
+// was opened with.
+const aboutDialog = $('about');
+$('about-open').addEventListener('click', () => aboutDialog.showModal());
+$('about-close').addEventListener('click', () => aboutDialog.close());
+// (a click beside it lands on the dialog itself: what it says fills it, see .dialog-body in style.css)
+aboutDialog.addEventListener('click', (event) => {
+  if (event.target === aboutDialog) aboutDialog.close();
+});
+
+// ---------- settings ----------
+
+// What a visitor can set for themselves: a small box at the gear in the title
+// row, which opens and shuts it. A click or a tap anywhere else shuts it too,
+// and so does Escape (see the detail panel for the key).
+const settings = $('settings');
+const settingsButton = $('settings-open');
+
+function showSettings(open) {
+  settings.hidden = !open;
+  settingsButton.setAttribute('aria-expanded', String(open));
 }
-const dialogOpen = () => document.querySelector('dialog[open]') !== null;
+settingsButton.addEventListener('click', () => showSettings(settings.hidden));
+// (as it begins, and before anything else hears of it: the map keeps some of what happens on it to itself)
+document.addEventListener('pointerdown', (event) => {
+  if (!settings.hidden && !settings.contains(event.target) && !settingsButton.contains(event.target)) showSettings(false);
+}, true);
 
 // Light, dark or as the device has it: chosen in the settings, kept in the browser.
 {
@@ -1136,8 +1151,15 @@ function closePanel() {
 }
 $('panel-close').addEventListener('click', closePanel);
 document.addEventListener('keydown', (event) => {
-  // (Escape closes what is on top: a dialog lies over the details)
-  if (event.key === 'Escape' && state.selection && !dialogOpen()) closePanel();
+  if (event.key !== 'Escape') return;
+  // Escape closes what is on top: the dialog lies over all else and closes by itself, then the settings, then the details.
+  if (aboutDialog.open) return;
+  if (!settings.hidden) {
+    showSettings(false);
+    settingsButton.focus();
+  } else if (state.selection) {
+    closePanel();
+  }
 });
 
 /**
