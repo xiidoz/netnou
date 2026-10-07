@@ -841,17 +841,28 @@ function vehicleSummary(v) {
   return parts.join(' · ');
 }
 
+// The tooltip names what the pointer hovers over. A finger does not hover: its
+// tap arrives as a pointer that moved there, and would leave the tooltip
+// standing.
+const hovering = matchMedia('(hover: hover)');
+const hideTooltip = () => { tooltip.hidden = true; };
+
 map.on('mousemove', (event) => {
   const hit = hitTest(event.point);
   map.getContainer().classList.toggle('clickable', !!hit);
-  tooltip.hidden = !hit;
-  if (!hit) return;
+  tooltip.hidden = !hit || !hovering.matches;
+  if (tooltip.hidden) return;
   tooltip.textContent = hit.vehicle ? vehicleSummary(hit.vehicle) : hit.station.name;
   tooltip.style.transform = `translate(${event.point.x + 14}px, ${event.point.y + 14}px)`;
 });
-map.on('mouseout', () => { tooltip.hidden = true; });
+// It goes when the pointer leaves the map, when the map moves away under it,
+// and when what it names is chosen: the details say more, and may come to lie
+// right where it stood.
+map.on('mouseout', hideTooltip);
+map.on('movestart', hideTooltip);
 
 map.on('click', (event) => {
+  hideTooltip();
   const hit = hitTest(event.point);
   if (hit?.vehicle) select('trip', hit.vehicle.id);
   else if (hit?.station) select('station', hit.station.id);
