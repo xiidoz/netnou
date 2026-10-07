@@ -45,6 +45,10 @@ export function tripDelays(timetable, t, date, update) {
 
   const arrDelay = new Array(n).fill(null);
   const depDelay = new Array(n).fill(null);
+  // Which of them the feed reports for that stop itself, as opposed to those
+  // carried on from an earlier stop or taken from the other event of the stop.
+  const arrReported = new Uint8Array(n);
+  const depReported = new Uint8Array(n);
   let skipped = null;
   let skippedCount = 0;
   let carried = null;
@@ -66,7 +70,10 @@ export function tripDelays(timetable, t, date, update) {
         skippedCount++;
       } else {
         const dep = eventDelay(stu.dep, base + schedDep[p]);
-        const arr = eventDelay(stu.arr, base + schedArr[p]) ?? carried ?? dep;
+        const reached = eventDelay(stu.arr, base + schedArr[p]);
+        const arr = reached ?? carried ?? dep;
+        if (reached !== null) arrReported[p] = 1;
+        if (dep !== null) depReported[p] = 1;
         arrDelay[p] = arr;
         depDelay[p] = carried = dep ?? arr;
         continue;
@@ -82,7 +89,70 @@ export function tripDelays(timetable, t, date, update) {
     while (skipped[first]) first++;
     while (skipped[last]) last--;
   }
-  return { arrDelay, depDelay, skipped, cancelled, first, last };
+  return { arrDelay, depDelay, arrReported, depReported, skipped, cancelled, first, last };
+}
+
+/**
+ * The delay that counts for all the portions of a coupled train, at one end
+ * of a way they share. What the feed reports for that stop itself counts
+ * before what is only carried on from an earlier stop: with any of the first
+ * kind, the others are left out. Of those that count, it is the delay most
+ * of them have – and the largest one, where as many have one as the other.
+ * @param reports one per portion: [delay or null, whether it is reported for the stop itself]
+ * @returns the delay, or null if nothing is known of any of them
+ */
+export function agreedDelay(reports) {
+  const known = reports.filter(([delay]) => delay !== null);
+  const own = known.filter(([, reported]) => reported);
+  const counts = new Map();
+  for (const [delay] of own.length ? own : known) counts.set(delay, (counts.get(delay) ?? 0) + 1);
+  let agreed = null;
+  let most = 0;
+  for (const [delay, count] of counts) {
+    if (count > most || (count === most && delay > agreed)) {
+      agreed = delay;
+      most = count;
+    }
+  }
+  return agreed;
+}
+
+// The two ends of a way: the departure from the stop it begins at, the arrival at the next one.
+const WAY_ENDS = [['depDelay', 'depReported', 0], ['arrDelay', 'arrReported', 1]];
+
+/**
+ * Trains that run coupled are a trip each, in the timetable and in the feed,
+ * and the feed may report a delay for one of them and not for the others. One
+ * train cannot be at two places: on every way they share, all of them get
+ * the same delay at either end (see agreedDelay). A portion the feed has no
+ * word on gets what the others say for that way, and nothing else.
+ * @param byDate service date -> trip index -> delays, changed in place
+ */
+function shareDelays(timetable, byDate) {
+  for (const [date, trips] of byDate) {
+    for (const way of timetable.sharedWays) {
+      // (no word on any of them: nothing to share)
+      if (!way.some(([t]) => trips.has(t))) continue;
+      const running = way.filter(([t]) => timetable.runsOn(t, date) && !trips.get(t)?.cancelled);
+      if (running.length < 2) continue;
+      for (const [delays, reported, ahead] of WAY_ENDS) {
+        const agreed = agreedDelay(running.map(([t, p]) => {
+          const rt = trips.get(t);
+          return rt ? [rt[delays][p + ahead], rt[reported][p + ahead] === 1] : [null, false];
+        }));
+        if (agreed === null) continue;
+        for (const [t, p] of running) {
+          let rt = trips.get(t);
+          if (!rt) {
+            const n = timetable.trips.stops[t].length;
+            rt = { arrDelay: new Array(n).fill(null), depDelay: new Array(n).fill(null), arrReported: new Uint8Array(n), depReported: new Uint8Array(n), skipped: null, cancelled: false, first: 0, last: n - 1 };
+            trips.set(t, rt);
+          }
+          rt[delays][p + ahead] = agreed;
+        }
+      }
+    }
+  }
 }
 
 // gtfs.de names the provider of a trip's realtime data in an "alert" of its
@@ -94,7 +164,8 @@ const SOURCE_NOTE = /^Echtzeitdaten aufbereitet von GTFS\.de, bereitgestellt von
 
 /**
  * Snapshot of one feed fetch:
- *   byDate        service date -> trip index -> delays (see tripDelays)
+ *   byDate        service date -> trip index -> delays (see tripDelays), those
+ *                 of coupled trains made the same where they share their way
  *   tripNotes     trip index -> alert texts (disruption reasons, vehicle features)
  *   tripSources   trip index -> who provides the realtime data (see SOURCE_NOTE)
  *   stationNotes  station index -> alert texts (e.g. broken lifts)
@@ -139,6 +210,7 @@ export function buildRealtime(timetable, feed, now = Math.floor(Date.now() / 100
     trips.set(t, rt);
     matched++;
   }
+  shareDelays(timetable, byDate);
   return { byDate, tripNotes, tripSources, stationNotes, matched };
 }
 
