@@ -94,7 +94,7 @@ is not a matter of taste: the next version number, the changelog and the
 release are worked out from them (see [Releases](#releases)).
 
 ```text
-<type>[(<scope>)][!]: <summary>
+<type>(<scope>)[!]: <summary>
 
 [body: what changes and why, where the summary does not say it all]
 
@@ -108,7 +108,7 @@ feat(api): add the platform to departures
 ```
 
 ```text
-fix: keep the delays of a trip whose update lacks a stop sequence
+fix(realtime): keep the delays of a trip whose update lacks a stop sequence
 ```
 
 ```text
@@ -137,8 +137,16 @@ version:
 - **Summary:** imperative ("add", not "added"), lower case, no full stop,
   the whole first line at most 100 characters. Write it for someone reading
   the changelog: say what changes for them, not which file was touched.
-- **Scope:** optional. Common ones are `api`, `server`, `page`, `i18n`,
-  `docker` and `deps`.
+- **Scope:** required. It names the part the change is about, in one word,
+  and stands in front of the line in the changelog. Take the one a reader
+  would look under:
+  - `page` for what visitors see and do, or the part of it: `map`, `search`;
+  - `settings` for what operators set, `api` for what clients of the API get;
+  - `realtime`, `timetable`, `server` for the inner workings;
+  - `i18n`, `docker`, `deps`, `release`;
+  - for documentation the document: `readme`, `contributing`, `api`.
+
+  A new part may get a new scope; the list is not closed.
 - **Breaking changes** get a `!` before the colon and a `BREAKING CHANGE:`
   footer that says what to do. While Netnou is at 0.x they lead to a new
   minor version (0.3.2 to 0.4.0), from 1.0.0 on to a new major version. Mark
@@ -149,8 +157,8 @@ version:
   not breaking, and neither is a new cache format (the caches rebuild
   themselves).
 
-The convention is checked twice. `npm ci` installs a git hook that rejects a
-commit with a malformed message right away, and CI checks every commit of a
+The convention is checked twice, the scope included. `npm ci` installs a git
+hook that rejects a commit with a malformed message right away, and CI checks every commit of a
 pull request and its title (`.github/workflows/commits.yml`). To correct a
 message, use `git commit --amend` for the last commit and `git rebase -i` for
 earlier ones.
@@ -199,6 +207,10 @@ running instances will load data written by older code:
 ## Pull requests
 
 - One topic per pull request, with a description of what changes and why.
+- A change that shows in the page comes with pictures of it in the
+  description: what it looks like now, on a wide screen and on a phone, and
+  what it looked like before where that makes the difference clear. They
+  let somebody judge the change without running it.
 - The title of the pull request and its commits follow
   [the commit message convention](#commit-messages). The title becomes the
   commit message when the pull request is squashed.
