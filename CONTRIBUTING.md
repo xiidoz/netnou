@@ -137,6 +137,9 @@ version:
 - **Summary:** imperative ("add", not "added"), lower case, no full stop,
   the whole first line at most 100 characters. Write it for someone reading
   the changelog: say what changes for them, not which file was touched.
+  For the title of a pull request the 100 include what GitHub puts behind
+  it on `main`, a space and the number as in `(#123)`: that leaves 93 for
+  the title.
 - **Scope:** required. It names the part the change is about, in one word,
   and stands in front of the line in the changelog. Take the one a reader
   would look under:
@@ -159,7 +162,7 @@ version:
 
 The convention is checked twice, the scope included. `npm ci` installs a git
 hook that rejects a commit with a malformed message right away, and CI checks every commit of a
-pull request and its title (`.github/workflows/commits.yml`). To correct a
+pull request and its title, as it will stand on `main` (`.github/workflows/commits.yml`). To correct a
 message, use `git commit --amend` for the last commit and `git rebase -i` for
 earlier ones.
 

@@ -41,11 +41,14 @@ jobs:
         env:
           BASE: ${{ github.event.pull_request.base.sha }}
           HEAD: ${{ github.event.pull_request.head.sha }}
+      # The title as it will stand on main: GitHub puts the number of the pull
+      # request behind it when it squashes, and both together have to fit.
       - name: Title of the pull request
         if: github.event_name == 'pull_request'
-        run: printf '%s\n' "$TITLE" | npx commitlint --verbose
+        run: printf '%s (#%s)\n' "$TITLE" "$NUMBER" | npx commitlint --verbose
         env:
           TITLE: ${{ github.event.pull_request.title }}
+          NUMBER: ${{ github.event.pull_request.number }}
 
       - name: Pushed commits
         if: github.event_name == 'push'
