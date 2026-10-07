@@ -135,6 +135,22 @@ test('index.html carries the English texts and marks them for translation', () =
   assert.equal(marked, html.match(/\sdata-i18n(-[a-z-]+)?=/g).length, 'a data-i18n attribute this test did not understand');
 });
 
+// app.js gets the elements of the page by their ids, and stops at the first
+// one that is not there.
+test('every element app.js asks for by its id is in index.html', () => {
+  const html = read('index.html');
+  const ids = new Set([...withoutComments(read('app.js')).matchAll(/\$\('([^']+)'\)/g)].map((match) => match[1]));
+  assert.ok(ids.size > 10, 'the ids were not found in app.js');
+  for (const id of ids) assert.ok(html.includes(` id="${id}"`), `app.js asks for #${id}, which is not in index.html`);
+});
+
+test('the dialog that says how it works is named by its heading, in the words of the button that opens it', () => {
+  const html = read('index.html');
+  const heading = /<dialog [^>]*aria-labelledby="([^"]+)"/.exec(html)[1];
+  assert.match(html, new RegExp(`<h2 id="${heading}" data-i18n="about.title">`));
+  assert.match(html, /<button [^>]*id="about-open"[^>]*data-i18n="about.title">/);
+});
+
 // A pragmatic check, not a proof: it reads the string literals of app.js and
 // knows nothing about where they end up.
 test('app.js has no text for visitors of its own', () => {

@@ -26,7 +26,7 @@ export default {
   'loading.starting': 'Der Server startet …',
   'loading.download': 'Fahrplandaten werden heruntergeladen …',
   'loading.import': 'Fahrplandaten werden verarbeitet …',
-  'loading.routes': 'Linienwege werden berechnet …',
+  'loading.routes': 'Streckenverläufe werden berechnet …',
   'loading.timetable': 'Fahrplandaten werden geladen …',
   'loading.error': 'Fahrplandaten konnten nicht geladen werden.',
   'banner.offline': 'Keine Internetverbindung – die Live-Karte braucht eine Verbindung.',
@@ -66,7 +66,15 @@ export default {
 
   'links.label': 'Über dieses Angebot',
 
-  'area.hint': 'Grau: außerhalb des Gebiets. Dort nur Linien mit Halt im Gebiet, Position als Luftlinie zwischen den Halten.',
+  'about.fact': 'Positionen sind geschätzt, nicht gemessen.',
+  'about.title': 'So funktioniert’s',
+  'about.positions': 'Positionen',
+  'about.positionsText': 'Kein Fahrzeug meldet dieser Karte seinen Standort. Jedes wird dort gezeichnet, wo es laut Fahrplan gerade sein müsste, verschoben um die gemeldete Verspätung. Ein Fahrzeug kann deshalb etwas vor oder hinter seiner Markierung sein. Fahrzeuge ohne gemeldete Verspätung sind blasser gezeichnet und fahren hier nach Fahrplan.',
+  'about.routes': 'Streckenverlauf',
+  'about.routesText': 'Auch der Streckenverlauf zwischen zwei Halten ist berechnet: der kürzeste plausible Weg über Straßen und Gleise aus OpenStreetMap, nicht der offizielle des Betreibers. Zwischen nahen Halten ist das fast immer derselbe. Wo er abweicht, nimmt ein Fahrzeug auf der Karte einen anderen Weg als in Wirklichkeit; wo sich keiner findet, fährt es Luftlinie.',
+  'about.outside': 'Außerhalb des Gebiets',
+  'about.outsideText': 'Grau: Dort nur Linien mit Halt im Gebiet, Position als Luftlinie zwischen den Halten.',
+  'about.source': 'Alle Einzelheiten stehen im offenen Quelltext von {software}, der Software hinter dieser Karte.',
 
   'panel.label': 'Details',
   'panel.close': 'Schließen',
