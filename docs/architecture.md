@@ -190,7 +190,10 @@ the default area that is about 60,000 distinct hops.
   between stops a few hundred metres apart it is almost always the same.
 - **Beyond the area.** Where one stop of a hop is outside the area, the path
   follows the network to about 4 km beyond the edge and continues in a
-  straight line. Hops entirely outside mostly have no geometry.
+  straight line. The OpenStreetMap data may end before that, as the extracts
+  of a federal state do at its border: the straight line then begins where
+  the network stops leading towards the stop. The limit on the length applies
+  here as well. Hops entirely outside mostly have no geometry.
 - **Fallback.** A hop without a path is a straight line. In October 2026 that
   was the case for about 1 % of the hops inside the default area.
 - **Storage.** Paths are simplified to 1.5 m accuracy and stored once per

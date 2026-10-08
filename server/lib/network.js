@@ -164,6 +164,10 @@ class MinHeap {
 const CELL_M = 120;
 // routeBeyond stops searching once it is this close to the stop it heads for.
 const CLOSE_ENOUGH_M = 300;
+// It leaves the network where the way so far plus this many times the straight
+// line that is left is shortest: a metre of way has to bring it half a metre
+// closer to the stop, so it follows the network towards the stop and not past it.
+const AHEAD = 2;
 
 export class Network {
   /**
@@ -391,26 +395,31 @@ export class Network {
   /**
    * Route between a stop on the network and one that is not on it – typically
    * far outside the area: follows the network towards the other stop until
-   * `inside(x, y)` turns false and bridges the rest with a straight line. If
-   * the network ends earlier (edge of the OSM data) or the other stop is
-   * simply off the network, the route goes as close to it as the network gets.
+   * `inside(x, y)` turns false and bridges the rest with a straight line.
+   *
+   * The network may end earlier (at the edge of the OSM data), or the other
+   * stop may simply be off it. A search that finds the way ahead cut off goes
+   * on elsewhere, and would leave the area at some other place and head for
+   * the stop from there. So the route leaves the network at the node that is
+   * best for it (see AHEAD), out of those on a way that, with the straight
+   * line after it, is no longer than maxLength.
    * @param arriving true if the vehicle comes from the far stop
    */
-  routeBeyond(candidates, farX, farY, inside, arriving) {
+  routeBeyond(candidates, farX, farY, inside, arriving, maxLength) {
     const { x, y } = this;
     const toFar = (u) => Math.hypot(x[u] - farX, y[u] - farY);
     let exit = -1;
-    let closest = Infinity;
+    let best = Infinity;
     let budget = 300_000;
-    this.search(arriving ? this.in : this.out, this.seeds(candidates, arriving), toFar, Infinity, (u) => {
+    this.search(arriving ? this.in : this.out, this.seeds(candidates, arriving), toFar, Infinity, (u, g) => {
       const distance = toFar(u);
-      if (distance < closest) {
-        closest = distance;
+      // (the nodes come in the order of this sum: every later one is too far as well)
+      if (g + distance > maxLength) return true;
+      if (g + AHEAD * distance < best) {
+        best = g + AHEAD * distance;
         exit = u;
-      }
-      if (!inside(x[u], y[u]) || distance < CLOSE_ENOUGH_M) {
-        exit = u;
-        return true;
+        // (out of the area on the best way there is: no need to follow it any further)
+        if (!inside(x[u], y[u]) || distance < CLOSE_ENOUGH_M) return true;
       }
       return --budget === 0;
     });
