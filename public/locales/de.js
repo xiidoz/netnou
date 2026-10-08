@@ -10,6 +10,9 @@ export default {
   'theme.auto': 'Automatisch',
   'theme.light': 'Hell',
   'theme.dark': 'Dunkel',
+  'flags.label': 'Verspätung an den Fahrzeugen',
+  'flags.on': 'Anzeigen',
+  'flags.off': 'Ausblenden',
 
   'map.label': 'Karte mit den aktuellen Positionen der Fahrzeuge',
   'map.zoomIn': 'Vergrößern',

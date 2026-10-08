@@ -239,9 +239,9 @@ Worth watching:
   ([Realtime polling and traffic](configuration.md#realtime-polling-and-traffic)).
 - **What is stored and logged.** The server sets no cookies, has no accounts
   and writes no access log; it logs a request only when handling it failed
-  with an error. The page stores five settings in the browser's
-  `localStorage` (`netnou.lang`, `netnou.theme`, `netnou.hiddenModes`,
-  `netnou.colorBy`, `netnou.view`) and its own files in the browser cache `netnou-shell-v2`
+  with an error. The page stores six settings in the browser's
+  `localStorage` (`netnou.lang`, `netnou.theme`, `netnou.flags`,
+  `netnou.hiddenModes`, `netnou.colorBy`, `netnou.view`) and its own files in the browser cache `netnou-shell-v2`
   for the offline start. The only requests a visitor's browser makes to a
   third party are those for the map: its style, tiles, fonts and icons. With
   the defaults they go to `tiles.openfreemap.org`, which is served through

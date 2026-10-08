@@ -175,6 +175,7 @@ const state = {
   outline: [], // the edge of the area: rings of [lat, lon]
   enabled: new Set([...MODES, 'other']),
   colorBy: loadSetting('colorBy', 'mode') === 'delay' ? 'delay' : 'mode',
+  flags: loadSetting('flags', true) !== false, // the vehicles carry their delay as a flag
   theme: 'auto', // one of THEMES, see there
   selection: null, // { type: 'trip' | 'station' | 'line', id, data }, see select()
   hits: [], // what can be pointed at on the map: { x, y, r, vehicle or station }, see draw()
@@ -463,9 +464,10 @@ function drawRing(x, y, r, w, color) {
  * late, or a question mark where none is reported while others have one
  * (`live`). On time to the minute it carries none.
  * None when the vehicles are coloured by delay: the colour says both then.
+ * And none at all for a visitor who has switched the flags off.
  */
 function flagOf(v, live) {
-  if (state.colorBy !== 'mode') return null;
+  if (state.colorBy !== 'mode' || !state.flags) return null;
   if (v.delay === null) return live ? { text: '?', color: colors.unknown } : null;
   if (Math.round(v.delay / 60) === 0) return null;
   return { text: delayText(v.delay), color: colors.delay[FLAG_COLOR[delayClass(v.delay)]] };
@@ -1424,6 +1426,23 @@ document.addEventListener('pointerdown', (event) => {
     });
   }
   applyTheme();
+}
+
+// The delay as a flag on the vehicles, or a calmer map without: chosen in the settings, kept in the browser.
+{
+  const buttons = [...document.querySelectorAll('[data-flags-choice]')];
+  const show = () => {
+    for (const button of buttons) button.setAttribute('aria-pressed', String((button.dataset.flagsChoice === 'on') === state.flags));
+  };
+  for (const button of buttons) {
+    button.addEventListener('click', () => {
+      state.flags = button.dataset.flagsChoice === 'on';
+      saveSetting('flags', state.flags);
+      show();
+      draw();
+    });
+  }
+  show();
 }
 
 // ---------- detail panel ----------

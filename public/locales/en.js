@@ -22,6 +22,10 @@ export default {
   'theme.auto': 'Automatic',
   'theme.light': 'Light',
   'theme.dark': 'Dark',
+  // the small flag on a vehicle on the map that says how many minutes it is early or late
+  'flags.label': 'Delay on the vehicles',
+  'flags.on': 'Show',
+  'flags.off': 'Hide',
 
   'map.label': 'Map with the current positions of the vehicles',
   'map.zoomIn': 'Zoom in',
