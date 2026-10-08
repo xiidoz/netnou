@@ -122,16 +122,16 @@ export function buildSegments(data, graphs, area, onProgress = () => {}) {
     const [bx, by] = network.toXY(stops.lat[to], stops.lon[to]);
     let route = null;
     const far = (stop) => area.distance(stops.lat[stop], stops.lon[stop]) > NEAR.exit;
-    if (a.length && b.length) {
-      const [factor, slack] = SETTINGS[NETS[n]].detour;
-      route = network.route(a, b, Math.hypot(bx - ax, by - ay) * factor + slack);
-    }
+    const [factor, slack] = SETTINGS[NETS[n]].detour;
+    const maxLength = Math.hypot(bx - ax, by - ay) * factor + slack;
+    if (a.length && b.length) route = network.route(a, b, maxLength);
     // One end is not on the network, or it lies beyond the area on a part of
     // the network that is not connected to the rest (the OSM data ends a few
-    // km outside): follow the network towards it until the route has left the area.
+    // km outside): follow the network towards it until the route has left the
+    // area, or as far as the network goes that way.
     const inside = (x, y) => area.distance(...network.toLatLon(x, y)) <= NEAR.exit;
-    if (!route && a.length && (!b.length || far(to))) route = network.routeBeyond(a, bx, by, inside, false);
-    if (!route && b.length && (!a.length || far(from))) route = network.routeBeyond(b, ax, ay, inside, true);
+    if (!route && a.length && (!b.length || far(to))) route = network.routeBeyond(a, bx, by, inside, false, maxLength);
+    if (!route && b.length && (!a.length || far(from))) route = network.routeBeyond(b, ax, ay, inside, true, maxLength);
     if (!route) continue;
 
     route = simplify(route, SIMPLIFY_M);

@@ -131,12 +131,25 @@ test('routing follows the network, respects one-way streets and the detour limit
   // towards a stop far to the east: follow the road to the edge of the area, then straight
   const [farX, farY] = road.toXY(LAT, LON + 1);
   const [limitX] = road.toXY(LAT, LON + 0.003);
-  const leaving = road.routeBeyond(snap('mainWest'), farX, farY, (x) => x < limitX, false);
+  const leaving = road.routeBeyond(snap('mainWest'), farX, farY, (x) => x < limitX, false, 200000);
   const [cx, cy] = road.toXY(...corner('C'));
   close(leaving.slice(-4), [cx, cy, farX, farY], 0.01, 'leaves the area at C');
-  const arriving = road.routeBeyond(snap('mainWest'), farX, farY, (x) => x < limitX, true);
+  const arriving = road.routeBeyond(snap('mainWest'), farX, farY, (x) => x < limitX, true, 200000);
   close(arriving.slice(0, 4), [farX, farY, cx, cy], 0.01, 'enters the area at C');
   assert.equal(arriving.length, leaving.length);
+
+  // Towards a stop some way east of C, where the main road ends within the area
+  // (as at the edge of the OSM data) while the streets to the north leave it:
+  // the route goes as far as the road leads towards the stop, and does not
+  // turn north to get out of the area.
+  const [nearX, nearY] = road.toXY(LAT, LON + 0.012);
+  const [, limitY] = road.toXY(LAT + 0.001, LON);
+  const southOnly = (x, y) => y < limitY;
+  const cutOff = road.routeBeyond(snap('mainWest'), nearX, nearY, southOnly, false, 1500);
+  close(cutOff.slice(-4), [cx, cy, nearX, nearY], 0.01, 'leaves the road where it ends');
+  // … nor does it look further than a route may be long
+  close(road.routeBeyond(snap('mainWest'), nearX, nearY, southOnly, false, 900).slice(-4), [cx, cy, nearX, nearY], 0.01, 'the same within a short limit');
+  assert.equal(road.routeBeyond(snap('mainWest'), nearX, nearY, southOnly, false, 100), null);
 });
 
 test('simplify drops points on a straight line only', () => {

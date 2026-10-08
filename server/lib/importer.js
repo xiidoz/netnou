@@ -10,7 +10,7 @@ import { addDays, weekday } from './time.js';
 // Bump when the layout or the meaning of anything in the dataset changes,
 // including `segments` (shapes.js) and what the importer puts into a field: a
 // stored dataset of another version is discarded and imported again on start.
-export const DATASET_VERSION = 4;
+export const DATASET_VERSION = 5;
 
 const WEEKDAYS = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
 
