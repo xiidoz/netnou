@@ -14,6 +14,7 @@ const CACHE = `${CACHE_PREFIX}v2`;
 const SHELL = [
   './',
   'app.js',
+  'display.js',
   'i18n.js',
   'search.js',
   'theme.js',

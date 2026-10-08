@@ -96,6 +96,8 @@ button { font: inherit; color: inherit; }
 .maplibregl-map { font-family: inherit; }
 .maplibregl-map.clickable .maplibregl-canvas-container { cursor: pointer; }
 
+/* (a button with one of the page's own icons, not a picture of MapLibre's) */
+.maplibregl-ctrl-group.own-icon button { display: grid; place-items: center; color: var(--text); }
 /* the controls of MapLibre in the colours of the cards */
 .maplibregl-ctrl-group,
 .maplibregl-ctrl.maplibregl-ctrl-attrib {
@@ -126,7 +128,7 @@ button { font: inherit; color: inherit; }
   z-index: 1001;
   top: calc(var(--gap) + var(--safe-top));
   left: calc(var(--gap) + var(--safe-left));
-  width: 324px;
+  width: 336px;
   padding: 12px 14px;
   display: grid;
   gap: 10px;
@@ -139,7 +141,7 @@ button { font: inherit; color: inherit; }
 
 /* the round buttons in the title row: the gear that opens the settings, and
    on a small screen the lens that opens the search (see there) */
-.settings-open, .search-open, .search-close {
+.settings-open, .display-toggle, .search-open, .search-close {
   display: grid;
   place-items: center;
   flex: none;
@@ -152,8 +154,8 @@ button { font: inherit; color: inherit; }
   background: var(--bg-subtle);
   cursor: pointer;
 }
-.settings-open, .search-open { margin: -4px 0; color: var(--text-muted); }
-.settings-open:hover, .settings-open[aria-expanded="true"] { color: var(--text); }
+.settings-open, .display-toggle, .search-open { margin: -4px 0; color: var(--text-muted); }
+.settings-open:hover, .settings-open[aria-expanded="true"], .display-toggle:hover { color: var(--text); }
 
 /* The settings: a small box that hangs at the gear, with a tip that points to
    it, over the rest of the card. (The gear is 30 wide and ends where the card's
@@ -587,6 +589,40 @@ li:last-child > .row.stop .rail::before { bottom: 50%; }
   border-radius: 10px;
   box-shadow: var(--shadow);
   text-align: center;
+}
+
+/* ---------- display mode ---------- */
+
+/* The controls hidden (see "display mode" in app.js): of the card its title
+   row stays, with what the page is and the button that brings the rest back –
+   and the status line where it is a warning. On a screen on a wall
+   (display=fixed) nothing is to be touched: no buttons at all, on the card or
+   in the corner of the map, and no details. The legend of the delays stays
+   there, as nobody can look up what a colour means. */
+:root[data-display] .controls { width: auto; max-width: 336px; }
+:root[data-display=""] .controls > :not(.title, .status),
+:root[data-display="fixed"] .controls > :not(.title, .status, .legend),
+:root[data-display] .status:not([data-state="outage"], [data-state="error"]),
+:root[data-display] .title .settings-open,
+:root[data-display] .title .search-open,
+:root[data-display="fixed"] .title button,
+:root[data-display="fixed"] .maplibregl-ctrl-group,
+:root[data-display="fixed"] .panel { display: none; }
+/* the way out of a screen on a wall: it shows for a moment when the screen is touched */
+.display-leave {
+  position: absolute;
+  z-index: 1200;
+  left: 50%;
+  bottom: 56px;
+  transform: translateX(-50%);
+  padding: 10px 18px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--bg);
+  color: var(--text);
+  box-shadow: var(--shadow);
+  font-weight: 600;
+  cursor: pointer;
 }
 
 /* ---------- how it works ---------- */

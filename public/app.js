@@ -9,8 +9,9 @@
 // lines, stops and operators, and the notes of the feed.
 
 import { APP_NAME, formatNumber, formatTime, languagePicker, loadLanguage, pageTexts, setTimeZone, t, translatePage } from './i18n.js';
+import { displayQuery, readDisplay } from './display.js';
 import { buildIndex, search, searchLines } from './search.js';
-import { mdiAlert, mdiChevronLeft, mdiChevronRight, mdiClose, mdiCog, mdiMagnify } from './vendor/material-design-icons/icons.js';
+import { mdiAlert, mdiChevronLeft, mdiChevronRight, mdiClose, mdiCog, mdiEye, mdiEyeOff, mdiFullscreen, mdiFullscreenExit, mdiMagnify } from './vendor/material-design-icons/icons.js';
 import { AttributionControl, MapLibreMap, NavigationControl } from './vendor/maplibre-gl/maplibre-gl.mjs';
 
 // The modes with a chip. Same ids as MODES in server/lib/timetable.js, the
@@ -20,6 +21,16 @@ const MODES = ['subway', 'tram', 'bus', 'suburban', 'regional', 'longdistance'];
 // Later entries are drawn on top: trains over trams over buses.
 const DRAW_ORDER = ['other', 'bus', 'tram', 'subway', 'suburban', 'regional', 'longdistance'];
 const RAIL_MODES = ['subway', 'suburban', 'regional', 'longdistance'];
+
+// Display mode: the page without its controls, with what is shown in its
+// address (see display.js for what an address says). ASKED is what the
+// address the page was opened with asks for, if it asks for a display.
+const ASKED = readDisplay(location.search, MODES);
+const OPENED_AS_DISPLAY = ASKED !== null;
+// A screen on a wall that nobody operates: the map stands still, and the page looks after itself (startFixed).
+const FIXED = ASKED?.fixed ?? false;
+const DISPLAY_LEAVE_MS = 6000; // how long the way out shows after a fixed display was touched
+const DISPLAY_VERSION_MS = 10 * 60_000; // how often a fixed display asks whether the server runs another version
 
 const POLL_MS = 10_000;
 const RETRY_LOADING_MS = 5000; // while the server has no timetable yet
@@ -117,7 +128,7 @@ function el(tag, props = {}, children = []) {
 // each the shape of one icon in a box of 24 by 24; style.css gives it its size
 // and its colour. Shapes and not characters: where a character sits in its box
 // is up to the font, and the font is the device's.
-const ICONS = { alert: mdiAlert, close: mdiClose, left: mdiChevronLeft, right: mdiChevronRight, search: mdiMagnify, settings: mdiCog };
+const ICONS = { alert: mdiAlert, eye: mdiEye, eyeOff: mdiEyeOff, fullscreen: mdiFullscreen, fullscreenExit: mdiFullscreenExit, close: mdiClose, left: mdiChevronLeft, right: mdiChevronRight, search: mdiMagnify, settings: mdiCog };
 
 function icon(name) {
   const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
@@ -135,6 +146,8 @@ for (const node of document.querySelectorAll('[data-icon]')) node.append(icon(no
 // What is stored may be anything – written by another version of the page or
 // by hand – so whoever reads a setting checks its shape.
 function loadSetting(key, fallback) {
+  // (a page opened as a display has its settings from the address)
+  if (ASKED) return ASKED.settings[key] ?? fallback;
   try {
     return JSON.parse(localStorage.getItem(`netnou.${key}`)) ?? fallback;
   } catch {
@@ -143,6 +156,11 @@ function loadSetting(key, fallback) {
 }
 
 function saveSetting(key, value) {
+  // (a display keeps what is set in its address, see writeAddress)
+  if (state.display) {
+    writeAddress();
+    return;
+  }
   try {
     localStorage.setItem(`netnou.${key}`, JSON.stringify(value));
   } catch {
@@ -174,6 +192,7 @@ const state = {
   areaKnown: false, // api/area has answered: the map shows the area
   outline: [], // the edge of the area: rings of [lat, lon]
   enabled: new Set([...MODES, 'other']),
+  display: OPENED_AS_DISPLAY, // the map without the controls, see "display mode"
   colorBy: loadSetting('colorBy', 'mode') === 'delay' ? 'delay' : 'mode',
   flags: loadSetting('flags', true) !== false, // the vehicles carry their delay as a flag
   theme: 'auto', // one of THEMES, see there
@@ -280,6 +299,8 @@ try {
     zoom: MIN_ZOOM,
     minZoom: MIN_ZOOM,
     maxZoom: MAX_ZOOM,
+    // (a display on a wall is looked at, not moved)
+    interactive: !FIXED,
     // North stays up and the view flat.
     dragRotate: false,
     touchPitch: false,
@@ -914,6 +935,8 @@ const hovering = matchMedia('(hover: hover)');
 const hideTooltip = () => { tooltip.hidden = true; };
 
 map.on('mousemove', (event) => {
+  // (a display on a wall has nothing to point at: the map tells of the pointer all the same)
+  if (FIXED) return;
   const hit = hitTest(event.point);
   map.getContainer().classList.toggle('clickable', !!hit);
   tooltip.hidden = !hit || !hovering.matches;
@@ -928,6 +951,7 @@ map.on('mouseout', hideTooltip);
 map.on('movestart', hideTooltip);
 
 map.on('click', (event) => {
+  if (FIXED) return;
   hideTooltip();
   const hit = hitTest(event.point);
   if (hit?.vehicle) select('trip', hit.vehicle.id);
@@ -1471,6 +1495,8 @@ document.addEventListener('keydown', (event) => {
     settingsButton.focus();
   } else if (state.selection) {
     closePanel();
+  } else if (state.display && !FIXED) {
+    setDisplay(false);
   }
 });
 
@@ -1911,6 +1937,8 @@ async function loadArea() {
   map.addControl(new NavigationControl({ showCompass: false }), 'bottom-right');
   // (a browser tells where it is to pages with HTTPS only)
   if (window.isSecureContext && navigator.geolocation) map.addControl(locateControl, 'bottom-right');
+  // (not every browser lets a page have the whole screen: an iPhone does not)
+  if (document.fullscreenEnabled) map.addControl(fullscreenControl, 'bottom-right');
   state.outline = area.outline;
   // What "how it works" ends with: the software by its name, as in the credits, with the way to its source.
   if (typeof about?.homepage === 'string') {
@@ -2014,6 +2042,130 @@ document.addEventListener('visibilitychange', () => {
 });
 window.addEventListener('online', poll);
 
+// ---------- display mode ----------
+
+// The button with the eye in the title row takes the controls away and brings them back.
+const displayButton = $('display-toggle');
+displayButton.addEventListener('click', () => setDisplay(!state.display));
+
+/** Puts what is shown into the address, in place of the address so far: the page is not loaded again. */
+function writeAddress() {
+  if (!state.areaKnown) return;
+  const center = map.getCenter();
+  const settings = {
+    view: { lat: center.lat, lon: center.lng, zoom: map.getZoom() },
+    theme: state.theme,
+    colorBy: state.colorBy,
+    flags: state.flags,
+    hiddenModes: MODES.filter((mode) => !state.enabled.has(mode)),
+  };
+  history.replaceState(null, '', displayQuery({ fixed: FIXED, language, settings }, MODES));
+}
+
+/** Brings the page in line with whether it is a display. */
+function showDisplay() {
+  const root = document.documentElement;
+  if (state.display) root.dataset.display = FIXED ? 'fixed' : '';
+  else delete root.dataset.display;
+  // The button says what it does: a struck-through eye hides, an open eye shows.
+  const label = state.display ? t('display.leave') : t('display.enter');
+  displayButton.title = label;
+  displayButton.setAttribute('aria-label', label);
+  displayButton.replaceChildren(icon(state.display ? 'eye' : 'eyeOff'));
+}
+
+/** Takes the controls away or brings them back. The map stays as it is: nothing is loaded again. */
+function setDisplay(on) {
+  if (!on && OPENED_AS_DISPLAY) {
+    // What is set came with the address and not from this browser: the page
+    // with its controls starts afresh, with what is stored here.
+    location.search = ASKED.language ? `?lang=${encodeURIComponent(ASKED.language)}` : '';
+    return;
+  }
+  state.display = on;
+  if (on) {
+    // (what hangs at the row that stays, or takes its place, goes with the rest)
+    showSettings(false);
+    closeSearch();
+  }
+  showDisplay();
+  if (on) {
+    writeAddress();
+    return;
+  }
+  history.replaceState(null, '', `${location.pathname}${OWN_SEARCH}`);
+  // (where the map was moved to meanwhile is what the browser keeps again)
+  const center = map.getCenter();
+  saveSetting('view', { lat: center.lat, lon: center.lng, zoom: map.getZoom() });
+}
+// (the address the page with its controls was opened with)
+const OWN_SEARCH = OPENED_AS_DISPLAY ? '' : location.search;
+
+/**
+ * What a display on a wall does besides showing the map: nobody operates it,
+ * so it looks after itself. And it shows the way out to whoever touches it
+ * after all: the button in the corner is gone there.
+ */
+function startFixed() {
+  const leave = $('display-leave');
+  let leaveTimer = null;
+  const showLeave = () => {
+    leave.hidden = false;
+    clearTimeout(leaveTimer);
+    leaveTimer = setTimeout(() => { leave.hidden = true; }, DISPLAY_LEAVE_MS);
+  };
+  document.addEventListener('pointerdown', showLeave);
+  document.addEventListener('keydown', showLeave);
+  leave.addEventListener('click', () => setDisplay(false));
+
+  // The screen stays on where the browser lets a page ask for that; the
+  // browser takes it back whenever the page is hidden.
+  const keepAwake = () => navigator.wakeLock?.request('screen').catch(() => {});
+  keepAwake();
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden) keepAwake();
+  });
+
+  // Nobody reloads it: it does so itself once the server runs another version.
+  let running = null;
+  const checkVersion = async () => {
+    try {
+      const res = await fetch('api/status');
+      if (!res.ok) return;
+      const about = await res.json();
+      const version = `${about.version} ${about.commit ?? ''}`;
+      if (running !== null && version !== running) location.reload();
+      running = version;
+    } catch {
+      // no connection: the next check will tell
+    }
+  };
+  checkVersion();
+  setInterval(checkVersion, DISPLAY_VERSION_MS);
+}
+
+// ---------- full screen ----------
+
+// The whole screen for the page: a button in the corner of the map, with the
+// zoom buttons. Its icon is one of the page's own, MapLibre's style sheet has none.
+const fullscreenButton = el('button', { type: 'button', onclick: () => (document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen()).catch(() => {}) });
+/** For map.addControl: the button as a group of its own, like the zoom buttons. */
+const fullscreenControl = {
+  onAdd: () => el('div', { class: 'maplibregl-ctrl maplibregl-ctrl-group own-icon' }, [fullscreenButton]),
+  onRemove: () => fullscreenButton.parentNode.remove(),
+};
+/** Brings the button in line with whether the page has the whole screen. */
+function showFullscreen() {
+  const on = Boolean(document.fullscreenElement);
+  const label = on ? t('map.fullscreenExit') : t('map.fullscreen');
+  fullscreenButton.title = label;
+  fullscreenButton.setAttribute('aria-label', label);
+  fullscreenButton.replaceChildren(icon(on ? 'fullscreenExit' : 'fullscreen'));
+}
+// (the browser tells: Escape leaves it too, and no click of the button's is behind that)
+document.addEventListener('fullscreenchange', showFullscreen);
+showFullscreen();
+
 function init() {
   // The lists have a column for the time, as wide as the language writes it (14:05 or 12:05 PM).
   const hours = Array.from({ length: 24 }, (_, hour) => formatTime(hour * 3600));
@@ -2023,6 +2175,8 @@ function init() {
   resizeCanvas();
   requestAnimationFrame(frame);
   setInterval(updateStatus, 1000);
+  showDisplay();
+  if (FIXED) startFixed();
   poll();
   // Makes the page installable as an app and lets it start offline (see sw.js).
   navigator.serviceWorker?.register('sw.js').catch((err) => console.warn('service worker not registered:', err));

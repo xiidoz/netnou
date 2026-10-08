@@ -43,6 +43,9 @@ changes as breaking.
   under way, alone on the map.
 - The visitor's own location on the map, if they ask for it; it stays in
   their browser.
+- A button hides the controls for more map, another gives the page the whole
+  screen. With `?display=fixed` in its address the page is a
+  [display for a screen on a wall](docs/deployment.md#a-screen-on-a-wall).
 - User interface in German and English, chosen per visitor; further languages
   are one file each.
 - Tells search engines and link previews what it shows and where, in the

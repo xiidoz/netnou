@@ -108,6 +108,7 @@ Page (`public/`):
 | --- | --- |
 | `index.html`, `style.css` | structure and appearance; colours for canvas and DOM live in the style sheet |
 | `app.js` | map, polling, animation, drawing on a canvas, detail panel |
+| `display.js` | display mode in the address of the page: what an address asks for, and the address for what is shown |
 | `search.js` | finding stops and lines by name: matching and order, without the page around it |
 | `i18n.js`, `locales/` | texts in the visitor's language, see [translating.md](translating.md) |
 | `theme.js` | light or dark: puts the visitor's choice, or else the scheme of the device, on the page before it is drawn |
