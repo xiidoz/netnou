@@ -31,6 +31,8 @@
       <h1>Netnou</h1>
       <p id="area-name"></p>
       <button type="button" class="search-open" id="search-open" aria-label="Search" data-i18n-aria-label="search.open" data-icon="search"></button>
+      <!-- Takes the controls away and brings them back: of the card this row stays (see "display mode" in app.js, which draws the eye). -->
+      <button type="button" class="display-toggle" id="display-toggle" aria-label="Hide the controls" data-i18n-aria-label="display.enter"></button>
       <button type="button" class="settings-open" id="settings-open" aria-label="Settings" data-i18n-aria-label="settings.title" aria-expanded="false" aria-controls="settings" data-icon="settings"></button>
     </div>
     <!-- What a visitor can set for themselves, kept in their browser: the
@@ -125,6 +127,11 @@
     </div>
   </dialog>
 
+
+  <!-- The way back from a display on a wall (display=fixed, see "display
+       mode" in app.js), where nothing else is left to press: it shows for a
+       moment when the screen is touched. -->
+  <button type="button" class="display-leave" id="display-leave" hidden data-i18n="display.leave">Show the controls</button>
 
   <div class="tooltip" id="tooltip" hidden></div>
   <div class="banner" id="banner" hidden role="alert"></div>

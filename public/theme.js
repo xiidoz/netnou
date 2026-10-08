@@ -8,10 +8,15 @@
 
 window.applyColorScheme = () => {
   let choice = null;
-  try {
-    choice = JSON.parse(localStorage.getItem('netnou.theme'));
-  } catch {
-    // private mode, blocked storage, or not what the page stored: as the device has it
+  // (while the page is a display its address says it, in place of what is stored: see "display mode" in app.js)
+  const address = new URLSearchParams(location.search);
+  if (address.has('display')) choice = address.get('theme');
+  else {
+    try {
+      choice = JSON.parse(localStorage.getItem('netnou.theme'));
+    } catch {
+      // private mode, blocked storage, or not what the page stored: as the device has it
+    }
   }
   const dark = choice === 'dark' || (choice !== 'light' && matchMedia('(prefers-color-scheme: dark)').matches);
   document.documentElement.dataset.theme = dark ? 'dark' : 'light';

@@ -34,6 +34,8 @@ export default {
   'map.credits': 'Show or hide the credits',
   // the button above the zoom buttons: it shows where the visitor is, and has the map follow them
   'map.locate': 'Show my location',
+  'map.fullscreen': 'Full screen',
+  'map.fullscreenExit': 'Leave full screen',
   // on the marker next to the version in the credits; it leads to the release notes
   'update.available': 'Version {version} is available: release notes',
   'map.unsupported': 'This browser cannot draw the map. It needs WebGL 2, which is switched off or not available here.',
@@ -91,6 +93,10 @@ export default {
   'colorBy.title': 'Colour by',
   'colorBy.mode': 'Mode',
   'colorBy.delay': 'Delay',
+
+  // the button with the eye next to the settings: it takes the controls of the page away, and brings them back
+  'display.enter': 'Hide the controls',
+  'display.leave': 'Show the controls',
 
   'delay.early': 'early',
   'delay.onTime': 'on time',

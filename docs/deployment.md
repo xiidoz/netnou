@@ -6,6 +6,7 @@
 - [Reverse proxy, HTTPS and sub-paths](#reverse-proxy-https-and-sub-paths)
 - [Monitoring](#monitoring)
 - [Running a public instance](#running-a-public-instance)
+- [A screen on a wall](#a-screen-on-a-wall)
 - [Troubleshooting](#troubleshooting)
 
 ## Requirements
@@ -242,7 +243,9 @@ Worth watching:
   with an error. The page stores six settings in the browser's
   `localStorage` (`netnou.lang`, `netnou.theme`, `netnou.flags`,
   `netnou.hiddenModes`, `netnou.colorBy`, `netnou.view`) and its own files in the browser cache `netnou-shell-v2`
-  for the offline start. The only requests a visitor's browser makes to a
+  for the offline start. While its controls are hidden, and as a display on a
+  wall, it reads and writes none of the settings: its address says them
+  ([A screen on a wall](#a-screen-on-a-wall)). The only requests a visitor's browser makes to a
   third party are those for the map: its style, tiles, fonts and icons. With
   the defaults they go to `tiles.openfreemap.org`, which is served through
   Cloudflare; both see the visitor's IP address and the address of your
@@ -262,6 +265,50 @@ Worth watching:
   `LINKS` puts links to them, and to any other page of your own, at the
   foot of the header card, in view on a phone as well
   ([Links of your own](configuration.md#links-of-your-own)).
+
+## A screen on a wall
+
+The page can be a display on a screen that nobody operates, in a waiting
+room, an office or a hallway. The browser of such a screen often has nothing
+stored, so the address says everything that is shown:
+
+```text
+https://example.org/?display=fixed&view=49.4478,11.0765,13.4&theme=dark&lang=de
+```
+
+| In the address | Meaning | Without it |
+| --- | --- | --- |
+| `display=fixed` | the page as a display: no buttons, the map stands still | the page with its controls |
+| `view=<lat>,<lon>,<zoom>` | the section of the map | the whole area |
+| `theme=light` or `theme=dark` | the colour scheme | as the device has it |
+| `color=delay` | vehicles coloured by delay, with the legend | coloured by kind of transport |
+| `flags=off` | no delay flags on the vehicles | with flags |
+| `modes=tram,subway` | only these kinds of transport, of `subway`, `tram`, `bus`, `suburban`, `regional` and `longdistance` | all |
+| `lang=de` | the language | the language of the browser |
+
+The quick way to such an address: open the page, set it up as the screen
+should show it, and press the button with the eye next to the settings. That
+hides the controls, and from then on the address says what is shown and
+follows the map as you move it. Copy it and write `display=fixed` in place
+of `display`.
+
+What a fixed display does by itself:
+
+- It asks the server every ten minutes which version runs, and loads the page
+  again when that has changed.
+- It asks the browser to keep the screen on. That needs HTTPS and a browser
+  that knows the Screen Wake Lock API; set the screen's own power saving as
+  well.
+- Without realtime data or without a connection it says so under its title,
+  and goes on by itself when they are back.
+- A touch or a key shows a button for a few seconds that leads to the page
+  with its controls.
+
+A display is never hidden, so while it shows, the server fetches the realtime
+feed day and night
+([Realtime polling and traffic](configuration.md#realtime-polling-and-traffic)).
+On an instance of your own that is what it is there for. Before you point a
+display at somebody else's instance, ask them.
 
 ## Troubleshooting
 
