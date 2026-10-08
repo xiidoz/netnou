@@ -34,8 +34,9 @@
       <button type="button" class="settings-open" id="settings-open" aria-label="Settings" data-i18n-aria-label="settings.title" aria-expanded="false" aria-controls="settings" data-icon="settings"></button>
     </div>
     <!-- What a visitor can set for themselves, kept in their browser: the
-         language (app.js fills in the list) and whether the page is light or
-         dark. A small box that hangs at the gear, which opens and shuts it. -->
+         language (app.js fills in the list), whether the page is light or
+         dark, and whether the vehicles carry their delay as a flag. A small
+         box that hangs at the gear, which opens and shuts it. -->
     <div class="bubble" id="settings" role="group" aria-label="Settings" data-i18n-aria-label="settings.title" hidden>
       <div class="setting">
         <label for="language" data-i18n="language.label">Language</label>
@@ -47,6 +48,13 @@
           <button type="button" data-theme-choice="auto" aria-pressed="true" data-i18n="theme.auto">Automatic</button>
           <button type="button" data-theme-choice="light" aria-pressed="false" data-i18n="theme.light">Light</button>
           <button type="button" data-theme-choice="dark" aria-pressed="false" data-i18n="theme.dark">Dark</button>
+        </div>
+      </div>
+      <div class="setting" role="group" aria-labelledby="flags-label">
+        <span id="flags-label" data-i18n="flags.label">Delay on the vehicles</span>
+        <div class="segmented">
+          <button type="button" data-flags-choice="on" aria-pressed="true" data-i18n="flags.on">Show</button>
+          <button type="button" data-flags-choice="off" aria-pressed="false" data-i18n="flags.off">Hide</button>
         </div>
       </div>
     </div>
