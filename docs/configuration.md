@@ -216,7 +216,13 @@ A file in the folder takes the place of the built-in one of the same name:
 | `preview.png` or `preview.jpg` | the picture a link to the instance shows in a chat or on social media, shown large; needs `PUBLIC_URL` | 1200 × 630 |
 
 Any of them may be missing; the built-in one is used then, and without a
-preview picture a link shows the icon. No other file of the page can be
+preview picture a link shows the icon.
+
+Keep the preview picture small as a file, 300 kB at most: a chat fetches it
+for every preview, and some show a larger file small or not at all. A
+screenshot of the map is several times smaller as a JPEG than as a PNG. The
+page tells previews how large the picture is; the server reads that from the
+file. No other file of the page can be
 replaced this way. The server looks into the folder when it starts and names
 what it found in its log, so restart it after changing the files. Browsers
 and chats keep icons and previews for a long time; a change may take a
