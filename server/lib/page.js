@@ -46,6 +46,34 @@ export function ownFiles(dir) {
   return { files, preview };
 }
 
+/**
+ * How large a picture is, read from its file: { width, height } of a PNG or a
+ * JPEG, null of anything else and of a file that cannot be read.
+ */
+export function pictureSize(file) {
+  let data;
+  try {
+    data = fs.readFileSync(file);
+  } catch {
+    return null;
+  }
+  // PNG: its signature, then the first chunk, which begins with width and height
+  if (data.length >= 24 && data.readUInt32BE(0) === 0x89504e47 && data.toString('latin1', 12, 16) === 'IHDR') {
+    return { width: data.readUInt32BE(16), height: data.readUInt32BE(20) };
+  }
+  // JPEG: segments, each a marker and its length; the "start of frame" among them has the size
+  if (data.length >= 4 && data.readUInt16BE(0) === 0xffd8) {
+    let at = 2;
+    while (at + 9 <= data.length && data[at] === 0xff) {
+      const marker = data[at + 1];
+      // (C0 to CF but for three that are something else)
+      if (marker >= 0xc0 && marker <= 0xcf && ![0xc4, 0xc8, 0xcc].includes(marker)) return { width: data.readUInt16BE(at + 7), height: data.readUInt16BE(at + 5) };
+      at += 2 + data.readUInt16BE(at + 2);
+    }
+  }
+  return null;
+}
+
 const escapeHtml = (text) => String(text).replace(/[&<>"']/g, (char) => `&#${char.charCodeAt(0)};`);
 
 /** The address of the page in one language, or without one in that of the visitor's browser. */
@@ -65,12 +93,13 @@ const versions = (publicUrl) => [...LANGUAGE_CODES.map((code) => [code, addressI
  * @param links the operator's own, [{ text, href }], at the foot of the header card
  * @param preview the address of the operator's picture for previews of
  *   links (ownFiles), null to show the icon
+ * @param previewSize its { width, height } (pictureSize), null if not known
  * @param publicUrl the address of the instance with a slash at its end, or
  *   null: then all that needs a full address is left out
  * @param listed whether search engines may list the page; if not, it asks
  *   them not to and leaves out what is there for them alone
  */
-export function renderPage(html, { language, asked, texts, siteName, areaName, links = [], preview = null, publicUrl, listed }) {
+export function renderPage(html, { language, asked, texts, siteName, areaName, links = [], preview = null, previewSize = null, publicUrl, listed }) {
   const { title, description } = pageTexts(areaName, texts, siteName);
   let page = html;
   const put = (pattern, replacement) => {
@@ -114,6 +143,8 @@ export function renderPage(html, { language, asked, texts, siteName, areaName, l
     tags.push(`<meta property="og:url" content="${address}">`);
     if (preview) {
       tags.push(`<meta property="og:image" content="${escapeHtml(publicUrl + preview)}">`);
+      // (some chats show a picture large only if they know its size before they have fetched it)
+      if (previewSize) tags.push(`<meta property="og:image:width" content="${previewSize.width}">`, `<meta property="og:image:height" content="${previewSize.height}">`);
     } else {
       tags.push(
         `<meta property="og:image" content="${escapeHtml(publicUrl + PREVIEW_ICON.path)}">`,

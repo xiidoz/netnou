@@ -10,7 +10,7 @@ import { test } from 'node:test';
 import { LANGUAGES, pageTexts } from '../public/i18n.js';
 import de from '../public/locales/de.js';
 import en from '../public/locales/en.js';
-import { LANGUAGE_CODES, ownFiles, renderManifest, renderPage, robotsTxt, sitemapXml } from '../server/lib/page.js';
+import { LANGUAGE_CODES, ownFiles, pictureSize, renderManifest, renderPage, robotsTxt, sitemapXml } from '../server/lib/page.js';
 
 const html = fs.readFileSync(new URL('../public/index.html', import.meta.url), 'utf8');
 const URL_ = 'https://karte.example.org/live/';
@@ -144,12 +144,33 @@ test('files of the operator\'s own are found by their names, and only those that
   }
 });
 
+test('the size of a picture is read from its file', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'netnou-size-'));
+  try {
+    // a PNG: one of the page's own icons
+    assert.deepEqual(pictureSize(new URL('../public/icons/icon-192.png', import.meta.url)), { width: 192, height: 192 });
+    // a JPEG: start of image, an application segment to pass over, then the start of frame with height and width
+    const jpeg = Buffer.from([0xff, 0xd8, 0xff, 0xe0, 0x00, 0x04, 0x4a, 0x46, 0xff, 0xc2, 0x00, 0x11, 0x08, 0x02, 0x76, 0x04, 0xb0, 0x03, 0x01, 0x22, 0x00]);
+    fs.writeFileSync(path.join(dir, 'preview.jpg'), jpeg);
+    assert.deepEqual(pictureSize(path.join(dir, 'preview.jpg')), { width: 1200, height: 630 });
+    // anything else, a file cut short and a file that is not there have none
+    fs.writeFileSync(path.join(dir, 'preview.png'), 'not really a picture');
+    fs.writeFileSync(path.join(dir, 'short.jpg'), jpeg.subarray(0, 10));
+    for (const name of ['preview.png', 'short.jpg', 'not-there.png']) assert.equal(pictureSize(path.join(dir, name)), null, name);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 test('a picture of the operator\'s own is what a preview of a link shows, large', () => {
   const page = renderPage(html, { ...german, preview: 'preview.png' });
   assert.equal(tag(page, /<meta property="og:image" content="([^"]*)"/), `${URL_}preview.png`);
   assert.equal(tag(page, /<meta name="twitter:card" content="([^"]*)"/), 'summary_large_image');
-  // its size is not known and not claimed
+  // its size is said where it is known, and not claimed where it is not
   assert.ok(!page.includes('og:image:width'));
+  const sized = renderPage(html, { ...german, preview: 'preview.png', previewSize: { width: 1200, height: 630 } });
+  assert.equal(tag(sized, /<meta property="og:image:width" content="([^"]*)"/), '1200');
+  assert.equal(tag(sized, /<meta property="og:image:height" content="([^"]*)"/), '630');
   // without one it is the icon, small, as before
   const plain = renderPage(html, german);
   assert.equal(tag(plain, /<meta name="twitter:card" content="([^"]*)"/), 'summary');

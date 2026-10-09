@@ -6,7 +6,7 @@ import zlib from 'node:zlib';
 import { loadConfig, parseBox } from './config.js';
 import { FeedUpdater } from './lib/feed.js';
 import { RealtimePoller } from './lib/realtime.js';
-import { LANGUAGE_CODES, ownFiles, renderManifest, renderPage, robotsTxt, sitemapXml } from './lib/page.js';
+import { LANGUAGE_CODES, ownFiles, pictureSize, renderManifest, renderPage, robotsTxt, sitemapXml } from './lib/page.js';
 import { setTimeZone } from './lib/time.js';
 import { lite } from './lib/timetable.js';
 import { describeBuild, githubReleases, UpdateChecker } from './lib/update.js';
@@ -133,6 +133,7 @@ const compressed = new Map();
 // The operator's own icons and picture for previews of links, if they have
 // put any into a folder for them (BRAND_DIR): looked for once, at the start.
 const own = ownFiles(config.brandDir);
+const previewSize = own.preview ? pictureSize(own.files.get(own.preview)) : null;
 if (own.files.size) log(`Own files from ${config.brandDir}: ${[...own.files.keys()].join(', ')}`);
 
 // The page is index.html with what the instance is written into it
@@ -149,7 +150,7 @@ function servePage(req, res, url) {
   let page = pages.get(asked);
   if (page?.stamp !== stamp) {
     const language = asked ?? config.language;
-    const body = Buffer.from(renderPage(fs.readFileSync(file, 'utf8'), { language, asked, texts: texts[language], siteName: config.siteName, areaName: config.areaName, links: config.links, preview: own.preview, publicUrl: config.publicUrl, listed: config.searchEngines }));
+    const body = Buffer.from(renderPage(fs.readFileSync(file, 'utf8'), { language, asked, texts: texts[language], siteName: config.siteName, areaName: config.areaName, links: config.links, preview: own.preview, previewSize, publicUrl: config.publicUrl, listed: config.searchEngines }));
     page = { stamp, body, etag: `"${crypto.createHash('sha1').update(body).digest('hex').slice(0, 16)}"`, packed: null };
     pages.set(asked, page);
   }
