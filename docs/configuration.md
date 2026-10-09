@@ -242,7 +242,10 @@ LINKS="Über=/ueber, Impressum=/impressum, Datenschutz=https://example.org/daten
   instance, for example on a site of your own at the root of the host while
   the instance is under a path.
 - The texts are shown as they are, in one language.
-- The links open in a new tab.
+- A link with a full address opens in a new tab, so that the map stays where
+  it is. A link to a path on the same host opens in the same tab: such a page
+  belongs to the same site, and a link from it back to the map leads to the
+  map as the visitor left it, not to a second one.
 
 The pages themselves are not part of Netnou. Without `LINKS` nothing is
 shown.

@@ -106,7 +106,8 @@ test('the operator\'s links stand at the foot of the header card, and nothing do
   const nav = /<nav class="links" id="links"([^>]*)>(.*?)<\/nav>/s.exec(page);
   assert.ok(!/\shidden/.test(nav[1]), 'the row is shown');
   assert.match(nav[1], /aria-label="About this service"/);
-  assert.equal(nav[2], '<a href="/ueber" target="_blank" rel="noopener">Über</a>'
+  // a page on the same host takes the place of the map, one elsewhere opens in a new tab
+  assert.equal(nav[2], '<a href="/ueber">Über</a>'
     + '<a href="https://example.org/impressum?a=1&#38;b=2" target="_blank" rel="noopener">Impressum &#38; Kontakt</a>');
   // inside the card, after everything else in it
   assert.ok(page.indexOf('id="links"') > page.indexOf('id="about-line"') && page.indexOf('id="links"') < page.indexOf('</header>'));
