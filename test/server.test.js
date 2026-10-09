@@ -538,7 +538,7 @@ test('an instance that is not to be listed says so with every answer', async () 
       assert.ok(page.includes(`<h1>${settings.SITE_NAME ? 'Bus &#38; Bahn live' : 'Netnou'}</h1>`));
       assert.equal((await get('/api/area')).json.siteName, settings.SITE_NAME ?? 'Netnou');
       assert.equal((await get('/manifest.webmanifest')).json.name, settings.SITE_NAME ?? 'Netnou');
-      assert.equal(page.includes('<a href="/impressum" target="_blank" rel="noopener">Impressum</a></nav>'), Boolean(settings.LINKS));
+      assert.equal(page.includes('<a href="/impressum">Impressum</a></nav>'), Boolean(settings.LINKS));
       assert.equal(/<nav class="links"[^>]* hidden>/.test(page), !settings.LINKS);
       assert.equal(page.includes('og:image'), address !== null);
       if (address) assert.ok(page.includes(`<meta property="og:image" content="${address}preview.png">`));

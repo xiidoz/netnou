@@ -84,8 +84,12 @@ export function renderPage(html, { language, asked, texts, siteName, areaName, l
   put(/(<meta name="apple-mobile-web-app-title" content=")[^"]*"/, (_, start) => `${start}${escapeHtml(siteName)}"`);
   put(/(<h1>)[^<]*/, (_, start) => `${start}${escapeHtml(siteName)}`);
   put(/(<p id="area-name">)[^<]*/, (_, start) => `${start}${escapeHtml(areaName)}`);
-  // (in a new tab, like the links of the credits: the map stays where it is)
-  const anchors = links.map(({ text, href }) => `<a href="${escapeHtml(href)}" target="_blank" rel="noopener">${escapeHtml(text)}</a>`).join('');
+  // A page elsewhere opens in a new tab, like the links of the credits: the
+  // map stays where it is. A page next to the instance (a path on the same
+  // host) takes the place of the map: it belongs to the same site, and its
+  // way back would open the map a second time in a tab of its own.
+  const elsewhere = (href) => (href.startsWith('/') ? '' : ' target="_blank" rel="noopener"');
+  const anchors = links.map(({ text, href }) => `<a href="${escapeHtml(href)}"${elsewhere(href)}>${escapeHtml(text)}</a>`).join('');
   put(/(<nav class="links"[^>]*?) hidden><\/nav>/, (whole, start) => (links.length ? `${start}>${anchors}</nav>` : whole));
 
   // For previews of a link (Open Graph, which the others read as well).
