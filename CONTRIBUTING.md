@@ -307,6 +307,26 @@ For maintainers, three things outside the repository files:
   Commits" together with "Require branches to be up to date before merging".
   Nobody is exempt from it.
 
+### Deploying what was built
+
+The workflow can tell a server to fetch the image it has just pushed, and
+then wait until an instance there runs it. Nothing in the repository says
+where that is: the addresses are settings of the repository on GitHub
+(Settings, Secrets and variables, Actions). A fork has none, and the job
+`deploy` then has nothing to do.
+
+| Setting | Kind | Meaning |
+| --- | --- | --- |
+| `DEPLOY_HOOK` | secret | an address that is called with `POST` once the image is pushed. Whatever answers there fetches the image and starts the containers that use it anew: the HTTP API of Watchtower for example, `https://…/v1/update?image=ghcr.io/xiidoz/netnou` |
+| `DEPLOY_HOOK_TOKEN` | secret | sent with that call as a bearer token, if set |
+| `DEPLOY_STATUS_EDGE` | variable | the address of `/api/status` of an instance that follows `edge` |
+| `DEPLOY_STATUS_RELEASE` | variable | the same of an instance that follows `latest`; looked at after a release only |
+
+After the call the job asks each instance named for its status until it
+reports the commit that was built, for ten minutes at most. A run that fails
+there has still published the image: it says that the instance does not run
+it. Write a host name with letters outside ASCII in its `xn--` form.
+
 ## Reporting bugs
 
 Use the bug report form. The most useful things to include are the output of
