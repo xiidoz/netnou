@@ -8,6 +8,13 @@ This file is written by
 messages when a release is made. Do not edit it by hand; see
 [Releases](CONTRIBUTING.md#releases).
 
+## [0.6.2](https://github.com/xiidoz/netnou/compare/v0.6.1...v0.6.2) (2026-10-09)
+
+
+### Bug Fixes
+
+* **page:** tell previews of links how large the operator's picture is ([#84](https://github.com/xiidoz/netnou/issues/84)) ([074ebcc](https://github.com/xiidoz/netnou/commit/074ebcc2792c48246fd4cf43ffd43140eb9ae6db))
+
 ## [0.6.1](https://github.com/xiidoz/netnou/compare/v0.6.0...v0.6.1) (2026-10-09)
 
 
