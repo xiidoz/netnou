@@ -11,6 +11,9 @@ name: Release
 # 2. The container image is built and pushed to ghcr.io/xiidoz/netnou: always
 #    as "edge", and for a release also as "latest", X.Y.Z, X.Y and - from
 #    1.0.0 on - X. So "latest" is the newest release and "edge" is main.
+# 3. If the repository names an address for it, an instance of the operator's
+#    is told to fetch the new image, and the run waits until it answers as
+#    this commit (see "Deploying what was built" in CONTRIBUTING.md).
 #
 # It can also be started by hand, for main: should GitHub start no workflow for
 # a push, which has happened, the release pull request would otherwise stay as
@@ -90,6 +93,8 @@ jobs:
     permissions:
       contents: read
       packages: write
+    outputs:
+      release: ${{ steps.release.outputs.tag }}
     steps:
       - uses: actions/checkout@v7
         with:
@@ -148,3 +153,63 @@ jobs:
           build-args: |
             COMMIT=${{ github.sha }}
             RELEASE=${{ steps.release.outputs.tag != '' }}
+
+  # Nothing here says where anything runs: the addresses are settings of the
+  # repository. Without them, as in a fork, the job has nothing to do.
+  #   secret DEPLOY_HOOK              an address that is called once the image
+  #                                   is pushed, with POST; whatever answers
+  #                                   there fetches the image and starts the
+  #                                   instances that use it anew
+  #   secret DEPLOY_HOOK_TOKEN        sent with the call as a bearer token, if set
+  #   variable DEPLOY_STATUS_EDGE     the /api/status of an instance that
+  #                                   follows "edge": it has to report this
+  #                                   commit within ten minutes
+  #   variable DEPLOY_STATUS_RELEASE  the same of one that follows "latest",
+  #                                   looked at after a release only
+  deploy:
+    name: Deploy
+    needs: image
+    if: ${{ !cancelled() && needs.image.result == 'success' }}
+    runs-on: ubuntu-latest
+    permissions: {}
+    steps:
+      - name: Tell the instances and wait for them
+        run: |
+          if [ -z "$HOOK" ]; then
+            echo "No deploy hook is set: nothing to do."
+            exit 0
+          fi
+          auth=()
+          if [ -n "$HOOK_TOKEN" ]; then auth=(-H "Authorization: Bearer $HOOK_TOKEN"); fi
+          # (it may answer only when it is done with fetching and starting)
+          curl --fail --silent --show-error --max-time 600 -X POST "${auth[@]}" -o /dev/null "$HOOK"
+          echo "The deploy hook has answered."
+
+          checks=()
+          if [ -n "$STATUS_EDGE" ]; then checks+=("edge|$STATUS_EDGE"); fi
+          if [ -n "$RELEASE" ] && [ -n "$STATUS_RELEASE" ]; then checks+=("release|$STATUS_RELEASE"); fi
+          failed=0
+          for check in "${checks[@]}"; do
+            name=${check%%|*}
+            url=${check#*|}
+            echo "Waiting for the $name instance to run $GITHUB_SHA."
+            commit=
+            for _ in $(seq 60); do
+              commit=$(curl --silent --max-time 10 "$url" | jq --raw-output '.commit // empty' 2>/dev/null || true)
+              if [ "$commit" = "$GITHUB_SHA" ]; then break; fi
+              sleep 10
+            done
+            if [ "$commit" = "$GITHUB_SHA" ]; then
+              echo "It does."
+            else
+              echo "::error title=Not deployed::The $name instance does not run $GITHUB_SHA after ten minutes. It reports \"${commit:-nothing}\"."
+              failed=1
+            fi
+          done
+          exit "$failed"
+        env:
+          HOOK: ${{ secrets.DEPLOY_HOOK }}
+          HOOK_TOKEN: ${{ secrets.DEPLOY_HOOK_TOKEN }}
+          STATUS_EDGE: ${{ vars.DEPLOY_STATUS_EDGE }}
+          STATUS_RELEASE: ${{ vars.DEPLOY_STATUS_RELEASE }}
+          RELEASE: ${{ needs.image.outputs.release }}
