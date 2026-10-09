@@ -8,6 +8,13 @@ This file is written by
 messages when a release is made. Do not edit it by hand; see
 [Releases](CONTRIBUTING.md#releases).
 
+## [0.6.1](https://github.com/xiidoz/netnou/compare/v0.6.0...v0.6.1) (2026-10-09)
+
+
+### Bug Fixes
+
+* **page:** open the operator's links to pages on the same host in the same tab ([#82](https://github.com/xiidoz/netnou/issues/82)) ([5a2cb81](https://github.com/xiidoz/netnou/commit/5a2cb818c27798c205e8e3e89bc2c6627e0bbbca))
+
 ## [0.6.0](https://github.com/xiidoz/netnou/compare/v0.5.1...v0.6.0) (2026-10-08)
 
 
