@@ -185,7 +185,7 @@ function servePage(req, res, url) {
   if (page?.stamp !== stamp) {
     const language = asked ?? config.language;
     const body = Buffer.from(renderPage(fs.readFileSync(file, 'utf8'), { language, asked, texts: texts[language], siteName: config.siteName, areaName: config.areaName, links: config.links, preview: own.preview, previewSize, publicUrl: config.publicUrl, listed: config.searchEngines }));
-    page = { stamp, etag: `"${crypto.createHash('sha1').update(body).digest('hex').slice(0, 16)}"`, kept: keep(body) };
+    page = { stamp, body, etag: `"${crypto.createHash('sha1').update(body).digest('hex').slice(0, 16)}"`, packed: null };
     pages.set(asked, page);
   }
   // Always revalidate, as the files are: a deploy shows up immediately.
@@ -194,7 +194,7 @@ function servePage(req, res, url) {
     res.writeHead(304, { ...headers, Vary: 'Accept-Encoding' });
     return res.end();
   }
-  return send(req, res, 200, MIME['.html'], page.kept.body, headers, page.kept);
+  return send(req, res, 200, MIME['.html'], page.body, headers, (page.packed ??= keep(page.body)));
 }
 
 // The manifest of the installed app says what the instance is called, in its
@@ -270,7 +270,7 @@ let searchCache = null;
 function searchIndex() {
   if (!searchCache) {
     const body = Buffer.from(JSON.stringify(timetable.searchIndex()));
-    searchCache = { etag: `"${crypto.createHash('sha1').update(body).digest('hex').slice(0, 16)}"`, kept: keep(body) };
+    searchCache = { body, etag: `"${crypto.createHash('sha1').update(body).digest('hex').slice(0, 16)}"`, packed: null };
   }
   return searchCache;
 }
@@ -370,7 +370,7 @@ function handleApi(req, res, url) {
         res.writeHead(304, { ...headers, Vary: 'Accept-Encoding' });
         return res.end();
       }
-      return send(req, res, 200, MIME['.json'], index.kept.body, headers, index.kept);
+      return send(req, res, 200, MIME['.json'], index.body, headers, (index.packed ??= keep(index.body)));
     }
 
     // The vehicles of one line that are under way. A line is named as
