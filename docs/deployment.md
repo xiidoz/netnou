@@ -188,7 +188,9 @@ reachable through the proxy.
   engines or carry a picture for previews of links
   ([Being found](configuration.md#being-found)).
 - **Compression and caching** need no configuration: the server compresses
-  its answers and sets cache headers itself.
+  its answers and sets cache headers itself. The files of the page go out
+  with Brotli to browsers that take it, else with gzip; a reverse proxy has
+  to pass `Content-Encoding` and `Vary` on as they are, which is the usual.
 - **Embedding** the page in a frame on another site is not possible: the
   Content-Security-Policy says `frame-ancestors 'none'`.
 
