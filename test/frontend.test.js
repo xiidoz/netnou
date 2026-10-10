@@ -219,6 +219,17 @@ test('the classes app.js borrows from the map library are in its style sheet', (
   for (const name of borrowed) assert.match(css, new RegExp(`\\.${name}(?![\\w-])`), `.${name} is not in the style sheet of MapLibre`);
 });
 
+// MapLibre fades nothing in while it loads its first style. A style given at
+// the start, even an empty one, would be that first one: the map of the area
+// would come after it and be drawn frame after frame while its tiles arrive.
+test('the map starts without a style, and raster tiles do not fade in', () => {
+  const app = withoutComments(read('app.js'));
+  const options = /new MapLibreMap\(\{([\s\S]*?)\n {2}\}\);/.exec(app);
+  assert.ok(options, 'the options of the map were not found in app.js');
+  assert.doesNotMatch(options[1], /^\s*style:/m, 'the map is created with a style');
+  assert.match(app, /'raster-fade-duration': 0/);
+});
+
 // ('xx' stands for a language the page does not have, whatever is added to it)
 test('the language is the stored choice, else the first language of the browser that exists, else English', () => {
   assert.equal(pickLanguage('de', ['en-US']), 'de');

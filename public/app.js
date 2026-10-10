@@ -265,12 +265,13 @@ matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
 /**
  * A style for MapLibre out of a URL template for raster tiles. Of the
  * placeholders besides {z}, {x} and {y} it knows {s}, the subdomains a to c,
- * and {r}, "@2x" on a dense screen.
+ * and {r}, "@2x" on a dense screen. A tile shows as soon as it is there:
+ * fading it in would have the map drawn frame after frame while tiles arrive.
  */
 function rasterStyle(template) {
   const url = template.replace('{r}', window.devicePixelRatio > 1 ? '@2x' : '');
   const tiles = url.includes('{s}') ? ['a', 'b', 'c'].map((subdomain) => url.replace('{s}', subdomain)) : [url];
-  return { version: 8, sources: { tiles: { type: 'raster', tiles, tileSize: 256, maxzoom: 19 } }, layers: [{ id: 'tiles', type: 'raster', source: 'tiles' }] };
+  return { version: 8, sources: { tiles: { type: 'raster', tiles, tileSize: 256, maxzoom: 19 } }, layers: [{ id: 'tiles', type: 'raster', source: 'tiles', paint: { 'raster-fade-duration': 0 } }] };
 }
 
 /**
@@ -293,8 +294,10 @@ try {
   map = new MapLibreMap({
     container: 'map',
     // Which part of the world to show, and with which map, the server says
-    // (see loadArea); until then the map is empty.
-    style: { version: 8, sources: {}, layers: [] },
+    // (see loadArea). Until then the map has no style, not even an empty one:
+    // without one MapLibre draws nothing, and the map of the area is the
+    // first it loads. That one it shows without fading its labels in, in a
+    // handful of frames where it would take dozens.
     center: [0, 0],
     zoom: MIN_ZOOM,
     minZoom: MIN_ZOOM,
