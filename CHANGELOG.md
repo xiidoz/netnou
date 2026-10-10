@@ -8,6 +8,15 @@ This file is written by
 messages when a release is made. Do not edit it by hand; see
 [Releases](CONTRIBUTING.md#releases).
 
+## [0.6.3](https://github.com/xiidoz/netnou/compare/v0.6.2...v0.6.3) (2026-10-10)
+
+
+### Performance Improvements
+
+* **map:** load the map in a few frames instead of dozens ([#91](https://github.com/xiidoz/netnou/issues/91)) ([5131081](https://github.com/xiidoz/netnou/commit/51310817fe4a25208ef813e4d424ff4d7b2f7b71)), closes [#87](https://github.com/xiidoz/netnou/issues/87)
+* **page:** fetch the scripts, the area and the map style at once ([#93](https://github.com/xiidoz/netnou/issues/93)) ([595b26f](https://github.com/xiidoz/netnou/commit/595b26fd5c836a405e648d96b9050a7cc01d2f28)), closes [#88](https://github.com/xiidoz/netnou/issues/88)
+* **server:** send the files of the page compressed with Brotli ([#94](https://github.com/xiidoz/netnou/issues/94)) ([7b1dd9a](https://github.com/xiidoz/netnou/commit/7b1dd9a7542099a335e28abf28e834d6aa523f66))
+
 ## [0.6.2](https://github.com/xiidoz/netnou/compare/v0.6.1...v0.6.2) (2026-10-09)
 
 
