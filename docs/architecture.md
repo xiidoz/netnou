@@ -98,7 +98,7 @@ Server (`server/`):
 | `lib/pb.js` | decodes the GTFS-Realtime message (`decodeFeed`) |
 | `lib/update.js` | what the server calls itself (`describeBuild`) and the daily look-out for a newer release (`UpdateChecker`) |
 | `lib/time.js` | service days and the time zone of the feed |
-| `lib/page.js` | what the server writes into the page before it sends it, for search engines and previews of links; `robots.txt` and the sitemap; which files of the operator's own take the place of built-in icons |
+| `lib/page.js` | what the server writes into the page before it sends it, for search engines and previews of links, and what the page is to fetch right away; `robots.txt` and the sitemap; which files of the operator's own take the place of built-in icons |
 | `lib/files.js` | downloads, gzipped JSON files, error texts |
 | `areas/vgn.geojson` | outline of the default area, see [its README](../server/areas/README.md) |
 
@@ -364,6 +364,13 @@ otherwise a server would load a file written by older code:
   their language; both take them from `pageTexts` in `i18n.js`. The
   manifest of the installed app gets the name, the language and the
   description of the instance the same way.
+- **What the page fetches at its start** it would learn of step by step: of
+  `app.js` from the page, of the map library from `app.js`, of the area and
+  the style of the map only once the script runs. The server names all of it
+  in the head of the page (`PAGE_MODULES` and `renderPage` in `lib/page.js`):
+  the scripts with the texts of the page's language, `api/area` and
+  `api/status`, and the style of the map, or with raster tiles the
+  connection to their server. The browser then asks for everything at once.
 - **Security.** The Content-Security-Policy allows scripts, styles, workers
   and connections from the page's own origin only. The one exception is the
   map, which may be fetched from the server of its style or tiles and from

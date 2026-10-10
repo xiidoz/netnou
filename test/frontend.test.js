@@ -8,6 +8,7 @@ import fs from 'node:fs';
 import { test } from 'node:test';
 import { ATTRIBUTES, LANGUAGES, formatNumber, formatTime, loadLanguage, pageTexts, pickLanguage, setTimeZone, t } from '../public/i18n.js';
 import en from '../public/locales/en.js';
+import { PAGE_MODULES } from '../server/lib/page.js';
 import { MODES } from '../server/lib/timetable.js';
 
 const publicDir = new URL('../public/', import.meta.url);
@@ -43,6 +44,18 @@ test('what the scripts of the page import is precached with them', () => {
       assert.ok(shell.includes(folder + target), `${file} imports ${folder}${target}, which is not in SHELL of sw.js`);
     }
   }
+});
+
+// The server names the scripts of the page in its head, so that a browser
+// fetches them all at once (PAGE_MODULES in server/lib/page.js). One that is
+// missing there is fetched late, and one too many for nothing.
+test('the scripts the page starts with are the ones the server names', () => {
+  const found = new Set(['app.js']);
+  for (const file of found) {
+    const folder = file.includes('/') ? file.slice(0, file.lastIndexOf('/') + 1) : '';
+    for (const [, target] of withoutComments(read(file)).matchAll(/\bfrom\s*['"]\.\/([^'"]+)['"]/g)) found.add(folder + target);
+  }
+  assert.deepEqual([...found].sort(), PAGE_MODULES.toSorted());
 });
 
 test('a language is a file in locales/, an entry in LANGUAGES and one in the shell of the service worker', () => {
