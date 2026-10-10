@@ -30,6 +30,22 @@ const OWN_ICONS = {
 };
 const OWN_PREVIEWS = ['preview.png', 'preview.jpg'];
 
+// The scripts the page starts with. A browser learns of each from the one
+// before – of app.js from the page, of what app.js imports from app.js, and
+// so on down to the map library – and would fetch them one after the other.
+// Named in the head of the page, they are all asked for at once. A test
+// compares the list with what the scripts import (test/frontend.test.js).
+export const PAGE_MODULES = [
+  'app.js',
+  'i18n.js',
+  'locales/en.js',
+  'display.js',
+  'search.js',
+  'vendor/material-design-icons/icons.js',
+  'vendor/maplibre-gl/maplibre-gl.mjs',
+  'vendor/maplibre-gl/maplibre-gl-shared.mjs',
+];
+
 /**
  * The operator's own files in `dir`, as far as they are there.
  * @param dir the folder, or null; one that does not exist is one without files
@@ -98,8 +114,11 @@ const versions = (publicUrl) => [...LANGUAGE_CODES.map((code) => [code, addressI
  *   null: then all that needs a full address is left out
  * @param listed whether search engines may list the page; if not, it asks
  *   them not to and leaves out what is there for them alone
+ * @param styleUrl the style of the map, null with raster tiles
+ * @param mapOrigins the servers the map comes from, as the
+ *   Content-Security-Policy names them
  */
-export function renderPage(html, { language, asked, texts, siteName, areaName, links = [], preview = null, previewSize = null, publicUrl, listed }) {
+export function renderPage(html, { language, asked, texts, siteName, areaName, links = [], preview = null, previewSize = null, publicUrl, listed, styleUrl = null, mapOrigins = [] }) {
   const { title, description } = pageTexts(areaName, texts, siteName);
   let page = html;
   const put = (pattern, replacement) => {
@@ -153,6 +172,24 @@ export function renderPage(html, { language, asked, texts, siteName, areaName, l
       );
     }
   }
+
+  // What the page asks for as soon as it runs, so that the browser has asked
+  // by then: its scripts, with the texts of its language (the visitor's, in
+  // most cases), what the server says of the area and of itself (loadArea in
+  // app.js), and the map. Of the map its style where it has one – else, and
+  // for what a style takes from other servers, the connection is made ready.
+  const own = `locales/${language}.js`;
+  const styleOrigin = styleUrl ? new URL(styleUrl).origin : null;
+  tags.push(
+    ...[...PAGE_MODULES, ...(PAGE_MODULES.includes(own) ? [] : [own])].map((file) => `<link rel="modulepreload" href="${file}">`),
+    // (crossorigin: as fetch() asks, or the answer is not the one it takes)
+    '<link rel="preload" as="fetch" href="api/area" crossorigin>',
+    '<link rel="preload" as="fetch" href="api/status" crossorigin>',
+  );
+  if (styleUrl) tags.push(`<link rel="preload" as="fetch" href="${escapeHtml(styleUrl)}" crossorigin>`);
+  // (a name with a wildcard, from tiles with {s}, is none to connect to)
+  for (const origin of mapOrigins) if (origin !== styleOrigin && !origin.includes('*')) tags.push(`<link rel="preconnect" href="${escapeHtml(origin)}" crossorigin>`);
+
   put(/\n<\/head>/, () => `\n${tags.map((tag) => `  ${tag}`).join('\n')}\n</head>`);
   return page;
 }

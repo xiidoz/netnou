@@ -10,7 +10,7 @@ import { test } from 'node:test';
 import { LANGUAGES, pageTexts } from '../public/i18n.js';
 import de from '../public/locales/de.js';
 import en from '../public/locales/en.js';
-import { LANGUAGE_CODES, ownFiles, pictureSize, renderManifest, renderPage, robotsTxt, sitemapXml } from '../server/lib/page.js';
+import { LANGUAGE_CODES, PAGE_MODULES, ownFiles, pictureSize, renderManifest, renderPage, robotsTxt, sitemapXml } from '../server/lib/page.js';
 
 const html = fs.readFileSync(new URL('../public/index.html', import.meta.url), 'utf8');
 const URL_ = 'https://karte.example.org/live/';
@@ -98,6 +98,32 @@ test('an instance with a name of its own carries it wherever the page names itse
   assert.equal(page.replaceAll('Bus &#38; Bahn live', 'Netnou'), renderPage(html, german));
   // without a name of its own, the page is as it always was
   assert.equal(tag(renderPage(html, german), /<h1>([^<]*)<\/h1>/), 'Netnou');
+});
+
+test('the page names what it fetches at its start, and where its map comes from', () => {
+  const modules = (page) => [...page.matchAll(/<link rel="modulepreload" href="([^"]*)">/g)].map(([, file]) => file);
+  const page = renderPage(html, german);
+  // its scripts, and the texts of its language with them
+  assert.deepEqual(modules(page), [...PAGE_MODULES, 'locales/de.js']);
+  for (const file of modules(page)) assert.ok(fs.existsSync(new URL(`../public/${file}`, import.meta.url)), file);
+  // (English is among the scripts: every other language falls back on it)
+  assert.deepEqual(modules(renderPage(html, { ...german, language: 'en', asked: 'en', texts: en })), PAGE_MODULES);
+  // what the script asks the server first, in the way fetch() asks
+  for (const address of ['api/area', 'api/status']) assert.ok(page.includes(`<link rel="preload" as="fetch" href="${address}" crossorigin>`), address);
+  // and nothing of a map the server was not told of
+  assert.equal(page.match(/rel="preload"/g).length, 2);
+  assert.ok(!page.includes('rel="preconnect"'));
+
+  // a style is fetched, and what it takes from other servers finds the connection made
+  const styled = renderPage(html, { ...german, styleUrl: 'https://tiles.example.org/styles/bright?key=a&b=c', mapOrigins: ['https://tiles.example.org', 'https://fonts.example.org'] });
+  assert.ok(styled.includes('<link rel="preload" as="fetch" href="https://tiles.example.org/styles/bright?key=a&#38;b=c" crossorigin>'));
+  assert.deepEqual([...styled.matchAll(/<link rel="preconnect" href="([^"]*)" crossorigin>/g)].map(([, origin]) => origin), ['https://fonts.example.org']);
+
+  // raster tiles have no style: the connection to their server, unless they come from several of one name
+  const raster = renderPage(html, { ...german, mapOrigins: ['https://tile.example.org'] });
+  assert.ok(raster.includes('<link rel="preconnect" href="https://tile.example.org" crossorigin>'));
+  assert.equal(raster.match(/rel="preload"/g).length, 2);
+  assert.ok(!renderPage(html, { ...german, mapOrigins: ['https://*.tile.example.org'] }).includes('rel="preconnect"'));
 });
 
 test('the operator\'s links stand at the foot of the header card, and nothing does without any', () => {
