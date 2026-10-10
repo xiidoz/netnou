@@ -381,7 +381,7 @@ test('/api/departures', async () => {
   assert.deepEqual((await get('/api/nothing')).json, { error: 'not found' });
 });
 
-test('static files: types, revalidation, HEAD and gzip', async () => {
+test('static files: types, revalidation, HEAD, gzip and Brotli', async () => {
   const page = await request('/');
   assert.equal(page.status, 200);
   assert.equal(page.headers['content-type'], 'text/html; charset=utf-8');
@@ -423,6 +423,21 @@ test('static files: types, revalidation, HEAD and gzip', async () => {
   assert.ok(zlib.gunzipSync(packed.body).equals(script));
   // (packed once and kept)
   assert.ok((await request('/app.js', { headers: { 'Accept-Encoding': 'gzip' } })).body.equals(packed.body));
+  // Brotli is made beside the requests: the first one that takes it got gzip, a later one gets the smaller form
+  const withBrotli = (pathname, accepted) => until(async () => {
+    const answer = await request(pathname, { headers: { 'Accept-Encoding': accepted } });
+    return answer.headers['content-encoding'] === 'br' && answer;
+  }, `${pathname} with Brotli`);
+  const smallest = await withBrotli('/app.js', 'br, gzip');
+  assert.equal(smallest.headers.vary, 'Accept-Encoding');
+  assert.equal(smallest.headers.etag, packed.headers.etag);
+  assert.equal(Number(smallest.headers['content-length']), smallest.body.length);
+  assert.ok(smallest.body.length < packed.body.length);
+  assert.ok(zlib.brotliDecompressSync(smallest.body).equals(script));
+  // (and gzip stays what it was for whoever takes nothing else)
+  assert.ok((await request('/app.js', { headers: { 'Accept-Encoding': 'gzip, deflate' } })).body.equals(packed.body));
+  // the page itself likewise, asked for as a browser asks
+  assert.ok(zlib.brotliDecompressSync((await withBrotli('/', 'gzip, deflate, br, zstd')).body).equals(page.body));
   // the map library is modules, which browsers only run with the type of a script
   assert.equal((await request('/vendor/maplibre-gl/maplibre-gl-worker.mjs')).headers['content-type'], 'text/javascript; charset=utf-8');
   const plain = await request('/app.js');

@@ -100,15 +100,49 @@ const SECURITY_HEADERS = {
 };
 
 const gzip = (body) => zlib.gzipSync(body, { level: 6 });
+// Brotli at its best: a sixth smaller than gzip for the scripts of the page,
+// but most of a second of work for each half of the map library. So it is
+// for what is kept once it is compressed, and it is made beside the requests.
+const brotli = (body, done) => zlib.brotliCompress(body, { params: { [zlib.constants.BROTLI_PARAM_QUALITY]: zlib.constants.BROTLI_MAX_QUALITY, [zlib.constants.BROTLI_PARAM_SIZE_HINT]: body.length } }, done);
 
-/** @param compress how to gzip the body, for a caller that keeps the result */
-function send(req, res, status, type, body, headers = {}, compress = gzip) {
+/**
+ * A body that is sent again and again, with its compressed forms, each made
+ * once: gzip when it is first asked for, Brotli from then on beside the
+ * requests. Until that is there, a browser that takes Brotli gets gzip.
+ */
+function keep(body) {
+  let gzipped = null;
+  let smallest = null; // with Brotli; false while it is being made, and for good if that fails
+  return {
+    body,
+    /** The smallest form a browser takes that accepts these encodings: [encoding, body]. */
+    pick(accepted) {
+      if (/\bbr\b/.test(accepted)) {
+        if (smallest) return ['br', smallest];
+        if (smallest === null) {
+          smallest = false;
+          brotli(body, (err, packed) => {
+            if (!err) smallest = packed;
+          });
+        }
+      }
+      if (/\bgzip\b/.test(accepted)) return ['gzip', (gzipped ??= gzip(body))];
+      return [null, body];
+    },
+  };
+}
+
+/** @param kept the body as keep() has it, for a caller that sends the same again; else it is compressed for this answer alone, with gzip */
+function send(req, res, status, type, body, headers = {}, kept = null) {
   const head = { ...SECURITY_HEADERS, 'Content-Type': type, ...headers };
   if (COMPRESSIBLE.test(type)) {
     head.Vary = 'Accept-Encoding';
-    if (body.length > 1024 && /\bgzip\b/.test(req.headers['accept-encoding'] ?? '')) {
-      body = compress(body);
-      head['Content-Encoding'] = 'gzip';
+    if (body.length > 1024) {
+      const accepted = req.headers['accept-encoding'] ?? '';
+      let encoding = null;
+      if (kept) [encoding, body] = kept.pick(accepted);
+      else if (/\bgzip\b/.test(accepted)) [encoding, body] = ['gzip', gzip(body)];
+      if (encoding) head['Content-Encoding'] = encoding;
     }
   }
   head['Content-Length'] = body.length;
@@ -126,8 +160,8 @@ function etagMatches(req, etag) {
   return tags.includes(etag) || tags.includes('*');
 }
 
-// The compressed form of each static file, by path: the map library is over a
-// megabyte, too much to compress again for every visitor.
+// Each static file with its compressed forms, by path: the map library is
+// over a megabyte, too much to compress again for every visitor.
 const compressed = new Map();
 
 // The operator's own icons and picture for previews of links, if they have
@@ -151,7 +185,7 @@ function servePage(req, res, url) {
   if (page?.stamp !== stamp) {
     const language = asked ?? config.language;
     const body = Buffer.from(renderPage(fs.readFileSync(file, 'utf8'), { language, asked, texts: texts[language], siteName: config.siteName, areaName: config.areaName, links: config.links, preview: own.preview, previewSize, publicUrl: config.publicUrl, listed: config.searchEngines }));
-    page = { stamp, body, etag: `"${crypto.createHash('sha1').update(body).digest('hex').slice(0, 16)}"`, packed: null };
+    page = { stamp, etag: `"${crypto.createHash('sha1').update(body).digest('hex').slice(0, 16)}"`, kept: keep(body) };
     pages.set(asked, page);
   }
   // Always revalidate, as the files are: a deploy shows up immediately.
@@ -160,7 +194,7 @@ function servePage(req, res, url) {
     res.writeHead(304, { ...headers, Vary: 'Accept-Encoding' });
     return res.end();
   }
-  return send(req, res, 200, MIME['.html'], page.body, headers, (body) => (page.packed ??= gzip(body)));
+  return send(req, res, 200, MIME['.html'], page.kept.body, headers, page.kept);
 }
 
 // The manifest of the installed app says what the instance is called, in its
@@ -206,10 +240,10 @@ function serveStatic(req, res, pathname) {
     res.writeHead(304, COMPRESSIBLE.test(type) ? { ...headers, Vary: 'Accept-Encoding' } : headers);
     return res.end();
   }
-  send(req, res, 200, type, fs.readFileSync(file), headers, (body) => {
-    if (compressed.get(file)?.etag !== etag) compressed.set(file, { etag, body: gzip(body) });
-    return compressed.get(file).body;
-  });
+  if (!COMPRESSIBLE.test(type)) return send(req, res, 200, type, fs.readFileSync(file), headers);
+  if (compressed.get(file)?.etag !== etag) compressed.set(file, { etag, kept: keep(fs.readFileSync(file)) });
+  const { kept } = compressed.get(file);
+  return send(req, res, 200, type, kept.body, headers, kept);
 }
 
 // The vehicles of the whole area are the same for every browser, so compute
@@ -236,7 +270,7 @@ let searchCache = null;
 function searchIndex() {
   if (!searchCache) {
     const body = Buffer.from(JSON.stringify(timetable.searchIndex()));
-    searchCache = { body, etag: `"${crypto.createHash('sha1').update(body).digest('hex').slice(0, 16)}"`, packed: null };
+    searchCache = { etag: `"${crypto.createHash('sha1').update(body).digest('hex').slice(0, 16)}"`, kept: keep(body) };
   }
   return searchCache;
 }
@@ -336,7 +370,7 @@ function handleApi(req, res, url) {
         res.writeHead(304, { ...headers, Vary: 'Accept-Encoding' });
         return res.end();
       }
-      return send(req, res, 200, MIME['.json'], index.body, headers, (body) => (index.packed ??= gzip(body)));
+      return send(req, res, 200, MIME['.json'], index.kept.body, headers, index.kept);
     }
 
     // The vehicles of one line that are under way. A line is named as

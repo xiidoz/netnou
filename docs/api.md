@@ -25,7 +25,8 @@ shortened where marked with `…`.
 - Only `GET` and `HEAD`. There is no authentication and there are no CORS
   headers, so a page on another origin cannot call the API from a browser.
 - Answers are JSON in UTF-8, compressed with gzip when the client accepts it
-  and the body is larger than 1 kB.
+  and the body is larger than 1 kB. The index of the search, which is the
+  same for everybody, comes with Brotli where the client accepts that.
 - Answers carry `Cache-Control: no-store`, except `/api/area` and
   `/api/search`, which have an `ETag` and answer `304` to a matching
   `If-None-Match`.
