@@ -453,10 +453,12 @@ test('the page says what and where the instance is before any script runs', asyn
   const address = 'https://karte.example.org/live/';
   // in the main language, German unless LANGUAGE says otherwise
   const page = await text('/');
-  assert.match(page, /<html lang="de">/);
+  assert.match(page, /<html lang="de"[ >]/);
   assert.match(page, /<title>ÖPNV-Live-Karte: Testland – Netnou<\/title>/);
   assert.match(page, /<meta name="description" content="Testland: Busse, /);
   assert.match(page, /<p id="area-name">Testland<\/p>/);
+  // (and the header card, which a visitor sees before the scripts have run)
+  assert.ok(page.includes('<span id="status-text" data-i18n="status.connecting">Verbinde …</span>'));
   assert.ok(page.includes(`<link rel="canonical" href="${address}">`));
   assert.ok(page.includes(`<link rel="alternate" hreflang="en" href="${address}?lang=en">`));
   assert.ok(page.includes(`<meta property="og:image" content="${address}icons/icon-512.png">`));
@@ -464,8 +466,9 @@ test('the page says what and where the instance is before any script runs', asyn
 
   // in the language the address asks for
   const english = await request('/?lang=en');
-  assert.match(english.body.toString(), /<html lang="en">/);
+  assert.match(english.body.toString(), /<html lang="en"[ >]/);
   assert.match(english.body.toString(), /<title>Live map of public transport: Testland – Netnou<\/title>/);
+  assert.ok(english.body.toString().includes('<span id="status-text" data-i18n="status.connecting">Connecting …</span>'));
   assert.ok(english.body.toString().includes(`<link rel="canonical" href="${address}?lang=en">`));
   assert.equal((await request('/?lang=en', { headers: { 'If-None-Match': english.headers.etag } })).status, 304);
   // each version has its own tag: one is not taken for the other

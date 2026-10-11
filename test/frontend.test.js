@@ -6,6 +6,7 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import { test } from 'node:test';
+import vm from 'node:vm';
 import { ATTRIBUTES, LANGUAGES, formatNumber, formatTime, loadLanguage, pageTexts, pickLanguage, setTimeZone, t } from '../public/i18n.js';
 import en from '../public/locales/en.js';
 import { PAGE_MODULES } from '../server/lib/page.js';
@@ -28,6 +29,28 @@ const shell = /const SHELL = \[([^\]]*)\]/.exec(read('sw.js'))[1].match(/'[^']+'
 const codes = LANGUAGES.map(([code]) => code);
 const placeholders = (text) => [...new Set([...text.matchAll(/\{(\w+)\}/g)].map((match) => match[1]))].sort();
 const arrayIn = (source, name) => new RegExp(`const ${name} = \\[([^\\]]*)\\]`).exec(source)[1].match(/'[^']+'/g).map((entry) => entry.slice(1, -1));
+
+/**
+ * Runs first.js as a browser does before it draws the page, and returns what
+ * the script has put on the root of the page.
+ * @param lang     the language the page came in
+ * @param search   the query of its address
+ * @param stored   what the browser has kept, by its key
+ * @param browser  the languages of the browser, most wanted first
+ * @param dark     whether the device has the dark scheme
+ * @param blocked  whether the browser refuses to keep or tell anything
+ */
+function firstScript({ lang = 'en', search = '', stored = {}, browser = [], dark = false, blocked = false } = {}) {
+  const root = { lang, dataset: { languages: codes.join(' ') } };
+  const getItem = (key) => {
+    if (blocked) throw new Error('blocked');
+    return stored[key] ?? null;
+  };
+  const context = { document: { documentElement: root }, location: { search }, navigator: { languages: browser }, localStorage: { getItem }, matchMedia: () => ({ matches: dark }), URLSearchParams };
+  context.window = context;
+  vm.runInNewContext(read('first.js'), context);
+  return root.dataset;
+}
 
 test('the service worker precaches files that exist', () => {
   assert.ok(shell.length > 0);
@@ -165,23 +188,111 @@ test('the dialog that says how it works is named by its heading, in the words of
 });
 
 // Light or dark is the visitor's choice or else the device's scheme, and
-// theme.js is the one place that decides it.
+// first.js is the one place that decides it.
 test('the colour scheme is put on the page first, and the style sheet follows it alone', () => {
   const html = read('index.html');
-  const script = html.indexOf('<script src="theme.js"></script>');
-  assert.ok(script > 0, 'index.html loads theme.js as a script that is waited for');
-  assert.ok(script < html.indexOf('<link rel="stylesheet"'), 'theme.js comes before the style sheets');
-  assert.ok(shell.includes('theme.js'), 'theme.js is missing in SHELL of sw.js');
+  const script = html.indexOf('<script src="first.js"></script>');
+  assert.ok(script > 0, 'index.html loads first.js as a script that is waited for');
+  assert.ok(script < html.indexOf('<link rel="stylesheet"'), 'first.js comes before the style sheets');
+  assert.ok(shell.includes('first.js'), 'first.js is missing in SHELL of sw.js');
   // (a media query would follow the device whatever the visitor chose)
   assert.doesNotMatch(read('style.css'), /prefers-color-scheme/);
   assert.match(read('style.css'), /^:root\[data-theme="dark"\] \{$/m);
-  assert.match(read('theme.js'), /dataset\.theme = dark \? 'dark' : 'light'/);
   // the choices in the settings are the ones the script knows
   const choices = [...html.matchAll(/\sdata-theme-choice="([^"]+)"/g)].map((match) => match[1]);
   assert.deepEqual(choices, arrayIn(read('app.js'), 'THEMES'));
-  // what app.js stores is what theme.js reads
+  // what app.js stores is what first.js reads
   assert.match(read('app.js'), /saveSetting\('theme', /);
-  assert.match(read('theme.js'), /localStorage\.getItem\('netnou\.theme'\)/);
+
+  assert.equal(firstScript().theme, 'light');
+  assert.equal(firstScript({ dark: true }).theme, 'dark');
+  assert.equal(firstScript({ dark: true, stored: { 'netnou.theme': '"light"' } }).theme, 'light');
+  assert.equal(firstScript({ stored: { 'netnou.theme': '"dark"' } }).theme, 'dark');
+  assert.equal(firstScript({ dark: true, stored: { 'netnou.theme': '"auto"' } }).theme, 'dark');
+  // (written by another version of the page, or not to be read at all)
+  assert.equal(firstScript({ dark: true, stored: { 'netnou.theme': 'dark{' } }).theme, 'dark');
+  assert.equal(firstScript({ dark: true, blocked: true }).theme, 'dark');
+  // a display has its scheme from its address, whatever is stored
+  assert.equal(firstScript({ search: '?display&theme=dark', stored: { 'netnou.theme': '"light"' } }).theme, 'dark');
+  assert.equal(firstScript({ search: '?display=fixed', dark: true, stored: { 'netnou.theme': '"light"' } }).theme, 'dark');
+});
+
+// The header card is in the page as most visitors get it, and shows before
+// the scripts have run where it is what this visitor gets (first.js). For
+// that the page, its style sheet and its scripts have to agree on what the
+// card is like as it comes.
+test('the header card comes as most visitors get it', () => {
+  const html = read('index.html');
+  const css = read('style.css');
+  const app = read('app.js');
+  const card = /<header class="card controls" id="controls">[\s\S]*?<\/header>/.exec(html)?.[0];
+  assert.ok(card, 'the header card was not found, or is hidden by an attribute of its own');
+  // out of sight until a script says that it is what the visitor gets
+  assert.ok(css.includes(':root:not([data-controls]) .controls { display: none; }'));
+  assert.match(read('first.js'), /root\.dataset\.controls = 'shown'/);
+  assert.match(app, /document\.documentElement\.dataset\.controls = 'shown'/);
+
+  // a chip for every mode that has one, switched on, in its colour and with its name
+  const modes = arrayIn(app, 'MODES');
+  const chips = [...card.matchAll(/<button type="button" class="chip" data-mode="([a-z]+)" aria-pressed="true"><span class="swatch"><\/span><span class="name" data-i18n="mode\.([a-z]+)">[^<]+<\/span><span class="count">0<\/span><\/button>/g)];
+  assert.deepEqual(chips.map(([, mode]) => mode), modes);
+  assert.equal(card.match(/class="chip"/g).length, modes.length);
+  for (const [, mode, key] of chips) {
+    assert.equal(key, mode);
+    assert.ok(css.includes(`.chip[data-mode="${mode}"] { --chip-color: var(--mode-${mode}); }`), `the colour of the chip of ${mode}`);
+  }
+  // coloured by mode, and so without the legend of the delays
+  assert.match(card, /<button type="button" data-color-by="mode" aria-pressed="true"/);
+  assert.match(card, /<button type="button" data-color-by="delay" aria-pressed="false"/);
+  assert.match(card, /<ul class="legend" id="delay-legend" hidden><\/ul>/);
+  // of the arrows of the row of chips the one at its end, where the row goes on
+  assert.match(card, /<button type="button" class="chips-more back" id="modes-back" [^>]*\shidden>/);
+  assert.match(card, /<button type="button" class="chips-more" id="modes-on" [^>]*"true">/);
+  // an icon wherever the card has one; the server draws them (test/page.test.js)
+  for (const part of ['id="search-open"', 'id="display-toggle"', 'id="settings-open"', 'class="search-sign"']) assert.match(card, new RegExp(`<[a-z]+ [^>]*${part}[^>]*\\sdata-icon="mdi\\w+"|<[a-z]+ [^>]*\\sdata-icon="mdi\\w+"[^>]*${part}`), part);
+  // (an element that asks for an icon is empty: the icon is all it holds)
+  assert.equal(html.match(/\sdata-icon="[^"]*"[^>]*><\//g).length, html.match(/\sdata-icon=/g).length);
+});
+
+test('the header card shows at once where the page came as this visitor gets it', () => {
+  const shown = (situation) => firstScript(situation).controls === 'shown';
+  // the language of the page is the visitor's: picked as i18n.js picks it
+  const browsers = [[], ['xx'], ['de-DE', 'en'], ['en-US'], ['xx-XX', 'de-AT', 'en'], ['EN-gb', 'de'], ['fr', 'en', 'de']];
+  for (const lang of codes) {
+    for (const browser of browsers) {
+      for (const stored of [null, ...codes, 'xx']) {
+        for (const asked of [null, ...codes, 'xx', '']) {
+          const situation = { lang, browser, stored: stored === null ? {} : { 'netnou.lang': stored }, search: asked === null ? '' : `?lang=${asked}` };
+          assert.equal(shown(situation), pickLanguage(stored, browser, asked) === lang, JSON.stringify(situation));
+        }
+      }
+    }
+  }
+  assert.ok(shown({ lang: 'de', browser: ['de-DE'] }));
+  assert.ok(!shown({ lang: 'de', browser: ['en-US'] }));
+  // (a browser of no language the page has gets English)
+  assert.ok(shown({ lang: 'en', browser: ['xx'] }));
+  // (a browser that keeps nothing has chosen nothing)
+  assert.ok(shown({ lang: 'de', browser: ['de'], blocked: true }));
+  assert.ok(!shown({ lang: 'en', browser: ['de'], blocked: true }));
+  // the key the choice of a language is kept under
+  assert.match(read('i18n.js'), /^const STORAGE_KEY = 'netnou\.lang';$/m);
+
+  // a display is the page without most of the card
+  assert.ok(!shown({ search: '?display' }));
+  assert.ok(!shown({ search: '?display=fixed&lang=en' }));
+  // modes switched off and colours by delay change the card: read as app.js reads them
+  assert.ok(!shown({ stored: { 'netnou.colorBy': '"delay"' } }));
+  assert.ok(shown({ stored: { 'netnou.colorBy': '"mode"' } }));
+  assert.ok(!shown({ stored: { 'netnou.hiddenModes': '["bus"]' } }));
+  assert.ok(shown({ stored: { 'netnou.hiddenModes': '[]' } }));
+  // (not what the page stored: app.js takes the card as it comes then, too)
+  assert.ok(shown({ stored: { 'netnou.colorBy': 'delay', 'netnou.hiddenModes': '{"bus":1}' } }));
+  assert.ok(shown({ stored: { 'netnou.hiddenModes': 'bus,tram' } }));
+  assert.match(read('app.js'), /loadSetting\('colorBy', 'mode'\) === 'delay'/);
+  assert.match(read('app.js'), /loadSetting\('hiddenModes', \[\]\)/);
+  // what does not show in the card leaves it as it comes
+  assert.ok(shown({ dark: true, stored: { 'netnou.theme': '"dark"', 'netnou.flags': 'false', 'netnou.view': '{"lat":49.4,"lon":11,"zoom":14}' } }));
 });
 
 // A pragmatic check, not a proof: it reads the string literals of app.js and

@@ -244,7 +244,7 @@ Worth watching:
   and writes no access log; it logs a request only when handling it failed
   with an error. The page stores six settings in the browser's
   `localStorage` (`netnou.lang`, `netnou.theme`, `netnou.flags`,
-  `netnou.hiddenModes`, `netnou.colorBy`, `netnou.view`) and its own files in the browser cache `netnou-shell-v2`
+  `netnou.hiddenModes`, `netnou.colorBy`, `netnou.view`) and its own files in the browser cache `netnou-shell-v3`
   for the offline start. While its controls are hidden, and as a display on a
   wall, it reads and writes none of the settings: its address says them
   ([A screen on a wall](#a-screen-on-a-wall)). The only requests a visitor's browser makes to a

@@ -11,7 +11,7 @@
 //                             on a wall that nobody operates: the map stands
 //                             still and the page looks after itself
 //   view=<lat>,<lon>,<zoom>   the section of the map, else the whole area
-//   theme=light|dark          else as the device has it (theme.js reads it)
+//   theme=light|dark          else as the device has it (first.js reads it)
 //   color=delay               coloured by delay, else by kind of transport
 //   flags=off                 without the delay flags
 //   modes=tram,subway         only these kinds of transport, else all

@@ -17,6 +17,11 @@ the server.
 Changing the language in the page reloads it, from the address without
 `?lang=…`.
 
+The server sends the page in the main language of the instance (`LANGUAGE`)
+or in the one the address asks for. A visitor whose language that is sees
+the header card as soon as the page arrives; for anybody else it shows once
+the script has put their language in, a moment later.
+
 The address with a language is there for search engines, whose browser
 speaks English and chooses nothing: it is how they get to read the page in
 each language. What they read before any script runs is written into the
@@ -87,8 +92,10 @@ otherwise. Use it in `public/app.js` through `t('some.key', { … })`, or in
 
 `data-i18n` sets the text of the element, `data-i18n-aria-label`,
 `data-i18n-title`, `data-i18n-content` and `data-i18n-placeholder` set the
-attribute of that name. The English text in the HTML is what shows until the
-script has run, and the test keeps it equal to `en.js`.
+attribute of that name. The text in the HTML is the English one, and the
+test keeps it equal to `en.js`. The server puts the text of the page's
+language in its place when it sends the page, and the script that of the
+visitor's where that is another.
 
 The test also fails when a key is no longer used anywhere, and when `app.js`
 contains text for visitors that does not go through `t()`.

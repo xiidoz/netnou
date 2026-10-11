@@ -24,12 +24,12 @@ export default defineConfig([
   {
     // The page: ES modules.
     files: ['public/*.js', 'public/locales/**'],
-    ignores: ['public/sw.js', 'public/theme.js'],
+    ignores: ['public/sw.js', 'public/first.js'],
     languageOptions: { globals: globals.browser },
   },
   {
     // Loaded as a classic script ahead of the rest, see the file.
-    files: ['public/theme.js'],
+    files: ['public/first.js'],
     languageOptions: { sourceType: 'script', globals: globals.browser },
   },
   {

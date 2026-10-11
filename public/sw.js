@@ -8,7 +8,7 @@
 // Changed files need no new name: with network first the cache follows. Bump
 // the version only to get rid of entries for files that were removed or renamed.
 const CACHE_PREFIX = 'netnou-shell-';
-const CACHE = `${CACHE_PREFIX}v2`;
+const CACHE = `${CACHE_PREFIX}v3`;
 // What the page needs to start. test/frontend.test.js checks that the files
 // exist and that every language of i18n.js is among them.
 const SHELL = [
@@ -17,7 +17,7 @@ const SHELL = [
   'display.js',
   'i18n.js',
   'search.js',
-  'theme.js',
+  'first.js',
   'locales/de.js',
   'locales/en.js',
   'style.css',

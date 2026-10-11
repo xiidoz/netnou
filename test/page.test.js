@@ -10,12 +10,26 @@ import { test } from 'node:test';
 import { LANGUAGES, pageTexts } from '../public/i18n.js';
 import de from '../public/locales/de.js';
 import en from '../public/locales/en.js';
+import * as shapes from '../public/vendor/material-design-icons/icons.js';
 import { LANGUAGE_CODES, PAGE_MODULES, ownFiles, pictureSize, renderManifest, renderPage, robotsTxt, sitemapXml } from '../server/lib/page.js';
 
 const html = fs.readFileSync(new URL('../public/index.html', import.meta.url), 'utf8');
 const URL_ = 'https://karte.example.org/live/';
 const tag = (page, pattern) => pattern.exec(page)?.[1];
 const german = { language: 'de', asked: null, texts: de, siteName: 'Netnou', areaName: 'Großraum Nürnberg (VGN)', publicUrl: URL_, listed: true };
+const escaped = (text) => text.replace(/[&<>"']/g, (char) => `&#${char.charCodeAt(0)};`);
+const ICON = /<svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="([^"]*)"\/><\/svg>/g;
+
+/** The texts of a page that are marked for translation: [what, key, text], for the text of an element and for each attribute. */
+function markedTexts(page) {
+  const found = [];
+  for (const [, tag, text] of page.replace(/<!--[\s\S]*?-->/g, '').matchAll(/(<[a-z][\w-]*\s[^<>]*>)([^<]*)/g)) {
+    for (const [, attribute, key] of tag.matchAll(/\sdata-i18n-([a-z-]+)="([^"]*)"/g)) found.push([attribute, key, new RegExp(`\\s${attribute}="([^"]*)"`).exec(tag)[1]]);
+    const own = /\sdata-i18n="([^"]*)"/.exec(tag);
+    if (own) found.push(['text', own[1], text]);
+  }
+  return found;
+}
 
 test('the languages of the page are those of its texts', () => {
   assert.deepEqual(LANGUAGE_CODES, LANGUAGES.map(([code]) => code));
@@ -23,7 +37,7 @@ test('the languages of the page are those of its texts', () => {
 
 test('the page says what and where it is, in the language of the instance', () => {
   const page = renderPage(html, german);
-  assert.match(page, /<html lang="de">/);
+  assert.match(page, /<html lang="de"[ >]/);
   assert.equal(tag(page, /<title>([^<]*)<\/title>/), 'ÖPNV-Live-Karte: Großraum Nürnberg (VGN) – Netnou');
   const description = tag(page, /<meta name="description" content="([^"]*)"/);
   assert.equal(description, de['page.descriptionIn'].replace('{area}', 'Großraum Nürnberg (VGN)'));
@@ -39,12 +53,57 @@ test('the page says what and where it is, in the language of the instance', () =
   assert.equal(tag(page, /<meta property="og:image" content="([^"]*)"/), `${URL_}icons/icon-512.png`);
   assert.ok(fs.existsSync(new URL('../public/icons/icon-512.png', import.meta.url)));
 
-  // nothing else of the file is touched: with what was added taken out and the four places put back, it is the file
-  const added = page.slice(page.indexOf('  <meta property="og:type"'), page.indexOf('</head>'));
+  // Nothing else of the file is touched. In English, the language of the file:
+  // with what was added taken out and the five places put back, it is the file.
+  const english = renderPage(html, { ...german, language: 'en', texts: en });
+  const added = english.slice(english.indexOf('  <meta property="og:type"'), english.indexOf('</head>'));
   // (the name is the software's own here, as in the file)
-  const back = page.replace(added, '').replace('<html lang="de">', '<html lang="en">').replace(/<title>[^<]*<\/title>/, '<title>Netnou</title>')
-    .replace(description, en['page.description']).replace('<p id="area-name">Großraum Nürnberg (VGN)</p>', '<p id="area-name"></p>');
+  const back = english.replace(added, '').replace(/<html lang="en"[^>]*>/, '<html lang="en">').replace(/<title>[^<]*<\/title>/, '<title>Netnou</title>')
+    .replace(tag(english, /<meta name="description" content="([^"]*)"/), en['page.description']).replace('<p id="area-name">Großraum Nürnberg (VGN)</p>', '<p id="area-name"></p>')
+    .replace(ICON, '');
   assert.equal(back, html);
+});
+
+// A visitor sees the page as it is sent until its scripts have run. The first
+// of them shows the header card at once where the page is in the visitor's
+// language (public/first.js), so the card has to be whole as it comes.
+test('the page comes with its texts in its language and its icons drawn', () => {
+  const page = renderPage(html, german);
+  // every text the file marks for translation, and no other
+  const texts = markedTexts(page);
+  assert.deepEqual(texts.map(([what, key]) => [what, key]), markedTexts(html).map(([what, key]) => [what, key]));
+  assert.ok(texts.length > 40, 'the texts were not found');
+  for (const [what, key, text] of texts) {
+    // (what the page says about itself names the area: see above)
+    if (key === 'page.description') continue;
+    assert.equal(text, escaped(de[key]), `${what} of ${key}`);
+  }
+  for (const text of ['Verbinde …', 'Haltestelle oder Linie suchen', 'Regionalzug', 'So funktioniert’s']) assert.ok(page.includes(text), text);
+  for (const text of ['Connecting', 'Search for a stop', 'Regional train', 'How it works']) assert.ok(!page.includes(text), text);
+  // the marks stay: the script puts in the texts of a visitor with another language by them
+  assert.equal(page.match(/\sdata-i18n(-[a-z-]+)?=/g).length, html.match(/\sdata-i18n(-[a-z-]+)?=/g).length);
+  // which languages there are, for the script that picks the visitor's before the page is drawn
+  assert.ok(page.includes(`<html lang="de" data-languages="${LANGUAGE_CODES.join(' ')}">`));
+
+  // in English the texts are those of the file
+  assert.deepEqual(markedTexts(renderPage(html, { ...german, language: 'en', texts: en, areaName: '' })), markedTexts(html));
+  // a text a language lacks is the English one
+  const partial = { ...de };
+  delete partial['status.connecting'];
+  assert.ok(renderPage(html, { ...german, texts: partial }).includes('<span id="status-text" data-i18n="status.connecting">Connecting …</span>'));
+  // and a text is text, whatever is in it
+  const odd = renderPage(html, { ...german, texts: { ...de, 'status.connecting': 'Tom & <b>"Jerry"</b>', 'search.label': 'a "b" <c> & $1' } });
+  assert.ok(odd.includes('data-i18n="status.connecting">Tom &#38; &#60;b&#62;&#34;Jerry&#34;&#60;/b&#62;</span>'));
+  assert.ok(odd.includes(' placeholder="a &#34;b&#34; &#60;c&#62; &#38; $1" data-i18n-placeholder="search.label" aria-label="a &#34;b&#34; &#60;c&#62; &#38; $1" data-i18n-aria-label="search.label">'));
+
+  // an icon in every element that asks for one, the shape of that name
+  const asked = [...html.matchAll(/\sdata-icon="([^"]*)"/g)].map(([, name]) => name);
+  assert.ok(asked.length >= 9, 'the icons were not found');
+  const drawn = [...page.matchAll(new RegExp(`\\sdata-icon="([^"]*)"[^<>]*>${ICON.source}</`, 'g'))].map(([, name, shape]) => [name, shape]);
+  assert.deepEqual(drawn, asked.map((name) => [name, shapes[name]]));
+  assert.equal(page.match(ICON).length, asked.length);
+  for (const name of asked) assert.equal(typeof shapes[name], 'string', `${name} is not in vendor/material-design-icons/icons.js`);
+  assert.throws(() => renderPage(html.replace('data-icon="mdiCog"', 'data-icon="mdiNone"'), german), /index\.html: there is no icon mdiNone/);
 });
 
 test('the page names its address and its versions in other languages', () => {
@@ -56,7 +115,7 @@ test('the page names its address and its versions in other languages', () => {
 
   // asked for in English: the same versions, and this one is the address of its own
   const english = renderPage(html, { ...german, language: 'en', asked: 'en', texts: en });
-  assert.match(english, /<html lang="en">/);
+  assert.match(english, /<html lang="en"[ >]/);
   assert.equal(tag(english, /<title>([^<]*)<\/title>/), 'Live map of public transport: Großraum Nürnberg (VGN) – Netnou');
   assert.match(tag(english, /<meta name="description" content="([^"]*)"/), /^Großraum Nürnberg \(VGN\): buses, /);
   assert.equal(tag(english, /<link rel="canonical" href="([^"]*)"/), `${URL_}?lang=en`);
@@ -131,7 +190,7 @@ test('the operator\'s links stand at the foot of the header card, and nothing do
   const page = renderPage(html, { ...german, links });
   const nav = /<nav class="links" id="links"([^>]*)>(.*?)<\/nav>/s.exec(page);
   assert.ok(!/\shidden/.test(nav[1]), 'the row is shown');
-  assert.match(nav[1], /aria-label="About this service"/);
+  assert.ok(nav[1].includes(` aria-label="${de['links.label']}"`));
   // a page on the same host takes the place of the map, one elsewhere opens in a new tab
   assert.equal(nav[2], '<a href="/ueber">Über</a>'
     + '<a href="https://example.org/impressum?a=1&#38;b=2" target="_blank" rel="noopener">Impressum &#38; Kontakt</a>');
