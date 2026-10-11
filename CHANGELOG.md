@@ -8,6 +8,13 @@ This file is written by
 messages when a release is made. Do not edit it by hand; see
 [Releases](CONTRIBUTING.md#releases).
 
+## [0.7.0](https://github.com/xiidoz/netnou/compare/v0.6.3...v0.7.0) (2026-10-11)
+
+
+### Features
+
+* **settings:** let an operator set the title and description of the page ([#99](https://github.com/xiidoz/netnou/issues/99)) ([28b7f19](https://github.com/xiidoz/netnou/commit/28b7f19ae7a1830d1aa4550dcca7268c1aac1dfe))
+
 ## [0.6.3](https://github.com/xiidoz/netnou/compare/v0.6.2...v0.6.3) (2026-10-11)
 
 
