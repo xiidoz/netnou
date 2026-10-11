@@ -47,7 +47,7 @@ services:
 | `AREA_NAME` | `Großraum Nürnberg (VGN)`; empty for a custom area | text | shown next to the title of the page, and what search engines find the instance by, see [Being found](#being-found) |
 | `BRAND_DIR` | – (`/brand` in the image) | path | a folder with icons and a preview picture of your own, see [Icons of your own](#icons-of-your-own) |
 | `LINKS` | – | `Text=address`, separated by commas | links of the operator at the foot of the header card, see [Links of your own](#links-of-your-own) |
-| `LANGUAGE` | `de` | a language of the page: `de`, `en` | the main language of the instance: what the page says about itself to search engines and in previews of links is in it. Visitors still get their own |
+| `LANGUAGE` | `de` | a language of the page: `de`, `en` | the main language of the instance: the page is sent in it to whoever asks without naming a language, as search engines do. Visitors get the language of their browser, see [Being found](#being-found) |
 | `PUBLIC_URL` | – | http(s) URL | the address under which visitors reach the instance, e.g. `https://transit.example.org/`, see [Being found](#being-found) |
 | `SEARCH_ENGINES` | `on` if `PUBLIC_URL` is set, otherwise `off` | `on` or `off` | whether search engines may list the instance, see [Being found](#being-found) |
 | `VIEW` | Nürnberg, Fürth and Erlangen; the whole area for a custom one | `south,west,north,east` | map section on a visitor's first visit; afterwards the browser remembers the last one |
@@ -154,11 +154,12 @@ into it what the instance is:
 - **`AREA_NAME`** goes into the title, the description and the heading of
   the page. It is what people look for, so name the area as they would:
   "Großraum Nürnberg (VGN)" rather than "Area 1".
-- **`LANGUAGE`** is the language these texts are in. A visitor still gets
-  the page in the language they chose or in that of their browser. Take the
-  one most of your visitors read: the header card is sent in it and shows
-  at once to those whose language it is, while for the others it waits
-  until the scripts of the page have run.
+- **`LANGUAGE`** is the language these texts are in for whoever asks
+  without naming a language: search engines, as a rule. A browser names the
+  languages of its user with every request, and gets the page in the first
+  of them the page has, in English if it has none of them. A preview of a
+  link is in the main language where the service that fetches the page for
+  it names no language, and in the one it names where it does.
 - **`PUBLIC_URL`** is the address of the instance as visitors type it, with
   the path if it lives under one (`https://example.org/netnou/`). With it
   the page names its canonical address, its versions in the other languages

@@ -65,6 +65,9 @@ self.addEventListener('fetch', (event) => {
         }
         return response;
       })
-      .catch(async () => (await caches.match(request, { ignoreSearch: true })) ?? Response.error()),
+      // (What is kept is taken whatever the address asks for besides, and
+      // whatever the browser: the server sends the page in the browser's
+      // language, and the one that was kept is the one there is.)
+      .catch(async () => (await caches.match(request, { ignoreSearch: true, ignoreVary: true })) ?? Response.error()),
   );
 });

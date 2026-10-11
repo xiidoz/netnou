@@ -386,7 +386,8 @@ test('static files: types, revalidation, HEAD, gzip and Brotli', async () => {
   assert.equal(page.status, 200);
   assert.equal(page.headers['content-type'], 'text/html; charset=utf-8');
   assert.equal(page.headers['cache-control'], 'no-cache');
-  assert.equal(page.headers.vary, 'Accept-Encoding');
+  // (the page comes in the language asked for as well, see the next test; a file does not)
+  assert.equal(page.headers.vary, 'Accept-Language, Accept-Encoding');
   assert.equal(page.headers['content-encoding'], undefined);
   assert.equal(Number(page.headers['content-length']), page.body.length);
   // index.html with what the instance is written into it, see the next test
@@ -404,7 +405,7 @@ test('static files: types, revalidation, HEAD, gzip and Brotli', async () => {
     assert.equal(unchanged.status, 304, tags);
     assert.equal(unchanged.body.length, 0);
     assert.equal(unchanged.headers.etag, etag);
-    assert.equal(unchanged.headers.vary, 'Accept-Encoding');
+    assert.equal(unchanged.headers.vary, 'Accept-Language, Accept-Encoding');
   }
   assert.equal((await request('/', { headers: { 'If-None-Match': '"something-else"' } })).status, 200);
 
@@ -476,6 +477,39 @@ test('the page says what and where the instance is before any script runs', asyn
   // a language the page does not have is none
   assert.equal(await text('/?lang=xx'), page);
   assert.equal(await text('/?lang='), page);
+
+  // Without a language in the address: in the one the browser asks for, so
+  // that the page comes as its visitor gets it. It is still the page of the
+  // plain address, and says that it depends on who asks.
+  const asking = (pathname, languages, headers = {}) => request(pathname, { headers: { 'Accept-Language': languages, ...headers } });
+  const forEnglish = await asking('/', 'en-US,en;q=0.9');
+  assert.match(forEnglish.body.toString(), /<html lang="en"[ >]/);
+  assert.match(forEnglish.body.toString(), /<title>Live map of public transport: Testland – Netnou<\/title>/);
+  assert.ok(forEnglish.body.toString().includes('<span id="status-text" data-i18n="status.connecting">Connecting …</span>'));
+  assert.ok(forEnglish.body.toString().includes(`<link rel="canonical" href="${address}">`));
+  assert.ok(forEnglish.body.toString().includes(`<meta property="og:url" content="${address}">`));
+  assert.equal(forEnglish.headers.vary, 'Accept-Language, Accept-Encoding');
+  assert.equal((await asking('/index.html', 'en')).body.toString(), forEnglish.body.toString());
+  // a German browser gets what a visitor without a word on languages gets, a search engine for one
+  const forGerman = await asking('/', 'de-DE,de;q=0.9,en-US;q=0.8,en;q=0.7');
+  assert.equal(forGerman.body.toString(), page);
+  assert.equal(forGerman.headers.vary, 'Accept-Language, Accept-Encoding');
+  assert.equal((await request('/')).headers.vary, 'Accept-Language, Accept-Encoding');
+  assert.equal((await asking('/', '*')).body.toString(), page);
+  // a browser of a language the page does not have gets English, as from the script
+  assert.equal((await asking('/', 'xx-XX,xx;q=0.9')).body.toString(), forEnglish.body.toString());
+  // each has its tag, and an answer that has not changed says what it depends on too
+  assert.notEqual(forEnglish.headers.etag, forGerman.headers.etag);
+  assert.notEqual(forEnglish.headers.etag, english.headers.etag);
+  const unchanged = await asking('/', 'en', { 'If-None-Match': forEnglish.headers.etag });
+  assert.deepEqual([unchanged.status, unchanged.headers.vary], [304, 'Accept-Language, Accept-Encoding']);
+  assert.equal((await asking('/', 'de', { 'If-None-Match': forEnglish.headers.etag })).status, 200);
+  // the address wins over the browser, and its page is the same for all
+  const askedGerman = await asking('/?lang=de', 'en-US,en;q=0.9');
+  assert.match(askedGerman.body.toString(), /<html lang="de"[ >]/);
+  assert.equal(askedGerman.headers.vary, 'Accept-Encoding');
+  assert.equal(english.headers.vary, 'Accept-Encoding');
+  assert.equal((await request('/?lang=en', { headers: { 'If-None-Match': english.headers.etag } })).headers.vary, 'Accept-Encoding');
 
   // the installed app: named as the instance, in its language, sent again only when it has changed
   const manifest = await get('/manifest.webmanifest');

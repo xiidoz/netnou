@@ -7,11 +7,11 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { test } from 'node:test';
-import { LANGUAGES, pageTexts } from '../public/i18n.js';
+import { LANGUAGES, pageTexts, pickLanguage } from '../public/i18n.js';
 import de from '../public/locales/de.js';
 import en from '../public/locales/en.js';
 import * as shapes from '../public/vendor/material-design-icons/icons.js';
-import { LANGUAGE_CODES, PAGE_MODULES, ownFiles, pictureSize, renderManifest, renderPage, robotsTxt, sitemapXml } from '../server/lib/page.js';
+import { LANGUAGE_CODES, PAGE_MODULES, languageFor, ownFiles, pictureSize, renderManifest, renderPage, robotsTxt, sitemapXml } from '../server/lib/page.js';
 
 const html = fs.readFileSync(new URL('../public/index.html', import.meta.url), 'utf8');
 const URL_ = 'https://karte.example.org/live/';
@@ -33,6 +33,40 @@ function markedTexts(page) {
 
 test('the languages of the page are those of its texts', () => {
   assert.deepEqual(LANGUAGE_CODES, LANGUAGES.map(([code]) => code));
+});
+
+// Where the address names no language, the page is sent in the one its own
+// script would pick for the browser: then it comes as the visitor gets it.
+// ('xx' stands for a language the page does not have, whatever is added to it)
+test('the language of the page is the one the page would pick for the browser that asks', () => {
+  // as browsers ask: most wanted first, each with its region and without
+  assert.equal(languageFor('de-DE,de;q=0.9,en-US;q=0.8,en;q=0.7', 'en'), 'de');
+  assert.equal(languageFor('en-US,en;q=0.9', 'de'), 'en');
+  assert.equal(languageFor('en-GB', 'de'), 'en');
+  assert.equal(languageFor('xx-XX,xx;q=0.9,de-AT;q=0.8,en;q=0.7', 'en'), 'de');
+  // by the weights, wherever they stand; of two with the same weight the first
+  assert.equal(languageFor('en;q=0.1, de;q=0.9', 'en'), 'de');
+  assert.equal(languageFor('en;q=0.5,de;q=0.5', 'de'), 'en');
+  assert.equal(languageFor(' DE ; q = 0.8 , en ; q=0.4', 'en'), 'de');
+  // a language that is not wanted at all is none
+  assert.equal(languageFor('de;q=0, en', 'de'), 'en');
+  assert.equal(languageFor('xx, de;q=0.000', 'de'), 'en');
+  // none the page has: English, as the page picks for such a browser
+  assert.equal(languageFor('xx-XX,xx;q=0.9', 'de'), 'en');
+  // nothing said, or nothing that says anything: the main language of the instance
+  for (const header of [undefined, '', ' ', '*', '*;q=0.5', 'de;q=2', 'en;q=often', 'curl/8.5.0', ',,;']) {
+    assert.equal(languageFor(header, 'de'), 'de', `${header}`);
+    assert.equal(languageFor(header, 'en'), 'en', `${header}`);
+  }
+  // (what cannot be read is passed over, the rest counts)
+  assert.equal(languageFor('en;q=often, de', 'en'), 'de');
+
+  // the same choice as the script of the page makes from the same list
+  const browsers = [['de-DE', 'de', 'en-US', 'en'], ['en-US', 'en'], ['xx-XX', 'xx'], ['xx', 'en', 'de'], ['EN-gb', 'de'], ['de']];
+  for (const browser of browsers) {
+    const header = browser.map((tag, index) => (index ? `${tag};q=${(1 - index / 10).toFixed(1)}` : tag)).join(',');
+    for (const main of LANGUAGE_CODES) assert.equal(languageFor(header, main), pickLanguage(null, browser), header);
+  }
 });
 
 test('the page says what and where it is, in the language of the instance', () => {

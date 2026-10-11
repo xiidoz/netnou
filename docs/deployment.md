@@ -191,6 +191,10 @@ reachable through the proxy.
   its answers and sets cache headers itself. The files of the page go out
   with Brotli to browsers that take it, else with gzip; a reverse proxy has
   to pass `Content-Encoding` and `Vary` on as they are, which is the usual.
+  The page itself is sent in the language the browser asks for and says so
+  (`Vary: Accept-Language`). A proxy or a content delivery network that is
+  set to keep pages has to keep them apart by that header; one that does
+  not look at it must not keep the page.
 - **Embedding** the page in a frame on another site is not possible: the
   Content-Security-Policy says `frame-ancestors 'none'`.
 
@@ -242,7 +246,8 @@ Worth watching:
   ([Realtime polling and traffic](configuration.md#realtime-polling-and-traffic)).
 - **What is stored and logged.** The server sets no cookies, has no accounts
   and writes no access log; it logs a request only when handling it failed
-  with an error. The page stores six settings in the browser's
+  with an error. Of the languages a browser names with its request it takes
+  the language to send the page in, and keeps nothing of them. The page stores six settings in the browser's
   `localStorage` (`netnou.lang`, `netnou.theme`, `netnou.flags`,
   `netnou.hiddenModes`, `netnou.colorBy`, `netnou.view`) and its own files in the browser cache `netnou-shell-v3`
   for the offline start. While its controls are hidden, and as a display on a

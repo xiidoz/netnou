@@ -17,10 +17,15 @@ the server.
 Changing the language in the page reloads it, from the address without
 `?lang=…`.
 
-The server sends the page in the main language of the instance (`LANGUAGE`)
-or in the one the address asks for. A visitor whose language that is sees
-the header card as soon as the page arrives; for anybody else it shows once
-the script has put their language in, a moment later.
+The server sends the page in that language from the start. A browser names
+the languages of its user with every request (`Accept-Language`), and the
+server picks among them by steps 2 to 4, as the page does. So the page
+arrives as the visitor gets it, and its header card shows as soon as it is
+there. Step 1 the server cannot take: a language chosen in the page stays
+in the browser. For such a visitor the card shows once the script has put
+their language in, a moment later. Whoever names no language at all, as
+search engines do as a rule, gets the main language of the instance
+(`LANGUAGE`).
 
 The address with a language is there for search engines, whose browser
 speaks English and chooses nothing: it is how they get to read the page in

@@ -9,7 +9,9 @@
 // scripts are on their way: on a phone that is seconds. So the server sends
 // the header card whole, its texts in the language of the page and its icons
 // drawn. Whether that is the card this visitor gets, the first script of the
-// page finds out (public/first.js), and shows it at once if it is.
+// page finds out (public/first.js), and shows it at once if it is. For most it
+// is: where the address names no language, the page is sent in the one the
+// page itself would pick for the browser that asks (languageFor).
 //
 // The page picks its language in the browser, which a search engine never
 // gets to see in another language than that of its own browser. Hence an
@@ -17,7 +19,7 @@
 
 import fs from 'node:fs';
 import path from 'node:path';
-import { LANGUAGES, pageTexts, t } from '../../public/i18n.js';
+import { LANGUAGES, pageTexts, pickLanguage, t } from '../../public/i18n.js';
 import * as shapes from '../../public/vendor/material-design-icons/icons.js';
 
 export const LANGUAGE_CODES = LANGUAGES.map(([code]) => code);
@@ -97,6 +99,27 @@ export function pictureSize(file) {
   return null;
 }
 
+/**
+ * The language of the page for a browser whose address names none: the one
+ * the page would pick for it in the browser (pickLanguage in public/i18n.js),
+ * from the languages the browser says it wants. So the page comes as its
+ * visitor gets it, and its header card can show before the scripts have run.
+ * Whoever says nothing of languages – a search engine, as a rule – gets the
+ * main language of the instance.
+ * @param header the Accept-Language header of the request, undefined without
+ *   one: "de-DE,de;q=0.9,en;q=0.8", most wanted first unless the weights say otherwise
+ * @param main the main language of the instance
+ */
+export function languageFor(header = '', main) {
+  const wanted = header.split(',')
+    .map((part) => /^\s*([a-z]{1,8}(?:-[a-z0-9]{1,8})*)\s*(?:;\s*q\s*=\s*([01](?:\.\d{0,3})?))?\s*$/i.exec(part))
+    // (a language that is not one, a weight that is none, "any language" and a language not wanted at all)
+    .filter((match) => match && Number(match[2] ?? 1) > 0)
+    .sort((a, b) => Number(b[2] ?? 1) - Number(a[2] ?? 1))
+    .map((match) => match[1]);
+  return wanted.length ? pickLanguage(null, wanted) : main;
+}
+
 const escapeHtml = (text) => String(text).replace(/[&<>"']/g, (char) => `&#${char.charCodeAt(0)};`);
 
 /**
@@ -134,7 +157,8 @@ const versions = (publicUrl) => [...LANGUAGE_CODES.map((code) => [code, addressI
  * index.html as it is sent.
  * @param html the file
  * @param language what its texts are to be in
- * @param asked the language the address asked for, null if it named none
+ * @param asked the language the address asked for, null if it named none:
+ *   the page is then the one that follows the browser, whatever it is in
  * @param texts the texts of that language (a module of public/locales)
  * @param siteName what the instance calls itself
  * @param areaName may be empty
