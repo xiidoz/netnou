@@ -162,6 +162,9 @@ const versions = (publicUrl) => [...LANGUAGE_CODES.map((code) => [code, addressI
  * @param texts the texts of that language (a module of public/locales)
  * @param siteName what the instance calls itself
  * @param areaName may be empty
+ * @param siteTitle the operator's own title of the page in that language,
+ *   null for the one the page has, with the names of the area and the instance
+ * @param siteDescription the operator's own description in that language, null for the page's
  * @param links the operator's own, [{ text, href }], at the foot of the header card
  * @param preview the address of the operator's picture for previews of
  *   links (ownFiles), null to show the icon
@@ -174,8 +177,10 @@ const versions = (publicUrl) => [...LANGUAGE_CODES.map((code) => [code, addressI
  * @param mapOrigins the servers the map comes from, as the
  *   Content-Security-Policy names them
  */
-export function renderPage(html, { language, asked, texts, siteName, areaName, links = [], preview = null, previewSize = null, publicUrl, listed, styleUrl = null, mapOrigins = [] }) {
-  const { title, description } = pageTexts(areaName, texts, siteName);
+export function renderPage(html, { language, asked, texts, siteName, areaName, siteTitle = null, siteDescription = null, links = [], preview = null, previewSize = null, publicUrl, listed, styleUrl = null, mapOrigins = [] }) {
+  const worded = pageTexts(areaName, texts, siteName);
+  const title = siteTitle ?? worded.title;
+  const description = siteDescription ?? worded.description;
   // The texts first: of what follows, some takes the place of one of them.
   // Then the icons, each into the empty element that asks for one.
   let page = translate(html, texts).replace(/(<[a-z]+\s(?:[^<>]*\s)?data-icon="([^"]*)"[^<>]*>)(?=<\/)/g, (_, start, name) => start + iconSvg(name));
@@ -187,7 +192,8 @@ export function renderPage(html, { language, asked, texts, siteName, areaName, l
   // (which languages there are: first.js picks the visitor's among them, and sees whether it is that of the page)
   put(/<html lang="[^"]*">/, () => `<html lang="${language}" data-languages="${LANGUAGE_CODES.join(' ')}">`);
   put(/<title>[^<]*<\/title>/, () => `<title>${escapeHtml(title)}</title>`);
-  put(/(<meta name="description" content=")[^"]*"/, (_, start) => `${start}${escapeHtml(description)}"`);
+  // (a description of the operator's own stands as it is: without the mark by which the script would put the page's in its place)
+  put(/(<meta name="description" content=")[^"]*"( data-i18n-content="page\.description")/, (_, start, mark) => `${start}${escapeHtml(description)}"${siteDescription === null ? mark : ''}`);
   put(/(<meta name="apple-mobile-web-app-title" content=")[^"]*"/, (_, start) => `${start}${escapeHtml(siteName)}"`);
   put(/(<h1>)[^<]*/, (_, start) => `${start}${escapeHtml(siteName)}`);
   put(/(<p id="area-name">)[^<]*/, (_, start) => `${start}${escapeHtml(areaName)}`);
@@ -257,10 +263,11 @@ export function renderPage(html, { language, asked, texts, siteName, areaName, l
  * The manifest of the installed app as it is sent: the file, with the name of
  * the instance, and its language and description in place of the English ones.
  * @param json the file
+ * @param siteDescription the operator's own description in that language, null for the page's
  */
-export function renderManifest(json, { language, texts, siteName, areaName }) {
+export function renderManifest(json, { language, texts, siteName, areaName, siteDescription = null }) {
   const manifest = JSON.parse(json);
-  return JSON.stringify({ ...manifest, name: siteName, short_name: siteName, description: pageTexts(areaName, texts, siteName).description, lang: language }, null, 2);
+  return JSON.stringify({ ...manifest, name: siteName, short_name: siteName, description: siteDescription ?? pageTexts(areaName, texts, siteName).description, lang: language }, null, 2);
 }
 
 /**
