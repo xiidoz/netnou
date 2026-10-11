@@ -98,7 +98,7 @@ Server (`server/`):
 | `lib/pb.js` | decodes the GTFS-Realtime message (`decodeFeed`) |
 | `lib/update.js` | what the server calls itself (`describeBuild`) and the daily look-out for a newer release (`UpdateChecker`) |
 | `lib/time.js` | service days and the time zone of the feed |
-| `lib/page.js` | what the server writes into the page before it sends it: for search engines and previews of links, the header card as a visitor first sees it, and what the page is to fetch right away; `robots.txt` and the sitemap; which files of the operator's own take the place of built-in icons |
+| `lib/page.js` | which language the page is sent in, and what the server writes into it before it sends it: for search engines and previews of links, the header card as a visitor first sees it, and what the page is to fetch right away; `robots.txt` and the sitemap; which files of the operator's own take the place of built-in icons |
 | `lib/files.js` | downloads, gzipped JSON files, error texts |
 | `areas/vgn.geojson` | outline of the default area, see [its README](../server/areas/README.md) |
 
@@ -350,14 +350,16 @@ otherwise a server would load a file written by older code:
 - **Offline start.** The service worker fetches from the network first and
   falls back to its cache, so an update shows up immediately and the
   installed app can still start without a connection (and then says that it
-  needs one). API answers and the map are never cached.
+  needs one). It takes the page it has kept, in whatever language that came.
+  API answers and the map are never cached.
 - **Texts** come from locale files through `t()`; nothing a visitor reads is
   written out in `app.js` or in the server, apart from data such as
   names of stops and notes of the feed. See [translating.md](translating.md).
 - **Before any script runs** the page already says what and where the
   instance is: the server writes the title, the description, the name of the
-  instance and the name of the area into `index.html` when it sends it, in the main language of the
-  instance or the one the address asks for (`?lang=de`), with the tags for
+  instance and the name of the area into `index.html` when it sends it, in the language the
+  address asks for (`?lang=de`), else in the one the browser asks for, else in the main language
+  of the instance, with the tags for
   previews of links and, if it knows its public address, the canonical
   address and the versions in other languages. That is what search engines
   and chats read. The script puts the same texts in for the visitor, in
@@ -368,10 +370,14 @@ otherwise a server would load a file written by older code:
   library above all, and on a phone they take seconds to arrive. Until they
   have run, a visitor sees the page as the server sent it. So the server
   sends the header card whole: its texts in the language of the page, its
-  icons drawn, a chip for every mode (`renderPage`). `first.js`, the one
-  script the page waits for, picks the visitor's language as `i18n.js` does
-  and shows the card with the first paint where the page came as this
-  visitor gets it. Where it did not – another language, modes switched off,
+  icons drawn, a chip for every mode (`renderPage`). Where the address
+  names no language, the page is sent in the one its own script would pick
+  for the browser that asks, from the languages the browser names with its
+  request (`languageFor`); the answer says that it depends on them
+  (`Vary: Accept-Language`). `first.js`, the one script the page waits
+  for, picks the visitor's language as `i18n.js` does and shows the card
+  with the first paint where the page came as this visitor gets it. Where
+  it did not – another language chosen in the settings, modes switched off,
   colours by delay, a display – the card stays out of sight until `app.js`
   has made it so: it would change under the eyes of who reads it otherwise.
   What `app.js` adds to a card that shows already is what its buttons do,

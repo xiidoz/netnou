@@ -58,6 +58,13 @@ test('the service worker precaches files that exist', () => {
   for (const file of ['app.js', 'i18n.js', 'search.js', 'style.css']) assert.ok(shell.includes(file), `${file} is missing in SHELL of sw.js`);
 });
 
+// The page is sent in the language its browser asks for, and says so (Vary). A
+// start without a connection takes the one that was kept, whatever the browser
+// asks for by then: a cache that held that against it would have no page at all.
+test('the service worker finds the page it kept, whatever is asked for besides', () => {
+  assert.match(withoutComments(read('sw.js')), /caches\.match\(request, \{ ignoreSearch: true, ignoreVary: true \}\)/);
+});
+
 // An installed app starts from the shell alone: a script in it that imports
 // one that is not would leave the page blank without a connection.
 test('what the scripts of the page import is precached with them', () => {

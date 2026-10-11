@@ -6,7 +6,7 @@ import zlib from 'node:zlib';
 import { loadConfig, parseBox } from './config.js';
 import { FeedUpdater } from './lib/feed.js';
 import { RealtimePoller } from './lib/realtime.js';
-import { LANGUAGE_CODES, ownFiles, pictureSize, renderManifest, renderPage, robotsTxt, sitemapXml } from './lib/page.js';
+import { LANGUAGE_CODES, languageFor, ownFiles, pictureSize, renderManifest, renderPage, robotsTxt, sitemapXml } from './lib/page.js';
 import { setTimeZone } from './lib/time.js';
 import { lite } from './lib/timetable.js';
 import { describeBuild, githubReleases, UpdateChecker } from './lib/update.js';
@@ -132,11 +132,14 @@ function keep(body) {
   };
 }
 
+/** What an answer that may be compressed depends on: the encodings the browser takes, besides what its headers name already. */
+const varies = (headers) => (headers.Vary ? `${headers.Vary}, Accept-Encoding` : 'Accept-Encoding');
+
 /** @param kept the body as keep() has it, for a caller that sends the same again; else it is compressed for this answer alone, with gzip */
 function send(req, res, status, type, body, headers = {}, kept = null) {
   const head = { ...SECURITY_HEADERS, 'Content-Type': type, ...headers };
   if (COMPRESSIBLE.test(type)) {
-    head.Vary = 'Accept-Encoding';
+    head.Vary = varies(headers);
     if (body.length > 1024) {
       const accepted = req.headers['accept-encoding'] ?? '';
       let encoding = null;
@@ -171,8 +174,9 @@ const previewSize = own.preview ? pictureSize(own.files.get(own.preview)) : null
 if (own.files.size) log(`Own files from ${config.brandDir}: ${[...own.files.keys()].join(', ')}`);
 
 // The page is index.html with what the instance is written into it
-// (lib/page.js), in its main language or the one the address asks for. Put
-// together once for each and again when the file has changed.
+// (lib/page.js), in the language the address asks for, else in the one the
+// browser asks for, else in the main language of the instance. Put together
+// once for each and again when the file has changed.
 const texts = Object.fromEntries(await Promise.all(LANGUAGE_CODES.map(async (code) => [code, (await import(`../public/locales/${code}.js`)).default])));
 const pages = new Map();
 
@@ -181,17 +185,22 @@ function servePage(req, res, url) {
   const stat = fs.statSync(file);
   const stamp = `${stat.size}-${stat.mtimeMs}`;
   const asked = LANGUAGE_CODES.includes(url.searchParams.get('lang')) ? url.searchParams.get('lang') : null;
-  let page = pages.get(asked);
+  // (the header is read for this one answer and kept nowhere)
+  const language = asked ?? languageFor(req.headers['accept-language'], config.language);
+  // (the page of an address with a language names that address as its own: not the same page)
+  const key = asked ? `?lang=${asked}` : language;
+  let page = pages.get(key);
   if (page?.stamp !== stamp) {
-    const language = asked ?? config.language;
     const body = Buffer.from(renderPage(fs.readFileSync(file, 'utf8'), { language, asked, texts: texts[language], siteName: config.siteName, areaName: config.areaName, links: config.links, preview: own.preview, previewSize, publicUrl: config.publicUrl, listed: config.searchEngines, styleUrl: config.styleUrl, mapOrigins: config.mapOrigins }));
     page = { stamp, body, etag: `"${crypto.createHash('sha1').update(body).digest('hex').slice(0, 16)}"`, packed: null };
-    pages.set(asked, page);
+    pages.set(key, page);
   }
-  // Always revalidate, as the files are: a deploy shows up immediately.
-  const headers = { ETag: page.etag, 'Cache-Control': 'no-cache' };
+  // Always revalidate, as the files are: a deploy shows up immediately. Where
+  // the address names no language, the same address has an answer for each:
+  // whoever keeps answers is told to keep them apart by the browser's languages.
+  const headers = { ETag: page.etag, 'Cache-Control': 'no-cache', ...(asked ? {} : { Vary: 'Accept-Language' }) };
   if (etagMatches(req, page.etag)) {
-    res.writeHead(304, { ...headers, Vary: 'Accept-Encoding' });
+    res.writeHead(304, { ...headers, Vary: varies(headers) });
     return res.end();
   }
   return send(req, res, 200, MIME['.html'], page.body, headers, (page.packed ??= keep(page.body)));

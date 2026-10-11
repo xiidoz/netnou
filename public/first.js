@@ -27,12 +27,13 @@ window.applyColorScheme = () => {
 window.applyColorScheme();
 
 // The header card. The server sends it as most visitors get it: in the
-// language of the page, every mode of transport switched on, the vehicles
-// coloured by their mode (server/lib/page.js). Where that is what this visitor
-// gets, the card shows with the first paint, well before app.js has arrived.
-// Where it is not – another language, a display, modes switched off, colours
-// by delay – it stays out of sight until app.js has made it so: a card that
-// changes under the eyes of who reads it is worse than one that comes later.
+// language their browser asks for, every mode of transport switched on, the
+// vehicles coloured by their mode (server/lib/page.js). Where that is what
+// this visitor gets, the card shows with the first paint, well before app.js
+// has arrived. Where it is not – another language chosen in the settings, a
+// display, modes switched off, colours by delay – it stays out of sight until
+// app.js has made it so: a card that changes under the eyes of who reads it
+// is worse than one that comes later.
 //
 // The language is picked as pickLanguage in i18n.js picks it, and the settings
 // are read as app.js reads them; test/frontend.test.js holds the two together.
