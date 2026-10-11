@@ -1,6 +1,6 @@
 {
   "name": "netnou",
-  "version": "0.6.2",
+  "version": "0.6.3",
   "description": "Live public-transport map: vehicle positions computed from GTFS and GTFS-Realtime feeds, routes between stops from OpenStreetMap. No runtime dependencies.",
   "keywords": [
     "gtfs",
