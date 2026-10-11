@@ -1909,10 +1909,12 @@ async function loadArea() {
 
   setTimeZone(area.timeZone);
   $('area-name').textContent = area.name;
-  // What the server wrote into the page before it sent it (server/lib/page.js), now in the visitor's language.
+  // What the server wrote into the page before it sent it (server/lib/page.js),
+  // now in the visitor's language: the operator's own title and description
+  // where they have them for that language, else the page's.
   const page = pageTexts(area.name, undefined, area.siteName);
-  document.title = page.title;
-  document.querySelector('meta[name="description"]').content = page.description;
+  document.title = area.siteTitle[language] ?? page.title;
+  document.querySelector('meta[name="description"]').content = area.siteDescription[language] ?? page.description;
 
   const [south, west, north, east] = area.bbox;
   // Lines are followed beyond the area, so the map reaches well beyond it too

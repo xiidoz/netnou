@@ -302,6 +302,20 @@ test('the header card shows at once where the page came as this visitor gets it'
   assert.ok(shown({ dark: true, stored: { 'netnou.theme': '"dark"', 'netnou.flags': 'false', 'netnou.view': '{"lat":49.4,"lon":11,"zoom":14}' } }));
 });
 
+// The script puts the title and the description of the page into the visitor's
+// language. Where the operator has words of their own for them (SITE_TITLE,
+// SITE_DESCRIPTION), the server sends those and tells the script of them with
+// the area, by language; the script has to take them, or a search engine,
+// which runs it, reads the page's own words after all.
+test('the script takes a title and a description of the operator\'s own for the visitor\'s language', () => {
+  const app = withoutComments(read('app.js'));
+  assert.match(app, /document\.title = area\.siteTitle\[language\] \?\? page\.title;/);
+  assert.match(app, /querySelector\('meta\[name="description"\]'\)\.content = area\.siteDescription\[language\] \?\? page\.description;/);
+  // (and nowhere else does it set either)
+  assert.equal(app.match(/document\.title = /g).length, 1);
+  assert.equal(app.match(/meta\[name="description"\]/g).length, 1);
+});
+
 // A pragmatic check, not a proof: it reads the string literals of app.js and
 // knows nothing about where they end up.
 test('app.js has no text for visitors of its own', () => {

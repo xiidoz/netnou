@@ -139,6 +139,8 @@ server runs and is available while the timetable is still loading.
 {
   "siteName": "Netnou",
   "name": "Großraum Nürnberg (VGN)",
+  "siteTitle": { "de": null, "en": null },
+  "siteDescription": { "de": null, "en": null },
   "bbox": [48.5842, 10.0399, 50.5232, 12.5939],
   "view": [49.376, 10.916, 49.604, 11.204],
   "outline": [[[49.22, 11.9362], [49.2145, 11.9445], …]],
@@ -156,6 +158,8 @@ server runs and is available while the timetable is still loading.
 | --- | --- | --- |
 | `siteName` | string | what the instance calls itself (`SITE_NAME`); "Netnou" unless the operator chose another name |
 | `name` | string | name of the area, `""` if it has none |
+| `siteTitle` | object | the operator's own title of the page (`SITE_TITLE`), by the languages of the page: for each a text to be shown as it is, or `null` where they have none and the page words its own |
+| `siteDescription` | object | the same for what the page says about itself (`SITE_DESCRIPTION`) |
 | `bbox` | box | rectangle around the area |
 | `view` | box | map section to show first |
 | `outline` | array of rings | the edge of the area, each ring an array of `[latitude, longitude]`. Note the order: the GeoJSON file the area comes from has longitude first |

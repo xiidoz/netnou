@@ -363,7 +363,10 @@ otherwise a server would load a file written by older code:
   previews of links and, if it knows its public address, the canonical
   address and the versions in other languages. That is what search engines
   and chats read. The script puts the same texts in for the visitor, in
-  their language; both take them from `pageTexts` in `i18n.js`. The
+  their language; both take them from `pageTexts` in `i18n.js`. A title or
+  a description of the operator's own (`SITE_TITLE`, `SITE_DESCRIPTION`)
+  takes the place of the page's in both, as it is: one for every language,
+  or one for each. The
   manifest of the installed app gets the name, the language and the
   description of the instance the same way.
 - **The header card comes with the page.** The scripts are large, the map

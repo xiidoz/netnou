@@ -44,6 +44,8 @@ services:
 | `AREA_FILE` | the built-in VGN outline | path | GeoJSON file with the polygons of the area, see [Choosing an area](#choosing-an-area) |
 | `BBOX` | – | `south,west,north,east` | a rectangle as the area, instead of `AREA_FILE` |
 | `SITE_NAME` | `Netnou` | text | what the instance calls itself: in the heading and the title of the page, in previews of links and as the installed app. The credits on the map name Netnou and its version whatever is set here |
+| `SITE_TITLE` | the page's own, in each of its languages | text, or texts by language | the title of the page as the tab of a browser and a search result show it, in words of your own, see [Being found](#being-found) |
+| `SITE_DESCRIPTION` | the page's own, in each of its languages | text, or texts by language | what the page says about itself in a search result and in a preview of a link, in words of your own |
 | `AREA_NAME` | `Großraum Nürnberg (VGN)`; empty for a custom area | text | shown next to the title of the page, and what search engines find the instance by, see [Being found](#being-found) |
 | `BRAND_DIR` | – (`/brand` in the image) | path | a folder with icons and a preview picture of your own, see [Icons of your own](#icons-of-your-own) |
 | `LINKS` | – | `Text=address`, separated by commas | links of the operator at the foot of the header card, see [Links of your own](#links-of-your-own) |
@@ -154,6 +156,26 @@ into it what the instance is:
 - **`AREA_NAME`** goes into the title, the description and the heading of
   the page. It is what people look for, so name the area as they would:
   "Großraum Nürnberg (VGN)" rather than "Area 1".
+- **`SITE_TITLE`** and **`SITE_DESCRIPTION`** put words of your own in the
+  place of the title and the description: the line a search result is
+  headed by and the lines below it, and what a preview of a link says. The
+  page has both in each of its languages, made of what it is and the names
+  above: "ÖPNV-Live-Karte: Großraum Nürnberg (VGN) – Netnou". Yours are
+  shown as they are. There are three ways to give them, here for the title:
+
+  ```sh
+  # one text, for every language
+  SITE_TITLE="Bus & Bahn live – die Karte für den Großraum Nürnberg"
+  # texts by language, as a JSON object
+  SITE_TITLE='{"de": "Bus & Bahn live – die Karte", "en": "Buses and trains live – the map"}'
+  # a setting for one language alone, with the language at its end
+  SITE_TITLE_EN="Buses and trains live – the map"
+  ```
+
+  For each language the setting of its own counts first, then the object,
+  then the one text; a language that is given none keeps the page's own
+  words. A search engine shows about 60 characters of a title and 150 of a
+  description. Title and description can be set without each other.
 - **`LANGUAGE`** is the language these texts are in for whoever asks
   without naming a language: search engines, as a rule. A browser names the
   languages of its user with every request, and gets the page in the first
@@ -171,7 +193,10 @@ The page chooses its language in the browser, and the browser of a search
 engine speaks English. So there is an address per language, `?lang=de`,
 which shows the page in that language to whoever has not chosen one in the
 page themselves. The page names these addresses as its versions in other
-languages, and the sitemap lists them.
+languages, and the sitemap lists them. At the plain address a search engine
+therefore gets to read the title and the description for English, whatever
+`LANGUAGE` is: yours for English, else yours for every language, else the
+page's own.
 
 Whether search engines may list the instance at all is `SEARCH_ENGINES`.
 If nothing is set, an instance that knows its address is listed and any

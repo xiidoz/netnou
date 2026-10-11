@@ -193,6 +193,47 @@ test('an instance with a name of its own carries it wherever the page names itse
   assert.equal(tag(renderPage(html, german), /<h1>([^<]*)<\/h1>/), 'Netnou');
 });
 
+// The page words its title and its description in each of its languages. An
+// operator may have words of their own for them, for the people the instance
+// is for: those stand as they are, in one language, for everybody.
+test('a title and a description of the operator\'s own take the place of the page\'s', () => {
+  const own = { siteTitle: 'Bus & Bahn live im Großraum Nürnberg', siteDescription: 'Wo ist meine Bahn? "Live" auf der Karte, <jetzt> & hier.' };
+  const said = { title: 'Bus &#38; Bahn live im Großraum Nürnberg', description: 'Wo ist meine Bahn? &#34;Live&#34; auf der Karte, &#60;jetzt&#62; &#38; hier.' };
+  const page = renderPage(html, { ...german, ...own });
+  assert.equal(tag(page, /<title>([^<]*)<\/title>/), said.title);
+  assert.equal(tag(page, /<meta property="og:title" content="([^"]*)"/), said.title);
+  assert.equal(tag(page, /<meta name="description" content="([^"]*)"/), said.description);
+  assert.equal(tag(page, /<meta property="og:description" content="([^"]*)"/), said.description);
+  // without the mark by which the script would put the page's own description in its place
+  assert.ok(page.includes(`<meta name="description" content="${said.description}">`));
+  // the name of the instance and of the area stay where else the page names them
+  assert.equal(tag(page, /<h1>([^<]*)<\/h1>/), 'Netnou');
+  assert.equal(tag(page, /<p id="area-name">([^<]*)<\/p>/), 'Großraum Nürnberg (VGN)');
+  assert.equal(tag(page, /<meta property="og:site_name" content="([^"]*)"/), 'Netnou');
+  // and nothing else changes: with the page's own words put back, it is the page of any instance
+  const plain = renderPage(html, german);
+  const worded = { title: tag(plain, /<title>([^<]*)<\/title>/), description: tag(plain, /<meta name="description" content="([^"]*)"/) };
+  assert.equal(page.replaceAll(said.title, worded.title).replace(`content="${said.description}">`, `content="${worded.description}" data-i18n-content="page.description">`).replaceAll(said.description, worded.description), plain);
+  // in one language: the page in English says the same
+  const english = renderPage(html, { ...german, ...own, language: 'en', asked: 'en', texts: en });
+  assert.equal(tag(english, /<title>([^<]*)<\/title>/), said.title);
+  assert.equal(tag(english, /<meta name="description" content="([^"]*)"/), said.description);
+  assert.ok(english.includes('>Connecting …<'));
+
+  // one of the two alone leaves the other to the page
+  const titled = renderPage(html, { ...german, siteTitle: own.siteTitle });
+  assert.equal(tag(titled, /<title>([^<]*)<\/title>/), said.title);
+  assert.ok(titled.includes(`<meta name="description" content="${worded.description}" data-i18n-content="page.description">`));
+  const described = renderPage(html, { ...german, siteDescription: own.siteDescription });
+  assert.equal(tag(described, /<title>([^<]*)<\/title>/), worded.title);
+  assert.equal(tag(described, /<meta name="description" content="([^"]*)"/), said.description);
+
+  // the installed app says the same of itself
+  const file = fs.readFileSync(new URL('../public/manifest.webmanifest', import.meta.url), 'utf8');
+  assert.equal(JSON.parse(renderManifest(file, { ...german, ...own })).description, own.siteDescription);
+  assert.equal(JSON.parse(renderManifest(file, { ...german, siteTitle: own.siteTitle })).description, de['page.descriptionIn'].replace('{area}', 'Großraum Nürnberg (VGN)'));
+});
+
 test('the page names what it fetches at its start, and where its map comes from', () => {
   const modules = (page) => [...page.matchAll(/<link rel="modulepreload" href="([^"]*)">/g)].map(([, file]) => file);
   const page = renderPage(html, german);

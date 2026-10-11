@@ -3,6 +3,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { after, test } from 'node:test';
+import { LANGUAGES } from '../public/i18n.js';
 import { loadConfig, parseBox } from '../server/config.js';
 
 const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'netnou-config-'));
@@ -33,6 +34,30 @@ test('what the page says about itself: its main language and the address of the 
   // an instance may call itself something else than the software; an empty name is none
   assert.equal(loadConfig({ SITE_NAME: ' Bus & Bahn live ' }).siteName, 'Bus & Bahn live');
   assert.equal(loadConfig({ SITE_NAME: ' ' }).siteName, 'Netnou');
+  // a title and a description of the operator's own for the page, by its languages: none unless set, each on one line
+  const inAll = (words) => Object.fromEntries(LANGUAGES.map(([code]) => [code, words]));
+  assert.deepEqual([loadConfig({}).siteTitle, loadConfig({}).siteDescription], [inAll(null), inAll(null)]);
+  assert.deepEqual(loadConfig({ SITE_TITLE: ' ', SITE_DESCRIPTION: '' }).siteTitle, inAll(null));
+  assert.deepEqual(loadConfig({ SITE_TITLE: ' Bus & Bahn live:\n   der Großraum Nürnberg ' }).siteTitle, inAll('Bus & Bahn live: der Großraum Nürnberg'));
+  assert.deepEqual(loadConfig({ SITE_DESCRIPTION: 'Wo ist\tmeine Bahn? ' }).siteDescription, inAll('Wo ist meine Bahn?'));
+  // one for a language alone takes the place of the one for all there, and stands by itself where there is none for all
+  assert.deepEqual(loadConfig({ SITE_TITLE: 'Bus & Bahn live', SITE_TITLE_EN: ' Buses and trains,\n live ' }).siteTitle, { ...inAll('Bus & Bahn live'), en: 'Buses and trains, live' });
+  assert.deepEqual(loadConfig({ SITE_DESCRIPTION_DE: 'Wo ist meine Bahn?' }).siteDescription, { ...inAll(null), de: 'Wo ist meine Bahn?' });
+  assert.deepEqual(loadConfig({ SITE_TITLE: 'Bus & Bahn live', SITE_TITLE_EN: ' ' }).siteTitle, inAll('Bus & Bahn live'));
+  // texts by language in the one setting, as a JSON object: for the languages it names, the others keep the page's own
+  assert.deepEqual(loadConfig({ SITE_TITLE: ' {"de": "Bus & Bahn\\n live", "en": "Buses and trains, live"} ' }).siteTitle, { ...inAll(null), de: 'Bus & Bahn live', en: 'Buses and trains, live' });
+  assert.deepEqual(loadConfig({ SITE_DESCRIPTION: '{"de": "Wo ist meine Bahn?"}' }).siteDescription, { ...inAll(null), de: 'Wo ist meine Bahn?' });
+  assert.deepEqual(loadConfig({ SITE_TITLE: '{}' }).siteTitle, inAll(null));
+  // the setting for one language wins over the object
+  assert.deepEqual(loadConfig({ SITE_TITLE: '{"de": "aus dem Objekt", "en": "from the object"}', SITE_TITLE_EN: 'of its own' }).siteTitle, { ...inAll(null), de: 'aus dem Objekt', en: 'of its own' });
+  // what begins as an object and is none of texts is refused
+  for (const wrong of ['{de: "Bus"}', '{"de": 5}', '{"de": ["Bus"]}', '{"de": null}', '{']) {
+    assert.throws(() => loadConfig({ SITE_TITLE: wrong }), /^Error: SITE_TITLE must be a text, or texts by language as a JSON object such as \{"/, wrong);
+  }
+  // a language the page does not have is refused, by its name
+  assert.throws(() => loadConfig({ SITE_TITLE: '{"de": "Bus", "xx": "Bus"}' }), /^Error: SITE_TITLE: the page has no language "xx"; it has /);
+  assert.throws(() => loadConfig({ SITE_TITLE_XX: 'Bus & Bahn live' }), /^Error: SITE_TITLE_XX: the page has no such language; it has /);
+  assert.throws(() => loadConfig({ SITE_DESCRIPTION_: 'Wo ist meine Bahn?' }), /^Error: SITE_DESCRIPTION_: the page has no such language/);
 
   // a folder with icons of the operator's own: none unless it is named
   assert.equal(loadConfig({}).brandDir, null);

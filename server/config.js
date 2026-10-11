@@ -123,6 +123,38 @@ export function loadConfig(env = process.env) {
   const text = (name) => (env[name] ?? '').trim();
   const invalid = (name, expected) => new Error(`${name} must be ${expected} (got "${env[name]}")`);
 
+  /**
+   * Words of the operator's own for the page, by its languages: { de, en },
+   * each a text on one line or null. There are three ways to give them, and
+   * the more particular one wins: `name` as a text is for every language;
+   * `name` as a JSON object is for the languages it names, {"de": "…"}; and
+   * `name` with a language at its end, SITE_TITLE_EN, is for that one alone.
+   */
+  function ownWords(name) {
+    const oneLine = (words) => words.replace(/\s+/g, ' ').trim() || null;
+    const languages = LANGUAGE_CODES.join(', ');
+    let forAll = null;
+    let byLanguage = {};
+    if (text(name).startsWith('{')) {
+      const expected = `a text, or texts by language as a JSON object such as {${LANGUAGE_CODES.map((code) => `"${code}": "…"`).join(', ')}}`;
+      try {
+        byLanguage = JSON.parse(text(name));
+      } catch {
+        throw invalid(name, expected);
+      }
+      if (byLanguage === null || Array.isArray(byLanguage) || Object.values(byLanguage).some((words) => typeof words !== 'string')) throw invalid(name, expected);
+      // (a language the page does not have is a slip of the pen: better said than passed over)
+      const unknown = Object.keys(byLanguage).find((code) => !LANGUAGE_CODES.includes(code));
+      if (unknown !== undefined) throw new Error(`${name}: the page has no language "${unknown}"; it has ${languages}`);
+    } else {
+      forAll = oneLine(text(name));
+    }
+    const stray = Object.keys(env).find((key) => key.startsWith(`${name}_`) && !LANGUAGE_CODES.includes(key.slice(name.length + 1).toLowerCase()));
+    if (stray) throw new Error(`${stray}: the page has no such language; it has ${languages}`);
+    return Object.fromEntries(LANGUAGE_CODES.map((code) => [code, oneLine(text(`${name}_${code.toUpperCase()}`)) ?? oneLine(byLanguage[code] ?? '') ?? forAll]));
+  }
+
+
   function number(name, fallback, min, max, { integer = false } = {}) {
     const raw = text(name);
     const value = raw === '' ? fallback : DECIMAL.test(raw) ? Number(raw) : NaN;
@@ -218,6 +250,13 @@ export function loadConfig(env = process.env) {
     // What the instance calls itself, where the page names itself: its
     // heading, its title, the installed app. The credits name the software.
     siteName: text('SITE_NAME') || APP_NAME,
+    // What the page is called in the tab of a browser and in the results of a
+    // search engine, and what it says about itself there: the operator's own
+    // words, as they are, in place of the ones the page has in each of its
+    // languages (pageTexts in public/i18n.js). By language, null where the
+    // page's own are to stand.
+    siteTitle: ownWords('SITE_TITLE'),
+    siteDescription: ownWords('SITE_DESCRIPTION'),
     // A folder with the operator's own icons and picture for previews of
     // links, which take the place of the built-in ones (ownFiles in
     // lib/page.js); null if there is to be none.
