@@ -44,8 +44,8 @@ services:
 | `AREA_FILE` | the built-in VGN outline | path | GeoJSON file with the polygons of the area, see [Choosing an area](#choosing-an-area) |
 | `BBOX` | – | `south,west,north,east` | a rectangle as the area, instead of `AREA_FILE` |
 | `SITE_NAME` | `Netnou` | text | what the instance calls itself: in the heading and the title of the page, in previews of links and as the installed app. The credits on the map name Netnou and its version whatever is set here |
-| `SITE_TITLE` | the page's own, in each of its languages | text | the title of the page as the tab of a browser and a search result show it, in words of your own; for one language alone with that language at its end, `SITE_TITLE_EN`. See [Being found](#being-found) |
-| `SITE_DESCRIPTION` | the page's own, in each of its languages | text | what the page says about itself in a search result and in a preview of a link, in words of your own; `SITE_DESCRIPTION_EN` likewise |
+| `SITE_TITLE` | the page's own, in each of its languages | text | the title of the page as the tab of a browser and a search result show it, in words of your own, the same for every language, see [Being found](#being-found) |
+| `SITE_DESCRIPTION` | the page's own, in each of its languages | text | what the page says about itself in a search result and in a preview of a link, in words of your own, the same for every language |
 | `AREA_NAME` | `Großraum Nürnberg (VGN)`; empty for a custom area | text | shown next to the title of the page, and what search engines find the instance by, see [Being found](#being-found) |
 | `BRAND_DIR` | – (`/brand` in the image) | path | a folder with icons and a preview picture of your own, see [Icons of your own](#icons-of-your-own) |
 | `LINKS` | – | `Text=address`, separated by commas | links of the operator at the foot of the header card, see [Links of your own](#links-of-your-own) |
@@ -161,12 +161,10 @@ into it what the instance is:
   headed by and the lines below it, and what a preview of a link says. The
   page has both in each of its languages, made of what it is and the names
   above: "ÖPNV-Live-Karte: Großraum Nürnberg (VGN) – Netnou". Yours are
-  shown as they are. Set like this they are for every language, so write
-  them for the people the instance is for. A language can have its own:
-  `SITE_TITLE_EN` and `SITE_DESCRIPTION_EN` are for the page in English
-  and take the place of the ones for all there. A search engine shows about
-  60 characters of a title and 150 of a description. Each can be set
-  without the others.
+  shown as they are, the same for every language and to everybody, so write
+  them for the people the instance is for. A search engine shows about 60
+  characters of a title and 150 of a description. Either can be set without
+  the other.
 - **`LANGUAGE`** is the language these texts are in for whoever asks
   without naming a language: search engines, as a rule. A browser names the
   languages of its user with every request, and gets the page in the first
@@ -185,9 +183,9 @@ engine speaks English. So there is an address per language, `?lang=de`,
 which shows the page in that language to whoever has not chosen one in the
 page themselves. The page names these addresses as its versions in other
 languages, and the sitemap lists them. At the plain address a search engine
-therefore gets to read the title and the description for English, whatever
-`LANGUAGE` is: yours for English, else yours for every language, else the
-page's own.
+therefore gets to read the page's own title and description in English,
+whatever `LANGUAGE` is. A title and a description of your own are the same
+at every address.
 
 Whether search engines may list the instance at all is `SEARCH_ENGINES`.
 If nothing is set, an instance that knows its address is listed and any

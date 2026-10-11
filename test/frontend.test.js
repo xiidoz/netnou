@@ -305,12 +305,12 @@ test('the header card shows at once where the page came as this visitor gets it'
 // The script puts the title and the description of the page into the visitor's
 // language. Where the operator has words of their own for them (SITE_TITLE,
 // SITE_DESCRIPTION), the server sends those and tells the script of them with
-// the area, by language; the script has to take them, or a search engine,
-// which runs it, reads the page's own words after all.
-test('the script takes a title and a description of the operator\'s own for the visitor\'s language', () => {
+// the area; the script has to leave them, or a search engine, which runs it,
+// reads the page's own words after all.
+test('the script leaves a title and a description of the operator\'s own as they are', () => {
   const app = withoutComments(read('app.js'));
-  assert.match(app, /document\.title = area\.siteTitle\[language\] \?\? page\.title;/);
-  assert.match(app, /querySelector\('meta\[name="description"\]'\)\.content = area\.siteDescription\[language\] \?\? page\.description;/);
+  assert.match(app, /document\.title = area\.siteTitle \?\? page\.title;/);
+  assert.match(app, /querySelector\('meta\[name="description"\]'\)\.content = area\.siteDescription \?\? page\.description;/);
   // (and nowhere else does it set either)
   assert.equal(app.match(/document\.title = /g).length, 1);
   assert.equal(app.match(/meta\[name="description"\]/g).length, 1);

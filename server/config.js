@@ -123,18 +123,6 @@ export function loadConfig(env = process.env) {
   const text = (name) => (env[name] ?? '').trim();
   const invalid = (name, expected) => new Error(`${name} must be ${expected} (got "${env[name]}")`);
 
-  /**
-   * Words of the operator's own for the page, by its languages: { de, en },
-   * each a text on one line or null. `name` is for every language, and
-   * `name` with a language at its end, SITE_TITLE_EN, for that one alone.
-   */
-  function ownWords(name) {
-    const oneLine = (setting) => text(setting).replace(/\s+/g, ' ') || null;
-    // (a language the page does not have is a slip of the pen: better said than passed over)
-    const unknown = Object.keys(env).find((key) => key.startsWith(`${name}_`) && !LANGUAGE_CODES.includes(key.slice(name.length + 1).toLowerCase()));
-    if (unknown) throw new Error(`${unknown}: the page has no such language; ${name} can end in one of ${LANGUAGE_CODES.map((code) => `_${code.toUpperCase()}`).join(', ')}`);
-    return Object.fromEntries(LANGUAGE_CODES.map((code) => [code, oneLine(`${name}_${code.toUpperCase()}`) ?? oneLine(name)]));
-  }
 
   function number(name, fallback, min, max, { integer = false } = {}) {
     const raw = text(name);
@@ -233,11 +221,11 @@ export function loadConfig(env = process.env) {
     siteName: text('SITE_NAME') || APP_NAME,
     // What the page is called in the tab of a browser and in the results of a
     // search engine, and what it says about itself there: the operator's own
-    // words, as they are, in place of the ones the page has in each of its
-    // languages (pageTexts in public/i18n.js). By language, null where the
-    // page's own are to stand.
-    siteTitle: ownWords('SITE_TITLE'),
-    siteDescription: ownWords('SITE_DESCRIPTION'),
+    // words, as they are and the same for every language, in place of the ones
+    // the page has in each of its languages (pageTexts in public/i18n.js).
+    // null: those. (On one line, however the setting was written.)
+    siteTitle: text('SITE_TITLE').replace(/\s+/g, ' ') || null,
+    siteDescription: text('SITE_DESCRIPTION').replace(/\s+/g, ' ') || null,
     // A folder with the operator's own icons and picture for previews of
     // links, which take the place of the built-in ones (ownFiles in
     // lib/page.js); null if there is to be none.

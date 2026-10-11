@@ -365,8 +365,8 @@ otherwise a server would load a file written by older code:
   and chats read. The script puts the same texts in for the visitor, in
   their language; both take them from `pageTexts` in `i18n.js`. A title or
   a description of the operator's own (`SITE_TITLE`, `SITE_DESCRIPTION`)
-  takes the place of the page's in both, as it is: one for every language,
-  or one for a language alone (`SITE_TITLE_EN`). The
+  takes the place of the page's in both, as it is and the same for every
+  language. The
   manifest of the installed app gets the name, the language and the
   description of the instance the same way.
 - **The header card comes with the page.** The scripts are large, the map

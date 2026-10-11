@@ -11,7 +11,6 @@ import path from 'node:path';
 import { after, before, test } from 'node:test';
 import { fileURLToPath } from 'node:url';
 import zlib from 'node:zlib';
-import { LANGUAGES } from '../public/i18n.js';
 import { addDays } from '../server/lib/time.js';
 import { encodeFeed, makeZip, startUpstream } from './helpers.js';
 
@@ -49,11 +48,7 @@ const REALTIME = encodeFeed({
 // Every setting the server reads; none may leak in from the shell running the tests.
 const SETTINGS = ['PORT', 'HOST', 'DATA_DIR', 'AREA_FILE', 'BBOX', 'AREA_NAME', 'VIEW', 'TIMEZONE', 'MAP_STYLE_URL', 'MAP_ORIGINS', 'TILE_URL', 'TILE_ATTRIBUTION', 'DATA_ATTRIBUTION',
   'OSM_PBF_URLS', 'OSM_MAX_AGE_DAYS', 'FEED_URL', 'FEED_CHECK_MINUTES', 'DOWNLOAD_TIMEOUT_MINUTES', 'REALTIME_URL', 'REALTIME_INTERVAL_SECONDS', 'REALTIME_IDLE_SECONDS', 'UPDATE_CHECK',
-  'LANGUAGE', 'PUBLIC_URL', 'SEARCH_ENGINES', 'SITE_NAME', 'SITE_TITLE', 'SITE_DESCRIPTION', 'LINKS', 'BRAND_DIR',
-  // (a title and a description may be set for one language alone)
-  ...LANGUAGES.flatMap(([code]) => [`SITE_TITLE_${code.toUpperCase()}`, `SITE_DESCRIPTION_${code.toUpperCase()}`])];
-// Words of the operator's own for the page, the same in each of its languages; null for none.
-const inAll = (words) => Object.fromEntries(LANGUAGES.map(([code]) => [code, words]));
+  'LANGUAGE', 'PUBLIC_URL', 'SEARCH_ENGINES', 'SITE_NAME', 'SITE_TITLE', 'SITE_DESCRIPTION', 'LINKS', 'BRAND_DIR'];
 // What an image carries about its build, which a checkout does not have.
 const BUILD = ['NETNOU_COMMIT', 'NETNOU_RELEASE'];
 
@@ -178,8 +173,8 @@ test('/api/area', async () => {
   assert.deepEqual(json, {
     siteName: 'Netnou',
     name: 'Testland',
-    siteTitle: inAll(null),
-    siteDescription: inAll(null),
+    siteTitle: null,
+    siteDescription: null,
     bbox: BBOX,
     view: BBOX,
     outline: [[[49.3, 10.8], [49.3, 11.3], [49.7, 11.3], [49.7, 10.8], [49.3, 10.8]]], // [lat, lon]
@@ -578,7 +573,7 @@ test('an instance that is not to be listed says so with every answer', async () 
   fs.mkdirSync(brand);
   fs.writeFileSync(path.join(brand, 'favicon.svg'), '<svg xmlns="http://www.w3.org/2000/svg"/>');
   fs.writeFileSync(path.join(brand, 'preview.png'), 'not really a picture');
-  for (const [settings, address] of [[{}, null], [{ PUBLIC_URL: 'https://test.example.org/', SEARCH_ENGINES: 'off', SITE_NAME: 'Bus & Bahn live', SITE_TITLE: 'Wo ist mein Bus? Testland live', SITE_TITLE_EN: 'Where is my bus? Testland live', SITE_DESCRIPTION: 'Busse & Bahnen in Testland,\n live auf der Karte.', LINKS: 'Impressum=/impressum', BRAND_DIR: brand }, 'https://test.example.org/']]) {
+  for (const [settings, address] of [[{}, null], [{ PUBLIC_URL: 'https://test.example.org/', SEARCH_ENGINES: 'off', SITE_NAME: 'Bus & Bahn live', SITE_TITLE: 'Wo ist mein Bus? Testland live', SITE_DESCRIPTION: 'Busse & Bahnen in Testland,\n live auf der Karte.', LINKS: 'Impressum=/impressum', BRAND_DIR: brand }, 'https://test.example.org/']]) {
     const proc = start({ PORT: '0', HOST: '127.0.0.1', DATA_DIR: path.join(dir, 'unlisted'), BBOX: BBOX.join(','), FEED_URL: `${upstream.url}/feed.zip`, REALTIME_URL: `${upstream.url}/realtime.pb`, ...settings });
     let text = '';
     proc.stdout.on('data', (chunk) => { text += chunk; });
@@ -595,11 +590,10 @@ test('an instance that is not to be listed says so with every answer', async () 
       assert.ok(page.includes(`<meta property="og:title" content="${settings.SITE_TITLE ?? 'ÖPNV-Live-Karte – Netnou'}">`));
       // a title and a description of its own: in the page, for the script and for the installed app, as they are
       const area = (await get('/api/area')).json;
-      assert.deepEqual([area.siteTitle, area.siteDescription], settings.SITE_TITLE ? [{ ...inAll('Wo ist mein Bus? Testland live'), en: 'Where is my bus? Testland live' }, inAll('Busse & Bahnen in Testland, live auf der Karte.')] : [inAll(null), inAll(null)]);
-      // (the title has one for English alone: at the English address, and for a browser that asks for English; the description is the one for all)
+      assert.deepEqual([area.siteTitle, area.siteDescription], settings.SITE_TITLE ? ['Wo ist mein Bus? Testland live', 'Busse & Bahnen in Testland, live auf der Karte.'] : [null, null]);
+      // (the same in every language: at the English address, and for a browser that asks for English)
       for (const english of [(await request('/?lang=en')).body.toString(), (await request('/', { headers: { 'Accept-Language': 'en-US,en;q=0.9' } })).body.toString()]) {
-        assert.equal(english.includes('<title>Where is my bus? Testland live</title>'), Boolean(settings.SITE_TITLE_EN));
-        assert.equal(english.includes('<meta property="og:title" content="Where is my bus? Testland live">'), Boolean(settings.SITE_TITLE_EN));
+        assert.equal(english.includes('<title>Wo ist mein Bus? Testland live</title>'), Boolean(settings.SITE_TITLE));
         assert.equal(english.includes('<meta name="description" content="Busse &#38; Bahnen in Testland, live auf der Karte.">'), Boolean(settings.SITE_DESCRIPTION));
       }
       assert.equal(page.includes('<title>Wo ist mein Bus? Testland live</title>'), Boolean(settings.SITE_TITLE));

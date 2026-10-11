@@ -45,9 +45,8 @@ services:
       # The credits keep naming Netnou.
       # SITE_NAME: "Bus & Bahn live"
       # A title and a description of its own, as a search result and a
-      # preview of a link show them, for the people this instance is for.
-      # Without them the page words its own. A language can have its own:
-      # SITE_TITLE_EN, SITE_DESCRIPTION_EN.
+      # preview of a link show them: the same for every language, for the
+      # people this instance is for. Without them the page words its own.
       # SITE_TITLE: "Bus & Bahn live im Großraum Nürnberg"
       # SITE_DESCRIPTION: "Wo ist meine Bahn? Busse, Straßenbahnen, U- und S-Bahnen live auf der Karte, mit Verspätungen und Abfahrten."
       # (Icons of your own need no setting: see "volumes" below.)
