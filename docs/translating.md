@@ -109,10 +109,11 @@ contains text for visitors that does not go through `t()`.
 
 - **Data from the feeds:** names of stops, lines and operators, and the notes
   and alerts of the feed. They appear as the feed provides them.
-- **What the operator sets:** the name of the instance, its links and,
-  where it has them, its own title and description of the page
-  (`SITE_NAME`, `LINKS`, `SITE_TITLE`, `SITE_DESCRIPTION`). They are shown
-  as they are, the same in every language.
+- **What the operator sets:** the name of the instance and its links
+  (`SITE_NAME`, `LINKS`) are shown as they are, in one language. A title
+  and a description of their own (`SITE_TITLE`, `SITE_DESCRIPTION`) are
+  one text for every language, or texts by language where the operator
+  gives them so.
 - **The installed app's name and description.** The server writes them into
   `manifest.webmanifest` once, in the main language of the instance
   (`LANGUAGE`), for everybody who installs it.

@@ -191,7 +191,7 @@ function servePage(req, res, url) {
   const key = asked ? `?lang=${asked}` : language;
   let page = pages.get(key);
   if (page?.stamp !== stamp) {
-    const body = Buffer.from(renderPage(fs.readFileSync(file, 'utf8'), { language, asked, texts: texts[language], siteName: config.siteName, areaName: config.areaName, siteTitle: config.siteTitle, siteDescription: config.siteDescription, links: config.links, preview: own.preview, previewSize, publicUrl: config.publicUrl, listed: config.searchEngines, styleUrl: config.styleUrl, mapOrigins: config.mapOrigins }));
+    const body = Buffer.from(renderPage(fs.readFileSync(file, 'utf8'), { language, asked, texts: texts[language], siteName: config.siteName, areaName: config.areaName, siteTitle: config.siteTitle[language], siteDescription: config.siteDescription[language], links: config.links, preview: own.preview, previewSize, publicUrl: config.publicUrl, listed: config.searchEngines, styleUrl: config.styleUrl, mapOrigins: config.mapOrigins }));
     page = { stamp, body, etag: `"${crypto.createHash('sha1').update(body).digest('hex').slice(0, 16)}"`, packed: null };
     pages.set(key, page);
   }
@@ -216,7 +216,7 @@ function serveManifest(req, res) {
   const stat = fs.statSync(file);
   const stamp = `${stat.size}-${stat.mtimeMs}`;
   if (manifest?.stamp !== stamp) {
-    const body = Buffer.from(renderManifest(fs.readFileSync(file, 'utf8'), { language: config.language, texts: texts[config.language], siteName: config.siteName, areaName: config.areaName, siteDescription: config.siteDescription }));
+    const body = Buffer.from(renderManifest(fs.readFileSync(file, 'utf8'), { language: config.language, texts: texts[config.language], siteName: config.siteName, areaName: config.areaName, siteDescription: config.siteDescription[config.language] }));
     manifest = { stamp, body, etag: `"${crypto.createHash('sha1').update(body).digest('hex').slice(0, 16)}"` };
   }
   const headers = { ETag: manifest.etag, 'Cache-Control': 'no-cache' };
@@ -317,8 +317,8 @@ const areaInfo = {
   // What the instance calls itself, and the area it shows.
   siteName: config.siteName,
   name: config.areaName,
-  // The operator's own title and description of the page, each null if they
-  // have none: then the page words its own, in the visitor's language.
+  // The operator's own title and description of the page, by language: null
+  // for a language they have none in, and the page then words its own.
   siteTitle: config.siteTitle,
   siteDescription: config.siteDescription,
   bbox: config.area.bbox,

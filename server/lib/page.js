@@ -162,9 +162,9 @@ const versions = (publicUrl) => [...LANGUAGE_CODES.map((code) => [code, addressI
  * @param texts the texts of that language (a module of public/locales)
  * @param siteName what the instance calls itself
  * @param areaName may be empty
- * @param siteTitle the operator's own title of the page, null for the one
- *   the page has in its language, with the names of the area and the instance
- * @param siteDescription the operator's own description, null for the page's
+ * @param siteTitle the operator's own title of the page in that language,
+ *   null for the one the page has, with the names of the area and the instance
+ * @param siteDescription the operator's own description in that language, null for the page's
  * @param links the operator's own, [{ text, href }], at the foot of the header card
  * @param preview the address of the operator's picture for previews of
  *   links (ownFiles), null to show the icon
@@ -263,7 +263,7 @@ export function renderPage(html, { language, asked, texts, siteName, areaName, s
  * The manifest of the installed app as it is sent: the file, with the name of
  * the instance, and its language and description in place of the English ones.
  * @param json the file
- * @param siteDescription the operator's own description, null for the page's
+ * @param siteDescription the operator's own description in that language, null for the page's
  */
 export function renderManifest(json, { language, texts, siteName, areaName, siteDescription = null }) {
   const manifest = JSON.parse(json);
