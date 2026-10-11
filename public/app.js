@@ -11,7 +11,7 @@
 import { APP_NAME, formatNumber, formatTime, languagePicker, loadLanguage, pageTexts, setTimeZone, t, translatePage } from './i18n.js';
 import { displayQuery, readDisplay } from './display.js';
 import { buildIndex, search, searchLines } from './search.js';
-import { mdiAlert, mdiChevronLeft, mdiChevronRight, mdiClose, mdiCog, mdiEye, mdiEyeOff, mdiFullscreen, mdiFullscreenExit, mdiMagnify } from './vendor/material-design-icons/icons.js';
+import { mdiChevronLeft, mdiEye, mdiEyeOff, mdiFullscreen, mdiFullscreenExit } from './vendor/material-design-icons/icons.js';
 import { AttributionControl, MapLibreMap, NavigationControl } from './vendor/maplibre-gl/maplibre-gl.mjs';
 
 // The modes with a chip. Same ids as MODES in server/lib/timetable.js, the
@@ -123,25 +123,24 @@ function el(tag, props = {}, children = []) {
   return node;
 }
 
-// The icons on the page's own buttons, by the name data-icon asks for them in
-// index.html. They are from Material Design Icons (vendor/material-design-icons),
-// each the shape of one icon in a box of 24 by 24; style.css gives it its size
-// and its colour. Shapes and not characters: where a character sits in its box
-// is up to the font, and the font is the device's.
-const ICONS = { alert: mdiAlert, eye: mdiEye, eyeOff: mdiEyeOff, fullscreen: mdiFullscreen, fullscreenExit: mdiFullscreenExit, close: mdiClose, left: mdiChevronLeft, right: mdiChevronRight, search: mdiMagnify, settings: mdiCog };
-
-function icon(name) {
+// The icons on the page's own buttons are from Material Design Icons
+// (vendor/material-design-icons), each the shape of one icon in a box of 24 by
+// 24; style.css gives it its size and its colour. Shapes and not characters:
+// where a character sits in its box is up to the font, and the font is the
+// device's. Those of index.html are in the page as it comes: the server draws
+// them where data-icon asks for one, as this does for what the script builds
+// (iconSvg in server/lib/page.js).
+function icon(shape) {
   const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
   svg.setAttribute('class', 'icon');
   svg.setAttribute('viewBox', '0 0 24 24');
   // (what it is on says what it is for)
   svg.setAttribute('aria-hidden', 'true');
   const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-  path.setAttribute('d', ICONS[name]);
+  path.setAttribute('d', shape);
   svg.append(path);
   return svg;
 }
-for (const node of document.querySelectorAll('[data-icon]')) node.append(icon(node.dataset.icon));
 
 // What is stored may be anything – written by another version of the page or
 // by hand – so whoever reads a setting checks its shape.
@@ -169,6 +168,8 @@ function saveSetting(key, value) {
 }
 
 // The texts come first: the map takes those of its controls when it is created.
+// (The page came in its own language, which is the visitor's in most cases:
+// then this changes nothing in it.)
 const language = await loadLanguage();
 translatePage();
 
@@ -241,14 +242,14 @@ function readColors() {
 readColors();
 
 // Light or dark: the visitor's choice in the settings, or 'auto' for what the
-// device has. theme.js puts it on the page, before this script runs and again
+// device has. first.js puts it on the page, before this script runs and again
 // whenever it changes; the colours drawn here follow.
 const THEMES = ['auto', 'light', 'dark'];
 // The colour a browser gives its own bars, one per scheme (index.html), each as the file has it.
 const barColors = [...document.querySelectorAll('meta[name="theme-color"]')].map((meta) => ({ meta, own: meta.content, scheme: meta.media.includes('dark') ? 'dark' : 'light' }));
 
 function applyTheme() {
-  // (without theme.js the page stays light)
+  // (without first.js the page stays light)
   window.applyColorScheme?.();
   // (a browser picks the bar colour by the device's scheme: with a choice, both say the chosen one)
   const chosen = barColors.find(({ scheme }) => scheme === state.theme)?.own;
@@ -1286,16 +1287,15 @@ function watchChipRow(row, back, on) {
 function buildControls() {
   languagePicker($('language'));
 
+  // The chips are in the page as it comes, each switched on (index.html):
+  // the card can show before this has run. Here they get what they do.
   const container = $('modes');
   for (const mode of MODES) {
-    const count = el('span', { class: 'count', text: formatNumber(0) });
+    const chip = container.querySelector(`[data-mode="${mode}"]`);
+    const count = chip.querySelector('.count');
+    count.textContent = formatNumber(0);
     chipCounts.set(mode, count);
-    const chip = el('button', { type: 'button', class: 'chip', 'aria-pressed': String(state.enabled.has(mode)) }, [
-      el('span', { class: 'swatch' }),
-      el('span', { class: 'name', text: t(`mode.${mode}`) }),
-      count,
-    ]);
-    chip.style.setProperty('--chip-color', `var(--mode-${mode})`);
+    chip.setAttribute('aria-pressed', String(state.enabled.has(mode)));
     chip.addEventListener('click', () => {
       if (state.enabled.has(mode)) state.enabled.delete(mode);
       else state.enabled.add(mode);
@@ -1304,7 +1304,6 @@ function buildControls() {
       updateStatus();
       draw();
     });
-    container.append(chip);
   }
   watchChipRow(container, $('modes-back'), $('modes-on'));
 
@@ -1620,7 +1619,7 @@ function renderTrip(trip, scrollToNext) {
   // button in a row of its own above the head.
   const from = state.selection.from;
   const back = from ? el('div', { class: 'back-row' }, [
-    el('button', { type: 'button', class: 'back', 'aria-label': t('line.back', { line: from.name }), onclick: () => selectLine(from) }, [icon('left'), badge(from.name, from.mode)]),
+    el('button', { type: 'button', class: 'back', 'aria-label': t('line.back', { line: from.name }), onclick: () => selectLine(from) }, [icon(mdiChevronLeft), badge(from.name, from.mode)]),
   ]) : '';
   fillPanel(
     [
@@ -2074,7 +2073,7 @@ function showDisplay() {
   const label = state.display ? t('display.leave') : t('display.enter');
   displayButton.title = label;
   displayButton.setAttribute('aria-label', label);
-  displayButton.replaceChildren(icon(state.display ? 'eye' : 'eyeOff'));
+  displayButton.replaceChildren(icon(state.display ? mdiEye : mdiEyeOff));
 }
 
 /** Takes the controls away or brings them back. The map stays as it is: nothing is loaded again. */
@@ -2163,7 +2162,7 @@ function showFullscreen() {
   const label = on ? t('map.fullscreenExit') : t('map.fullscreen');
   fullscreenButton.title = label;
   fullscreenButton.setAttribute('aria-label', label);
-  fullscreenButton.replaceChildren(icon(on ? 'fullscreenExit' : 'fullscreen'));
+  fullscreenButton.replaceChildren(icon(on ? mdiFullscreenExit : mdiFullscreen));
 }
 // (the browser tells: Escape leaves it too, and no click of the button's is behind that)
 document.addEventListener('fullscreenchange', showFullscreen);
@@ -2174,7 +2173,10 @@ function init() {
   const hours = Array.from({ length: 24 }, (_, hour) => formatTime(hour * 3600));
   document.documentElement.style.setProperty('--time-chars', Math.max(...hours.map((text) => text.length)));
   buildControls();
-  $('controls').hidden = false;
+  // (the header card is what this visitor gets now; where the page came that way, first.js has shown it already)
+  document.documentElement.dataset.controls = 'shown';
+  // (and what was typed into it before this script had arrived is looked for)
+  if (searchField.value) runSearch();
   resizeCanvas();
   requestAnimationFrame(frame);
   setInterval(updateStatus, 1000);

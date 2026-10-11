@@ -13,9 +13,11 @@ manager or a build step.
 | `LICENSE-APACHE-2.0.txt` | the licence it names, from <https://www.apache.org/licenses/LICENSE-2.0.txt> |
 
 Each line of `icons.js` is the shape of one icon as a path for a box of 24
-by 24. `ICONS` in [`public/app.js`](../../app.js) gives each the name by
-which `data-icon` asks for it in `index.html`, and `.icon` in
-[`public/style.css`](../../style.css) gives it its size and its colour.
+by 24. In `index.html` an element asks for one by its name here, with
+`data-icon`, and the server draws it into the page it sends (`iconSvg` in
+[`server/lib/page.js`](../../../server/lib/page.js)). What the script
+builds, [`public/app.js`](../../app.js) draws itself (`icon`). `.icon` in
+[`public/style.css`](../../style.css) gives an icon its size and its colour.
 
 The icons of the zoom buttons, the location button and the credits are not
 these: they are MapLibre's own and come with its style sheet.
@@ -28,7 +30,9 @@ these: they are MapLibre's own and come with its style sheet.
    verifies the integrity value of the registry, and copy the line
    `export var mdiTrain = "…";` from `package/mdi.js` into `icons.js`,
    keeping the lines in the order of the alphabet.
-3. Import it in `public/app.js` and give it a name in `ICONS`.
+3. Ask for it in `public/index.html`, with `data-icon="mdiTrain"` on an
+   empty element, or import it in `public/app.js` and draw it with
+   `icon(mdiTrain)`.
 
 ## Updating
 

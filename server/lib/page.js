@@ -5,13 +5,20 @@
 // found. The same texts are put in by the script for whoever looks at the page
 // (pageTexts in public/i18n.js).
 //
+// A visitor sees the page as the server sends it too, for as long as its
+// scripts are on their way: on a phone that is seconds. So the server sends
+// the header card whole, its texts in the language of the page and its icons
+// drawn. Whether that is the card this visitor gets, the first script of the
+// page finds out (public/first.js), and shows it at once if it is.
+//
 // The page picks its language in the browser, which a search engine never
 // gets to see in another language than that of its own browser. Hence an
 // address per language, ?lang=de, which the page names as its other versions.
 
 import fs from 'node:fs';
 import path from 'node:path';
-import { LANGUAGES, pageTexts } from '../../public/i18n.js';
+import { LANGUAGES, pageTexts, t } from '../../public/i18n.js';
+import * as shapes from '../../public/vendor/material-design-icons/icons.js';
 
 export const LANGUAGE_CODES = LANGUAGES.map(([code]) => code);
 // The picture of a link's preview: the icon, unless the operator has one of
@@ -92,6 +99,31 @@ export function pictureSize(file) {
 
 const escapeHtml = (text) => String(text).replace(/[&<>"']/g, (char) => `&#${char.charCodeAt(0)};`);
 
+/**
+ * The texts of index.html, which has the English ones, in another language:
+ * what translatePage (public/i18n.js) does in the browser. data-i18n names the
+ * key of the text of an element, data-i18n-<attribute> that of an attribute.
+ * @param texts the texts of the language (a module of public/locales)
+ */
+function translate(html, texts) {
+  // a start tag and the text that follows it
+  return html.replace(/(<[a-z][\w-]*\s[^<>]*>)([^<]*)/g, (whole, tag, text) => {
+    if (!tag.includes(' data-i18n')) return whole;
+    let start = tag;
+    for (const [, attribute, key] of tag.matchAll(/\sdata-i18n-([a-z-]+)="([^"]*)"/g)) {
+      start = start.replace(new RegExp(`(\\s${attribute}=")[^"]*`), (_, before) => `${before}${escapeHtml(t(key, {}, texts))}`);
+    }
+    const own = /\sdata-i18n="([^"]*)"/.exec(tag);
+    return start + (own ? escapeHtml(t(own[1], {}, texts)) : text);
+  });
+}
+
+/** An icon as app.js draws it (icon there): the shape of that name from vendor/material-design-icons. */
+function iconSvg(name) {
+  if (!shapes[name]) throw new Error(`index.html: there is no icon ${name}`);
+  return `<svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="${shapes[name]}"/></svg>`;
+}
+
 /** The address of the page in one language, or without one in that of the visitor's browser. */
 const addressIn = (publicUrl, language) => (language ? `${publicUrl}?lang=${language}` : publicUrl);
 
@@ -120,13 +152,16 @@ const versions = (publicUrl) => [...LANGUAGE_CODES.map((code) => [code, addressI
  */
 export function renderPage(html, { language, asked, texts, siteName, areaName, links = [], preview = null, previewSize = null, publicUrl, listed, styleUrl = null, mapOrigins = [] }) {
   const { title, description } = pageTexts(areaName, texts, siteName);
-  let page = html;
+  // The texts first: of what follows, some takes the place of one of them.
+  // Then the icons, each into the empty element that asks for one.
+  let page = translate(html, texts).replace(/(<[a-z]+\s(?:[^<>]*\s)?data-icon="([^"]*)"[^<>]*>)(?=<\/)/g, (_, start, name) => start + iconSvg(name));
   const put = (pattern, replacement) => {
     // (index.html has changed and this file has not: better no page than one that says the wrong thing)
     if (!pattern.test(page)) throw new Error(`index.html: nothing matches ${pattern}`);
     page = page.replace(pattern, replacement);
   };
-  put(/<html lang="[^"]*">/, () => `<html lang="${language}">`);
+  // (which languages there are: first.js picks the visitor's among them, and sees whether it is that of the page)
+  put(/<html lang="[^"]*">/, () => `<html lang="${language}" data-languages="${LANGUAGE_CODES.join(' ')}">`);
   put(/<title>[^<]*<\/title>/, () => `<title>${escapeHtml(title)}</title>`);
   put(/(<meta name="description" content=")[^"]*"/, (_, start) => `${start}${escapeHtml(description)}"`);
   put(/(<meta name="apple-mobile-web-app-title" content=")[^"]*"/, (_, start) => `${start}${escapeHtml(siteName)}"`);

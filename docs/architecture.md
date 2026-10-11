@@ -98,7 +98,7 @@ Server (`server/`):
 | `lib/pb.js` | decodes the GTFS-Realtime message (`decodeFeed`) |
 | `lib/update.js` | what the server calls itself (`describeBuild`) and the daily look-out for a newer release (`UpdateChecker`) |
 | `lib/time.js` | service days and the time zone of the feed |
-| `lib/page.js` | what the server writes into the page before it sends it, for search engines and previews of links, and what the page is to fetch right away; `robots.txt` and the sitemap; which files of the operator's own take the place of built-in icons |
+| `lib/page.js` | what the server writes into the page before it sends it: for search engines and previews of links, the header card as a visitor first sees it, and what the page is to fetch right away; `robots.txt` and the sitemap; which files of the operator's own take the place of built-in icons |
 | `lib/files.js` | downloads, gzipped JSON files, error texts |
 | `areas/vgn.geojson` | outline of the default area, see [its README](../server/areas/README.md) |
 
@@ -111,7 +111,7 @@ Page (`public/`):
 | `display.js` | display mode in the address of the page: what an address asks for, and the address for what is shown |
 | `search.js` | finding stops and lines by name: matching and order, without the page around it |
 | `i18n.js`, `locales/` | texts in the visitor's language, see [translating.md](translating.md) |
-| `theme.js` | light or dark: puts the visitor's choice, or else the scheme of the device, on the page before it is drawn |
+| `first.js` | what is settled before the page is drawn: light or dark, by the visitor's choice or else the scheme of the device, and whether the header card shows at once |
 | `sw.js`, `manifest.webmanifest`, `icons/` | installable app and offline start |
 | `vendor/maplibre-gl/` | the map library, vendored, see [its README](../public/vendor/maplibre-gl/README.md) |
 | `vendor/material-design-icons/` | the shapes of the icons on the page's own buttons, see [its README](../public/vendor/material-design-icons/README.md) |
@@ -352,7 +352,7 @@ otherwise a server would load a file written by older code:
   installed app can still start without a connection (and then says that it
   needs one). API answers and the map are never cached.
 - **Texts** come from locale files through `t()`; nothing a visitor reads is
-  written out in `app.js` or sent by the server, apart from data such as
+  written out in `app.js` or in the server, apart from data such as
   names of stops and notes of the feed. See [translating.md](translating.md).
 - **Before any script runs** the page already says what and where the
   instance is: the server writes the title, the description, the name of the
@@ -364,6 +364,18 @@ otherwise a server would load a file written by older code:
   their language; both take them from `pageTexts` in `i18n.js`. The
   manifest of the installed app gets the name, the language and the
   description of the instance the same way.
+- **The header card comes with the page.** The scripts are large, the map
+  library above all, and on a phone they take seconds to arrive. Until they
+  have run, a visitor sees the page as the server sent it. So the server
+  sends the header card whole: its texts in the language of the page, its
+  icons drawn, a chip for every mode (`renderPage`). `first.js`, the one
+  script the page waits for, picks the visitor's language as `i18n.js` does
+  and shows the card with the first paint where the page came as this
+  visitor gets it. Where it did not – another language, modes switched off,
+  colours by delay, a display – the card stays out of sight until `app.js`
+  has made it so: it would change under the eyes of who reads it otherwise.
+  What `app.js` adds to a card that shows already is what its buttons do,
+  the numbers on the chips and the state of the connection.
 - **What the page fetches at its start** it would learn of step by step: of
   `app.js` from the page, of the map library from `app.js`, of the area and
   the style of the map only once the script runs. The server names all of it

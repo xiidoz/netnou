@@ -155,7 +155,10 @@ into it what the instance is:
   the page. It is what people look for, so name the area as they would:
   "Großraum Nürnberg (VGN)" rather than "Area 1".
 - **`LANGUAGE`** is the language these texts are in. A visitor still gets
-  the page in the language they chose or in that of their browser.
+  the page in the language they chose or in that of their browser. Take the
+  one most of your visitors read: the header card is sent in it and shows
+  at once to those whose language it is, while for the others it waits
+  until the scripts of the page have run.
 - **`PUBLIC_URL`** is the address of the instance as visitors type it, with
   the path if it lives under one (`https://example.org/netnou/`). With it
   the page names its canonical address, its versions in the other languages

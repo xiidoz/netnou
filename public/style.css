@@ -1,5 +1,5 @@
 /* Light is what is written here; what dark changes follows below. Which of the
-   two it is, theme.js says with an attribute on the root: the visitor's choice,
+   two it is, first.js says with an attribute on the root: the visitor's choice,
    or else what the device has. So nothing here asks the device itself. */
 :root {
   color-scheme: light;
@@ -79,8 +79,9 @@ body {
 
 button { font: inherit; color: inherit; }
 
-/* The icons on the page's own buttons (ICONS in app.js): shapes in the colour
-   of the text around them, in a box that whatever holds it centres as a whole. */
+/* The icons on the page's own buttons (data-icon in index.html, icon() in
+   app.js): shapes in the colour of the text around them, in a box that
+   whatever holds it centres as a whole. */
 .icon { display: block; flex: none; width: 20px; height: 20px; fill: currentColor; }
 [hidden] { display: none !important; }
 
@@ -133,6 +134,10 @@ button { font: inherit; color: inherit; }
   display: grid;
   gap: 10px;
 }
+/* Out of sight until it is what this visitor gets, so that it does not change
+   under their eyes: first.js says so before the first paint where the page
+   came that way, app.js once it has made it so. */
+:root:not([data-controls]) .controls { display: none; }
 
 .title { display: flex; align-items: baseline; gap: 8px; }
 .title h1 { margin: 0; font-size: 18px; font-weight: 700; letter-spacing: -0.01em; }
@@ -331,6 +336,13 @@ button { font: inherit; color: inherit; }
   white-space: nowrap;
   font-size: 13px;
 }
+/* (one per mode with a chip, see MODES in app.js) */
+.chip[data-mode="subway"] { --chip-color: var(--mode-subway); }
+.chip[data-mode="tram"] { --chip-color: var(--mode-tram); }
+.chip[data-mode="bus"] { --chip-color: var(--mode-bus); }
+.chip[data-mode="suburban"] { --chip-color: var(--mode-suburban); }
+.chip[data-mode="regional"] { --chip-color: var(--mode-regional); }
+.chip[data-mode="longdistance"] { --chip-color: var(--mode-longdistance); }
 .chip .swatch { background: var(--chip-color); }
 .chip .count { color: var(--text-muted); font-variant-numeric: tabular-nums; }
 .chip[aria-pressed="false"] { color: var(--text-muted); background: var(--bg-subtle); }
