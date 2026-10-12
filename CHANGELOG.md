@@ -8,6 +8,17 @@ This file is written by
 messages when a release is made. Do not edit it by hand; see
 [Releases](CONTRIBUTING.md#releases).
 
+## [0.8.0](https://github.com/xiidoz/netnou/compare/v0.7.0...v0.8.0) (2026-10-12)
+
+
+### ⚠ BREAKING CHANGES
+
+* **settings:** every setting has a new name, the old one with NETNOU_ in front of it (SITE_NAME is NETNOU_SITE_NAME, BBOX is NETNOU_BBOX). The names without the prefix are no longer read: rename them in your compose file, stack or service unit before you update, or the instance runs with its defaults. In compose.yaml, PORT is now the port the host publishes.
+
+### Features
+
+* **settings:** put NETNOU_ in front of every setting ([#107](https://github.com/xiidoz/netnou/issues/107)) ([3920068](https://github.com/xiidoz/netnou/commit/3920068cab95de42da67bbed2cb1e893bb99a0e5)), closes [#98](https://github.com/xiidoz/netnou/issues/98)
+
 ## [0.7.0](https://github.com/xiidoz/netnou/compare/v0.6.3...v0.7.0) (2026-10-11)
 
 
