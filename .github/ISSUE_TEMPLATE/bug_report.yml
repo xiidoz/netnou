@@ -42,7 +42,7 @@ body:
     id: settings
     attributes:
       label: Settings
-      description: The environment variables you have set (BBOX, AREA_FILE, OSM_PBF_URLS, ...). Leave empty for the defaults and for the public instance.
+      description: The environment variables you have set (NETNOU_BBOX, NETNOU_AREA_FILE, NETNOU_OSM_PBF_URLS, ...). Leave empty for the defaults and for the public instance.
       render: shell
   - type: textarea
     id: status

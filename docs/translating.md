@@ -25,12 +25,12 @@ there. Step 1 the server cannot take: a language chosen in the page stays
 in the browser. For such a visitor the card shows once the script has put
 their language in, a moment later. Whoever names no language at all, as
 search engines do as a rule, gets the main language of the instance
-(`LANGUAGE`).
+(`NETNOU_LANGUAGE`).
 
 The address with a language is there for search engines, whose browser
 speaks English and chooses nothing: it is how they get to read the page in
 each language. What they read before any script runs is written into the
-page by the server, in the main language of the instance (`LANGUAGE`) or
+page by the server, in the main language of the instance (`NETNOU_LANGUAGE`) or
 the one the address asks for; see
 [Being found](configuration.md#being-found). A new language is one of these
 addresses by itself.
@@ -110,13 +110,13 @@ contains text for visitors that does not go through `t()`.
 - **Data from the feeds:** names of stops, lines and operators, and the notes
   and alerts of the feed. They appear as the feed provides them.
 - **What the operator sets:** the name of the instance and its links
-  (`SITE_NAME`, `LINKS`) are shown as they are, in one language. A title
-  and a description of their own (`SITE_TITLE`, `SITE_DESCRIPTION`) are
+  (`NETNOU_SITE_NAME`, `NETNOU_LINKS`) are shown as they are, in one language. A title
+  and a description of their own (`NETNOU_SITE_TITLE`, `NETNOU_SITE_DESCRIPTION`) are
   one text for every language, or texts by language where the operator
   gives them so.
 - **The installed app's name and description.** The server writes them into
   `manifest.webmanifest` once, in the main language of the instance
-  (`LANGUAGE`), for everybody who installs it.
+  (`NETNOU_LANGUAGE`), for everybody who installs it.
 - **Log lines, error messages and API texts of the server.** They are for
   operators and are in English.
 

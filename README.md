@@ -101,22 +101,22 @@ ones most people touch:
 
 | Variable | Default | Meaning |
 | --- | --- | --- |
-| `PORT` | `8080` | HTTP port |
-| `DATA_DIR` | `./data` | where the caches are kept |
-| `BBOX` | – | area to cover as `south,west,north,east`, instead of the VGN |
-| `AREA_FILE` | built-in VGN | GeoJSON file with the polygons of the area |
-| `AREA_NAME` | `Großraum Nürnberg (VGN)` | shown next to the title |
-| `PUBLIC_URL` | – | the address visitors reach the instance under, for search engines and previews of links |
-| `OSM_PBF_URLS` | five Bavarian extracts | OpenStreetMap extracts covering the area |
-| `MAP_STYLE_URL` | OpenFreeMap, style `bright` | the map behind the vehicles, as a MapLibre style |
+| `NETNOU_PORT` | `8080` | HTTP port |
+| `NETNOU_DATA_DIR` | `./data` | where the caches are kept |
+| `NETNOU_BBOX` | – | area to cover as `south,west,north,east`, instead of the VGN |
+| `NETNOU_AREA_FILE` | built-in VGN | GeoJSON file with the polygons of the area |
+| `NETNOU_AREA_NAME` | `Großraum Nürnberg (VGN)` | shown next to the title |
+| `NETNOU_PUBLIC_URL` | – | the address visitors reach the instance under, for search engines and previews of links |
+| `NETNOU_OSM_PBF_URLS` | five Bavarian extracts | OpenStreetMap extracts covering the area |
+| `NETNOU_MAP_STYLE_URL` | OpenFreeMap, style `bright` | the map behind the vehicles, as a MapLibre style |
 
 For example, München (in a POSIX shell; for PowerShell and Docker see the
 configuration guide):
 
 ```sh
-BBOX=48.06,11.36,48.25,11.72 \
-AREA_NAME=München \
-OSM_PBF_URLS=https://download.geofabrik.de/europe/germany/bayern/oberbayern-latest.osm.pbf \
+NETNOU_BBOX=48.06,11.36,48.25,11.72 \
+NETNOU_AREA_NAME=München \
+NETNOU_OSM_PBF_URLS=https://download.geofabrik.de/europe/germany/bayern/oberbayern-latest.osm.pbf \
 npm start
 ```
 

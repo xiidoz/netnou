@@ -39,7 +39,7 @@ export default {
   // on the marker next to the version in the credits; it leads to the release notes
   'update.available': 'Version {version} is available: release notes',
   'map.unsupported': 'This browser cannot draw the map. It needs WebGL 2, which is switched off or not available here.',
-  // followed by the names of those who publish the data (DATA_ATTRIBUTION of the server)
+  // followed by the names of those who publish the data (NETNOU_DATA_ATTRIBUTION of the server)
   'attribution.data': 'Timetable and realtime data, processed:',
 
   'status.connecting': 'Connecting …',

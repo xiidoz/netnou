@@ -46,6 +46,12 @@ own, or paste its content into Portainer (Stacks → Add stack → Web editor) o
 a similar tool; there the settings go into the `environment:` block of the
 pasted file.
 
+To publish another port than 8080, set `PORT` where Compose reads its
+variables (a file `.env` next to `compose.yaml`, the shell, the values of a
+stack): `PORT=9000 docker compose up -d`. `PORT` is the port of the host;
+the port inside the container is the setting `NETNOU_PORT`, see
+[Settings](configuration.md#settings).
+
 To run an image built from a checkout instead, add `compose.build.yaml`:
 
 ```sh
@@ -77,7 +83,7 @@ What the container looks like:
   The [changelog](../CHANGELOG.md) marks these changes as breaking.
 
 Settings go into the `environment:` block (see
-[configuration.md](configuration.md)). Leave `HOST` unset in the container:
+[configuration.md](configuration.md)). Leave `NETNOU_HOST` unset in the container:
 the health check talks to `127.0.0.1` inside it.
 
 Settings that belong to your host, such as a container name or the network of
@@ -91,7 +97,7 @@ services:
     networks:
       - "proxy"
     environment:
-      AREA_NAME: "My town"
+      NETNOU_AREA_NAME: "My town"
 
 networks:
   proxy:
@@ -121,7 +127,7 @@ npm start
 ```
 
 There is nothing to install or build. The caches go to `./data` unless
-`DATA_DIR` says otherwise.
+`NETNOU_DATA_DIR` says otherwise.
 
 As a systemd service on Linux, with a user of its own and the checkout in
 `/opt/netnou`:
@@ -137,9 +143,9 @@ Wants=network-online.target
 User=netnou
 WorkingDirectory=/opt/netnou
 ExecStart=/usr/bin/node server/index.js
-Environment=HOST=127.0.0.1
-Environment=PORT=8080
-Environment=DATA_DIR=/var/lib/netnou
+Environment=NETNOU_HOST=127.0.0.1
+Environment=NETNOU_PORT=8080
+Environment=NETNOU_DATA_DIR=/var/lib/netnou
 StateDirectory=netnou
 Restart=on-failure
 RestartSec=30
@@ -165,7 +171,7 @@ timestamp, and stops cleanly on `SIGTERM`.
 ## Reverse proxy, HTTPS and sub-paths
 
 The server speaks plain HTTP. Put it behind a reverse proxy for HTTPS and set
-`HOST=127.0.0.1` (or do not publish the container port) so that it is only
+`NETNOU_HOST=127.0.0.1` (or do not publish the container port) so that it is only
 reachable through the proxy.
 
 - **HTTPS** is needed for installing the page as an app, for its offline
@@ -183,7 +189,7 @@ reachable through the proxy.
   ```
 
 - **The public address**: tell the server under which address visitors reach
-  it, `PUBLIC_URL=https://transit.example.org/`. It cannot know that behind
+  it, `NETNOU_PUBLIC_URL=https://transit.example.org/`. It cannot know that behind
   a proxy, and without it the page cannot name its own address to search
   engines or carry a picture for previews of links
   ([Being found](configuration.md#being-found)).
@@ -227,7 +233,7 @@ Worth watching:
   availability. While it is down, the vehicles move on an empty background.
   For an instance that has to be dependable, use a provider with a service
   agreement or your own tile server ([The map](configuration.md#the-map)).
-- **Being found.** Set `PUBLIC_URL`, and `AREA_NAME` to what people call
+- **Being found.** Set `NETNOU_PUBLIC_URL`, and `NETNOU_AREA_NAME` to what people call
   the area ([Being found](configuration.md#being-found)). Then tell the
   search engines about the instance: add it to the Google Search Console and
   the Bing Webmaster Tools and hand in `/sitemap.xml` there. Both also show
@@ -235,8 +241,8 @@ Worth watching:
   anything being added to the page. What helps most is not in the page at
   all: links to the instance from other sites.
 - **A test instance next to it,** one that runs the `edge` image for
-  example, gets `SEARCH_ENGINES=off`. It stays open to everybody, and a link
-  to it keeps its preview if it has its own `PUBLIC_URL`, but search engines
+  example, gets `NETNOU_SEARCH_ENGINES=off`. It stays open to everybody, and a link
+  to it keeps its preview if it has its own `NETNOU_PUBLIC_URL`, but search engines
   are asked not to list it. Otherwise they find the same content under two
   addresses and choose one themselves.
 - **Load.** The API has no rate limiting of its own. Limit requests to
@@ -269,7 +275,7 @@ Worth watching:
   the provider of the map, can tell roughly where that is.
 - **Legal notices.** An imprint or a privacy notice, where the law requires
   one, is your responsibility: the pages are yours to write and to host.
-  `LINKS` puts links to them, and to any other page of your own, at the
+  `NETNOU_LINKS` puts links to them, and to any other page of your own, at the
   foot of the header card, in view on a phone as well
   ([Links of your own](configuration.md#links-of-your-own)).
 
@@ -324,21 +330,21 @@ The log lines below are quoted without their timestamp.
 | Symptom or log line | Meaning | What to do |
 | --- | --- | --- |
 | `Configuration error: …`, exit code 1 | A setting has a value that is not acceptable. | The message names the variable; see [Settings](configuration.md#settings). |
-| `Cannot listen on … port …`, exit code 1 | The port is in use or may not be opened, or `HOST` is not an address of this machine. | Set another `PORT` or correct `HOST`. |
-| `Timetable: cannot start: the data directory … cannot be created or written`, exit code 1 | `DATA_DIR` is not writable for the user the server runs as. | Fix the ownership; in Docker a bind mount must be writable for uid 1000. |
-| Page: "The timetable data could not be loaded." Log: `Timetable: update failed: fetch failed (…)` | The feed server cannot be reached. | Check outbound HTTPS and DNS. The next attempt follows after `FEED_CHECK_MINUTES`. |
-| `Timetable: update failed: the feed has no stops in the area; check BBOX or AREA_FILE …` | The area lies outside the feed, or latitude and longitude are swapped. | `BBOX` is `south,west,north,east`; GeoJSON positions are `[longitude, latitude]`. |
+| `Cannot listen on … port …`, exit code 1 | The port is in use or may not be opened, or `NETNOU_HOST` is not an address of this machine. | Set another `NETNOU_PORT` or correct `NETNOU_HOST`. |
+| `Timetable: cannot start: the data directory … cannot be created or written`, exit code 1 | `NETNOU_DATA_DIR` is not writable for the user the server runs as. | Fix the ownership; in Docker a bind mount must be writable for uid 1000. |
+| Page: "The timetable data could not be loaded." Log: `Timetable: update failed: fetch failed (…)` | The feed server cannot be reached. | Check outbound HTTPS and DNS. The next attempt follows after `NETNOU_FEED_CHECK_MINUTES`. |
+| `Timetable: update failed: the feed has no stops in the area; check NETNOU_BBOX or NETNOU_AREA_FILE …` | The area lies outside the feed, or latitude and longitude are swapped. | `NETNOU_BBOX` is `south,west,north,east`; GeoJSON positions are `[longitude, latitude]`. |
 | `… this feed version will be tried again in 60 min` | A download broke off or an import failed. That version of the feed is left alone for an hour, then two, doubling up to a day; a new version is tried at once. | Fix the cause named in the line and restart to try again immediately. |
 | `Timetable: update failed: import worker stopped (exit code …)` | The import ran out of memory or crashed. | Give the process more memory, see [Docker](#docker). |
 | `Timetable: stored dataset unusable (written by another version), importing again` | Normal after an update of Netnou that changed the cache format, or after changing the area (`made for another area`). | Nothing; the import runs again. |
-| `Routes: OSM data could not be updated (…), keeping straight lines` | The OpenStreetMap extracts could not be downloaded or do not cover the area. | Check `OSM_PBF_URLS`. The next attempt follows after an hour, then with doubling waits up to a day. |
+| `Routes: OSM data could not be updated (…), keeping straight lines` | The OpenStreetMap extracts could not be downloaded or do not cover the area. | Check `NETNOU_OSM_PBF_URLS`. The next attempt follows after an hour, then with doubling waits up to a day. |
 | Vehicles move in straight lines although extracts are set | The route geometry is still being computed, or the step above failed. | Look at `routes.segments` in `/api/status` and at the log. |
 | Page: the warning "no realtime data right now, all by timetable" in the header card | No realtime data at all: fetching the feed fails. For the first minute and a half after the page was opened it says "loading realtime …" instead. | `realtime.error` in `/api/status`; log line `Realtime: update failed: …`. |
 | Page: some vehicles carry a question mark | The feed has no delay for these trips. Their operators report none. | Nothing; it is how the data is. |
 | `Realtime: update failed: GET …: no answer after 90 s and … attempts (connect timeout)` | The feed server did not accept a connection in a minute and a half. If `curl` from the same host gets through, compare the times: the server of gtfs.de is hard to reach at rush hour. | Nothing, if it passes: fetching goes on. `realtime.failures` against `realtime.fetches` in `/api/status` shows how often it happens. |
 | `Realtime: update failed: GET …: incomplete after 90 s (… of … MB)` | The feed arrived too slowly, from a busy server or over a slow line. | As above. The feed is over 20 MB per fetch. |
 | Page: "No connection to the server" | The browser cannot reach the API. | Check the proxy configuration, in particular the trailing slash and the stripped prefix for a sub-path. |
-| The vehicles move on an empty background | The browser could not load the map: its server is down or blocked on the visitor's network, or the style takes tiles, fonts or icons from a server the page may not load from. | The console of the browser names the request. For a blocked server see `MAP_ORIGINS` in [The map](configuration.md#the-map). |
+| The vehicles move on an empty background | The browser could not load the map: its server is down or blocked on the visitor's network, or the style takes tiles, fonts or icons from a server the page may not load from. | The console of the browser names the request. For a blocked server see `NETNOU_MAP_ORIGINS` in [The map](configuration.md#the-map). |
 | Page: "This browser cannot draw the map." | The browser has no WebGL 2: it is old, or hardware acceleration is switched off or unavailable, as in some remote sessions. | Nothing on the server. Another browser or device shows the map. |
 | The container restarts during the first minutes | Killed for exceeding a memory limit during the import. | Raise the limit to 2 GB or more, or set `NODE_OPTIONS`. |
 

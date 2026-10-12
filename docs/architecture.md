@@ -123,8 +123,8 @@ previews from the README screenshot.
 
 ## The area
 
-The area is a set of polygons (`AREA_FILE`, or the built-in VGN) or a
-rectangle (`BBOX`). `Area` rasters it into cells of about 1.1 km and stores
+The area is a set of polygons (`NETNOU_AREA_FILE`, or the built-in VGN) or a
+rectangle (`NETNOU_BBOX`). `Area` rasters it into cells of about 1.1 km and stores
 for each cell its distance to the area in cells, up to 8. "Is this point
 inside, or within a few kilometres?" is then a table lookup, which matters
 because it is asked for every stop of a national timetable and for tens of
@@ -177,7 +177,7 @@ the default area that is about 60,000 distinct hops.
   Roads carry a cost factor so that buses prefer main roads, and respect
   one-way streets, access restrictions and the exemptions for buses. The
   networks are cached in `osm-networks.json.gz` and built again when the
-  OpenStreetMap data is older than `OSM_MAX_AGE_DAYS`, when the area or the
+  OpenStreetMap data is older than `NETNOU_OSM_MAX_AGE_DAYS`, when the area or the
   list of extracts changes.
 - **Snapping.** A stop is rarely exactly on its road or track. Candidates on
   nearby edges are considered, up to 70 m away for buses and up to 400 m for
@@ -206,7 +206,7 @@ lines.
 ## Realtime
 
 `RealtimePoller` fetches the GTFS-Realtime feed every
-`REALTIME_INTERVAL_SECONDS`, but only while the API is in use (see
+`NETNOU_REALTIME_INTERVAL_SECONDS`, but only while the API is in use (see
 [Realtime polling and traffic](configuration.md#realtime-polling-and-traffic)).
 Each fetch produces a new snapshot:
 
@@ -242,7 +242,7 @@ be changed without a dependency. `get` has one limit for the whole request,
 
 ## Failures and retries
 
-- **Feed version check** (`HEAD`, every `FEED_CHECK_MINUTES`): a failure is
+- **Feed version check** (`HEAD`, every `NETNOU_FEED_CHECK_MINUTES`): a failure is
   logged and the check simply runs again next time. The loaded timetable
   stays in use.
 - **Download refused** (HTTP error, no connection): tried again at the next
@@ -263,12 +263,12 @@ The waits are kept in memory; a restart tries everything again at once.
 
 ## Caches and format versions
 
-The data directory (`DATA_DIR`) holds:
+The data directory (`NETNOU_DATA_DIR`) holds:
 
 | File | Content | Lifetime |
 | --- | --- | --- |
 | `region.json.gz` | the dataset: timetable of the area with route geometry | until a new feed version is imported |
-| `osm-networks.json.gz` | the routable networks | `OSM_MAX_AGE_DAYS` |
+| `osm-networks.json.gz` | the routable networks | `NETNOU_OSM_MAX_AGE_DAYS` |
 | `feed.zip`, `osm-<n>.pbf` | downloads | only during an import |
 
 Everything can be deleted at any time and is rebuilt.
@@ -364,7 +364,7 @@ otherwise a server would load a file written by older code:
   address and the versions in other languages. That is what search engines
   and chats read. The script puts the same texts in for the visitor, in
   their language; both take them from `pageTexts` in `i18n.js`. A title or
-  a description of the operator's own (`SITE_TITLE`, `SITE_DESCRIPTION`)
+  a description of the operator's own (`NETNOU_SITE_TITLE`, `NETNOU_SITE_DESCRIPTION`)
   takes the place of the page's in both, as it is: one for every language,
   or one for each. The
   manifest of the installed app gets the name, the language and the
@@ -395,7 +395,7 @@ otherwise a server would load a file written by older code:
 - **Security.** The Content-Security-Policy allows scripts, styles, workers
   and connections from the page's own origin only. The one exception is the
   map, which may be fetched from the server of its style or tiles and from
-  those in `MAP_ORIGINS`. There are no inline scripts or styles.
+  those in `NETNOU_MAP_ORIGINS`. There are no inline scripts or styles.
 - **Browsers.** There is no build step, so the page runs as written. The map
   library sets the floor: it needs WebGL 2 and the JavaScript of 2022,
   roughly Chrome and Edge 94, Firefox 114, Safari 16.4 and newer.
@@ -413,7 +413,7 @@ otherwise a server would load a file written by older code:
   and a route is a shortest-path guess.
 - The feed's own `shapes.txt` is ignored.
 - Kinds of train are recognised by line names as used in Germany.
-- One time zone for the whole feed (`TIMEZONE`); `agency_timezone` is not
+- One time zone for the whole feed (`NETNOU_TIMEZONE`); `agency_timezone` is not
   read.
 - A timetable server without `ETag` and `Last-Modified` is never refreshed.
 - Alerts for whole agencies, routes or route types are not shown. Of an alert
@@ -431,7 +431,7 @@ What these mean for other feeds and countries, and where to change them:
 
 | Term | Meaning |
 | --- | --- |
-| area | the region covered, from `BBOX` or `AREA_FILE` |
+| area | the region covered, from `NETNOU_BBOX` or `NETNOU_AREA_FILE` |
 | stop | a row of `stops.txt`, often a single platform |
 | station | the stop that groups platforms (`parent_station`); what the map shows and a departure board is for |
 | hop | two consecutive stops of a trip |

@@ -36,7 +36,7 @@ shortened where marked with `…`.
   late. **Coordinates** are WGS 84 degrees. A **box** is
   `south,west,north,east`.
 - A **service day** is a date `yyyymmdd` in the time zone of the feed
-  (`TIMEZONE`). As in GTFS, a trip that starts after midnight can belong to
+  (`NETNOU_TIMEZONE`). As in GTFS, a trip that starts after midnight can belong to
   the service day before.
 - A **trip id** is `<trip_id>_<service day>`, for example `671753_20261004`,
   where `trip_id` is the one of the GTFS feed (it may itself contain
@@ -156,10 +156,10 @@ server runs and is available while the timetable is still loading.
 
 | Field | Type | Meaning |
 | --- | --- | --- |
-| `siteName` | string | what the instance calls itself (`SITE_NAME`); "Netnou" unless the operator chose another name |
+| `siteName` | string | what the instance calls itself (`NETNOU_SITE_NAME`); "Netnou" unless the operator chose another name |
 | `name` | string | name of the area, `""` if it has none |
-| `siteTitle` | object | the operator's own title of the page (`SITE_TITLE`), by the languages of the page: for each a text to be shown as it is, or `null` where they have none and the page words its own |
-| `siteDescription` | object | the same for what the page says about itself (`SITE_DESCRIPTION`) |
+| `siteTitle` | object | the operator's own title of the page (`NETNOU_SITE_TITLE`), by the languages of the page: for each a text to be shown as it is, or `null` where they have none and the page words its own |
+| `siteDescription` | object | the same for what the page says about itself (`NETNOU_SITE_DESCRIPTION`) |
 | `bbox` | box | rectangle around the area |
 | `view` | box | map section to show first |
 | `outline` | array of rings | the edge of the area, each ring an array of `[latitude, longitude]`. Note the order: the GeoJSON file the area comes from has longitude first |

@@ -4,7 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { after, test } from 'node:test';
 import { LANGUAGES } from '../public/i18n.js';
-import { loadConfig, parseBox } from '../server/config.js';
+import { loadConfig, parseBox, plainNames } from '../server/config.js';
 
 const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'netnou-config-'));
 after(() => fs.rmSync(dir, { recursive: true, force: true }));
@@ -15,74 +15,74 @@ const file = (name, content) => {
   return full;
 };
 // A small rectangle keeps the tests that are not about the area quick.
-const BBOX = '49.3,10.8,49.7,11.3';
+const NETNOU_BBOX = '49.3,10.8,49.7,11.3';
 const SQUARE = { type: 'Polygon', coordinates: [[[10.8, 49.3], [11.3, 49.3], [11.3, 49.7], [10.8, 49.7], [10.8, 49.3]]] };
 
 test('what the page says about itself: its main language and the address of the instance', () => {
   // German, as the default area and its feed are, and no address: nothing in the page then needs one
   assert.deepEqual([loadConfig({}).language, loadConfig({}).publicUrl], ['de', null]);
-  assert.equal(loadConfig({ LANGUAGE: ' EN ' }).language, 'en');
-  assert.throws(() => loadConfig({ LANGUAGE: 'fr' }), /^Error: LANGUAGE must be one of the languages of the page: de, en \(got "fr"\)$/);
+  assert.equal(loadConfig({ NETNOU_LANGUAGE: ' EN ' }).language, 'en');
+  assert.throws(() => loadConfig({ NETNOU_LANGUAGE: 'fr' }), /^Error: NETNOU_LANGUAGE must be one of the languages of the page: de, en \(got "fr"\)$/);
 
   // always with a slash at its end, with a path if the instance is under one
   for (const [given, taken] of [['https://karte.example.org', 'https://karte.example.org/'], ['https://karte.example.org/', 'https://karte.example.org/'],
     ['http://example.org:8080/netnou', 'http://example.org:8080/netnou/'], [' https://example.org/a/b// ', 'https://example.org/a/b/']]) {
-    assert.equal(loadConfig({ PUBLIC_URL: given }).publicUrl, taken, given);
+    assert.equal(loadConfig({ NETNOU_PUBLIC_URL: given }).publicUrl, taken, given);
   }
-  assert.equal(loadConfig({ PUBLIC_URL: ' ' }).publicUrl, null);
+  assert.equal(loadConfig({ NETNOU_PUBLIC_URL: ' ' }).publicUrl, null);
 
   // an instance may call itself something else than the software; an empty name is none
-  assert.equal(loadConfig({ SITE_NAME: ' Bus & Bahn live ' }).siteName, 'Bus & Bahn live');
-  assert.equal(loadConfig({ SITE_NAME: ' ' }).siteName, 'Netnou');
+  assert.equal(loadConfig({ NETNOU_SITE_NAME: ' Bus & Bahn live ' }).siteName, 'Bus & Bahn live');
+  assert.equal(loadConfig({ NETNOU_SITE_NAME: ' ' }).siteName, 'Netnou');
   // a title and a description of the operator's own for the page, by its languages: none unless set, each on one line
   const inAll = (words) => Object.fromEntries(LANGUAGES.map(([code]) => [code, words]));
   assert.deepEqual([loadConfig({}).siteTitle, loadConfig({}).siteDescription], [inAll(null), inAll(null)]);
-  assert.deepEqual(loadConfig({ SITE_TITLE: ' ', SITE_DESCRIPTION: '' }).siteTitle, inAll(null));
-  assert.deepEqual(loadConfig({ SITE_TITLE: ' Bus & Bahn live:\n   der Großraum Nürnberg ' }).siteTitle, inAll('Bus & Bahn live: der Großraum Nürnberg'));
-  assert.deepEqual(loadConfig({ SITE_DESCRIPTION: 'Wo ist\tmeine Bahn? ' }).siteDescription, inAll('Wo ist meine Bahn?'));
+  assert.deepEqual(loadConfig({ NETNOU_SITE_TITLE: ' ', NETNOU_SITE_DESCRIPTION: '' }).siteTitle, inAll(null));
+  assert.deepEqual(loadConfig({ NETNOU_SITE_TITLE: ' Bus & Bahn live:\n   der Großraum Nürnberg ' }).siteTitle, inAll('Bus & Bahn live: der Großraum Nürnberg'));
+  assert.deepEqual(loadConfig({ NETNOU_SITE_DESCRIPTION: 'Wo ist\tmeine Bahn? ' }).siteDescription, inAll('Wo ist meine Bahn?'));
   // one for a language alone takes the place of the one for all there, and stands by itself where there is none for all
-  assert.deepEqual(loadConfig({ SITE_TITLE: 'Bus & Bahn live', SITE_TITLE_EN: ' Buses and trains,\n live ' }).siteTitle, { ...inAll('Bus & Bahn live'), en: 'Buses and trains, live' });
-  assert.deepEqual(loadConfig({ SITE_DESCRIPTION_DE: 'Wo ist meine Bahn?' }).siteDescription, { ...inAll(null), de: 'Wo ist meine Bahn?' });
-  assert.deepEqual(loadConfig({ SITE_TITLE: 'Bus & Bahn live', SITE_TITLE_EN: ' ' }).siteTitle, inAll('Bus & Bahn live'));
+  assert.deepEqual(loadConfig({ NETNOU_SITE_TITLE: 'Bus & Bahn live', NETNOU_SITE_TITLE_EN: ' Buses and trains,\n live ' }).siteTitle, { ...inAll('Bus & Bahn live'), en: 'Buses and trains, live' });
+  assert.deepEqual(loadConfig({ NETNOU_SITE_DESCRIPTION_DE: 'Wo ist meine Bahn?' }).siteDescription, { ...inAll(null), de: 'Wo ist meine Bahn?' });
+  assert.deepEqual(loadConfig({ NETNOU_SITE_TITLE: 'Bus & Bahn live', NETNOU_SITE_TITLE_EN: ' ' }).siteTitle, inAll('Bus & Bahn live'));
   // texts by language in the one setting, as a JSON object: for the languages it names, the others keep the page's own
-  assert.deepEqual(loadConfig({ SITE_TITLE: ' {"de": "Bus & Bahn\\n live", "en": "Buses and trains, live"} ' }).siteTitle, { ...inAll(null), de: 'Bus & Bahn live', en: 'Buses and trains, live' });
-  assert.deepEqual(loadConfig({ SITE_DESCRIPTION: '{"de": "Wo ist meine Bahn?"}' }).siteDescription, { ...inAll(null), de: 'Wo ist meine Bahn?' });
-  assert.deepEqual(loadConfig({ SITE_TITLE: '{}' }).siteTitle, inAll(null));
+  assert.deepEqual(loadConfig({ NETNOU_SITE_TITLE: ' {"de": "Bus & Bahn\\n live", "en": "Buses and trains, live"} ' }).siteTitle, { ...inAll(null), de: 'Bus & Bahn live', en: 'Buses and trains, live' });
+  assert.deepEqual(loadConfig({ NETNOU_SITE_DESCRIPTION: '{"de": "Wo ist meine Bahn?"}' }).siteDescription, { ...inAll(null), de: 'Wo ist meine Bahn?' });
+  assert.deepEqual(loadConfig({ NETNOU_SITE_TITLE: '{}' }).siteTitle, inAll(null));
   // the setting for one language wins over the object
-  assert.deepEqual(loadConfig({ SITE_TITLE: '{"de": "aus dem Objekt", "en": "from the object"}', SITE_TITLE_EN: 'of its own' }).siteTitle, { ...inAll(null), de: 'aus dem Objekt', en: 'of its own' });
+  assert.deepEqual(loadConfig({ NETNOU_SITE_TITLE: '{"de": "aus dem Objekt", "en": "from the object"}', NETNOU_SITE_TITLE_EN: 'of its own' }).siteTitle, { ...inAll(null), de: 'aus dem Objekt', en: 'of its own' });
   // what begins as an object and is none of texts is refused
   for (const wrong of ['{de: "Bus"}', '{"de": 5}', '{"de": ["Bus"]}', '{"de": null}', '{']) {
-    assert.throws(() => loadConfig({ SITE_TITLE: wrong }), /^Error: SITE_TITLE must be a text, or texts by language as a JSON object such as \{"/, wrong);
+    assert.throws(() => loadConfig({ NETNOU_SITE_TITLE: wrong }), /^Error: NETNOU_SITE_TITLE must be a text, or texts by language as a JSON object such as \{"/, wrong);
   }
   // a language the page does not have is refused, by its name
-  assert.throws(() => loadConfig({ SITE_TITLE: '{"de": "Bus", "xx": "Bus"}' }), /^Error: SITE_TITLE: the page has no language "xx"; it has /);
-  assert.throws(() => loadConfig({ SITE_TITLE_XX: 'Bus & Bahn live' }), /^Error: SITE_TITLE_XX: the page has no such language; it has /);
-  assert.throws(() => loadConfig({ SITE_DESCRIPTION_: 'Wo ist meine Bahn?' }), /^Error: SITE_DESCRIPTION_: the page has no such language/);
+  assert.throws(() => loadConfig({ NETNOU_SITE_TITLE: '{"de": "Bus", "xx": "Bus"}' }), /^Error: NETNOU_SITE_TITLE: the page has no language "xx"; it has /);
+  assert.throws(() => loadConfig({ NETNOU_SITE_TITLE_XX: 'Bus & Bahn live' }), /^Error: NETNOU_SITE_TITLE_XX: the page has no such language; it has /);
+  assert.throws(() => loadConfig({ NETNOU_SITE_DESCRIPTION_: 'Wo ist meine Bahn?' }), /^Error: NETNOU_SITE_DESCRIPTION_: the page has no such language/);
 
   // a folder with icons of the operator's own: none unless it is named
   assert.equal(loadConfig({}).brandDir, null);
-  assert.equal(loadConfig({ BRAND_DIR: ' ' }).brandDir, null);
-  assert.equal(loadConfig({ BRAND_DIR: 'brand' }).brandDir, path.resolve('brand'));
+  assert.equal(loadConfig({ NETNOU_BRAND_DIR: ' ' }).brandDir, null);
+  assert.equal(loadConfig({ NETNOU_BRAND_DIR: 'brand' }).brandDir, path.resolve('brand'));
 
   // links of the operator's own: none by default, else a text and an address each
   assert.deepEqual(loadConfig({}).links, []);
-  assert.deepEqual(loadConfig({ LINKS: ' , ' }).links, []);
-  assert.deepEqual(loadConfig({ LINKS: 'Über=/ueber, Impressum = https://example.org/impressum?x=1 ,Datenschutz=/datenschutz/' }).links, [
+  assert.deepEqual(loadConfig({ NETNOU_LINKS: ' , ' }).links, []);
+  assert.deepEqual(loadConfig({ NETNOU_LINKS: 'Über=/ueber, Impressum = https://example.org/impressum?x=1 ,Datenschutz=/datenschutz/' }).links, [
     { text: 'Über', href: '/ueber' }, { text: 'Impressum', href: 'https://example.org/impressum?x=1' }, { text: 'Datenschutz', href: '/datenschutz/' },
   ]);
   for (const wrong of ['Impressum', '=/impressum', 'Impressum=', 'Impressum=impressum.html', 'Impressum=//example.org/', 'Impressum=javascript:alert(1)', 'Impressum=mailto:a@example.org', 'Über=/ueber, Impressum']) {
-    assert.throws(() => loadConfig({ LINKS: wrong }), /^Error: LINKS must be links as "Text=address", separated by commas, .+ \(not understood: ".+"\)$/, wrong);
+    assert.throws(() => loadConfig({ NETNOU_LINKS: wrong }), /^Error: NETNOU_LINKS must be links as "Text=address", separated by commas, .+ \(not understood: ".+"\)$/, wrong);
   }
 
   // Search engines may list an instance that knows its address, and no other, unless the operator says so.
   assert.equal(loadConfig({}).searchEngines, false);
-  assert.equal(loadConfig({ PUBLIC_URL: 'https://karte.example.org/' }).searchEngines, true);
-  assert.equal(loadConfig({ PUBLIC_URL: 'https://karte.example.org/', SEARCH_ENGINES: 'off' }).searchEngines, false);
-  assert.equal(loadConfig({ SEARCH_ENGINES: 'ON' }).searchEngines, true);
-  assert.equal(loadConfig({ SEARCH_ENGINES: 'off' }).searchEngines, false);
-  assert.throws(() => loadConfig({ SEARCH_ENGINES: 'no' }), /^Error: SEARCH_ENGINES must be "on" or "off" \(got "no"\)$/);
+  assert.equal(loadConfig({ NETNOU_PUBLIC_URL: 'https://karte.example.org/' }).searchEngines, true);
+  assert.equal(loadConfig({ NETNOU_PUBLIC_URL: 'https://karte.example.org/', NETNOU_SEARCH_ENGINES: 'off' }).searchEngines, false);
+  assert.equal(loadConfig({ NETNOU_SEARCH_ENGINES: 'ON' }).searchEngines, true);
+  assert.equal(loadConfig({ NETNOU_SEARCH_ENGINES: 'off' }).searchEngines, false);
+  assert.throws(() => loadConfig({ NETNOU_SEARCH_ENGINES: 'no' }), /^Error: NETNOU_SEARCH_ENGINES must be "on" or "off" \(got "no"\)$/);
   for (const wrong of ['karte.example.org', 'ftp://example.org/', 'https://example.org/?lang=de', 'https://example.org/#map', 'https://user:secret@example.org/']) {
-    assert.throws(() => loadConfig({ PUBLIC_URL: wrong }), /^Error: PUBLIC_URL must be the http\(s\) address of the page, without a query, /, wrong);
+    assert.throws(() => loadConfig({ NETNOU_PUBLIC_URL: wrong }), /^Error: NETNOU_PUBLIC_URL must be the http\(s\) address of the page, without a query, /, wrong);
   }
 });
 
@@ -120,14 +120,14 @@ test('defaults: the VGN, its OSM extracts, the gtfs.de feeds and OpenStreetMap t
 });
 
 test('a custom area has no name, no OSM extracts and is shown as a whole', () => {
-  const box = loadConfig({ BBOX });
+  const box = loadConfig({ NETNOU_BBOX });
   assert.deepEqual(box.area.bbox, [49.3, 10.8, 49.7, 11.3]);
   assert.equal(box.areaName, '');
   assert.deepEqual(box.view, [49.3, 10.8, 49.7, 11.3]);
   assert.deepEqual(box.osmUrls, []);
   assert.deepEqual(box.areaOutline, [[[10.8, 49.3], [11.3, 49.3], [11.3, 49.7], [10.8, 49.7], [10.8, 49.3]]]);
 
-  const fromFile = loadConfig({ AREA_FILE: file('square.geojson', { type: 'Feature', geometry: SQUARE }) });
+  const fromFile = loadConfig({ NETNOU_AREA_FILE: file('square.geojson', { type: 'Feature', geometry: SQUARE }) });
   assert.equal(fromFile.area.id, box.area.id);
   assert.equal(fromFile.areaName, '');
   assert.deepEqual(fromFile.view, [49.3, 10.8, 49.7, 11.3]);
@@ -136,31 +136,31 @@ test('a custom area has no name, no OSM extracts and is shown as a whole', () =>
 
   // a file may bring the outline to draw
   const outline = [[[10.9, 49.4], [11.2, 49.4], [11.2, 49.6], [10.9, 49.4]]];
-  assert.deepEqual(loadConfig({ AREA_FILE: file('outline.geojson', { ...SQUARE, outline }) }).areaOutline, outline);
+  assert.deepEqual(loadConfig({ NETNOU_AREA_FILE: file('outline.geojson', { ...SQUARE, outline }) }).areaOutline, outline);
 });
 
 test('every setting can be given', () => {
   const config = loadConfig({
-    PORT: '0',
-    HOST: '127.0.0.1',
-    DATA_DIR: dir,
-    BBOX: ' 49.3, 10.8, 49.7, 11.3 ',
-    AREA_NAME: ' Testland ',
-    VIEW: '49.4,10.9,49.6,11.2',
-    TIMEZONE: 'europe/vienna',
-    TILE_URL: 'https://{s}.tiles.example.org/{z}/{x}/{y}{r}.png?key=1',
-    TILE_ATTRIBUTION: '<b>tiles</b>',
-    MAP_ORIGINS: 'https://fonts.example.org/noto/{fontstack}/{range}.pbf, http://localhost:8082,',
-    DATA_ATTRIBUTION: '<b>data</b>',
-    FEED_URL: 'http://127.0.0.1:8000/feed.zip',
-    REALTIME_URL: 'http://127.0.0.1:8000/realtime.pb',
-    OSM_PBF_URLS: 'https://example.org/a.osm.pbf, https://example.org/b.osm.pbf,',
-    OSM_MAX_AGE_DAYS: '7',
-    FEED_CHECK_MINUTES: '60',
-    DOWNLOAD_TIMEOUT_MINUTES: '2.5',
-    REALTIME_INTERVAL_SECONDS: '10',
-    REALTIME_IDLE_SECONDS: '30',
-    UPDATE_CHECK: ' Off ',
+    NETNOU_PORT: '0',
+    NETNOU_HOST: '127.0.0.1',
+    NETNOU_DATA_DIR: dir,
+    NETNOU_BBOX: ' 49.3, 10.8, 49.7, 11.3 ',
+    NETNOU_AREA_NAME: ' Testland ',
+    NETNOU_VIEW: '49.4,10.9,49.6,11.2',
+    NETNOU_TIMEZONE: 'europe/vienna',
+    NETNOU_TILE_URL: 'https://{s}.tiles.example.org/{z}/{x}/{y}{r}.png?key=1',
+    NETNOU_TILE_ATTRIBUTION: '<b>tiles</b>',
+    NETNOU_MAP_ORIGINS: 'https://fonts.example.org/noto/{fontstack}/{range}.pbf, http://localhost:8082,',
+    NETNOU_DATA_ATTRIBUTION: '<b>data</b>',
+    NETNOU_FEED_URL: 'http://127.0.0.1:8000/feed.zip',
+    NETNOU_REALTIME_URL: 'http://127.0.0.1:8000/realtime.pb',
+    NETNOU_OSM_PBF_URLS: 'https://example.org/a.osm.pbf, https://example.org/b.osm.pbf,',
+    NETNOU_OSM_MAX_AGE_DAYS: '7',
+    NETNOU_FEED_CHECK_MINUTES: '60',
+    NETNOU_DOWNLOAD_TIMEOUT_MINUTES: '2.5',
+    NETNOU_REALTIME_INTERVAL_SECONDS: '10',
+    NETNOU_REALTIME_IDLE_SECONDS: '30',
+    NETNOU_UPDATE_CHECK: ' Off ',
   });
   assert.equal(config.port, 0);
   assert.equal(config.host, '127.0.0.1');
@@ -184,8 +184,8 @@ test('every setting can be given', () => {
   assert.equal(config.updateCheck, false);
 });
 
-test('empty values count as not set, except for AREA_NAME and OSM_PBF_URLS', () => {
-  const config = loadConfig({ PORT: '', HOST: ' ', BBOX: '', AREA_FILE: '', VIEW: '', TIMEZONE: '', MAP_STYLE_URL: ' ', MAP_ORIGINS: '', TILE_URL: '', TILE_ATTRIBUTION: '', FEED_URL: ' ', FEED_CHECK_MINUTES: '', AREA_NAME: '', OSM_PBF_URLS: '' });
+test('empty values count as not set, except for NETNOU_AREA_NAME and NETNOU_OSM_PBF_URLS', () => {
+  const config = loadConfig({ NETNOU_PORT: '', NETNOU_HOST: ' ', NETNOU_BBOX: '', NETNOU_AREA_FILE: '', NETNOU_VIEW: '', NETNOU_TIMEZONE: '', NETNOU_MAP_STYLE_URL: ' ', NETNOU_MAP_ORIGINS: '', NETNOU_TILE_URL: '', NETNOU_TILE_ATTRIBUTION: '', NETNOU_FEED_URL: ' ', NETNOU_FEED_CHECK_MINUTES: '', NETNOU_AREA_NAME: '', NETNOU_OSM_PBF_URLS: '' });
   assert.equal(config.port, 8080);
   assert.equal(config.host, undefined);
   assert.deepEqual(config.view, [49.376, 10.916, 49.604, 11.204]);
@@ -201,21 +201,21 @@ test('empty values count as not set, except for AREA_NAME and OSM_PBF_URLS', () 
 });
 
 test('the map is a style or raster tiles, and the Content-Security-Policy gets the origins of either', () => {
-  const style = loadConfig({ BBOX, MAP_STYLE_URL: 'https://maps.example.org:8443/styles/day.json?key=1', MAP_ORIGINS: 'https://maps.example.org:8443/fonts, https://tiles.example.org' });
+  const style = loadConfig({ NETNOU_BBOX, NETNOU_MAP_STYLE_URL: 'https://maps.example.org:8443/styles/day.json?key=1', NETNOU_MAP_ORIGINS: 'https://maps.example.org:8443/fonts, https://tiles.example.org' });
   assert.equal(style.styleUrl, 'https://maps.example.org:8443/styles/day.json?key=1');
   assert.equal(style.tileUrl, null);
   // each origin once
   assert.deepEqual(style.mapOrigins, ['https://maps.example.org:8443', 'https://tiles.example.org']);
   // a style names its sources itself, unless the operator adds to them
   assert.equal(style.tileAttribution, '');
-  assert.equal(loadConfig({ BBOX, TILE_ATTRIBUTION: '<b>map</b>' }).tileAttribution, '<b>map</b>');
+  assert.equal(loadConfig({ NETNOU_BBOX, NETNOU_TILE_ATTRIBUTION: '<b>map</b>' }).tileAttribution, '<b>map</b>');
 
-  const tiles = loadConfig({ BBOX, TILE_URL: 'https://tile.example.org/{z}/{x}/{y}.png' });
+  const tiles = loadConfig({ NETNOU_BBOX, NETNOU_TILE_URL: 'https://tile.example.org/{z}/{x}/{y}.png' });
   assert.equal(tiles.styleUrl, null);
   assert.equal(tiles.tileUrl, 'https://tile.example.org/{z}/{x}/{y}.png');
   assert.equal(tiles.tileAttribution, '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>');
 
-  const origin = (TILE_URL) => loadConfig({ BBOX, TILE_URL }).mapOrigins.join();
+  const origin = (NETNOU_TILE_URL) => loadConfig({ NETNOU_BBOX, NETNOU_TILE_URL }).mapOrigins.join();
   assert.equal(origin('https://tile.example.org/{z}/{x}/{y}.png'), 'https://tile.example.org');
   assert.equal(origin('http://localhost:8081/tiles/{z}/{x}/{y}.png'), 'http://localhost:8081');
   assert.equal(origin('https://{s}.tile.example.org/{z}/{x}/{y}.png'), 'https://*.tile.example.org');
@@ -224,62 +224,77 @@ test('the map is a style or raster tiles, and the Content-Security-Policy gets t
 });
 
 test('wrong settings are refused with a message that names the variable', () => {
-  const box = /^BBOX must be "south,west,north,east" in degrees with south < north and west < east, e\.g\. /;
+  const box = /^NETNOU_BBOX must be "south,west,north,east" in degrees with south < north and west < east, e\.g\. /;
   const cases = [
-    [{ PORT: '-1' }, /^PORT must be a whole number from 0 to 65535 \(got "-1"\)$/],
-    [{ PORT: '65536' }, /^PORT must be /],
-    [{ PORT: '80.5' }, /^PORT must be /],
-    [{ PORT: '0x50' }, /^PORT must be /],
-    [{ PORT: 'http' }, /^PORT must be /],
-    [{ FEED_CHECK_MINUTES: '0' }, /^FEED_CHECK_MINUTES must be a number from 1 to 1440 \(got "0"\)$/],
-    [{ FEED_CHECK_MINUTES: '99999' }, /^FEED_CHECK_MINUTES must be /],
-    [{ REALTIME_INTERVAL_SECONDS: '9' }, /^REALTIME_INTERVAL_SECONDS must be a number from 10 to 3600 /],
-    [{ REALTIME_INTERVAL_SECONDS: '3601' }, /^REALTIME_INTERVAL_SECONDS must be /],
-    [{ REALTIME_IDLE_SECONDS: '-1' }, /^REALTIME_IDLE_SECONDS must be a number from 30 to 86400 /],
-    [{ REALTIME_IDLE_SECONDS: '86401' }, /^REALTIME_IDLE_SECONDS must be /],
-    [{ OSM_MAX_AGE_DAYS: '0' }, /^OSM_MAX_AGE_DAYS must be a number from 1 to 3650 /],
-    [{ OSM_MAX_AGE_DAYS: 'never' }, /^OSM_MAX_AGE_DAYS must be /],
-    [{ DOWNLOAD_TIMEOUT_MINUTES: '0' }, /^DOWNLOAD_TIMEOUT_MINUTES must be a number from 1 to 1440 /],
-    [{ DOWNLOAD_TIMEOUT_MINUTES: 'Infinity' }, /^DOWNLOAD_TIMEOUT_MINUTES must be /],
+    [{ NETNOU_PORT: '-1' }, /^NETNOU_PORT must be a whole number from 0 to 65535 \(got "-1"\)$/],
+    [{ NETNOU_PORT: '65536' }, /^NETNOU_PORT must be /],
+    [{ NETNOU_PORT: '80.5' }, /^NETNOU_PORT must be /],
+    [{ NETNOU_PORT: '0x50' }, /^NETNOU_PORT must be /],
+    [{ NETNOU_PORT: 'http' }, /^NETNOU_PORT must be /],
+    [{ NETNOU_FEED_CHECK_MINUTES: '0' }, /^NETNOU_FEED_CHECK_MINUTES must be a number from 1 to 1440 \(got "0"\)$/],
+    [{ NETNOU_FEED_CHECK_MINUTES: '99999' }, /^NETNOU_FEED_CHECK_MINUTES must be /],
+    [{ NETNOU_REALTIME_INTERVAL_SECONDS: '9' }, /^NETNOU_REALTIME_INTERVAL_SECONDS must be a number from 10 to 3600 /],
+    [{ NETNOU_REALTIME_INTERVAL_SECONDS: '3601' }, /^NETNOU_REALTIME_INTERVAL_SECONDS must be /],
+    [{ NETNOU_REALTIME_IDLE_SECONDS: '-1' }, /^NETNOU_REALTIME_IDLE_SECONDS must be a number from 30 to 86400 /],
+    [{ NETNOU_REALTIME_IDLE_SECONDS: '86401' }, /^NETNOU_REALTIME_IDLE_SECONDS must be /],
+    [{ NETNOU_OSM_MAX_AGE_DAYS: '0' }, /^NETNOU_OSM_MAX_AGE_DAYS must be a number from 1 to 3650 /],
+    [{ NETNOU_OSM_MAX_AGE_DAYS: 'never' }, /^NETNOU_OSM_MAX_AGE_DAYS must be /],
+    [{ NETNOU_DOWNLOAD_TIMEOUT_MINUTES: '0' }, /^NETNOU_DOWNLOAD_TIMEOUT_MINUTES must be a number from 1 to 1440 /],
+    [{ NETNOU_DOWNLOAD_TIMEOUT_MINUTES: 'Infinity' }, /^NETNOU_DOWNLOAD_TIMEOUT_MINUTES must be /],
 
-    [{ BBOX: '49.3,,49.7,11.3' }, box], // an empty part is not 0
-    [{ BBOX: '49.3,10.8,49.7' }, box],
-    [{ BBOX: '49.3,10.8,49.7,11.3,0' }, box],
-    [{ BBOX: '49.3;10.8;49.7;11.3' }, box],
-    [{ BBOX: 'a,b,c,d' }, box],
-    [{ BBOX: '49.7,10.8,49.3,11.3' }, box], // south above north
-    [{ BBOX: '49.3,11.3,49.7,10.8' }, box], // west right of east
-    [{ BBOX: '-91,10.8,49.7,11.3' }, box],
-    [{ BBOX: '49.3,10.8,90.1,11.3' }, box],
-    [{ BBOX: '49.3,-181,49.7,11.3' }, box],
-    [{ BBOX: '49.3,10.8,49.7,181' }, box],
-    [{ VIEW: '49.4,10.9' }, /^VIEW must be "south,west,north,east" .+ \(got "49\.4,10\.9"\)$/],
-    [{ BBOX, AREA_FILE: file('both.geojson', SQUARE) }, /^AREA_FILE and BBOX are both set/],
+    [{ NETNOU_BBOX: '49.3,,49.7,11.3' }, box], // an empty part is not 0
+    [{ NETNOU_BBOX: '49.3,10.8,49.7' }, box],
+    [{ NETNOU_BBOX: '49.3,10.8,49.7,11.3,0' }, box],
+    [{ NETNOU_BBOX: '49.3;10.8;49.7;11.3' }, box],
+    [{ NETNOU_BBOX: 'a,b,c,d' }, box],
+    [{ NETNOU_BBOX: '49.7,10.8,49.3,11.3' }, box], // south above north
+    [{ NETNOU_BBOX: '49.3,11.3,49.7,10.8' }, box], // west right of east
+    [{ NETNOU_BBOX: '-91,10.8,49.7,11.3' }, box],
+    [{ NETNOU_BBOX: '49.3,10.8,90.1,11.3' }, box],
+    [{ NETNOU_BBOX: '49.3,-181,49.7,11.3' }, box],
+    [{ NETNOU_BBOX: '49.3,10.8,49.7,181' }, box],
+    [{ NETNOU_VIEW: '49.4,10.9' }, /^NETNOU_VIEW must be "south,west,north,east" .+ \(got "49\.4,10\.9"\)$/],
+    [{ NETNOU_BBOX, NETNOU_AREA_FILE: file('both.geojson', SQUARE) }, /^NETNOU_AREA_FILE and NETNOU_BBOX are both set/],
 
-    [{ BBOX: '', AREA_FILE: path.join(dir, 'missing.geojson') }, /^AREA_FILE: .*missing\.geojson cannot be read \(ENOENT\)$/],
-    [{ BBOX: '', AREA_FILE: file('broken.geojson', '{"type":') }, /^AREA_FILE: .*broken\.geojson is not valid JSON \(/],
-    [{ BBOX: '', AREA_FILE: file('empty.geojson', { type: 'FeatureCollection', features: [] }) }, /^AREA_FILE: .*empty\.geojson: area: the GeoJSON contains no polygons$/],
-    [{ BBOX: '', AREA_FILE: file('nofeatures.geojson', { type: 'FeatureCollection' }) }, /^AREA_FILE: .*nofeatures\.geojson: area: the GeoJSON contains no polygons$/],
-    [{ BBOX: '', AREA_FILE: file('point.geojson', { type: 'Polygon', coordinates: [[[11, 49.5], [11, 49.5], [11, 49.5]]] }) }, /^AREA_FILE: .*point\.geojson: area: no usable polygon$/],
-    [{ BBOX: '', AREA_FILE: file('badoutline.geojson', { ...SQUARE, outline: [[11, 49.5]] }) }, /^AREA_FILE: .*badoutline\.geojson: "outline" must be an array of rings/],
+    [{ NETNOU_BBOX: '', NETNOU_AREA_FILE: path.join(dir, 'missing.geojson') }, /^NETNOU_AREA_FILE: .*missing\.geojson cannot be read \(ENOENT\)$/],
+    [{ NETNOU_BBOX: '', NETNOU_AREA_FILE: file('broken.geojson', '{"type":') }, /^NETNOU_AREA_FILE: .*broken\.geojson is not valid JSON \(/],
+    [{ NETNOU_BBOX: '', NETNOU_AREA_FILE: file('empty.geojson', { type: 'FeatureCollection', features: [] }) }, /^NETNOU_AREA_FILE: .*empty\.geojson: area: the GeoJSON contains no polygons$/],
+    [{ NETNOU_BBOX: '', NETNOU_AREA_FILE: file('nofeatures.geojson', { type: 'FeatureCollection' }) }, /^NETNOU_AREA_FILE: .*nofeatures\.geojson: area: the GeoJSON contains no polygons$/],
+    [{ NETNOU_BBOX: '', NETNOU_AREA_FILE: file('point.geojson', { type: 'Polygon', coordinates: [[[11, 49.5], [11, 49.5], [11, 49.5]]] }) }, /^NETNOU_AREA_FILE: .*point\.geojson: area: no usable polygon$/],
+    [{ NETNOU_BBOX: '', NETNOU_AREA_FILE: file('badoutline.geojson', { ...SQUARE, outline: [[11, 49.5]] }) }, /^NETNOU_AREA_FILE: .*badoutline\.geojson: "outline" must be an array of rings/],
 
-    [{ FEED_URL: 'notaurl' }, /^FEED_URL must be an http\(s\) URL \(got "notaurl"\)$/],
-    [{ FEED_URL: 'ftp://example.org/feed.zip' }, /^FEED_URL must be /],
-    [{ REALTIME_URL: 'realtime.pb' }, /^REALTIME_URL must be an http\(s\) URL /],
-    [{ OSM_PBF_URLS: 'https://example.org/a.osm.pbf,b.osm.pbf' }, /^OSM_PBF_URLS must be an http\(s\) URL \(got "b\.osm\.pbf"\)$/],
-    [{ MAP_STYLE_URL: 'styles/bright' }, /^MAP_STYLE_URL must be an http\(s\) URL \(got "styles\/bright"\)$/],
-    [{ MAP_STYLE_URL: 'https://maps.example.org/style.json', TILE_URL: 'https://tile.example.org/{z}/{x}/{y}.png' }, /^MAP_STYLE_URL and TILE_URL are both set; use only one of them$/],
-    [{ MAP_ORIGINS: 'https://tiles.example.org, fonts.example.org' }, /^MAP_ORIGINS must be an http\(s\) URL \(got "fonts\.example\.org"\)$/],
-    [{ TILE_URL: 'https://tile.example.org/{z}/{x}.png' }, /^TILE_URL must be an http\(s\) URL template with \{z\}, \{x\} and \{y\}/],
-    [{ TILE_URL: '/tiles/{z}/{x}/{y}.png' }, /^TILE_URL must be /],
-    [{ TILE_URL: 'file:///tiles/{z}/{x}/{y}.png' }, /^TILE_URL must be /],
-    [{ TILE_URL: 'https://tile.{s}.example.org/{z}/{x}/{y}.png' }, /^TILE_URL must be /], // only the first label can be a wildcard
-    [{ UPDATE_CHECK: 'false' }, /^UPDATE_CHECK must be "on" or "off" \(got "false"\)$/],
-    [{ TIMEZONE: 'Europe/Nuernberg' }, /^TIMEZONE must be an IANA time zone name such as Europe\/Berlin \(got "Europe\/Nuernberg"\)$/],
+    [{ NETNOU_FEED_URL: 'notaurl' }, /^NETNOU_FEED_URL must be an http\(s\) URL \(got "notaurl"\)$/],
+    [{ NETNOU_FEED_URL: 'ftp://example.org/feed.zip' }, /^NETNOU_FEED_URL must be /],
+    [{ NETNOU_REALTIME_URL: 'realtime.pb' }, /^NETNOU_REALTIME_URL must be an http\(s\) URL /],
+    [{ NETNOU_OSM_PBF_URLS: 'https://example.org/a.osm.pbf,b.osm.pbf' }, /^NETNOU_OSM_PBF_URLS must be an http\(s\) URL \(got "b\.osm\.pbf"\)$/],
+    [{ NETNOU_MAP_STYLE_URL: 'styles/bright' }, /^NETNOU_MAP_STYLE_URL must be an http\(s\) URL \(got "styles\/bright"\)$/],
+    [{ NETNOU_MAP_STYLE_URL: 'https://maps.example.org/style.json', NETNOU_TILE_URL: 'https://tile.example.org/{z}/{x}/{y}.png' }, /^NETNOU_MAP_STYLE_URL and NETNOU_TILE_URL are both set; use only one of them$/],
+    [{ NETNOU_MAP_ORIGINS: 'https://tiles.example.org, fonts.example.org' }, /^NETNOU_MAP_ORIGINS must be an http\(s\) URL \(got "fonts\.example\.org"\)$/],
+    [{ NETNOU_TILE_URL: 'https://tile.example.org/{z}/{x}.png' }, /^NETNOU_TILE_URL must be an http\(s\) URL template with \{z\}, \{x\} and \{y\}/],
+    [{ NETNOU_TILE_URL: '/tiles/{z}/{x}/{y}.png' }, /^NETNOU_TILE_URL must be /],
+    [{ NETNOU_TILE_URL: 'file:///tiles/{z}/{x}/{y}.png' }, /^NETNOU_TILE_URL must be /],
+    [{ NETNOU_TILE_URL: 'https://tile.{s}.example.org/{z}/{x}/{y}.png' }, /^NETNOU_TILE_URL must be /], // only the first label can be a wildcard
+    [{ NETNOU_UPDATE_CHECK: 'false' }, /^NETNOU_UPDATE_CHECK must be "on" or "off" \(got "false"\)$/],
+    [{ NETNOU_TIMEZONE: 'Europe/Nuernberg' }, /^NETNOU_TIMEZONE must be an IANA time zone name such as Europe\/Berlin \(got "Europe\/Nuernberg"\)$/],
   ];
   for (const [env, message] of cases) {
-    assert.throws(() => loadConfig({ BBOX, ...env }), (err) => err instanceof Error && message.test(err.message), `${JSON.stringify(env)} -> ${message}`);
+    assert.throws(() => loadConfig({ NETNOU_BBOX, ...env }), (err) => err instanceof Error && message.test(err.message), `${JSON.stringify(env)} -> ${message}`);
   }
+});
+
+test('a name without the prefix is not read, and is named for the log if it can only be a setting', () => {
+  const config = loadConfig({ SITE_NAME: 'Bus & Bahn', PORT: '9000', BBOX: '49.3,10.8,49.7,11.3', LINKS: 'Impressum=/impressum' });
+  assert.equal(config.siteName, 'Netnou');
+  assert.equal(config.port, 8080);
+  assert.equal(config.areaName, 'Großraum Nürnberg (VGN)');
+  assert.deepEqual(config.links, []);
+
+  assert.deepEqual(plainNames({ SITE_NAME: 'Bus & Bahn', BBOX: '49.3,10.8,49.7,11.3', SITE_TITLE_EN: 'Buses', PATH: '/usr/bin' }), ['SITE_NAME', 'BBOX', 'SITE_TITLE_EN']);
+  // what a shell or a platform sets for reasons of its own
+  assert.deepEqual(plainNames({ PORT: '9000', HOST: 'box', LANGUAGE: 'en_GB:en' }), []);
+  // set under its new name as well: somebody is changing over, or serves both
+  assert.deepEqual(plainNames({ SITE_NAME: 'Bus & Bahn', NETNOU_SITE_NAME: 'Bus & Bahn' }), []);
+  assert.deepEqual(plainNames({ NETNOU_SITE_NAME: 'Bus & Bahn', NETNOU_COMMIT: 'abc' }), []);
 });
 
 test('parseBox accepts four numbers and nothing else', () => {

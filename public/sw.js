@@ -52,7 +52,7 @@ self.addEventListener('fetch', (event) => {
   const scope = new URL(self.registration.scope);
   if (request.method !== 'GET' || url.origin !== scope.origin || !url.pathname.startsWith(scope.pathname)) return;
   // Of this origin only the shell is kept. It may serve more than this app's
-  // files: its live data (api/) and even the map (MAP_STYLE_URL or TILE_URL of
+  // files: its live data (api/) and even the map (NETNOU_MAP_STYLE_URL or NETNOU_TILE_URL of
   // the server), of which there is no end.
   if (!SHELL.includes(url.pathname.slice(scope.pathname.length) || './')) return;
 

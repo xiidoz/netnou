@@ -206,7 +206,7 @@ async function readServices(zip, serviceIds) {
   return dates;
 }
 
-// Dataset layout (stored gzipped as DATA_DIR/region.json.gz). Columnar: index i
+// Dataset layout (stored gzipped as NETNOU_DATA_DIR/region.json.gz). Columnar: index i
 // of every array in a group describes the same stop, route or trip.
 //   version    DATASET_VERSION
 //   area       Area.id of the area the dataset was cut for
@@ -236,7 +236,7 @@ export async function buildDataset({ zipPath, area, onProgress = () => {} }) {
     onProgress('stops.txt: looking for stops in the area');
     const regionStops = await findRegionStops(zip, area);
     if (regionStops.size === 0) {
-      throw new Error('the feed has no stops in the area; check BBOX or AREA_FILE (BBOX is "south,west,north,east", GeoJSON positions are [longitude, latitude])');
+      throw new Error('the feed has no stops in the area; check NETNOU_BBOX or NETNOU_AREA_FILE (NETNOU_BBOX is "south,west,north,east", GeoJSON positions are [longitude, latitude])');
     }
     onProgress(`${regionStops.size} stops in the area`);
 

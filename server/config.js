@@ -1,5 +1,6 @@
-// Settings, all from environment variables and all optional. loadConfig()
-// checks them and throws an Error whose message names the variable at fault.
+// Settings, all from environment variables that begin with NETNOU_ and all
+// optional. loadConfig() checks them and throws an Error whose message names
+// the variable at fault.
 
 import fs from 'node:fs';
 import path from 'node:path';
@@ -24,13 +25,36 @@ const VGN = {
 
 const DECIMAL = /^[+-]?(\d+\.?\d*|\.\d+)$/;
 
+// Up to 0.7 the settings had no prefix. These are the names of then that can
+// hardly mean anything but a setting of Netnou. PORT, HOST and LANGUAGE are
+// not among them: a shell or a platform sets those for reasons of its own.
+const ONCE_PLAIN = [
+  'DATA_DIR', 'AREA_FILE', 'BBOX', 'AREA_NAME', 'VIEW', 'TIMEZONE', 'MAP_STYLE_URL', 'MAP_ORIGINS', 'TILE_URL', 'TILE_ATTRIBUTION',
+  'DATA_ATTRIBUTION', 'OSM_PBF_URLS', 'OSM_MAX_AGE_DAYS', 'FEED_URL', 'FEED_CHECK_MINUTES', 'DOWNLOAD_TIMEOUT_MINUTES', 'REALTIME_URL',
+  'REALTIME_INTERVAL_SECONDS', 'REALTIME_IDLE_SECONDS', 'UPDATE_CHECK', 'PUBLIC_URL', 'SEARCH_ENGINES', 'SITE_NAME', 'SITE_TITLE',
+  'SITE_DESCRIPTION', 'LINKS', 'BRAND_DIR',
+];
+// (the two that also came with a language at their end: SITE_TITLE_EN)
+const ONCE_PLAIN_BY_LANGUAGE = /^SITE_(TITLE|DESCRIPTION)_[A-Z]+$/;
+
+/**
+ * The names without a prefix that are still set and no longer read, for a
+ * line each in the log: an instance that was updated without them being
+ * renamed would otherwise run with its defaults and say nothing. A name that
+ * is set under its new name as well is left out.
+ * @param {Record<string, string | undefined>} [env]
+ */
+export function plainNames(env = process.env) {
+  return Object.keys(env).filter((name) => (ONCE_PLAIN.includes(name) || ONCE_PLAIN_BY_LANGUAGE.test(name)) && env[`NETNOU_${name}`] === undefined);
+}
+
 /** "south,west,north,east" -> four numbers, or null if the text is anything else. */
 export function parseBox(text) {
   const fields = (text ?? '').split(',').map((s) => s.trim());
   return fields.length === 4 && fields.every((s) => DECIMAL.test(s)) ? fields.map(Number) : null;
 }
 
-/** An address as PUBLIC_URL may be: http(s), and nothing after the path. With a slash at its end, null if it is none. */
+/** An address as NETNOU_PUBLIC_URL may be: http(s), and nothing after the path. With a slash at its end, null if it is none. */
 function pageAddress(value) {
   try {
     const url = new URL(value);
@@ -42,7 +66,7 @@ function pageAddress(value) {
 }
 
 /**
- * The operator's links as LINKS gives them: "Text=address, Text=address".
+ * The operator's links as NETNOU_LINKS gives them: "Text=address, Text=address".
  * An address is a full http(s) one or a path on the same host ("/imprint").
  * @returns [{ text, href }], or the part that is not understood as { wrong }
  */
@@ -119,7 +143,7 @@ function readArea(file, name) {
  * @param {Record<string, string | undefined>} [env]
  */
 export function loadConfig(env = process.env) {
-  // Except for AREA_NAME and OSM_PBF_URLS an empty value counts as not set.
+  // Except for NETNOU_AREA_NAME and NETNOU_OSM_PBF_URLS an empty value counts as not set.
   const text = (name) => (env[name] ?? '').trim();
   const invalid = (name, expected) => new Error(`${name} must be ${expected} (got "${env[name]}")`);
 
@@ -128,7 +152,7 @@ export function loadConfig(env = process.env) {
    * each a text on one line or null. There are three ways to give them, and
    * the more particular one wins: `name` as a text is for every language;
    * `name` as a JSON object is for the languages it names, {"de": "…"}; and
-   * `name` with a language at its end, SITE_TITLE_EN, is for that one alone.
+   * `name` with a language at its end, NETNOU_SITE_TITLE_EN, is for that one alone.
    */
   function ownWords(name) {
     const oneLine = (words) => words.replace(/\s+/g, ' ').trim() || null;
@@ -186,61 +210,61 @@ export function loadConfig(env = process.env) {
 
   // The area covered: trips serving at least one stop in it are imported, and
   // inside it vehicles follow roads and tracks. Either a GeoJSON file with
-  // polygons (AREA_FILE), a rectangle (BBOX), or – by default – the VGN.
-  if (text('AREA_FILE') && text('BBOX')) throw new Error('AREA_FILE and BBOX are both set; use only one of them');
-  const custom = Boolean(text('AREA_FILE') || text('BBOX'));
+  // polygons (NETNOU_AREA_FILE), a rectangle (NETNOU_BBOX), or – by default – the VGN.
+  if (text('NETNOU_AREA_FILE') && text('NETNOU_BBOX')) throw new Error('NETNOU_AREA_FILE and NETNOU_BBOX are both set; use only one of them');
+  const custom = Boolean(text('NETNOU_AREA_FILE') || text('NETNOU_BBOX'));
   let area;
   let outline;
-  if (text('BBOX')) area = Area.fromBbox(box('BBOX'));
-  else if (custom) ({ area, outline } = readArea(path.resolve(text('AREA_FILE')), 'AREA_FILE'));
+  if (text('NETNOU_BBOX')) area = Area.fromBbox(box('NETNOU_BBOX'));
+  else if (custom) ({ area, outline } = readArea(path.resolve(text('NETNOU_AREA_FILE')), 'NETNOU_AREA_FILE'));
   else ({ area, outline } = readArea(VGN.file, 'built-in area'));
 
   let timeZone;
   try {
     // The resolved name, so the page gets the usual spelling whatever was typed.
-    timeZone = new Intl.DateTimeFormat('en-US', { timeZone: text('TIMEZONE') || 'Europe/Berlin' }).resolvedOptions().timeZone;
+    timeZone = new Intl.DateTimeFormat('en-US', { timeZone: text('NETNOU_TIMEZONE') || 'Europe/Berlin' }).resolvedOptions().timeZone;
   } catch {
-    throw invalid('TIMEZONE', 'an IANA time zone name such as Europe/Berlin');
+    throw invalid('NETNOU_TIMEZONE', 'an IANA time zone name such as Europe/Berlin');
   }
 
   // The map behind the vehicles: a MapLibre style, which names its tiles, fonts
-  // and icons itself (MAP_STYLE_URL), or plain raster tiles (TILE_URL). The
-  // page may load from the server of either and from those in MAP_ORIGINS.
-  if (text('MAP_STYLE_URL') && text('TILE_URL')) throw new Error('MAP_STYLE_URL and TILE_URL are both set; use only one of them');
-  const tileUrl = text('TILE_URL') || null;
+  // and icons itself (NETNOU_MAP_STYLE_URL), or plain raster tiles (NETNOU_TILE_URL). The
+  // page may load from the server of either and from those in NETNOU_MAP_ORIGINS.
+  if (text('NETNOU_MAP_STYLE_URL') && text('NETNOU_TILE_URL')) throw new Error('NETNOU_MAP_STYLE_URL and NETNOU_TILE_URL are both set; use only one of them');
+  const tileUrl = text('NETNOU_TILE_URL') || null;
   if (tileUrl && (!tileOrigin(tileUrl) || !['{z}', '{x}', '{y}'].every((part) => tileUrl.includes(part)))) {
-    throw invalid('TILE_URL', 'an http(s) URL template with {z}, {x} and {y}, e.g. https://tiles.example.org/{z}/{x}/{y}.png');
+    throw invalid('NETNOU_TILE_URL', 'an http(s) URL template with {z}, {x} and {y}, e.g. https://tiles.example.org/{z}/{x}/{y}.png');
   }
-  const styleUrl = tileUrl ? null : httpUrl('MAP_STYLE_URL', text('MAP_STYLE_URL') || MAP_STYLE_URL);
+  const styleUrl = tileUrl ? null : httpUrl('NETNOU_MAP_STYLE_URL', text('NETNOU_MAP_STYLE_URL') || MAP_STYLE_URL);
   const mapOrigins = [
     tileUrl ? tileOrigin(tileUrl) : new URL(styleUrl).origin,
-    ...text('MAP_ORIGINS').split(',').map((s) => s.trim()).filter(Boolean).map((url) => new URL(httpUrl('MAP_ORIGINS', url)).origin),
+    ...text('NETNOU_MAP_ORIGINS').split(',').map((s) => s.trim()).filter(Boolean).map((url) => new URL(httpUrl('NETNOU_MAP_ORIGINS', url)).origin),
   ];
 
   // OpenStreetMap extracts (.osm.pbf) that together cover the area; the route
   // geometry between stops is computed from them. A custom area has to name
   // its own; without any, vehicles move in straight lines between stops. An
-  // empty OSM_PBF_URLS turns the route geometry off for the VGN as well.
-  const language = text('LANGUAGE').toLowerCase() || 'de';
-  if (!LANGUAGE_CODES.includes(language)) throw invalid('LANGUAGE', `one of the languages of the page: ${LANGUAGE_CODES.join(', ')}`);
-  const publicUrl = text('PUBLIC_URL') ? pageAddress(text('PUBLIC_URL')) : null;
-  if (text('PUBLIC_URL') && !publicUrl) throw invalid('PUBLIC_URL', 'the http(s) address of the page, without a query, e.g. https://transit.example.org/');
+  // empty NETNOU_OSM_PBF_URLS turns the route geometry off for the VGN as well.
+  const language = text('NETNOU_LANGUAGE').toLowerCase() || 'de';
+  if (!LANGUAGE_CODES.includes(language)) throw invalid('NETNOU_LANGUAGE', `one of the languages of the page: ${LANGUAGE_CODES.join(', ')}`);
+  const publicUrl = text('NETNOU_PUBLIC_URL') ? pageAddress(text('NETNOU_PUBLIC_URL')) : null;
+  if (text('NETNOU_PUBLIC_URL') && !publicUrl) throw invalid('NETNOU_PUBLIC_URL', 'the http(s) address of the page, without a query, e.g. https://transit.example.org/');
 
-  const links = operatorLinks(text('LINKS'));
+  const links = operatorLinks(text('NETNOU_LINKS'));
   if (links.wrong !== undefined) {
-    throw new Error(`LINKS must be links as "Text=address", separated by commas, each address an http(s) URL or a path that starts with "/" (not understood: "${links.wrong}")`);
+    throw new Error(`NETNOU_LINKS must be links as "Text=address", separated by commas, each address an http(s) URL or a path that starts with "/" (not understood: "${links.wrong}")`);
   }
 
-  const osmUrls = env.OSM_PBF_URLS === undefined
+  const osmUrls = env.NETNOU_OSM_PBF_URLS === undefined
     ? (custom ? [] : VGN.osmUrls)
-    : env.OSM_PBF_URLS.split(',').map((s) => s.trim()).filter(Boolean).map((url) => httpUrl('OSM_PBF_URLS', url));
+    : env.NETNOU_OSM_PBF_URLS.split(',').map((s) => s.trim()).filter(Boolean).map((url) => httpUrl('NETNOU_OSM_PBF_URLS', url));
 
   return {
-    port: number('PORT', 8080, 0, 65535, { integer: true }),
+    port: number('NETNOU_PORT', 8080, 0, 65535, { integer: true }),
     // Address to listen on; undefined = all interfaces.
-    host: text('HOST') || undefined,
+    host: text('NETNOU_HOST') || undefined,
     publicDir: path.join(root, 'public'),
-    dataDir: path.resolve(text('DATA_DIR') || path.join(root, 'data')),
+    dataDir: path.resolve(text('NETNOU_DATA_DIR') || path.join(root, 'data')),
 
     area,
     // What the map draws as the edge of the area: rings of [lon, lat]. A GeoJSON
@@ -249,25 +273,25 @@ export function loadConfig(env = process.env) {
     areaOutline: outline ?? area.polygons.flat(),
     // What the instance calls itself, where the page names itself: its
     // heading, its title, the installed app. The credits name the software.
-    siteName: text('SITE_NAME') || APP_NAME,
+    siteName: text('NETNOU_SITE_NAME') || APP_NAME,
     // What the page is called in the tab of a browser and in the results of a
     // search engine, and what it says about itself there: the operator's own
     // words, as they are, in place of the ones the page has in each of its
     // languages (pageTexts in public/i18n.js). By language, null where the
     // page's own are to stand.
-    siteTitle: ownWords('SITE_TITLE'),
-    siteDescription: ownWords('SITE_DESCRIPTION'),
+    siteTitle: ownWords('NETNOU_SITE_TITLE'),
+    siteDescription: ownWords('NETNOU_SITE_DESCRIPTION'),
     // A folder with the operator's own icons and picture for previews of
     // links, which take the place of the built-in ones (ownFiles in
     // lib/page.js); null if there is to be none.
-    brandDir: text('BRAND_DIR') ? path.resolve(text('BRAND_DIR')) : null,
+    brandDir: text('NETNOU_BRAND_DIR') ? path.resolve(text('NETNOU_BRAND_DIR')) : null,
     // Links of the operator's own at the foot of the header card, e.g. to an
     // imprint and a privacy notice: [{ text, href }].
     links,
     // Shown next to the page title.
-    areaName: env.AREA_NAME === undefined ? (custom ? '' : VGN.name) : env.AREA_NAME.trim(),
+    areaName: env.NETNOU_AREA_NAME === undefined ? (custom ? '' : VGN.name) : env.NETNOU_AREA_NAME.trim(),
     // Map section on the first visit. Default: all of a custom area.
-    view: text('VIEW') ? box('VIEW') : custom ? area.bbox : VGN.view,
+    view: text('NETNOU_VIEW') ? box('NETNOU_VIEW') : custom ? area.bbox : VGN.view,
 
     // The zone the times of the feed are in (agency_timezone is not read).
     timeZone,
@@ -277,28 +301,28 @@ export function loadConfig(env = process.env) {
     tileUrl,
     mapOrigins: [...new Set(mapOrigins)],
     // Credit for the map (HTML). A style names its sources itself, raster tiles cannot.
-    tileAttribution: text('TILE_ATTRIBUTION') || (tileUrl ? '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>' : ''),
+    tileAttribution: text('NETNOU_TILE_ATTRIBUTION') || (tileUrl ? '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>' : ''),
     // Credit for the timetable and realtime data (HTML).
-    dataAttribution: text('DATA_ATTRIBUTION') || '<a href="https://gtfs.de">GTFS.DE</a> / <a href="https://www.delfi.de">DELFI e.V.</a> (<a href="https://creativecommons.org/licenses/by-sa/4.0/">CC BY-SA 4.0</a>)',
+    dataAttribution: text('NETNOU_DATA_ATTRIBUTION') || '<a href="https://gtfs.de">GTFS.DE</a> / <a href="https://www.delfi.de">DELFI e.V.</a> (<a href="https://creativecommons.org/licenses/by-sa/4.0/">CC BY-SA 4.0</a>)',
 
     // Other feeds must follow the conventions of the gtfs.de one in a few
     // places, e.g. how train categories are told apart (routeMode in
     // lib/timetable.js) and rows grouped by trip in stop_times.txt.
-    feedUrl: httpUrl('FEED_URL', text('FEED_URL') || 'https://download.gtfs.de/germany/free/latest.zip'),
-    feedCheckMs: number('FEED_CHECK_MINUTES', 15, 1, 1440) * 60_000,
+    feedUrl: httpUrl('NETNOU_FEED_URL', text('NETNOU_FEED_URL') || 'https://download.gtfs.de/germany/free/latest.zip'),
+    feedCheckMs: number('NETNOU_FEED_CHECK_MINUTES', 15, 1, 1440) * 60_000,
     // Limit for one download of the feed or of an OSM extract.
-    downloadTimeoutMs: number('DOWNLOAD_TIMEOUT_MINUTES', 30, 1, 1440) * 60_000,
+    downloadTimeoutMs: number('NETNOU_DOWNLOAD_TIMEOUT_MINUTES', 30, 1, 1440) * 60_000,
 
     osmUrls,
-    osmMaxAgeMs: number('OSM_MAX_AGE_DAYS', 30, 1, 3650) * 86_400_000,
+    osmMaxAgeMs: number('NETNOU_OSM_MAX_AGE_DAYS', 30, 1, 3650) * 86_400_000,
 
-    realtimeUrl: httpUrl('REALTIME_URL', text('REALTIME_URL') || 'https://realtime.gtfs.de/realtime-free.pb'),
-    realtimeIntervalMs: number('REALTIME_INTERVAL_SECONDS', 30, 10, 3600) * 1000,
+    realtimeUrl: httpUrl('NETNOU_REALTIME_URL', text('NETNOU_REALTIME_URL') || 'https://realtime.gtfs.de/realtime-free.pb'),
+    realtimeIntervalMs: number('NETNOU_REALTIME_INTERVAL_SECONDS', 30, 10, 3600) * 1000,
     // Polling stops this long after the last browser request.
-    realtimeIdleMs: number('REALTIME_IDLE_SECONDS', 120, 30, 86400) * 1000,
+    realtimeIdleMs: number('NETNOU_REALTIME_IDLE_SECONDS', 120, 30, 86400) * 1000,
 
     // Whether to ask once a day if there is a newer release (lib/update.js).
-    updateCheck: onOff('UPDATE_CHECK', true),
+    updateCheck: onOff('NETNOU_UPDATE_CHECK', true),
 
     // What the page says about itself before any script runs, for search
     // engines and previews of links (lib/page.js): the language it says it
@@ -309,6 +333,6 @@ export function loadConfig(env = process.env) {
     // that knows its own address is listed and any other is not: most
     // instances are private or for trying things out, and whoever names the
     // address wants to be found.
-    searchEngines: onOff('SEARCH_ENGINES', Boolean(publicUrl)),
+    searchEngines: onOff('NETNOU_SEARCH_ENGINES', Boolean(publicUrl)),
   };
 }
