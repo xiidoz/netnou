@@ -141,8 +141,26 @@ Three distances, in cells, decide what counts (`NEAR` in `lib/area.js`):
 | `exit` | 4 | routes to stops far outside follow the network this far, then go straight |
 | `osm` | 7 | OpenStreetMap data is kept up to here |
 
+An instance may have no area (`NETNOU_AREA=all`) and may keep the trips of
+some operators only (`NETNOU_AGENCIES`). The import then decides by the
+operator of a trip, read from `agency.txt`, `routes.txt` and `trips.txt`
+before the stop times, and where there is no area every stop counts.
+
+What the area is asked for besides, which OpenStreetMap data to keep and
+where routes follow the network, is asked of the **extent** in such an
+instance: an `Area` without polygons, made in the import worker from the
+dataset (`Area.covering`). A cell is inside if it has a stop of a trip or
+lies on the straight line from a stop to the next, so that the tracks
+between two stations far apart are kept as well. The main thread only needs
+the rectangle around the stops, which the `Timetable` works out.
+
 An area has an id, a hash of its polygons and the grid constants. Cached data
-is tied to it, so changing the area invalidates the caches.
+is tied to what the instance covers (`scopeId`): the id of its area alone
+where that is all, else the area, or none, and the operators together. A
+change to either invalidates the caches. The networks from OpenStreetMap
+that were read for an extent carry its grid with them: they are used again
+for as long as the extent of a new timetable lies within `exit` cells of
+it, and read again when a trip reaches further.
 
 ## Import
 

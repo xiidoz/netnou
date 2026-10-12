@@ -31,12 +31,13 @@ async function setup(t, files) {
     fs.rmSync(dir, { recursive: true, force: true });
   });
   /** A FeedUpdater with what it logged and the timetables it handed over. */
-  const make = ({ area = AREA, dataDir = dir, osmUrls = [] } = {}) => {
+  const make = ({ area = AREA, agencies = null, dataDir = dir, osmUrls = [] } = {}) => {
     const made = { log: [], timetables: [] };
     made.updater = new FeedUpdater({
       url: `${upstream.url}/feed.zip`,
       dataDir,
       area,
+      agencies,
       checkMs: 3600_000,
       downloadTimeoutMs: 10_000,
       osm: { urls: osmUrls, maxAgeMs: 86_400_000 },
@@ -185,8 +186,16 @@ test('a stored dataset is used again unless it is damaged or made for something 
   const area = Area.fromBbox([49.35, 10.8, 49.7, 11.3]);
   const third = make({ area });
   await third.updater.start();
-  assert.match(third.log.join('\n'), /stored dataset unusable \(made for another area\)/);
+  assert.match(third.log.join('\n'), /stored dataset unusable \(made for another area or other operators\)/);
   assert.deepEqual([requests.head, requests.get], [3, 2]);
+  // … or for an area where there is to be none
+  const none = make({ area: null });
+  await none.updater.start();
+  assert.match(none.log.join('\n'), /stored dataset unusable \(made for another area or other operators\)/);
+  assert.deepEqual(none.timetables.at(-1).bbox, [49.4, 11, 49.5, 11]);
+  assert.deepEqual([requests.head, requests.get], [4, 3]);
+  await make({ area }).updater.start();
+  assert.deepEqual([requests.head, requests.get], [5, 4]);
 
   // written by another version of the software
   writeDataset(datasetPath, { ...readDataset(datasetPath), version: 1 });
@@ -194,7 +203,7 @@ test('a stored dataset is used again unless it is damaged or made for something 
   await fourth.updater.start();
   assert.match(fourth.log.join('\n'), /stored dataset unusable \(written by another version\)/);
   assert.equal(fourth.updater.status.state, 'ready');
-  assert.deepEqual([requests.head, requests.get], [4, 3]);
+  assert.deepEqual([requests.head, requests.get], [6, 5]);
 });
 
 test('a data directory that cannot be written stops the start', async (t) => {
@@ -282,6 +291,55 @@ test('route geometry: straight lines first, OSM data retried with growing waits,
   assert.deepEqual([requests.head, requests.get, requests.osm], [8, 3, 4]);
   assert.equal(timetables.at(-1).source.etag, '"v3"');
   assert.equal(timetables.at(-1).segmentCount, 1);
+});
+
+test('without an area the OSM data is kept where the trips run, and read again when they reach beyond it', async (t) => {
+  const { feed, url, requests, make } = await setup(t, FEED);
+  // a track from A to B, and another one far away
+  feed.osm = makePbf(
+    [[1, 49.4, 11.0001], [2, 49.45, 11.002], [3, 49.5, 11.0001], [4, 52.4, 13.0001], [5, 52.45, 13.002], [6, 52.5, 13.0001]],
+    [[10, [1, 2, 3], { railway: 'subway' }], [11, [4, 5, 6], { railway: 'subway' }]],
+  );
+  const { updater, timetables, log } = make({ area: null, osmUrls: [`${url}/area.osm.pbf`] });
+  await updater.check();
+  assert.equal(updater.status.error, null);
+  assert.equal(timetables.at(-1).segmentCount, 1);
+  assert.deepEqual(timetables.at(-1).trip('T1', '20261003', null).path.slice(2, 4), [49.45, 11.002]);
+  assert.deepEqual([requests.get, requests.osm], [1, 1]);
+
+  // A new timetable with one more stop, two kilometres on: what was kept is good for it.
+  const longer = {
+    ...FEED,
+    'stops.txt': FEED['stops.txt'] + 'C,Gamma,49.52,11.00\n',
+    'stop_times.txt': FEED['stop_times.txt'] + 'T1,10:15:00,10:15:00,C,2\n',
+  };
+  feed.zip = makeZip(longer);
+  feed.etag = '"v2"';
+  await updater.check();
+  assert.equal(updater.status.error, null);
+  assert.equal(timetables.at(-1).stopCount(0), 3);
+  assert.deepEqual([requests.get, requests.osm], [2, 1]);
+
+  // One with a second line far away: the extract is read again, and the track there is kept now.
+  feed.zip = makeZip({
+    ...longer,
+    'stops.txt': longer['stops.txt'] + 'X,Chi,52.40,13.00\nY,Ypsilon,52.50,13.00\n',
+    'trips.txt': longer['trips.txt'] + 'R1,DAILY,T2\n',
+    'stop_times.txt': longer['stop_times.txt'] + 'T2,11:00:00,11:00:00,X,0\nT2,11:10:00,11:10:00,Y,1\n',
+  });
+  feed.etag = '"v3"';
+  await updater.check();
+  assert.equal(updater.status.error, null);
+  assert.deepEqual([requests.get, requests.osm], [3, 2]);
+  assert.ok(log.includes('Routes: the timetable reaches beyond the OSM data that was kept: reading it again'));
+  // (on what was kept before, the new line would have run straight)
+  assert.deepEqual(timetables.at(-1).trip('T2', '20261003', null).path.slice(2, 4), [52.45, 13.002]);
+  assert.deepEqual(timetables.at(-1).trip('T1', '20261003', null).path.slice(2, 4), [49.45, 11.002]);
+
+  // and the next one that stays within is routed on what is kept
+  feed.etag = '"v4"';
+  await updater.check();
+  assert.deepEqual([requests.get, requests.osm], [4, 2]);
 });
 
 test('download reports HTTP errors, reason adds what fetch hides', async (t) => {

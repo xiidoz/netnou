@@ -50,6 +50,7 @@ const feed = new FeedUpdater({
   url: config.feedUrl,
   dataDir: config.dataDir,
   area: config.area,
+  agencies: config.agencies,
   checkMs: config.feedCheckMs,
   downloadTimeoutMs: config.downloadTimeoutMs,
   osm: { urls: config.osmUrls, maxAgeMs: config.osmMaxAgeMs },
@@ -60,6 +61,7 @@ const feed = new FeedUpdater({
     realtime.reset();
     vehicleCache = null;
     searchCache = null;
+    describeArea();
   },
 });
 
@@ -306,38 +308,50 @@ function status() {
     // Route geometry from OpenStreetMap: number of routed hops and age of the OSM data.
     routes: { segments: timetable?.segmentCount ?? 0, osmFetchedAt: timetable?.source.osm ?? null },
     realtime: realtime.status,
-    area: { name: config.areaName, bbox: config.area.bbox },
-    view: config.view,
+    // What the instance covers: its area, or without one the rectangle around
+    // its stops, null until a timetable is loaded; its operators, null for all.
+    area: { name: config.areaName, bbox: areaInfo?.bbox ?? null, agencies: config.agencies?.map(({ name }) => name) ?? null },
+    view: areaInfo?.view ?? config.view,
   };
 }
 
-// What the page needs to know about the area and the map; it does not change
-// while the server runs.
-const areaInfo = {
-  // What the instance calls itself, and the area it shows.
-  siteName: config.siteName,
-  name: config.areaName,
-  // The operator's own title and description of the page, by language: null
-  // for a language they have none in, and the page then words its own.
-  siteTitle: config.siteTitle,
-  siteDescription: config.siteDescription,
-  bbox: config.area.bbox,
-  view: config.view,
-  // rings of [lat, lon]
-  outline: config.areaOutline.map((ring) => ring.map(([lon, lat]) => [lat, lon])),
-  // The zone all times are to be shown in.
-  timeZone: config.timeZone,
-  // The map behind the vehicles: a MapLibre style or raster tiles, the other is null.
-  styleUrl: config.styleUrl,
-  tileUrl: config.tileUrl,
-  // HTML, set by the operator. A style names its sources itself; map is what to show besides.
-  attribution: { map: config.tileAttribution, data: config.dataAttribution },
-};
-const areaEtag = `"${crypto.createHash('sha1').update(JSON.stringify(areaInfo)).digest('hex').slice(0, 16)}"`;
+// What the page needs to know about the area and the map. With an area it
+// does not change while the server runs. Without one, what the instance
+// covers is its extent, the rectangle around its stops: known once a
+// timetable is loaded, null until then, and new with every timetable.
+let areaInfo = null;
+let areaEtag = null;
+
+function describeArea() {
+  const bbox = config.area?.bbox ?? timetable?.bbox ?? null;
+  areaInfo = bbox && {
+    // What the instance calls itself, and the area it shows.
+    siteName: config.siteName,
+    name: config.areaName,
+    // The operator's own title and description of the page, by language: null
+    // for a language they have none in, and the page then words its own.
+    siteTitle: config.siteTitle,
+    siteDescription: config.siteDescription,
+    bbox,
+    // (all of the extent unless a section is set)
+    view: config.view ?? bbox,
+    // rings of [lat, lon]
+    outline: config.areaOutline.map((ring) => ring.map(([lon, lat]) => [lat, lon])),
+    // The zone all times are to be shown in.
+    timeZone: config.timeZone,
+    // The map behind the vehicles: a MapLibre style or raster tiles, the other is null.
+    styleUrl: config.styleUrl,
+    tileUrl: config.tileUrl,
+    // HTML, set by the operator. A style names its sources itself; map is what to show besides.
+    attribution: { map: config.tileAttribution, data: config.dataAttribution },
+  };
+  areaEtag = `"${crypto.createHash('sha1').update(JSON.stringify(areaInfo)).digest('hex').slice(0, 16)}"`;
+}
+describeArea();
 
 function handleApi(req, res, url) {
   if (url.pathname === '/api/status') return sendJson(req, res, 200, status());
-  if (url.pathname === '/api/area') {
+  if (url.pathname === '/api/area' && areaInfo) {
     if (etagMatches(req, areaEtag)) {
       res.writeHead(304, { ETag: areaEtag, 'Cache-Control': 'no-cache', Vary: 'Accept-Encoding' });
       return res.end();
@@ -453,7 +467,7 @@ server.listen(config.port, config.host, () => {
   // all interfaces, localhost is the address to try first.
   const { port } = server.address();
   const host = !config.host ? 'localhost' : config.host.includes(':') ? `[${config.host}]` : config.host;
-  log(`Netnou listening on http://${host}:${port}, area ${config.areaName || 'custom area'} (${config.area.bbox.join(',')})`);
+  log(`Netnou listening on http://${host}:${port}, ${config.area ? `area ${config.areaName || 'custom area'} (${config.area.bbox.join(',')})` : `no area${config.areaName ? ` (${config.areaName})` : ''}`}${config.agencies ? `, operators: ${config.agencies.map(({ name }) => name).join(', ')}` : ''}`);
   feed.start().catch((err) => {
     log(`Timetable: cannot start: ${err.message}`);
     process.exit(1);

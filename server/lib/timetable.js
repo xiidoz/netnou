@@ -51,6 +51,9 @@ export const hopKey = (net, from, to, stopCount) => (net * stopCount + from) * s
 // visible briefly after reaching its last stop.
 const LEAD_S = 30;
 const TRAIL_S = 15;
+// No time of a timetable is as much before the start of its service day as
+// this: what is added to a time to sort it as a number that is not negative.
+const EARLIEST_S = 30 * 86400;
 // Whose vehicles can run coupled: trains of any kind. Two buses with the same
 // times are two buses, or one that the feed has twice.
 const COUPLED_MODES = new Set(['subway', 'tram', 'suburban', 'regional', 'longdistance']);
@@ -336,6 +339,14 @@ export class Timetable {
     // Stations group the platforms of one stop; they are what the map shows
     // and what a departure board is requested for.
     const stopCount = this.stops.id.length;
+    // The rectangle around the stops of the instance, [south, west, north,
+    // east]: what an instance without an area has for one (its extent).
+    this.bbox = null;
+    for (let i = 0; i < stopCount; i++) {
+      if (!this.stops.region[i]) continue;
+      const [lat, lon] = [this.stops.lat[i], this.stops.lon[i]];
+      this.bbox = this.bbox ? [Math.min(this.bbox[0], lat), Math.min(this.bbox[1], lon), Math.max(this.bbox[2], lat), Math.max(this.bbox[3], lon)] : [lat, lon, lat, lon];
+    }
     this.stationOf = new Int32Array(stopCount);
     for (let i = 0; i < stopCount; i++) this.stationOf[i] = this.stops.parent[i] >= 0 ? this.stops.parent[i] : i;
     this.stopIndex = new Map(this.stops.id.map((id, i) => [id, i]));
@@ -634,11 +645,21 @@ export class Timetable {
         const service = this.tripService;
         for (let t = 0; t < this.tripCount; t++) if (active[service[t]]) running.push(t);
       }
+      // In the order of a time, and trips with the same one in the order of
+      // their numbers. Time and trip are sorted as one number each: for the
+      // 800,000 trips of a day in a large timetable that takes a tenth of
+      // what asking a function for every comparison does.
+      const span = this.tripCount;
+      const inOrder = (time) => {
+        const keys = new Float64Array(running.length);
+        for (let k = 0; k < running.length; k++) keys[k] = (time(running[k]) + EARLIEST_S) * span + running[k];
+        keys.sort();
+        return Int32Array.from(keys, (key) => key % span);
+      };
       const start = this.tripStart;
-      list = Int32Array.from(running).sort((a, b) => start[a] - start[b] || a - b);
+      list = inOrder((t) => start[t]);
       // The same trips in the order of their last arrivals (see underWay).
-      const end = (t) => start[t] + this.profileRun[this.tripProfile[t]];
-      list.byEnd = Int32Array.from(running).sort((a, b) => end(a) - end(b) || a - b);
+      list.byEnd = inOrder((t) => start[t] + this.profileRun[this.tripProfile[t]]);
       if (this.tripsOnDate.size > 6) this.tripsOnDate.clear();
       this.tripsOnDate.set(date, list);
     }

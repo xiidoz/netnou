@@ -6,7 +6,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { APP_NAME, LANGUAGES } from '../public/i18n.js';
-import { Area } from './lib/area.js';
+import { Area, agencyKey, scopeId } from './lib/area.js';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 // The languages the page has texts in.
@@ -156,6 +156,34 @@ export function loadConfig(env = process.env) {
   }
 
 
+  /**
+   * Names of operators: separated by commas, or a JSON array for names with
+   * a comma in them. @returns [{ name: as written, key: as compared }], each
+   * once, or null if none are named
+   */
+  function operators(name) {
+    const raw = text(name);
+    if (!raw) return null;
+    const expected = 'names of operators separated by commas, or a JSON array of them such as ["Stadtwerke, Verkehr", "Bahn"]';
+    let list;
+    if (raw.startsWith('[')) {
+      try {
+        list = JSON.parse(raw);
+      } catch {
+        throw invalid(name, expected);
+      }
+      if (!Array.isArray(list) || list.some((item) => typeof item !== 'string')) throw invalid(name, expected);
+    } else {
+      list = raw.split(',');
+    }
+    const byKey = new Map();
+    for (const item of list.map((written) => written.trim()).filter(Boolean)) {
+      if (!byKey.has(agencyKey(item))) byKey.set(agencyKey(item), { name: item, key: agencyKey(item) });
+    }
+    if (!byKey.size) throw invalid(name, expected);
+    return [...byKey.values()];
+  }
+
   function number(name, fallback, min, max, { integer = false } = {}) {
     const raw = text(name);
     const value = raw === '' ? fallback : DECIMAL.test(raw) ? Number(raw) : NaN;
@@ -188,13 +216,23 @@ export function loadConfig(env = process.env) {
   // The area covered: trips serving at least one stop in it are imported, and
   // inside it vehicles follow roads and tracks. Either a GeoJSON file with
   // polygons (NETNOU_AREA_FILE), a rectangle (NETNOU_BBOX), or – by default – the VGN.
-  if (text('NETNOU_AREA_FILE') && text('NETNOU_BBOX')) throw new Error('NETNOU_AREA_FILE and NETNOU_BBOX are both set; use only one of them');
-  const custom = Boolean(text('NETNOU_AREA_FILE') || text('NETNOU_BBOX'));
-  let area;
+  // Or no area at all (NETNOU_AREA=all): everything the feed has.
+  if (text('NETNOU_AREA') && text('NETNOU_AREA').toLowerCase() !== 'all') {
+    throw invalid('NETNOU_AREA', '"all", for an instance without an area; an area is given with NETNOU_AREA_FILE or NETNOU_BBOX');
+  }
+  const given = ['NETNOU_AREA', 'NETNOU_AREA_FILE', 'NETNOU_BBOX'].filter((name) => text(name));
+  if (given.length > 1) throw new Error(`${given.slice(0, -1).join(', ')} and ${given.at(-1)} are ${given.length > 2 ? 'all' : 'both'} set; use only one of them`);
+  const custom = given.length > 0;
+  let area = null;
   let outline;
   if (text('NETNOU_BBOX')) area = Area.fromBbox(box('NETNOU_BBOX'));
-  else if (custom) ({ area, outline } = readArea(path.resolve(text('NETNOU_AREA_FILE')), 'NETNOU_AREA_FILE'));
-  else ({ area, outline } = readArea(VGN.file, 'built-in area'));
+  else if (text('NETNOU_AREA_FILE')) ({ area, outline } = readArea(path.resolve(text('NETNOU_AREA_FILE')), 'NETNOU_AREA_FILE'));
+  else if (!custom) ({ area, outline } = readArea(VGN.file, 'built-in area'));
+
+  // The operators covered: all of them, or those named (NETNOU_AGENCIES) as
+  // agency.txt of the feed names them. A trip has to pass both, the area and
+  // the operators.
+  const agencies = operators('NETNOU_AGENCIES');
 
   let timeZone;
   try {
@@ -243,11 +281,18 @@ export function loadConfig(env = process.env) {
     publicDir: path.join(root, 'public'),
     dataDir: path.resolve(text('NETNOU_DATA_DIR') || path.join(root, 'data')),
 
+    // The area, or null for an instance without one. What it covers then is
+    // known once a timetable is loaded: its extent (Area.covering).
     area,
+    // The operators whose trips are kept, [{ name, key }], or null for all.
+    agencies,
+    // What stored data is tied to: the area and the operators together.
+    scope: scopeId(area, agencies?.map((agency) => agency.key) ?? null),
     // What the map draws as the edge of the area: rings of [lon, lat]. A GeoJSON
     // file may bring its own as a top-level "outline" member (useful when its
     // polygons are adjacent parts whose inner borders should not show).
-    areaOutline: outline ?? area.polygons.flat(),
+    // Without an area there is no edge.
+    areaOutline: outline ?? area?.polygons.flat() ?? [],
     // What the instance calls itself, where the page names itself: its
     // heading, its title, the installed app. The credits name the software.
     siteName: text('NETNOU_SITE_NAME') || APP_NAME,
@@ -267,8 +312,9 @@ export function loadConfig(env = process.env) {
     links,
     // Shown next to the page title.
     areaName: env.NETNOU_AREA_NAME === undefined ? (custom ? '' : VGN.name) : env.NETNOU_AREA_NAME.trim(),
-    // Map section on the first visit. Default: all of a custom area.
-    view: text('NETNOU_VIEW') ? box('NETNOU_VIEW') : custom ? area.bbox : VGN.view,
+    // Map section on the first visit. Default: all of a custom area; null
+    // without an area, for all of the extent.
+    view: text('NETNOU_VIEW') ? box('NETNOU_VIEW') : custom ? (area?.bbox ?? null) : VGN.view,
 
     // The zone the times of the feed are in (agency_timezone is not read).
     timeZone,

@@ -4,6 +4,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { Worker } from 'node:worker_threads';
+import { scopeId } from './area.js';
 import { DATASET_VERSION, readDataset } from './dataset.js';
 import { download, publicUrl, reason } from './files.js';
 import { Timetable } from './timetable.js';
@@ -23,9 +24,16 @@ const nextWait = (waitMs) => Math.min(waitMs ? waitMs * 2 : RETRY_MIN_MS, RETRY_
 const minutes = (ms) => `${Math.round(ms / 60_000)} min`;
 
 export class FeedUpdater {
-  constructor({ url, dataDir, area, checkMs, downloadTimeoutMs, osm, onTimetable, log }) {
+  /**
+   * @param area the area of the instance, or null if it has none
+   * @param agencies the operators whose trips it keeps, [{ name, key }], or null for all
+   */
+  constructor({ url, dataDir, area, agencies = null, checkMs, downloadTimeoutMs, osm, onTimetable, log }) {
     this.url = url;
     this.area = area;
+    this.agencies = agencies;
+    // What the instance covers: a stored dataset made for anything else is not used.
+    this.scope = scopeId(area, agencies?.map(({ key }) => key) ?? null);
     this.osm = osm; // { urls, maxAgeMs }
     this.checkMs = checkMs;
     this.downloadTimeoutMs = downloadTimeoutMs;
@@ -80,7 +88,7 @@ export class FeedUpdater {
   load() {
     const data = readDataset(this.datasetPath);
     if (data.version !== DATASET_VERSION) throw new Error('written by another version');
-    if (data.area !== this.area.id) throw new Error('made for another area');
+    if (data.area !== this.scope) throw new Error('made for another area or other operators');
     const timetable = new Timetable(data);
     this.current = data.source;
     this.routesMissing = this.osm.urls.length > 0 && !data.segments;
@@ -185,7 +193,9 @@ export class FeedUpdater {
           mode,
           interim: !this.current,
           zipPath: this.zipPath,
-          area: this.area.polygons,
+          area: this.area?.polygons ?? null,
+          agencies: this.agencies,
+          scope: this.scope,
           outPath: this.datasetPath,
           dataDir: this.dataDir,
           source,

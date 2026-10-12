@@ -184,6 +184,39 @@ test('every setting can be given', () => {
   assert.equal(config.updateCheck, false);
 });
 
+test('an instance may have no area, and may keep the trips of some operators only', () => {
+  const all = loadConfig({ NETNOU_AREA: 'all' });
+  assert.equal(all.area, null);
+  assert.deepEqual(all.areaOutline, []);
+  // (what it covers, and with that the section to begin with, is known once it has a timetable)
+  assert.equal(all.view, null);
+  assert.equal(all.areaName, '');
+  assert.deepEqual(all.osmUrls, []);
+  assert.equal(all.agencies, null);
+  assert.equal(loadConfig({ NETNOU_AREA: ' ALL ' }).area, null);
+  // a section, a name and extracts of its own, as any custom area may have
+  const named = loadConfig({ NETNOU_AREA: 'all', NETNOU_VIEW: '47.2,5.8,55.1,15.1', NETNOU_AREA_NAME: 'Deutschland', NETNOU_OSM_PBF_URLS: 'https://osm.example.org/germany.osm.pbf' });
+  assert.deepEqual([named.view, named.areaName, named.osmUrls], [[47.2, 5.8, 55.1, 15.1], 'Deutschland', ['https://osm.example.org/germany.osm.pbf']]);
+
+  // operators: as written, each once, compared without capitals and the spaces around them
+  const some = loadConfig({ NETNOU_AGENCIES: ' VerkehrsAG Nürnberg , verkehrsag nürnberg,Infra Fürth, ' });
+  assert.deepEqual(some.agencies, [{ name: 'VerkehrsAG Nürnberg', key: 'verkehrsag nürnberg' }, { name: 'Infra Fürth', key: 'infra fürth' }]);
+  // (the area stays what it is without them: here the built-in one)
+  assert.equal(some.areaName, 'Großraum Nürnberg (VGN)');
+  assert.ok(some.area);
+  // a name with a comma in it needs the list as JSON
+  assert.deepEqual(loadConfig({ NETNOU_AGENCIES: '["Stadtwerke, Verkehr", "Bahn"]' }).agencies.map(({ name }) => name), ['Stadtwerke, Verkehr', 'Bahn']);
+
+  // What stored data is tied to: the area alone as it always was, and
+  // something else for every other choice of area and operators.
+  const plain = loadConfig({});
+  assert.equal(plain.scope, plain.area.id);
+  const scopes = [plain, all, some, loadConfig({ NETNOU_AREA: 'all', NETNOU_AGENCIES: 'Infra Fürth' }), loadConfig({ NETNOU_BBOX, NETNOU_AGENCIES: 'Infra Fürth' })].map((config) => config.scope);
+  assert.equal(new Set(scopes).size, scopes.length);
+  // (neither the order of the names nor their capitals make another instance)
+  assert.equal(loadConfig({ NETNOU_AGENCIES: 'INFRA FÜRTH,VerkehrsAG Nürnberg' }).scope, some.scope);
+});
+
 test('empty values count as not set, except for NETNOU_AREA_NAME and NETNOU_OSM_PBF_URLS', () => {
   const config = loadConfig({ NETNOU_PORT: '', NETNOU_HOST: ' ', NETNOU_BBOX: '', NETNOU_AREA_FILE: '', NETNOU_VIEW: '', NETNOU_TIMEZONE: '', NETNOU_MAP_STYLE_URL: ' ', NETNOU_MAP_ORIGINS: '', NETNOU_TILE_URL: '', NETNOU_TILE_ATTRIBUTION: '', NETNOU_FEED_URL: ' ', NETNOU_FEED_CHECK_MINUTES: '', NETNOU_AREA_NAME: '', NETNOU_OSM_PBF_URLS: '' });
   assert.equal(config.port, 8080);
@@ -242,6 +275,13 @@ test('wrong settings are refused with a message that names the variable', () => 
     [{ NETNOU_DOWNLOAD_TIMEOUT_MINUTES: '0' }, /^NETNOU_DOWNLOAD_TIMEOUT_MINUTES must be a number from 1 to 1440 /],
     [{ NETNOU_DOWNLOAD_TIMEOUT_MINUTES: 'Infinity' }, /^NETNOU_DOWNLOAD_TIMEOUT_MINUTES must be /],
 
+    [{ NETNOU_AREA: 'germany' }, /^NETNOU_AREA must be "all", for an instance without an area; an area is given with NETNOU_AREA_FILE or NETNOU_BBOX \(got "germany"\)$/],
+    [{ NETNOU_AREA: 'all', NETNOU_BBOX }, /^NETNOU_AREA and NETNOU_BBOX are both set; use only one of them$/],
+    [{ NETNOU_AREA: 'all', NETNOU_BBOX, NETNOU_AREA_FILE: 'area.geojson' }, /^NETNOU_AREA, NETNOU_AREA_FILE and NETNOU_BBOX are all set; use only one of them$/],
+    [{ NETNOU_AGENCIES: ' , ' }, /^NETNOU_AGENCIES must be names of operators separated by commas, or a JSON array of them such as \["Stadtwerke, Verkehr", "Bahn"\] \(got " , "\)$/],
+    [{ NETNOU_AGENCIES: '["Bahn", 7]' }, /^NETNOU_AGENCIES must be names of operators/],
+    [{ NETNOU_AGENCIES: '["Bahn"' }, /^NETNOU_AGENCIES must be names of operators/],
+    [{ NETNOU_AGENCIES: '[]' }, /^NETNOU_AGENCIES must be names of operators/],
     [{ NETNOU_BBOX: '49.3,,49.7,11.3' }, box], // an empty part is not 0
     [{ NETNOU_BBOX: '49.3,10.8,49.7' }, box],
     [{ NETNOU_BBOX: '49.3,10.8,49.7,11.3,0' }, box],

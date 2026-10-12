@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { after, before, test } from 'node:test';
-import { Area } from '../server/lib/area.js';
+import { Area, scopeId } from '../server/lib/area.js';
 import { eachLine, parseCsvLine } from '../server/lib/csv.js';
 import { readDataset, writeDataset } from '../server/lib/dataset.js';
 import { buildDataset } from '../server/lib/importer.js';
@@ -59,11 +59,14 @@ const at = (hhmm, date = DAY) => serviceDayStart(date) + +hhmm.slice(0, 2) * 360
 let dir;
 let timetable;
 
-/** Imports FEED with some of its files replaced. */
-async function importFeed(files = {}, name = 'feed.zip') {
+/**
+ * Imports FEED with some of its files replaced.
+ * @param options for buildDataset, e.g. another area or the operators to keep
+ */
+async function importFeed(files = {}, name = 'feed.zip', options = {}) {
   const zipPath = path.join(dir, name);
   fs.writeFileSync(zipPath, makeZip({ ...FEED, ...files }, { store: ['agency.txt'] }));
-  const data = await buildDataset({ zipPath, area: AREA });
+  const data = await buildDataset({ zipPath, area: AREA, ...options });
   // The server stores the dataset as a file and loads that: so does the test.
   const file = path.join(dir, `${name}.dataset`);
   writeDataset(file, data);
@@ -251,6 +254,62 @@ test('a trip whose rows come in two runs is put together, where the feed first n
 test('an area without stops is reported with a hint at the settings', async () => {
   const zipPath = path.join(dir, 'feed.zip');
   await assert.rejects(buildDataset({ zipPath, area: Area.fromBbox([10.8, 49.3, 11.3, 49.7]) }), /no stops in the area; check NETNOU_BBOX or NETNOU_AREA_FILE/);
+});
+
+test('without an area an instance has everything the feed has', async () => {
+  const all = await importFeed({}, 'all.zip', { area: null });
+  assert.deepEqual([...all.tripIndex.keys()].sort(), ['T1', 'T2', 'T3', 'T4']);
+  // every stop belongs to it: the stations far outside the box are listed and have departures
+  assert.deepEqual(all.stations.map((s) => s.id).sort(), ['B', 'C', 'SA', 'X', 'Y']);
+  assert.deepEqual(all.departures('X', at('11:55'), null).departures.map((d) => d.line), ['99']);
+  assert.equal(timetable.departures('X', at('11:55'), null), null);
+  // what it covers is the rectangle around its stops
+  assert.deepEqual(all.bbox, [48, 11, 52, 13]);
+  // the bus that never touches the box is under way
+  assert.deepEqual(all.vehicles(at('12:30'), null).map((v) => v.id), [`T3_${DAY}`]);
+  assert.deepEqual(timetable.vehicles(at('12:30'), null), []);
+  // (with an area it is the stops in and around it that count)
+  assert.deepEqual(timetable.bbox, [49.4, 11, 49.6, 11.1]);
+});
+
+// The feed with a second operator, whose one line (the 99) never touches the box.
+const OPERATORS = {
+  'agency.txt': FEED['agency.txt'] + '2,"Fernbus, Nord GmbH",https://example.org,Europe/Berlin\n',
+  'routes.txt': FEED['routes.txt'].replace(',99,1,3,R3', ',99,2,3,R3'),
+};
+const operator = (name) => ({ name, key: name.trim().toLowerCase() });
+
+test('an instance may keep the trips of some operators, in its area or wherever they run', async () => {
+  const zipPath = path.join(dir, 'operators.zip');
+  fs.writeFileSync(zipPath, makeZip({ ...FEED, ...OPERATORS }));
+  const ids = async (options) => [...(await buildDataset({ zipPath, ...options })).trips.id].sort();
+
+  // one operator without an area: its trips and no others
+  const fernbus = await importFeed(OPERATORS, 'operators.zip', { area: null, agencies: [operator('Fernbus, Nord GmbH')] });
+  assert.deepEqual([...fernbus.tripIndex.keys()], ['T3']);
+  assert.deepEqual(fernbus.stations.map((s) => s.id).sort(), ['X', 'Y']);
+  assert.deepEqual(fernbus.bbox, [48, 11.5, 52, 13]);
+  assert.deepEqual(fernbus.searchIndex().lines.agency, ['Fernbus, Nord GmbH']);
+  // the name counts without its capitals
+  assert.deepEqual(await ids({ area: null, agencies: [operator('TESTBETRIEB')] }), ['T1', 'T2', 'T4']);
+  // an area and operators: a trip has to pass both
+  assert.deepEqual(await ids({ area: AREA, agencies: [operator('Testbetrieb')] }), ['T1', 'T2', 'T4']);
+  assert.deepEqual(await ids({ area: AREA, agencies: [operator('Testbetrieb'), operator('Fernbus, Nord GmbH')] }), ['T1', 'T2', 'T4']);
+  assert.deepEqual(await ids({ area: null, agencies: [operator('Testbetrieb'), operator('Fernbus, Nord GmbH')] }), ['T1', 'T2', 'T3', 'T4']);
+  await assert.rejects(buildDataset({ zipPath, area: AREA, agencies: [operator('Fernbus, Nord GmbH')] }), /^Error: no trip of the operators in NETNOU_AGENCIES serves a stop in the area; NETNOU_AREA=all takes their trips wherever they run$/);
+
+  // a name the feed does not have is named, with what the feed has that is like it
+  await assert.rejects(
+    buildDataset({ zipPath, area: null, agencies: [operator('Testbetrieb'), operator('Fernbus Nord')] }),
+    /^Error: the feed has no operator "Fernbus Nord" \(it has "Fernbus, Nord GmbH"\); NETNOU_AGENCIES takes the names as agency\.txt of the feed has them \(agency_name\), of which there are 2$/,
+  );
+  await assert.rejects(buildDataset({ zipPath, area: AREA, agencies: [operator('Bahn'), operator('Bus')] }), /^Error: the feed has no operator "Bahn" and none called "Bus"; /);
+
+  // what a dataset was made for is in it: an area alone as before, else the area and the operators
+  const made = async (options) => (await buildDataset({ zipPath, ...options })).area;
+  assert.equal(await made({ area: AREA }), AREA.id);
+  assert.equal(await made({ area: null }), scopeId(null, null));
+  assert.equal(await made({ area: AREA, agencies: [operator('Testbetrieb')] }), scopeId(AREA, ['testbetrieb']));
 });
 
 test('calendar and calendar_dates decide which days a trip runs', () => {
