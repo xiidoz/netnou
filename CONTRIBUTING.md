@@ -51,7 +51,7 @@ public/
   vendor/maplibre-gl/ vendored map library
   vendor/material-design-icons/   the icons of the buttons
 test/                 tests and their fixtures (helpers.js)
-tools/                scripts run by hand: default area, app icons
+tools/                scripts run by hand: default area, app icons, measuring a feed
 docs/                 documentation
 ```
 
@@ -203,7 +203,7 @@ running instances will load data written by older code:
 
 | Constant | Bump when |
 | --- | --- |
-| `DATASET_VERSION` in `server/lib/importer.js` | the layout or meaning of anything in the dataset changes, including the route geometry |
+| `DATASET_VERSION` in `server/lib/dataset.js` | the layout or meaning of anything in the dataset changes, including the route geometry |
 | `NETWORKS_VERSION` in `server/lib/shapes.js` | the classification of ways, the cost factors or the stored form of the networks change |
 | `CACHE` in `public/sw.js` | a file is removed from `SHELL` or renamed. Changed files need no bump |
 

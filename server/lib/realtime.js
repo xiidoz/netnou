@@ -36,9 +36,7 @@ function eventDelay(event, scheduled) {
  * switch to a new static feed).
  */
 export function tripDelays(timetable, t, date, update) {
-  const stops = timetable.trips.stops[t];
-  const schedArr = timetable.trips.arr[t];
-  const schedDep = timetable.trips.dep[t];
+  const stops = timetable.stopsOf(t);
   const n = stops.length;
   const base = serviceDayStart(date);
   const updates = update.stopTimeUpdates.filter((u) => u.seq !== null).sort((a, b) => a.seq - b.seq);
@@ -69,8 +67,8 @@ export function tripDelays(timetable, t, date, update) {
         (skipped ??= new Uint8Array(n))[p] = 1;
         skippedCount++;
       } else {
-        const dep = eventDelay(stu.dep, base + schedDep[p]);
-        const reached = eventDelay(stu.arr, base + schedArr[p]);
+        const dep = eventDelay(stu.dep, base + timetable.schedDep(t, p));
+        const reached = eventDelay(stu.arr, base + timetable.schedArr(t, p));
         const arr = reached ?? carried ?? dep;
         if (reached !== null) arrReported[p] = 1;
         if (dep !== null) depReported[p] = 1;
@@ -144,7 +142,7 @@ function shareDelays(timetable, byDate) {
         for (const [t, p] of running) {
           let rt = trips.get(t);
           if (!rt) {
-            const n = timetable.trips.stops[t].length;
+            const n = timetable.stopCount(t);
             rt = { arrDelay: new Array(n).fill(null), depDelay: new Array(n).fill(null), arrReported: new Uint8Array(n), depReported: new Uint8Array(n), skipped: null, cancelled: false, first: 0, last: n - 1 };
             trips.set(t, rt);
           }

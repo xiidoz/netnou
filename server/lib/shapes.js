@@ -2,6 +2,7 @@
 // consecutive stops is found by routing over OpenStreetMap: buses on roads,
 // trams, U-Bahn and trains on their tracks. The result is one polyline per
 // distinct "stop A -> stop B on network N" hop, shared by all trips using it.
+// All of them together are columns of the dataset (see buildSegments).
 
 import fs from 'node:fs';
 import path from 'node:path';
@@ -73,24 +74,31 @@ export async function loadNetworks({ dataDir, urls, area, maxAgeMs, timeoutMs, o
 
 /**
  * Routes every hop of every trip in `data` (an importer dataset).
- * @returns {{nets, net, from, to, pts}} columnar segments; pts are delta-coded
- *   [lat, lon, dLat, dLon, …] in 1e-5 degrees.
+ * @returns {{nets, net, key, start, points, share}} the segments as columns,
+ *   in the order of their keys (hopKey), by which a hop finds its segment:
+ *   segment i is on network nets[net[i]] and has the points start[i] to
+ *   start[i + 1] - 1; `points` holds latitude and longitude of each in 1e-5
+ *   degrees, `share` for each the share of the segment's length up to it.
  */
 export function buildSegments(data, graphs, area, onProgress = () => {}) {
-  const { stops, trips, routes } = data;
+  const { stops, trips, routes, patterns } = data;
   const stopCount = stops.id.length;
   const originLat = (area.bbox[0] + area.bbox[2]) / 2;
   const networks = NETS.map((net) => new Network(graphs[net], { originLat, ...SETTINGS[net] }));
 
-  // Distinct hops, keyed by (network, from stop, to stop).
+  // Distinct hops, keyed by (network, from stop, to stop): those of every
+  // stop sequence, on the network of every route that runs it.
+  const netOfRoute = routes.type.map((type, r) => NETS.indexOf(NET_OF_MODE[routeMode(type, routes.short[r])]));
+  const looked = new Set(); // a stop sequence and a network together
   const hops = new Set();
-  for (let t = 0; t < trips.id.length; t++) {
-    const route = trips.route[t];
-    const n = NETS.indexOf(NET_OF_MODE[routeMode(routes.type[route], routes.short[route])]);
+  for (let t = 0; t < trips.pattern.length; t++) {
+    const n = netOfRoute[trips.route[t]];
     if (n < 0) continue;
-    const list = trips.stops[t];
-    for (let p = 1; p < list.length; p++) {
-      if (list[p - 1] !== list[p]) hops.add(hopKey(n, list[p - 1], list[p], stopCount));
+    const pattern = trips.pattern[t];
+    if (looked.has(pattern * NETS.length + n)) continue;
+    looked.add(pattern * NETS.length + n);
+    for (let k = patterns.start[pattern] + 1; k < patterns.start[pattern + 1]; k++) {
+      if (patterns.stops[k - 1] !== patterns.stops[k]) hops.add(hopKey(n, patterns.stops[k - 1], patterns.stops[k], stopCount));
     }
   }
   onProgress(`routing ${hops.size} hops`);
@@ -103,7 +111,7 @@ export function buildSegments(data, graphs, area, onProgress = () => {}) {
     return list;
   };
 
-  const segments = { nets: NETS, net: [], from: [], to: [], pts: [] };
+  const routed = []; // { key, net, pts: [lat, lon, …] in 1e-5 degrees }
   const stats = NETS.map(() => ({ hops: 0, routed: 0 }));
   let done = 0;
 
@@ -136,25 +144,34 @@ export function buildSegments(data, graphs, area, onProgress = () => {}) {
 
     route = simplify(route, SIMPLIFY_M);
     const pts = [];
-    let prevLat = 0;
-    let prevLon = 0;
     for (let i = 0; i < route.length; i += 2) {
       const [lat, lon] = network.toLatLon(route[i], route[i + 1]);
       const iLat = Math.round(lat * 1e5);
       const iLon = Math.round(lon * 1e5);
-      if (i && iLat === prevLat && iLon === prevLon) continue;
-      pts.push(iLat - prevLat, iLon - prevLon);
-      prevLat = iLat;
-      prevLon = iLon;
+      if (i && iLat === pts.at(-2) && iLon === pts.at(-1)) continue;
+      pts.push(iLat, iLon);
     }
     if (pts.length < 4) continue;
-    segments.net.push(n);
-    segments.from.push(from);
-    segments.to.push(to);
-    segments.pts.push(pts);
+    routed.push({ key, net: n, pts });
     stats[n].routed++;
   }
-
   onProgress(`hops routed: ${NETS.map((net, n) => `${net} ${stats[n].routed}/${stats[n].hops}`).join(', ')}`);
-  return segments;
+
+  routed.sort((a, b) => a.key - b.key);
+  const start = new Int32Array(routed.length + 1);
+  routed.forEach(({ pts }, i) => { start[i + 1] = start[i] + pts.length / 2; });
+  const points = new Int32Array(2 * start[routed.length]);
+  const share = new Float64Array(start[routed.length]);
+  // (one latitude for the lengths of the whole area: a degree of longitude is shorter than one of latitude)
+  const kx = Math.cos(originLat * (Math.PI / 180));
+  routed.forEach(({ pts }, i) => {
+    points.set(pts, 2 * start[i]);
+    let length = 0;
+    for (let k = 2; k < pts.length; k += 2) {
+      length += Math.hypot(pts[k] - pts[k - 2], (pts[k + 1] - pts[k - 1]) * kx);
+      share[start[i] + k / 2] = length;
+    }
+    for (let k = start[i]; k < start[i + 1]; k++) share[k] = length ? share[k] / length : 1;
+  });
+  return { nets: NETS, net: Uint8Array.from(routed, (segment) => segment.net), key: Float64Array.from(routed, (segment) => segment.key), start, points, share };
 }

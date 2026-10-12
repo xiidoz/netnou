@@ -304,7 +304,7 @@ function status() {
       validUntil: timetable?.dates.at(-1) ?? null,
     },
     // Route geometry from OpenStreetMap: number of routed hops and age of the OSM data.
-    routes: { segments: timetable?.segPts.length ?? 0, osmFetchedAt: timetable?.source.osm ?? null },
+    routes: { segments: timetable?.segmentCount ?? 0, osmFetchedAt: timetable?.source.osm ?? null },
     realtime: realtime.status,
     area: { name: config.areaName, bbox: config.area.bbox },
     view: config.view,

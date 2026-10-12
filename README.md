@@ -89,9 +89,10 @@ takes two to five minutes:
 - A minute or two later the route geometry is ready and vehicles follow roads
   and tracks.
 
-The import needs about 1.5 GB of memory for a minute or two. Afterwards the
-server keeps two cache files of about 35 MB together in `./data` (the volume
-`data` in Docker) and starts from them in a second. The downloads are deleted
+The import needs about 1.1 GB of memory for a minute. Afterwards the server
+runs with about 200 MB, keeps two cache files of about 65 MB together in
+`./data` (the volume `data` in Docker) and starts from them in less than a
+second. The downloads are deleted
 when the import is done. (Figures: approximate, default area, October 2026.)
 
 ## Configuration

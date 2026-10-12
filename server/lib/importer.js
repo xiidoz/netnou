@@ -1,16 +1,14 @@
 // Cuts the nationwide GTFS feed down to the trips that serve at least one
-// stop inside the configured area and returns them as one compact, columnar
-// object (see buildDataset for the layout).
+// stop inside the configured area and returns them as a dataset: columns of
+// numbers in which every stop sequence and every set of running times is
+// stored once (see buildDataset for the layout).
 
 import { NEAR } from './area.js';
-import { openZip } from './zip.js';
 import { eachLine, parseCsvLine } from './csv.js';
+import { DATASET_VERSION, Numbers, SharedLists, Texts, byteOrder } from './dataset.js';
 import { addDays, weekday } from './time.js';
-
-// Bump when the layout or the meaning of anything in the dataset changes,
-// including `segments` (shapes.js) and what the importer puts into a field: a
-// stored dataset of another version is discarded and imported again on start.
-export const DATASET_VERSION = 5;
+import { findSharedWays } from './timetable.js';
+import { openZip } from './zip.js';
 
 const WEEKDAYS = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
 
@@ -86,13 +84,94 @@ async function findRegionStops(zip, area) {
   return region;
 }
 
+/**
+ * Collects trips and stores what repeats among them once: the sequence of
+ * stops of a trip, its running times and its stop sequence numbers are each
+ * looked up among those of the trips before it. A trip itself is a row of
+ * numbers.
+ */
+export class TripCollector {
+  /** @param options.hash for tests, see SharedLists */
+  constructor(options = {}) {
+    this.patterns = new SharedLists(options);
+    this.profiles = new SharedLists(options);
+    this.seqLists = new SharedLists(options);
+    this.ids = [];
+    this.index = new Map(); // trip id -> its number
+    this.pattern = new Numbers(); // -1 once a trip was taken out again
+    this.profile = new Numbers();
+    this.start = new Numbers();
+    this.seq = new Numbers();
+    this.headsign = new Numbers();
+    // Where a trip stands among all of them: the order in which the feed first names them.
+    this.rank = new Numbers();
+    this.times = new Int32Array(1 << 10);
+  }
+
+  /**
+   * @param rows of one trip in the order of its stops: { stops, arr, dep, seq },
+   *   the times whole seconds since the start of the service day
+   * @param headsign index of its headsign, or -1
+   * @param rank where it stands among the trips; after those before it unless given
+   * @returns the number of the trip
+   */
+  add(id, { stops, arr, dep, seq }, headsign = -1, rank = this.ids.length) {
+    const n = stops.length;
+    if (this.times.length < 2 * n) this.times = new Int32Array(4 * n);
+    // Arrival and departure at each stop, counted from the first departure.
+    for (let i = 0; i < n; i++) {
+      this.times[2 * i] = arr[i] - dep[0];
+      this.times[2 * i + 1] = dep[i] - dep[0];
+    }
+    const t = this.ids.length;
+    this.ids.push(id);
+    this.index.set(id, t);
+    this.pattern.push(this.patterns.add(stops, n));
+    this.profile.push(this.profiles.add(this.times, 2 * n));
+    this.start.push(dep[0]);
+    // stop_sequence is almost always 0..n-1; only store it when it is not.
+    this.seq.push(seq.every((value, i) => value === i) ? -1 : this.seqLists.add(seq, n));
+    this.headsign.push(headsign);
+    this.rank.push(rank);
+    return t;
+  }
+
+  /** The rows of a trip again, as add() got them. */
+  rows(t) {
+    const pattern = this.pattern.array[t];
+    const from = this.patterns.start.array[pattern];
+    const n = this.patterns.end(pattern) - from;
+    const times = this.profiles.start.array[this.profile.array[t]];
+    const numbers = this.seq.array[t] < 0 ? -1 : this.seqLists.start.array[this.seq.array[t]];
+    const rows = { stops: [], arr: [], dep: [], seq: [] };
+    for (let i = 0; i < n; i++) {
+      rows.stops.push(this.patterns.values.array[from + i]);
+      rows.arr.push(this.start.array[t] + this.profiles.values.array[times + 2 * i]);
+      rows.dep.push(this.start.array[t] + this.profiles.values.array[times + 2 * i + 1]);
+      rows.seq.push(numbers < 0 ? i : this.seqLists.values.array[numbers + i]);
+    }
+    return rows;
+  }
+
+  /** Takes a trip out again. What it shared with others stays. */
+  drop(t) {
+    this.pattern.array[t] = -1;
+    this.index.delete(this.ids[t]);
+  }
+}
+
 async function readStopTimes(zip, regionStops, onProgress) {
   const file = 'stop_times.txt';
   const stopIds = [];
   const stopIndex = new Map();
   const headsigns = [];
   const headsignIndex = new Map();
-  const trips = new Map();
+  const collector = new TripCollector();
+  // Trips that cannot be stored yet: a stop without times, or a single row.
+  // More rows of them may follow, and what is still missing at the end is
+  // filled in or the trip is dropped. trip id -> { rows, headsign, rank }
+  const waiting = new Map();
+  let ranks = 0;
 
   let col = null;
   let iTrip = 0;
@@ -103,25 +182,49 @@ async function readStopTimes(zip, regionStops, onProgress) {
   let curLines = [];
   let curHit = false;
 
+  const whole = ({ stops, arr, dep }) => stops.length >= 2 && !arr.some(Number.isNaN) && !dep.some(Number.isNaN);
+  const sorted = (rows) => {
+    const { seq } = rows;
+    if (seq.every((value, i) => !i || value > seq[i - 1])) return rows;
+    const order = seq.map((_, i) => i).sort((a, b) => seq[a] - seq[b]);
+    return Object.fromEntries(Object.entries(rows).map(([key, values]) => [key, order.map((i) => values[i])]));
+  };
+
   // Rows of one trip are contiguous in the gtfs.de feed, so a trip can be
   // accepted or dropped as soon as its id changes. Should a trip ever show up
-  // in two runs, the parts are merged and re-sorted below.
+  // in two runs, the rows of both are put together and sorted.
   const flush = () => {
     if (curHit) {
-      let trip = trips.get(curId);
-      if (!trip) {
-        trip = { stops: [], arr: [], dep: [], seq: [], headsign: -1 };
-        trips.set(detach(curId), trip);
+      let rows = { stops: [], arr: [], dep: [], seq: [] };
+      let headsign = -1;
+      let rank;
+      const before = waiting.get(curId);
+      const known = collector.index.get(curId);
+      if (before) {
+        ({ rows, headsign, rank } = before);
+      } else if (known !== undefined) {
+        rows = collector.rows(known);
+        headsign = collector.headsign.array[known];
+        rank = collector.rank.array[known];
+        collector.drop(known);
+      } else {
+        rank = ranks++;
       }
       for (const line of curLines) {
         const f = parseCsvLine(line);
-        trip.stops.push(intern(f[iStop], stopIds, stopIndex));
-        trip.arr.push(parseTime(f[col.arrival_time]));
-        trip.dep.push(parseTime(f[col.departure_time]));
-        trip.seq.push(+f[col.stop_sequence]);
-        if (trip.headsign === -1 && col.stop_headsign !== undefined && f[col.stop_headsign]) {
-          trip.headsign = intern(f[col.stop_headsign], headsigns, headsignIndex);
+        rows.stops.push(intern(f[iStop], stopIds, stopIndex));
+        rows.arr.push(parseTime(f[col.arrival_time]));
+        rows.dep.push(parseTime(f[col.departure_time]));
+        rows.seq.push(+f[col.stop_sequence]);
+        if (headsign === -1 && col.stop_headsign !== undefined && f[col.stop_headsign]) {
+          headsign = intern(f[col.stop_headsign], headsigns, headsignIndex);
         }
+      }
+      if (whole(rows)) {
+        waiting.delete(curId);
+        collector.add(detach(curId), sorted(rows), headsign, rank);
+      } else {
+        waiting.set(before ? curId : detach(curId), { rows, headsign, rank });
       }
     }
     curLines = [];
@@ -137,7 +240,7 @@ async function readStopTimes(zip, regionStops, onProgress) {
       lastFast = Math.max(iTrip, iStop);
       return;
     }
-    if (++lines % 5_000_000 === 0) onProgress(`${file}: ${lines / 1e6} million rows, ${trips.size} trips in the area`);
+    if (++lines % 5_000_000 === 0) onProgress(`${file}: ${lines / 1e6} million rows, ${collector.index.size} trips in the area`);
 
     // Only trip_id and stop_id are needed to decide whether the trip matters,
     // so the full CSV parse is deferred to flush() for the few trips we keep.
@@ -167,18 +270,14 @@ async function readStopTimes(zip, regionStops, onProgress) {
   });
   flush();
 
-  for (const [id, trip] of trips) {
-    const n = trip.seq.length;
-    let sorted = true;
-    for (let i = 1; i < n; i++) if (trip.seq[i] <= trip.seq[i - 1]) { sorted = false; break; }
-    if (!sorted) {
-      const order = trip.seq.map((_, i) => i).sort((a, b) => trip.seq[a] - trip.seq[b]);
-      for (const key of ['stops', 'arr', 'dep', 'seq']) trip[key] = order.map((i) => trip[key][i]);
-    }
-    if (n < 2 || !fillTimes(trip.arr, trip.dep)) trips.delete(id);
+  // GTFS allows empty times at non-timepoints: they are filled in, if that
+  // can be done. A trip of a single stop goes nowhere.
+  for (const [id, { rows, headsign, rank }] of waiting) {
+    const filled = sorted(rows);
+    if (filled.stops.length >= 2 && fillTimes(filled.arr, filled.dep)) collector.add(id, filled, headsign, rank);
   }
 
-  return { trips, stopIds, headsigns, headsignIndex, lines };
+  return { collector, stopIds, headsigns, headsignIndex, lines };
 }
 
 async function readServices(zip, serviceIds) {
@@ -206,24 +305,111 @@ async function readServices(zip, serviceIds) {
   return dates;
 }
 
-// Dataset layout (stored gzipped as NETNOU_DATA_DIR/region.json.gz). Columnar: index i
-// of every array in a group describes the same stop, route or trip.
+/**
+ * Puts a dataset together from the trips collected and what belongs to them.
+ * A trip without a route that the feed knows is left out. The trips stay in
+ * the order in which the feed first names them; beside them is the list of
+ * all trips in the order of their ids, in which a trip is found by its id.
+ * @param route, service  for each trip of the collector the index of its route and service, or -1
+ */
+function assemble({ area, stops, routes, headsigns, dates, services, collector, route, service }) {
+  const kept = [];
+  for (let t = 0; t < collector.ids.length; t++) {
+    if (collector.pattern.array[t] >= 0 && route[t] >= 0 && routes.type[route[t]] !== undefined) kept.push(t);
+  }
+  const rank = collector.rank.array;
+  kept.sort((a, b) => rank[a] - rank[b]);
+  const column = (values) => Int32Array.from(kept, (t) => values[t]);
+  const ids = kept.map((t) => collector.ids[t]);
+  // (plain "<" is the order of the bytes unless a character from the far end of Unicode is among them)
+  const inOrder = ids.some((id) => /[\uD800-\uFFFF]/.test(id)) ? byteOrder : (a, b) => (a < b ? -1 : a > b ? 1 : 0);
+  const byId = Int32Array.from(ids, (_, t) => t).sort((a, b) => inOrder(ids[a], ids[b]));
+
+  const patterns = collector.patterns.done();
+  const profiles = collector.profiles.done();
+  const seqLists = collector.seqLists.done();
+  const data = {
+    version: DATASET_VERSION,
+    area,
+    stops: {
+      id: stops.id,
+      name: stops.name,
+      platform: stops.platform,
+      lat: Float64Array.from(stops.lat),
+      lon: Float64Array.from(stops.lon),
+      parent: Int32Array.from(stops.parent),
+      region: Uint8Array.from(stops.region),
+    },
+    routes,
+    headsigns,
+    dates,
+    services,
+    patterns: { start: patterns.start, stops: patterns.values },
+    profiles: { start: profiles.start, times: profiles.values },
+    seqLists: { start: seqLists.start, seq: seqLists.values },
+    trips: {
+      id: Texts.from(ids),
+      byId,
+      pattern: column(collector.pattern.array),
+      profile: column(collector.profile.array),
+      start: column(collector.start.array),
+      seq: column(collector.seq.array),
+      route: column(route),
+      service: column(service),
+      headsign: column(collector.headsign.array),
+    },
+    segments: null,
+  };
+  // (what was only needed to get here; the search that follows needs room of its own)
+  collector.index.clear();
+  collector.ids.length = 0;
+  data.sharedWays = findSharedWays(data);
+  return data;
+}
+
+/**
+ * A dataset from trips given one by one, each with the arrays of its own:
+ * what a test or a tool has at hand.
+ * @param plain { area, stops: { id, name, lat, lon, parent, platform, region }, routes, headsigns, dates, services,
+ *   trips: { id, route, service, headsign, stops: [[stop index]], arr, dep: [[seconds]], seq: [[number] or null] } }
+ * @param options for the TripCollector
+ */
+export function packDataset({ area = null, stops, routes, headsigns, dates, services, trips }, options) {
+  const collector = new TripCollector(options);
+  trips.id.forEach((id, t) => {
+    collector.add(id, { stops: trips.stops[t], arr: trips.arr[t], dep: trips.dep[t], seq: trips.seq[t] ?? trips.stops[t].map((_, i) => i) }, trips.headsign[t]);
+  });
+  return assemble({ area, stops, routes, headsigns, dates, services, collector, route: trips.route, service: trips.service });
+}
+
+// Dataset layout (stored as NETNOU_DATA_DIR/dataset.bin, see dataset.js for
+// the file). Index i of every array in a group describes the same stop,
+// route or trip. A typed array is a column of the file; "texts" is a Texts.
 //   version    DATASET_VERSION
 //   area       Area.id of the area the dataset was cut for
 //   source     { etag, lastModified, importedAt, osm } – which feed and OSM
 //              data it was made from; added by import-worker.js
-//   stops      { id, name, lat, lon, parent: stop index or -1, platform,
+//   stops      { id, name, platform, lat, lon, parent: stop index or -1,
 //                region: 1 if in the area or within NEAR.region of it, else 0 }
 //   routes     { id, short, long, type: GTFS route_type, color, text,
 //                agency: name }   (color and text are not used yet)
 //   headsigns  [text]
 //   dates      [yyyymmdd], sorted
 //   services   [[index into dates]] – the days each service runs
-//   trips      { id, route: index, service: index, headsign: index or -1,
-//                stops: [[stop index]],
-//                arr, dep: [[seconds since the start of the service day]], may
-//                exceed 86400,
-//                seq: [[stop_sequence]] or null where it is 0, 1, 2, … }
+//   patterns   the stop sequences, each once: { start, stops } – pattern i
+//              is stops[start[i]] to stops[start[i + 1] - 1], stop indexes
+//   profiles   the sets of running times, each once: { start, times } – for
+//              every stop of a trip its arrival and its departure, in
+//              seconds counted from the first departure of the trip
+//   seqLists   the stop_sequence numbers of trips that do not count 0, 1, 2,
+//              …, each list once: { start, seq }
+//   trips      { id: texts, byId: the trips in the order of their ids,
+//                pattern, profile, start: the first departure in seconds
+//                since the start of the service day (may exceed 86400),
+//                seq: index into seqLists or -1, route, service,
+//                headsign: index or -1 }
+//   sharedWays the ways from one stop to the next on which trains run
+//              coupled, see findSharedWays in timetable.js
 //   segments   route geometry per hop, or null; added by import-worker.js,
 //              see buildSegments in shapes.js
 
@@ -240,26 +426,29 @@ export async function buildDataset({ zipPath, area, onProgress = () => {} }) {
     }
     onProgress(`${regionStops.size} stops in the area`);
 
-    const { trips, stopIds, headsigns, headsignIndex, lines } = await readStopTimes(zip, regionStops, onProgress);
-    onProgress(`stop_times.txt: ${lines} rows read, ${trips.size} trips in the area`);
+    const { collector, stopIds, headsigns, headsignIndex, lines } = await readStopTimes(zip, regionStops, onProgress);
+    onProgress(`stop_times.txt: ${lines} rows read, ${collector.index.size} trips in the area`);
 
     // trips.txt: route and service of every kept trip, and its headsign for
     // feeds that have none in stop_times.txt.
+    const tripCount = collector.ids.length;
+    const route = new Int32Array(tripCount).fill(-1);
+    const service = new Int32Array(tripCount).fill(-1);
     const routeIds = [];
     const routeIndex = new Map();
     const serviceIds = [];
     const serviceIndex = new Map();
     await readTable(zip, 'trips.txt', ['trip_id', 'route_id', 'service_id'], (f, col) => {
-      const trip = trips.get(f[col.trip_id]);
-      if (!trip) return;
+      const t = collector.index.get(f[col.trip_id]);
+      if (t === undefined) return;
       let r = routeIndex.get(f[col.route_id]);
       if (r === undefined) { r = routeIds.length; routeIds.push(f[col.route_id]); routeIndex.set(f[col.route_id], r); }
       let s = serviceIndex.get(f[col.service_id]);
       if (s === undefined) { s = serviceIds.length; serviceIds.push(f[col.service_id]); serviceIndex.set(f[col.service_id], s); }
-      trip.route = r;
-      trip.service = s;
-      if (trip.headsign === -1 && col.trip_headsign !== undefined && f[col.trip_headsign]) {
-        trip.headsign = intern(f[col.trip_headsign], headsigns, headsignIndex);
+      route[t] = r;
+      service[t] = s;
+      if (collector.headsign.array[t] === -1 && col.trip_headsign !== undefined && f[col.trip_headsign]) {
+        collector.headsign.array[t] = intern(f[col.trip_headsign], headsigns, headsignIndex);
       }
     });
 
@@ -320,21 +509,10 @@ export async function buildDataset({ zipPath, area, onProgress = () => {} }) {
       if (stops.lat[i] === undefined) throw new Error(`stops.txt: stop ${stopIds[i]} is referenced but missing`);
     }
 
-    const out = { id: [], route: [], service: [], headsign: [], stops: [], arr: [], dep: [], seq: [] };
-    for (const [id, trip] of trips) {
-      if (trip.route === undefined || routes.type[trip.route] === undefined) continue;
-      out.id.push(id);
-      out.route.push(trip.route);
-      out.service.push(trip.service);
-      out.headsign.push(trip.headsign);
-      out.stops.push(trip.stops);
-      out.arr.push(trip.arr);
-      out.dep.push(trip.dep);
-      // stop_sequence is almost always 0..n-1; only store it when it is not.
-      out.seq.push(trip.seq.every((s, i) => s === i) ? null : trip.seq);
-    }
-
-    return { version: DATASET_VERSION, area: area.id, stops, routes, headsigns, dates, services, trips: out };
+    regionStops.clear();
+    stopIndex.clear();
+    onProgress(`${collector.patterns.count} stop sequences and ${collector.profiles.count} sets of running times`);
+    return assemble({ area: area.id, stops, routes, headsigns, dates, services, collector, route, service });
   } finally {
     await zip.close();
   }

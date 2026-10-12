@@ -5,7 +5,8 @@ import path from 'node:path';
 import { test } from 'node:test';
 import { Area } from '../server/lib/area.js';
 import { FeedUpdater } from '../server/lib/feed.js';
-import { download, publicUrl, readGz, reason, writeGz } from '../server/lib/files.js';
+import { readDataset, writeDataset } from '../server/lib/dataset.js';
+import { download, publicUrl, reason } from '../server/lib/files.js';
 import { makePbf, makeZip, startUpstream } from './helpers.js';
 
 // One line from A to B inside the area.
@@ -62,8 +63,8 @@ test('the feed is only downloaded when its ETag has changed', async (t) => {
   assert.equal(timetables.length, 1);
   assert.deepEqual(log.filter((line) => /^Timetable: (downloading|reading)/.test(line)).map((line) => line.replace(/http:\S+/, 'URL')), ['Timetable: downloading URL', 'Timetable: reading the feed (0 MB)']);
   // the download is gone, the dataset is there
-  assert.deepEqual(fs.readdirSync(dir), ['region.json.gz']);
-  assert.equal(readGz(path.join(dir, 'region.json.gz')).source.etag, '"v1"');
+  assert.deepEqual(fs.readdirSync(dir), ['dataset.bin']);
+  assert.equal(readDataset(path.join(dir, 'dataset.bin')).source.etag, '"v1"');
 
   await updater.check();
   assert.deepEqual([requests.head, requests.get], [2, 1]);
@@ -161,7 +162,7 @@ test('a download that is refused is asked for again at the next check, one that 
 
 test('a stored dataset is used again unless it is damaged or made for something else', async (t) => {
   const { requests, dir, make } = await setup(t, FEED);
-  const datasetPath = path.join(dir, 'region.json.gz');
+  const datasetPath = path.join(dir, 'dataset.bin');
 
   // damaged: imported again
   fs.writeFileSync(datasetPath, 'not gzip');
@@ -171,7 +172,7 @@ test('a stored dataset is used again unless it is damaged or made for something 
   assert.match(first.log.join('\n'), /Timetable: stored dataset unusable \(.+\), importing again/);
   assert.equal(first.updater.status.state, 'ready');
   assert.deepEqual([requests.head, requests.get], [1, 1]);
-  assert.deepEqual(fs.readdirSync(dir), ['region.json.gz']);
+  assert.deepEqual(fs.readdirSync(dir), ['dataset.bin']);
 
   // intact and current: loaded from disk, nothing downloaded
   const second = make();
@@ -188,7 +189,7 @@ test('a stored dataset is used again unless it is damaged or made for something 
   assert.deepEqual([requests.head, requests.get], [3, 2]);
 
   // written by another version of the software
-  writeGz(datasetPath, { ...readGz(datasetPath), version: 1 });
+  writeDataset(datasetPath, { ...readDataset(datasetPath), version: 1 });
   const fourth = make({ area });
   await fourth.updater.start();
   assert.match(fourth.log.join('\n'), /stored dataset unusable \(written by another version\)/);
@@ -216,14 +217,14 @@ test('route geometry: straight lines first, OSM data retried with growing waits,
   assert.equal(updater.status.state, 'ready');
   assert.equal(updater.status.error, null);
   // loaded twice: at once with straight lines, and again when the OSM step is over
-  assert.deepEqual(timetables.map((timetable) => timetable.segPts.length), [0, 0]);
+  assert.deepEqual(timetables.map((timetable) => timetable.segmentCount), [0, 0]);
   assert.deepEqual([requests.get, requests.osm], [1, 1]);
   assert.deepEqual(routesLog(), [
     'Routes: downloading OSM extract URL',
     'Routes: OSM data could not be updated (GET URL HTTP 404), keeping straight lines',
     'Routes: no route geometry, next attempt in 60 min',
   ]);
-  assert.deepEqual(fs.readdirSync(dir), ['region.json.gz']);
+  assert.deepEqual(fs.readdirSync(dir), ['dataset.bin']);
 
   // A feed version that cannot be imported is no attempt at the OSM data.
   feed.zip = makeZip(ELSEWHERE);
@@ -264,12 +265,12 @@ test('route geometry: straight lines first, OSM data retried with growing waits,
   assert.equal(updater.status.message, '1 trips, 2 stations, 1 routed hops');
   assert.deepEqual(routesLog().slice(-4), ['Routes: downloading OSM extract URL', 'Routes: reading OSM extract (0 MB)', 'Routes: routing 1 hops', 'Routes: hops routed: road 0/0, rail 0/0, subway 1/1, tram 0/0']);
   const routed = timetables.at(-1);
-  assert.equal(routed.segPts.length, 1);
+  assert.equal(routed.segmentCount, 1);
   // the trip runs over the bend at node 2 instead of straight from A to B
   assert.deepEqual(routed.trip('T1', '20261003', null).path.slice(2, 4), [49.45, 11.002]);
   assert.ok(!Number.isNaN(Date.parse(routed.source.osm)));
   assert.equal(updater.routesMissing, false);
-  assert.deepEqual(fs.readdirSync(dir).sort(), ['osm-networks.json.gz', 'region.json.gz']);
+  assert.deepEqual(fs.readdirSync(dir).sort(), ['dataset.bin', 'osm-networks.json.gz']);
 
   // nothing more to do at the next check
   await updater.check();
@@ -280,7 +281,7 @@ test('route geometry: straight lines first, OSM data retried with growing waits,
   await updater.check();
   assert.deepEqual([requests.head, requests.get, requests.osm], [8, 3, 4]);
   assert.equal(timetables.at(-1).source.etag, '"v3"');
-  assert.equal(timetables.at(-1).segPts.length, 1);
+  assert.equal(timetables.at(-1).segmentCount, 1);
 });
 
 test('download reports HTTP errors, reason adds what fetch hides', async (t) => {

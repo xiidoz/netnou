@@ -1,11 +1,18 @@
-// In-memory view of the regional dataset produced by importer.js, plus the
-// queries the API needs: vehicles right now, one trip, departures of a station.
+// In-memory view of the dataset produced by importer.js, plus the queries the
+// API needs: vehicles right now, one trip, departures of a station.
+//
+// The dataset is columns of numbers (see importer.js): nothing in here holds
+// an array for every trip. What a trip has is asked for by its number:
+// stopsOf(t), schedArr(t, p), schedDep(t, p).
 //
 // Terms used throughout server/:
 //   area     the region covered (NETNOU_BBOX or NETNOU_AREA_FILE), see area.js
 //   stop     a row of stops.txt, often a single platform
 //   station  the stop that groups platforms (parent_station) – what the map
 //            shows and a departure board is for
+//   pattern  a sequence of stops, stored once for all the trips that run it
+//   profile  a set of running times, stored once: arrival and departure at
+//            every stop, counted from the first departure
 //   hop      two consecutive stops of a trip
 //   segment  the routed geometry of a hop on one net (road, rail, subway or
 //            tram), see shapes.js
@@ -55,26 +62,238 @@ const HORIZON_S = 90;
 const LITE_AHEAD_S = 60;
 
 const round5 = (x) => Math.round(x * 1e5) / 1e5;
+// The time of a knot along route geometry, in tenths of a second.
+const round10 = (x) => Math.round(x * 10) / 10;
 
 /** What tells one line from another: its name, its mode and its operator together. */
 const lineKey = ({ name, mode, agency }) => JSON.stringify([name, mode, agency]);
 
+/**
+ * Trains that run coupled are a trip each, and nothing in the feed says that
+ * they belong together. What gives them away is that they share the way from
+ * one stop to the next at the same times of the timetable. Most trips share
+ * their ways only with themselves on other days; found here are the ways on
+ * which two trips run on the same day at least once.
+ * @param data a dataset as importer.js puts it together, in which it is stored
+ * @returns { start, trip, position }: way i is the entries start[i] to
+ *   start[i + 1] - 1, each a trip and the position in it of the stop the way
+ *   begins at
+ */
+export function findSharedWays(data) {
+  const { trips, patterns, profiles, routes, services } = data;
+  const tripCount = trips.pattern.length;
+  const coupled = routes.type.map((type, r) => COUPLED_MODES.has(routeMode(type, routes.short[r])) ? MODES.indexOf(routeMode(type, routes.short[r])) : -1);
+  const hopsOf = (t) => patterns.start[trips.pattern[t] + 1] - patterns.start[trips.pattern[t]] - 1;
+
+  let hopCount = 0;
+  for (let t = 0; t < tripCount; t++) if (coupled[trips.route[t]] >= 0) hopCount += hopsOf(t);
+  const hopTrip = new Int32Array(hopCount);
+  const hopPosition = new Int32Array(hopCount);
+
+  // The way of hop h as five numbers: mode, the two stops, departure and arrival.
+  const way = new Int32Array(5);
+  const read = (h) => {
+    const t = hopTrip[h];
+    const p = hopPosition[h];
+    const stop = patterns.start[trips.pattern[t]] + p;
+    const time = profiles.start[trips.profile[t]] + 2 * p;
+    way[0] = coupled[trips.route[t]];
+    way[1] = patterns.stops[stop];
+    way[2] = patterns.stops[stop + 1];
+    way[3] = trips.start[t] + profiles.times[time + 1];
+    way[4] = trips.start[t] + profiles.times[time + 2];
+  };
+  const key = () => {
+    let a = 2166136261 | 0;
+    let b = 374761393 | 0;
+    for (let i = 0; i < 5; i++) {
+      a = Math.imul(a ^ way[i], 16777619);
+      b = Math.imul(b ^ (way[i] + 0x9e3779b1), 16777619);
+    }
+    return (a >>> 0) * 2097152 + ((b >>> 0) & 0x1fffff);
+  };
+
+  const keys = new Float64Array(hopCount);
+  let h = 0;
+  for (let t = 0; t < tripCount; t++) {
+    if (coupled[trips.route[t]] < 0) continue;
+    for (let p = 0, n = hopsOf(t); p < n; p++, h++) {
+      hopTrip[h] = t;
+      hopPosition[h] = p;
+      read(h);
+      keys[h] = key();
+    }
+  }
+  // Hops with the same key are neighbours once the hops are sorted into
+  // buckets by the low bits of their keys: a bucket holds a handful of them.
+  const buckets = 1 << Math.min(21, Math.max(4, Math.ceil(Math.log2(hopCount + 1))));
+  const bucketStart = new Int32Array(buckets + 1);
+  for (h = 0; h < hopCount; h++) bucketStart[(keys[h] % buckets) + 1]++;
+  for (let b = 0; b < buckets; b++) bucketStart[b + 1] += bucketStart[b];
+  const sorted = new Int32Array(hopCount);
+  {
+    const next = bucketStart.slice(0, buckets);
+    for (h = 0; h < hopCount; h++) sorted[next[keys[h] % buckets]++] = h;
+  }
+
+  const days = services.map((dateIdxs) => new Set(dateIdxs));
+  const meeting = new Map(); // two services -> whether they have a day in common
+  const meet = (a, b) => {
+    if (a === b) return days[a].size > 0;
+    const pair = a < b ? a * days.length + b : b * days.length + a;
+    let known = meeting.get(pair);
+    if (known === undefined) {
+      const [few, many] = days[a].size < days[b].size ? [days[a], days[b]] : [days[b], days[a]];
+      known = false;
+      for (const day of few) {
+        if (many.has(day)) {
+          known = true;
+          break;
+        }
+      }
+      meeting.set(pair, known);
+    }
+    return known;
+  };
+
+  const start = [0];
+  const trip = [];
+  const position = [];
+  const same = new Int32Array(5);
+  for (let b = 0; b < buckets; b++) {
+    for (let i = bucketStart[b]; i < bucketStart[b + 1]; i++) {
+      const one = sorted[i];
+      if (one < 0) continue;
+      // The hops on the same way as this one. Two ways may have the same key:
+      // they are told apart by their numbers.
+      let sharers = null;
+      for (let j = i + 1; j < bucketStart[b + 1]; j++) {
+        const other = sorted[j];
+        if (other < 0 || keys[other] !== keys[one]) continue;
+        if (!sharers) {
+          read(one);
+          same.set(way);
+          sharers = [one];
+        }
+        read(other);
+        if (way[0] !== same[0] || way[1] !== same[1] || way[2] !== same[2] || way[3] !== same[3] || way[4] !== same[4]) continue;
+        sharers.push(other);
+        sorted[j] = -1;
+      }
+      if (!sharers || sharers.length < 2) continue;
+      if (!sharers.some((hop, k) => sharers.some((second, l) => l > k && meet(trips.service[hopTrip[hop]], trips.service[hopTrip[second]])))) continue;
+      for (const hop of sharers) {
+        trip.push(hopTrip[hop]);
+        position.push(hopPosition[hop]);
+      }
+      start.push(trip.length);
+    }
+  }
+  return { start: Int32Array.from(start), trip: Int32Array.from(trip), position: Int32Array.from(position) };
+}
+
+/**
+ * A vehicle under way, as vehicles() hands it out. Its id and its knots are
+ * only made when they are asked for: an answer for a map section needs those
+ * of the vehicles in it, and there are tens of thousands in a large timetable.
+ */
+class Vehicle {
+  #timetable;
+  #trip;
+  #date;
+  #rt;
+  #from;
+  #last;
+  #now;
+  #id = null;
+  #knots = null;
+
+  constructor(timetable, t, date, rt, from, last, now, lat, lon) {
+    this.#timetable = timetable;
+    this.#trip = t;
+    this.#date = date;
+    this.#rt = rt;
+    this.#from = from;
+    this.#last = last;
+    this.#now = now;
+    const route = timetable.tripRoute[t];
+    const next = Math.min(from + 1, last);
+    this.line = timetable.lineName(route);
+    this.mode = timetable.routeModes[route];
+    this.to = timetable.headsign(t);
+    // Delay at the next stop in seconds; null when there is no realtime data.
+    this.delay = rt ? rt.arrDelay[next] : null;
+    // current position, for filtering by map section (not sent to the browser)
+    this.lat = lat;
+    this.lon = lon;
+    // for the vehicles of one line: which it is, the stop ahead and how many are left
+    this.lineIndex = timetable.lineOf[route];
+    this.next = timetable.stops.name[timetable.patternStops[timetable.patternStart[timetable.tripPattern[t]] + next]];
+    this.stopsLeft = last - next;
+  }
+
+  /** The id of its trip and its service day: "671753_20261004". */
+  get id() {
+    return (this.#id ??= `${this.#timetable.tripId(this.#trip)}_${this.#date}`);
+  }
+
+  /** [time, lat, lon, …] along its way ahead, see Timetable.knots. */
+  get knots() {
+    if (!this.#knots) {
+      const { arr, dep } = this.#timetable.times(this.#trip, this.#date, this.#rt);
+      this.#knots = this.#timetable.knots(this.#trip, arr, dep, this.#from, this.#last, this.#now);
+    }
+    return this.#knots;
+  }
+}
+
 export class Timetable {
-  /**
-   * @param data dataset from importer.js (plus segments from shapes.js)
-   * @param area the Area the dataset was built for
-   */
-  constructor(data, area) {
+  /** @param data dataset from importer.js (plus segments from shapes.js) */
+  constructor(data) {
     this.source = data.source ?? {};
     this.stops = data.stops;
     this.routes = data.routes;
     this.headsigns = data.headsigns;
     this.dates = data.dates;
-    this.trips = data.trips;
 
-    const tripCount = this.trips.id.length;
+    const { trips, patterns, profiles, seqLists } = data;
+    this.tripIds = trips.id;
+    this.tripPattern = trips.pattern;
+    this.tripProfile = trips.profile;
+    this.tripStart = trips.start;
+    this.tripSeq = trips.seq;
+    this.tripRoute = trips.route;
+    this.tripService = trips.service;
+    this.tripHeadsign = trips.headsign;
+    this.patternStart = patterns.start;
+    this.patternStops = patterns.stops;
+    this.profileStart = profiles.start;
+    this.profileTimes = profiles.times;
+    this.seqStart = seqLists.start;
+    this.seqNumbers = seqLists.seq;
+
+    const tripCount = trips.pattern.length;
     this.tripCount = tripCount;
-    this.tripIndex = new Map(this.trips.id.map((id, i) => [id, i]));
+    // Trips are found by their id in the list of all trips in the order of
+    // their ids: there is no map with an entry for each of them.
+    const { byId } = trips;
+    const find = (id) => {
+      if (typeof id !== 'string') return undefined;
+      const wanted = Buffer.from(id);
+      const { bytes, start } = trips.id;
+      let low = 0;
+      let high = tripCount - 1;
+      while (low <= high) {
+        const middle = (low + high) >> 1;
+        const t = byId[middle];
+        const order = bytes.compare(wanted, 0, wanted.length, start[t], start[t + 1]);
+        if (order === 0) return t;
+        if (order < 0) low = middle + 1;
+        else high = middle - 1;
+      }
+      return undefined;
+    };
+    this.tripIndex = { get: find, has: (id) => find(id) !== undefined, keys: () => trips.id[Symbol.iterator]() };
     this.dateIndex = new Map(this.dates.map((d, i) => [d, i]));
     this.routeModes = this.routes.type.map((type, r) => routeMode(type, this.routes.short[r]));
 
@@ -85,44 +304,34 @@ export class Timetable {
     });
     this.tripsOnDate = new Map();
 
-    // Trains that run coupled are a trip each, and nothing in the feed says
-    // that they belong together. What gives them away is that they share the
-    // way from one stop to the next at the same times (see way()).
-    // sharedWays lists every such way with the trips on it, each with the
-    // position in that trip of the stop the way begins at: [[trip, position], …].
-    // Most trips share their ways only with themselves on other days; kept
-    // are the ways on which two trips run on the same day at least once.
-    const ways = new Map();
-    for (let t = 0; t < tripCount; t++) {
-      if (!COUPLED_MODES.has(this.routeModes[this.trips.route[t]])) continue;
-      for (let p = 0; p + 1 < this.trips.stops[t].length; p++) {
-        const way = this.way(t, p);
-        const sharers = ways.get(way);
-        if (sharers) sharers.push([t, p]);
-        else ways.set(way, [[t, p]]);
+    // How long a trip runs, from its first departure to its last arrival, and
+    // the earliest and latest departure in it, for every profile.
+    const profileCount = profiles.start.length - 1;
+    this.profileRun = new Int32Array(profileCount);
+    const profileEarliest = new Int32Array(profileCount);
+    const profileLatest = new Int32Array(profileCount);
+    for (let r = 0; r < profileCount; r++) {
+      this.profileRun[r] = profiles.times[profiles.start[r + 1] - 2];
+      let earliest = Infinity;
+      let latest = -Infinity;
+      for (let k = profiles.start[r] + 1; k < profiles.start[r + 1]; k += 2) {
+        earliest = Math.min(earliest, profiles.times[k]);
+        latest = Math.max(latest, profiles.times[k]);
       }
+      profileEarliest[r] = earliest;
+      profileLatest[r] = latest;
     }
-    const days = data.services.map((dateIdxs) => new Set(dateIdxs));
-    const meeting = new Map(); // two services → whether they have a day in common
-    const meet = (a, b) => {
-      if (a === b) return days[a].size > 0;
-      const pair = a < b ? a * days.length + b : b * days.length + a;
-      let known = meeting.get(pair);
-      if (known === undefined) {
-        const [few, many] = days[a].size < days[b].size ? [days[a], days[b]] : [days[b], days[a]];
-        known = false;
-        for (const day of few) {
-          if (many.has(day)) {
-            known = true;
-            break;
-          }
-        }
-        meeting.set(pair, known);
-      }
-      return known;
-    };
-    this.sharedWays = [...ways.values()].filter((sharers) =>
-      sharers.some(([one], i) => sharers.some(([other], j) => j > i && meet(this.trips.service[one], this.trips.service[other]))));
+
+    // The ways on which trains run coupled, each with the trips on it and the
+    // position in each trip of the stop the way begins at: [[trip, position], …]
+    // (see findSharedWays, which the import has run).
+    this.sharedWays = [];
+    const shared = data.sharedWays;
+    for (let w = 0; shared && w + 1 < shared.start.length; w++) {
+      const sharers = [];
+      for (let k = shared.start[w]; k < shared.start[w + 1]; k++) sharers.push([shared.trip[k], shared.position[k]]);
+      this.sharedWays.push(sharers);
+    }
 
     // Stations group the platforms of one stop; they are what the map shows
     // and what a departure board is requested for.
@@ -148,76 +357,155 @@ export class Timetable {
       return this.lineIndex.get(key);
     });
 
-    // visits[station] = flat [trip, position, trip, position, …]
-    this.visits = new Map();
-    const stationModes = new Map();
+    // What a pattern has of all the trips that run it: how many they are, of
+    // which modes, how early and late a stop of it is left, and the trips
+    // themselves in the order of their first departures.
+    const patternCount = patterns.start.length - 1;
+    const patternTrips = new Int32Array(patternCount);
+    const patternModes = new Uint8Array(patternCount);
+    this.patternEarliest = new Int32Array(patternCount).fill(2 ** 31 - 1);
+    this.patternLatest = new Int32Array(patternCount).fill(-(2 ** 31));
     for (let t = 0; t < tripCount; t++) {
-      const stops = this.trips.stops[t];
-      const modeBit = 1 << MODES.indexOf(this.routeModes[this.trips.route[t]]);
-      const line = this.lines[this.lineOf[this.trips.route[t]]];
-      const headsign = this.headsign(t);
-      line.trips++;
-      line.headsigns.set(headsign, (line.headsigns.get(headsign) ?? 0) + 1);
-      for (let p = 0; p < stops.length; p++) {
-        if (!this.stops.region[stops[p]]) continue;
-        const station = this.stationOf[stops[p]];
-        let list = this.visits.get(station);
-        if (!list) this.visits.set(station, (list = []));
-        list.push(t, p);
-        stationModes.set(station, (stationModes.get(station) ?? 0) | modeBit);
-        line.lat += this.stops.lat[stops[p]];
-        line.lon += this.stops.lon[stops[p]];
-        line.stops++;
+      const pattern = trips.pattern[t];
+      patternTrips[pattern]++;
+      patternModes[pattern] |= 1 << MODES.indexOf(this.routeModes[trips.route[t]]);
+      this.patternEarliest[pattern] = Math.min(this.patternEarliest[pattern], profileEarliest[trips.profile[t]]);
+      this.patternLatest[pattern] = Math.max(this.patternLatest[pattern], profileLatest[trips.profile[t]]);
+    }
+    this.patternFirst = new Int32Array(patternCount + 1);
+    for (let i = 0; i < patternCount; i++) this.patternFirst[i + 1] = this.patternFirst[i] + patternTrips[i];
+    this.tripsOfPattern = new Int32Array(tripCount);
+    {
+      const next = this.patternFirst.slice(0, patternCount);
+      for (let t = 0; t < tripCount; t++) this.tripsOfPattern[next[trips.pattern[t]]++] = t;
+      for (let i = 0; i < patternCount; i++) {
+        this.tripsOfPattern.subarray(this.patternFirst[i], this.patternFirst[i + 1]).sort((a, b) => trips.start[a] - trips.start[b] || a - b);
       }
     }
 
-    this.stations = [...this.visits.keys()].map((s) => ({
+    // A station knows the patterns that stop at it, each with the position of
+    // the stop in the pattern: visitPattern and visitPosition from
+    // visitStart[station] on. Stations are listed in the order in which the
+    // trips first come to them.
+    const visits = new Int32Array(stopCount + 1);
+    const order = [];
+    const stationModes = new Uint8Array(stopCount);
+    const stationService = new Float64Array(stopCount);
+    // (the stops of a pattern that are in the area, and the sum of their positions, for the lines)
+    const inArea = new Int32Array(patternCount);
+    const latSum = new Float64Array(patternCount);
+    const lonSum = new Float64Array(patternCount);
+    const seen = new Uint8Array(patternCount);
+    const eachVisit = (pattern, visit) => {
+      for (let k = patterns.start[pattern]; k < patterns.start[pattern + 1]; k++) {
+        const stop = patterns.stops[k];
+        if (this.stops.region[stop]) visit(this.stationOf[stop], k - patterns.start[pattern], stop);
+      }
+    };
+    for (let t = 0; t < tripCount; t++) {
+      const pattern = trips.pattern[t];
+      if (seen[pattern]) continue;
+      seen[pattern] = 1;
+      eachVisit(pattern, (station, position, stop) => {
+        if (!visits[station + 1]++) order.push(station);
+        stationModes[station] |= patternModes[pattern];
+        stationService[station] += patternTrips[pattern];
+        inArea[pattern]++;
+        latSum[pattern] += this.stops.lat[stop];
+        lonSum[pattern] += this.stops.lon[stop];
+      });
+    }
+    for (let i = 0; i < stopCount; i++) visits[i + 1] += visits[i];
+    this.visitStart = visits;
+    this.visitPattern = new Int32Array(visits[stopCount]);
+    this.visitPosition = new Int32Array(visits[stopCount]);
+    {
+      const next = visits.slice(0, stopCount);
+      for (let pattern = 0; pattern < patternCount; pattern++) {
+        if (!seen[pattern]) continue;
+        eachVisit(pattern, (station, position) => {
+          this.visitPattern[next[station]] = pattern;
+          this.visitPosition[next[station]++] = position;
+        });
+      }
+    }
+    for (let t = 0; t < tripCount; t++) {
+      const line = this.lines[this.lineOf[trips.route[t]]];
+      const headsign = this.headsign(t);
+      line.trips++;
+      line.headsigns.set(headsign, (line.headsigns.get(headsign) ?? 0) + 1);
+      line.lat += latSum[trips.pattern[t]];
+      line.lon += lonSum[trips.pattern[t]];
+      line.stops += inArea[trips.pattern[t]];
+    }
+
+    this.stations = order.map((s) => ({
       id: this.stops.id[s],
       name: this.stops.name[s],
       lat: round5(this.stops.lat[s]),
       lon: round5(this.stops.lon[s]),
-      modes: MODES.filter((_, bit) => stationModes.get(s) & (1 << bit)),
+      modes: MODES.filter((_, bit) => stationModes[s] & (1 << bit)),
     }));
     // How often a trip stops at each station, over the whole timetable: it
     // says how much is going on there compared with the others.
-    this.stationService = [...this.visits.values()].map((list) => list.length / 2);
+    this.stationService = order.map((s) => stationService[s]);
 
     // Route geometry per hop (see shapes.js); absent until OSM data was loaded.
-    // segFrac holds, for every point, the share of the hop's length covered so
-    // far – a vehicle is assumed to move along the hop at constant speed.
+    // A hop is found by its key among the keys in their order. The points of
+    // all hops are one column, in 1e-5 degrees, and so is for every point the
+    // share of the hop's length covered so far – a vehicle is assumed to move
+    // along the hop at constant speed.
     this.routeNets = this.routeModes.map((mode) => NETS.indexOf(NET_OF_MODE[mode]));
-    this.segIndex = new Map();
-    this.segPts = [];
-    this.segFrac = [];
     const segments = data.segments;
-    const kx = Math.cos(((area.bbox[0] + area.bbox[2]) / 2) * (Math.PI / 180));
-    for (let i = 0; i < (segments?.pts.length ?? 0); i++) {
-      const deltas = segments.pts[i];
-      const pts = new Array(deltas.length);
-      const frac = new Array(deltas.length / 2);
-      let lat = 0;
-      let lon = 0;
-      let length = 0;
-      for (let k = 0; k < deltas.length; k += 2) {
-        lat += deltas[k];
-        lon += deltas[k + 1];
-        pts[k] = lat / 1e5;
-        pts[k + 1] = lon / 1e5;
-        if (k) length += Math.hypot(deltas[k], deltas[k + 1] * kx);
-        frac[k / 2] = length;
-      }
-      for (let k = 0; k < frac.length; k++) frac[k] = length ? frac[k] / length : 1;
-      this.segIndex.set(hopKey(NETS.indexOf(segments.nets[segments.net[i]]), segments.from[i], segments.to[i], stopCount), i);
-      this.segPts.push(pts);
-      this.segFrac.push(frac);
-    }
+    this.segmentKey = segments?.key ?? new Float64Array(0);
+    this.segmentStart = segments?.start ?? new Int32Array(1);
+    this.segmentPoints = segments?.points ?? new Int32Array(0);
+    this.segmentShare = segments?.share ?? new Float64Array(0);
+    this.segmentCount = this.segmentKey.length;
+    // Where position() leaves its answer.
+    this.at = new Float64Array(2);
+  }
+
+  /** The stops of trip t, as indexes of stops, in the order it calls at them. */
+  stopsOf(t) {
+    const pattern = this.tripPattern[t];
+    return this.patternStops.subarray(this.patternStart[pattern], this.patternStart[pattern + 1]);
+  }
+
+  stopCount(t) {
+    const pattern = this.tripPattern[t];
+    return this.patternStart[pattern + 1] - this.patternStart[pattern];
+  }
+
+  /** The arrival of trip t at its stop at position p as the timetable has it, in seconds since the start of the service day; may exceed 86400. */
+  schedArr(t, p) {
+    return this.tripStart[t] + this.profileTimes[this.profileStart[this.tripProfile[t]] + 2 * p];
+  }
+
+  /** The departure, likewise. */
+  schedDep(t, p) {
+    return this.tripStart[t] + this.profileTimes[this.profileStart[this.tripProfile[t]] + 2 * p + 1];
+  }
+
+  tripId(t) {
+    return this.tripIds.get(t);
   }
 
   /** Index of the route geometry for the hop from stop position p to p + 1, or -1. */
   segment(t, p) {
-    const stops = this.trips.stops[t];
-    const net = this.routeNets[this.trips.route[t]];
-    return this.segIndex.get(hopKey(net, stops[p], stops[p + 1], this.stops.id.length)) ?? -1;
+    const stops = this.patternStart[this.tripPattern[t]] + p;
+    const net = this.routeNets[this.tripRoute[t]];
+    const wanted = hopKey(net, this.patternStops[stops], this.patternStops[stops + 1], this.stops.id.length);
+    const keys = this.segmentKey;
+    let low = 0;
+    let high = keys.length - 1;
+    while (low <= high) {
+      const middle = (low + high) >> 1;
+      if (keys[middle] === wanted) return middle;
+      if (keys[middle] < wanted) low = middle + 1;
+      else high = middle - 1;
+    }
+    return -1;
   }
 
   /**
@@ -226,8 +514,10 @@ export class Timetable {
    * where there is one and a straight line between the stops otherwise.
    */
   knots(t, arr, dep, i, last, now) {
-    const stops = this.trips.stops[t];
+    const stops = this.stopsOf(t);
     const { lat, lon } = this.stops;
+    const points = this.segmentPoints;
+    const share = this.segmentShare;
     const horizon = now + HORIZON_S;
     const knots = [];
     let endLat = round5(lat[stops[i]]);
@@ -238,19 +528,18 @@ export class Timetable {
       const t1 = arr[j];
       const s = this.segment(t, j - 1);
       if (s >= 0) {
-        const pts = this.segPts[s];
-        const frac = this.segFrac[s];
-        const n = frac.length;
+        const from = this.segmentStart[s];
+        const n = this.segmentStart[s + 1] - from;
         let k = 0;
         // Of the points already passed only the last one is needed.
-        if (!knots.length) while (k + 1 < n && t0 + (t1 - t0) * frac[k + 1] <= now) k++;
+        if (!knots.length) while (k + 1 < n && t0 + (t1 - t0) * share[from + k + 1] <= now) k++;
         for (; k < n; k++) {
-          const time = t0 + (t1 - t0) * frac[k];
-          knots.push(Math.round(time * 10) / 10, pts[2 * k], pts[2 * k + 1]);
+          const time = t0 + (t1 - t0) * share[from + k];
+          knots.push(round10(time), points[2 * (from + k)] / 1e5, points[2 * (from + k) + 1] / 1e5);
           if (time > horizon) return knots;
         }
-        endLat = pts[2 * n - 2];
-        endLon = pts[2 * n - 1];
+        endLat = points[2 * (from + n) - 2] / 1e5;
+        endLon = points[2 * (from + n) - 1] / 1e5;
       } else {
         if (!knots.length) knots.push(t0, endLat, endLon);
         endLat = round5(lat[stops[j]]);
@@ -264,15 +553,59 @@ export class Timetable {
     return knots;
   }
 
+  /**
+   * Where trip t is at `now`, given that stop position i is the one it left
+   * last, at t0, and that it reaches the next one at t1: what
+   * positionAt(knots, now) gives for the knots of that moment, without making
+   * them. The answer is left in this.at: latitude and longitude.
+   */
+  position(t, i, last, t0, t1, now) {
+    const stops = this.patternStart[this.tripPattern[t]];
+    const { lat, lon } = this.stops;
+    const { at } = this;
+    const here = this.patternStops[stops + i];
+    const s = i === last ? -1 : this.segment(t, i);
+    if (s < 0) {
+      at[0] = round5(lat[here]);
+      at[1] = round5(lon[here]);
+      if (i === last || now <= t0) return;
+      const next = this.patternStops[stops + i + 1];
+      const f = now >= t1 ? 1 : (now - t0) / (t1 - t0);
+      const toLat = round5(lat[next]);
+      const toLon = round5(lon[next]);
+      at[0] = f === 1 ? toLat : at[0] + (toLat - at[0]) * f;
+      at[1] = f === 1 ? toLon : at[1] + (toLon - at[1]) * f;
+      return;
+    }
+    const from = this.segmentStart[s];
+    const n = this.segmentStart[s + 1] - from;
+    const share = this.segmentShare;
+    const points = this.segmentPoints;
+    let k = 0;
+    while (k + 1 < n && t0 + (t1 - t0) * share[from + k + 1] <= now) k++;
+    const passed = round10(t0 + (t1 - t0) * share[from + k]);
+    const ahead = k + 1 < n && now > passed ? round10(t0 + (t1 - t0) * share[from + k + 1]) : 0;
+    // (at the point passed last, at the one ahead, or between the two)
+    if (k + 1 < n && now > passed && now >= ahead) k++;
+    at[0] = points[2 * (from + k)] / 1e5;
+    at[1] = points[2 * (from + k) + 1] / 1e5;
+    if (k + 1 < n && now > passed && now < ahead) {
+      const f = (now - passed) / (ahead - passed);
+      at[0] += (points[2 * (from + k + 1)] / 1e5 - at[0]) * f;
+      at[1] += (points[2 * (from + k + 1) + 1] / 1e5 - at[1]) * f;
+    }
+  }
+
   seq(t, p) {
-    const seq = this.trips.seq[t];
-    return seq ? seq[p] : p;
+    const list = this.tripSeq[t];
+    return list < 0 ? p : this.seqNumbers[this.seqStart[list] + p];
   }
 
   headsign(t) {
-    const h = this.trips.headsign[t];
+    const h = this.tripHeadsign[t];
     if (h >= 0) return this.headsigns[h];
-    return this.stops.name[this.trips.stops[t].at(-1)];
+    const pattern = this.tripPattern[t];
+    return this.stops.name[this.patternStops[this.patternStart[pattern + 1] - 1]];
   }
 
   /**
@@ -281,8 +614,8 @@ export class Timetable {
    * there, if they are trains and run on the same day.
    */
   way(t, p) {
-    const stops = this.trips.stops[t];
-    return `${this.routeModes[this.trips.route[t]]}|${stops[p]}|${stops[p + 1]}|${this.trips.dep[t][p]}|${this.trips.arr[t][p + 1]}`;
+    const stops = this.patternStart[this.tripPattern[t]] + p;
+    return `${this.routeModes[this.tripRoute[t]]}|${this.patternStops[stops]}|${this.patternStops[stops + 1]}|${this.schedDep(t, p)}|${this.schedArr(t, p + 1)}`;
   }
 
   /** What a line is called: its short name ("U1") or, lacking one, the long name. */
@@ -290,17 +623,22 @@ export class Timetable {
     return this.routes.short[route] || this.routes.long[route];
   }
 
-  /** Trips whose service runs on the given date, as an array of trip indexes. */
+  /** Trips whose service runs on the given date, in the order of their first departures. */
   activeTrips(date) {
     let list = this.tripsOnDate.get(date);
     if (!list) {
       const d = this.dateIndex.get(date);
-      list = [];
+      const running = [];
       if (d !== undefined) {
         const active = this.serviceOnDate[d];
-        const service = this.trips.service;
-        for (let t = 0; t < this.tripCount; t++) if (active[service[t]]) list.push(t);
+        const service = this.tripService;
+        for (let t = 0; t < this.tripCount; t++) if (active[service[t]]) running.push(t);
       }
+      const start = this.tripStart;
+      list = Int32Array.from(running).sort((a, b) => start[a] - start[b] || a - b);
+      // The same trips in the order of their last arrivals (see underWay).
+      const end = (t) => start[t] + this.profileRun[this.tripProfile[t]];
+      list.byEnd = Int32Array.from(running).sort((a, b) => end(a) - end(b) || a - b);
       if (this.tripsOnDate.size > 6) this.tripsOnDate.clear();
       this.tripsOnDate.set(date, list);
     }
@@ -309,7 +647,7 @@ export class Timetable {
 
   runsOn(t, date) {
     const d = this.dateIndex.get(date);
-    return d !== undefined && this.serviceOnDate[d][this.trips.service[t]] === 1;
+    return d !== undefined && this.serviceOnDate[d][this.tripService[t]] === 1;
   }
 
   /**
@@ -318,16 +656,16 @@ export class Timetable {
    * browser interpolates along these times.
    */
   times(t, date, rt) {
-    const base = serviceDayStart(date);
-    const schedArr = this.trips.arr[t];
-    const schedDep = this.trips.dep[t];
-    const n = schedArr.length;
+    const base = serviceDayStart(date) + this.tripStart[t];
+    const times = this.profileTimes;
+    const from = this.profileStart[this.tripProfile[t]];
+    const n = this.stopCount(t);
     const arr = new Array(n);
     const dep = new Array(n);
     let prev = -Infinity;
     for (let i = 0; i < n; i++) {
-      let a = base + schedArr[i] + (rt?.arrDelay[i] ?? 0);
-      let d = base + schedDep[i] + (rt?.depDelay[i] ?? 0);
+      let a = base + times[from + 2 * i] + (rt?.arrDelay[i] ?? 0);
+      let d = base + times[from + 2 * i + 1] + (rt?.depDelay[i] ?? 0);
       if (a < prev) a = prev;
       if (d < a) d = a;
       arr[i] = a;
@@ -338,11 +676,62 @@ export class Timetable {
   }
 
   /**
+   * The trips of a service day that may be under way at `rel`, seconds since
+   * the start of that day, in the order of their numbers. The trips of the day
+   * are there in the order of their first departures and in that of their
+   * last arrivals: those that have started are the beginning of the one
+   * list, those that have not arrived yet the end of the other, and the
+   * shorter of the two is gone through. A trip with realtime data may be
+   * under way outside the times the timetable has for it.
+   */
+  underWay(date, rel, rtTrips) {
+    const found = [];
+    const start = this.tripStart;
+    const run = this.profileRun;
+    const profile = this.tripProfile;
+    const list = this.activeTrips(date);
+    const { byEnd } = list;
+    // how many have started, and how many of the others have arrived
+    let started = 0;
+    for (let high = list.length; started < high;) {
+      const middle = (started + high) >> 1;
+      if (start[list[middle]] - LEAD_S <= rel) started = middle + 1;
+      else high = middle;
+    }
+    let arrived = 0;
+    for (let high = byEnd.length; arrived < high;) {
+      const middle = (arrived + high) >> 1;
+      const t = byEnd[middle];
+      if (start[t] + run[profile[t]] + TRAIL_S < rel) arrived = middle + 1;
+      else high = middle;
+    }
+    if (started <= byEnd.length - arrived) {
+      for (let k = 0; k < started; k++) {
+        const t = list[k];
+        if (start[t] + run[profile[t]] + TRAIL_S >= rel) found.push(t);
+      }
+    } else {
+      for (let k = arrived; k < byEnd.length; k++) {
+        const t = byEnd[k];
+        if (start[t] - LEAD_S <= rel) found.push(t);
+      }
+    }
+    if (rtTrips) {
+      for (const [t, rt] of rtTrips) {
+        if (rt.cancelled || (start[t] - LEAD_S <= rel && start[t] + run[profile[t]] + TRAIL_S >= rel)) continue;
+        if (rel >= this.schedDep(t, rt.first) + (rt.depDelay[rt.first] ?? 0) - LEAD_S && rel <= this.schedArr(t, rt.last) + (rt.arrDelay[rt.last] ?? 0) + TRAIL_S) found.push(t);
+      }
+    }
+    return Int32Array.from(found).sort();
+  }
+
+  /**
    * Vehicles under way at `now` (epoch seconds), wherever they are: a trip is
    * followed along its whole run, also far outside the area – there without
    * route geometry, i.e. in straight lines between stops. The feed has no vehicle
    * positions, so each vehicle is described by "knots" – (time, lat, lon)
    * triples along its upcoming route – between which the browser interpolates.
+   * They are made when a vehicle is asked for them (see Vehicle).
    * `realtime` is a snapshot from buildRealtime() or null (schedule only).
    *
    * Trains that run coupled are a trip each in the feed, which has no word on
@@ -372,54 +761,60 @@ export class Timetable {
       }
       units.set(unit, members);
     };
+    const times = this.profileTimes;
 
     // Yesterday's service day is still running after midnight (times > 24:00).
     for (const date of [addDays(today, -1), today]) {
-      const rel = now - serviceDayStart(date);
+      const dayStart = serviceDayStart(date);
+      const rel = now - dayStart;
       const rtTrips = realtime?.byDate.get(date);
 
-      for (const t of this.activeTrips(date)) {
-        const schedArr = this.trips.arr[t];
-        const schedDep = this.trips.dep[t];
+      for (const t of this.underWay(date, rel, rtTrips)) {
         const rt = rtTrips?.get(t);
         let first = 0;
-        let last = schedArr.length - 1;
+        let last = this.stopCount(t) - 1;
         if (rt) {
           if (rt.cancelled) continue;
           first = rt.first;
           last = rt.last;
+          // (without realtime data underWay has looked at the times already)
+          if (rel < this.schedDep(t, first) + (rt.depDelay[first] ?? 0) - LEAD_S) continue;
+          if (rel > this.schedArr(t, last) + (rt.arrDelay[last] ?? 0) + TRAIL_S) continue;
         }
-        if (rel < schedDep[first] + (rt?.depDelay[first] ?? 0) - LEAD_S) continue;
-        if (rel > schedArr[last] + (rt?.arrDelay[last] ?? 0) + TRAIL_S) continue;
 
-        const { arr, dep } = this.times(t, date, rt);
-
-        // i = the stop the vehicle left most recently (or its first stop).
+        // i = the stop the vehicle left most recently (or its first stop),
+        // left at t0; t1 is when it reaches the next one. The times are those
+        // of times(), worked out stop by stop up to where the vehicle is.
+        const base = dayStart + this.tripStart[t];
+        const from = this.profileStart[this.tripProfile[t]];
         let i = first;
-        while (i < last && dep[i + 1] <= now) i++;
+        let t0 = 0;
+        let t1 = 0;
+        let arrived = false; // at the stop ahead, where it still stands
+        let prev = -Infinity;
+        for (let p = 0; p <= last; p++) {
+          let a = base + times[from + 2 * p] + (rt?.arrDelay[p] ?? 0);
+          let d = base + times[from + 2 * p + 1] + (rt?.depDelay[p] ?? 0);
+          if (a < prev) a = prev;
+          if (d < a) d = a;
+          prev = d;
+          if (p === i) t0 = d;
+          else if (p === i + 1) {
+            if (d <= now) {
+              i = p;
+              t0 = d;
+            } else {
+              t1 = a;
+              arrived = a <= now;
+              break;
+            }
+          }
+        }
 
-        const knots = this.knots(t, arr, dep, i, last, now);
-        const [lat, lon] = positionAt(knots, now);
-
-        const route = this.trips.route[t];
-        const mode = this.routeModes[route];
+        this.position(t, i, last, t0, t1, now);
+        const vehicle = new Vehicle(this, t, date, rt, i, last, now, this.at[0], this.at[1]);
+        const { mode } = vehicle;
         const next = Math.min(i + 1, last);
-        const vehicle = {
-          id: `${this.trips.id[t]}_${date}`,
-          line: this.lineName(route),
-          mode,
-          to: this.headsign(t),
-          // Delay at the next stop in seconds; null when there is no realtime data.
-          delay: rt ? rt.arrDelay[next] : null,
-          knots,
-          // current position, for filtering by map section (not sent to the browser)
-          lat,
-          lon,
-          // for the vehicles of one line: which it is, the stop ahead and how many are left
-          lineIndex: this.lineOf[route],
-          next: this.stops.name[this.trips.stops[t][next]],
-          stopsLeft: last - next,
-        };
         out.push(vehicle);
 
         if (!COUPLED_MODES.has(mode)) continue;
@@ -427,9 +822,9 @@ export class Timetable {
         // ahead. Standing at that one, the way on from there counts as well,
         // so that trains are coupled from when they stand together to when
         // the first of them leaves.
-        for (const from of next < last && arr[next] <= now ? [i, next] : [i]) {
-          if (from >= last) continue;
-          const way = `${date}|${this.way(t, from)}`;
+        for (const begin of next < last && arrived ? [i, next] : [i]) {
+          if (begin >= last) continue;
+          const way = `${date}|${this.way(t, begin)}`;
           const other = ways.get(way);
           if (other) couple(other, vehicle);
           else ways.set(way, vehicle);
@@ -485,15 +880,15 @@ export class Timetable {
     if (t === undefined || !this.runsOn(t, date)) return null;
     const rt = realtime?.byDate.get(date)?.get(t);
     const base = serviceDayStart(date);
-    const route = this.trips.route[t];
-    const stops = this.trips.stops[t];
+    const route = this.tripRoute[t];
+    const stops = this.stopsOf(t);
 
     // The whole route as one line [lat, lon, …].
     const path = [];
     for (let p = 0; p + 1 < stops.length; p++) {
       const s = this.segment(t, p);
       if (s >= 0) {
-        for (const value of this.segPts[s]) path.push(value);
+        for (let k = 2 * this.segmentStart[s]; k < 2 * this.segmentStart[s + 1]; k++) path.push(this.segmentPoints[k] / 1e5);
       } else {
         path.push(this.stops.lat[stops[p]], this.stops.lon[stops[p]], this.stops.lat[stops[p + 1]], this.stops.lon[stops[p + 1]]);
       }
@@ -511,14 +906,14 @@ export class Timetable {
       cancelled: !!rt?.cancelled,
       notes: realtime?.tripNotes.get(t) ?? [],
       path,
-      stops: stops.map((s, p) => ({
+      stops: Array.from(stops, (s, p) => ({
         station: this.stops.id[this.stationOf[s]],
         name: this.stops.name[s],
         platform: this.stops.platform[s],
         lat: this.stops.lat[s],
         lon: this.stops.lon[s],
-        arr: base + this.trips.arr[t][p],
-        dep: base + this.trips.dep[t][p],
+        arr: base + this.schedArr(t, p),
+        dep: base + this.schedDep(t, p),
         arrDelay: rt ? rt.arrDelay[p] : null,
         depDelay: rt ? rt.depDelay[p] : null,
         skipped: !!rt?.skipped?.[p],
@@ -529,53 +924,68 @@ export class Timetable {
   /** Departures from a station (all its platforms) in the next `windowS` seconds. */
   departures(stationId, now, realtime, { windowS = 7200, limit = 40 } = {}) {
     const station = this.stopIndex.get(stationId);
-    const visits = station === undefined ? undefined : this.visits.get(station);
-    if (!visits) return null;
+    if (station === undefined || this.visitStart[station] === this.visitStart[station + 1]) return null;
 
     const today = localDate(now);
-    const list = [];
-    for (const date of [addDays(today, -1), today, addDays(today, 1)]) {
+    const start = this.tripStart;
+    const found = [];
+    [addDays(today, -1), today, addDays(today, 1)].forEach((date, day) => {
       const d = this.dateIndex.get(date);
-      if (d === undefined) continue;
+      if (d === undefined) return;
       const active = this.serviceOnDate[d];
       const base = serviceDayStart(date);
       const rtTrips = realtime?.byDate.get(date);
 
-      for (let k = 0; k < visits.length; k += 2) {
-        const t = visits[k];
-        const p = visits[k + 1];
-        if (!active[this.trips.service[t]]) continue;
-        if (p === this.trips.stops[t].length - 1) continue; // terminus: nothing departs
-        const planned = base + this.trips.dep[t][p];
-        // Cheap pre-filter; delays of more than three hours are not expected.
-        if (planned > now + windowS || planned < now - 3 * 3600) continue;
-        const rt = rtTrips?.get(t);
-        const delay = rt ? rt.depDelay[p] : null;
-        const expected = planned + (delay ?? 0);
-        if (expected < now - 30 || expected > now + windowS) continue;
-
-        const route = this.trips.route[t];
-        const stop = this.trips.stops[t][p];
-        list.push({
-          trip: `${this.trips.id[t]}_${date}`,
-          line: this.lineName(route),
-          mode: this.routeModes[route],
-          to: this.headsign(t),
-          platform: this.stops.platform[stop],
-          planned,
-          delay,
-          cancelled: !!rt && (rt.cancelled || !!rt.skipped?.[p]),
-        });
+      for (let visit = this.visitStart[station]; visit < this.visitStart[station + 1]; visit++) {
+        const pattern = this.visitPattern[visit];
+        const p = this.visitPosition[visit];
+        if (p === this.patternStart[pattern + 1] - this.patternStart[pattern] - 1) continue; // terminus: nothing departs
+        // The trips of the pattern are in the order of their first
+        // departures: those that can leave here in time begin at `k`. Cheap
+        // pre-filter; delays of more than three hours are not expected.
+        const earliest = now - 3 * 3600 - base - this.patternLatest[pattern];
+        const latest = now + windowS - base - this.patternEarliest[pattern];
+        let k = this.patternFirst[pattern];
+        for (let high = this.patternFirst[pattern + 1]; k < high;) {
+          const middle = (k + high) >> 1;
+          if (start[this.tripsOfPattern[middle]] < earliest) k = middle + 1;
+          else high = middle;
+        }
+        for (; k < this.patternFirst[pattern + 1]; k++) {
+          const t = this.tripsOfPattern[k];
+          if (start[t] > latest) break;
+          if (!active[this.tripService[t]]) continue;
+          const planned = base + this.schedDep(t, p);
+          if (planned > now + windowS || planned < now - 3 * 3600) continue;
+          const rt = rtTrips?.get(t);
+          const delay = rt ? rt.depDelay[p] : null;
+          const expected = planned + (delay ?? 0);
+          if (expected < now - 30 || expected > now + windowS) continue;
+          found.push({ day, t, p, date, planned, delay, cancelled: !!rt && (rt.cancelled || !!rt.skipped?.[p]) });
+        }
       }
-    }
-    list.sort((a, b) => a.planned + (a.delay ?? 0) - (b.planned + (b.delay ?? 0)));
+    });
+    // By when they leave; those that leave at the same time by day, trip and stop.
+    found.sort((a, b) => a.planned + (a.delay ?? 0) - (b.planned + (b.delay ?? 0)) || a.day - b.day || a.t - b.t || a.p - b.p);
     return {
       id: stationId,
       name: this.stops.name[station],
       lat: this.stops.lat[station],
       lon: this.stops.lon[station],
       notes: realtime?.stationNotes.get(station) ?? [],
-      departures: list.slice(0, limit),
+      departures: found.slice(0, limit).map(({ t, p, date, planned, delay, cancelled }) => {
+        const route = this.tripRoute[t];
+        return {
+          trip: `${this.tripId(t)}_${date}`,
+          line: this.lineName(route),
+          mode: this.routeModes[route],
+          to: this.headsign(t),
+          platform: this.stops.platform[this.patternStops[this.patternStart[this.tripPattern[t]] + p]],
+          planned,
+          delay,
+          cancelled,
+        };
+      }),
     };
   }
 }

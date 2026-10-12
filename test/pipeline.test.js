@@ -5,6 +5,7 @@ import path from 'node:path';
 import { after, before, test } from 'node:test';
 import { Area } from '../server/lib/area.js';
 import { eachLine, parseCsvLine } from '../server/lib/csv.js';
+import { readDataset, writeDataset } from '../server/lib/dataset.js';
 import { buildDataset } from '../server/lib/importer.js';
 import { decodeFeed } from '../server/lib/pb.js';
 import { agreedDelay, buildRealtime } from '../server/lib/realtime.js';
@@ -63,8 +64,10 @@ async function importFeed(files = {}, name = 'feed.zip') {
   const zipPath = path.join(dir, name);
   fs.writeFileSync(zipPath, makeZip({ ...FEED, ...files }, { store: ['agency.txt'] }));
   const data = await buildDataset({ zipPath, area: AREA });
-  // The server stores the dataset as JSON; make sure it survives the round trip.
-  return new Timetable(JSON.parse(JSON.stringify(data)), AREA);
+  // The server stores the dataset as a file and loads that: so does the test.
+  const file = path.join(dir, `${name}.dataset`);
+  writeDataset(file, data);
+  return new Timetable(readDataset(file));
 }
 
 before(async () => {
@@ -124,7 +127,7 @@ test('a zip64 archive is read the same way', async () => {
     await zip.close();
   }
   const data = await buildDataset({ zipPath, area: AREA });
-  assert.deepEqual(data.trips.id.sort(), ['T1', 'T2', 'T4']);
+  assert.deepEqual([...data.trips.id].sort(), ['T1', 'T2', 'T4']);
 });
 
 test('service days follow Europe/Berlin including the DST switch', () => {
@@ -205,11 +208,11 @@ test('importer copes with a byte order mark, rows out of order, missing times an
   assert.deepEqual(other.stations.map((s) => s.id).sort(), ['B', 'C', 'SA']);
 
   const t1 = other.tripIndex.get('T1');
-  assert.deepEqual(other.trips.stops[t1].map((s) => other.stops.id[s]), ['A', 'B', 'C']);
+  assert.deepEqual(Array.from(other.stopsOf(t1), (s) => other.stops.id[s]), ['A', 'B', 'C']);
   assert.deepEqual([0, 1, 2].map((p) => other.seq(t1, p)), [10, 20, 30]);
   // B lies halfway between the departure from A and the arrival at C
-  assert.deepEqual(other.trips.arr[t1], [36000, 36660, 37200]);
-  assert.deepEqual(other.trips.dep[t1], [36120, 36660, 37200]);
+  assert.deepEqual([0, 1, 2].map((p) => other.schedArr(t1, p)), [36000, 36660, 37200]);
+  assert.deepEqual([0, 1, 2].map((p) => other.schedDep(t1, p)), [36120, 36660, 37200]);
   // stop_times.txt has no stop_headsign: trips.txt is asked, then the last stop
   assert.equal(other.headsign(t1), 'Gamma über Beta');
   assert.equal(other.headsign(other.tripIndex.get('T2')), 'Fern Süd');
@@ -217,6 +220,32 @@ test('importer copes with a byte order mark, rows out of order, missing times an
   // realtime updates are matched by stop_sequence, not by position
   const rt = buildRealtime(other, decodeFeed(encodeFeed({ timestamp: 1, tripUpdates: [{ tripId: 'T1', startDate: DAY, stops: [{ seq: 20, stopId: 'B', arr: { delay: 60 } }] }] })));
   assert.deepEqual(rt.byDate.get(DAY).get(t1).arrDelay, [null, 60, 60]);
+});
+
+test('a trip whose rows come in two runs is put together, where the feed first names it', async () => {
+  const split = await importFeed({
+    'stop_times.txt': [
+      'trip_id,arrival_time,departure_time,stop_id,stop_sequence,stop_headsign,pickup_type,drop_off_type',
+      // T1 as far as B, which is a trip already; its last stop follows further down
+      'T1,10:00:00,10:00:00,A,0,"Gamma, Endstation",,',
+      'T1,10:10:00,10:12:00,B,1,"Gamma, Endstation",,',
+      // one stop of T4, which is none yet
+      'T4,25:00:00,25:00:00,C,0,Alpha,,',
+      'T2,9:00:00,9:00:00,X,0,Fern Süd,,',
+      'T2,10:00:00,10:05:00,B,1,Fern Süd,,',
+      'T2,11:00:00,11:00:00,Y,2,Fern Süd,,',
+      'T1,10:20:00,10:20:00,C,2,"Gamma, Endstation",,',
+      'T4,25:30:00,25:30:00,A,1,Alpha,,',
+    ].join('\n') + '\n',
+  }, 'split.zip');
+  assert.deepEqual([...split.tripIndex.keys()], ['T1', 'T4', 'T2']);
+  for (const [id, date] of [['T1', DAY], ['T2', DAY], ['T4', '20261002']]) {
+    assert.deepEqual(split.trip(id, date, null), timetable.trip(id, date, null), id);
+  }
+  // T1 shared its two stops with nobody; the three it has now are one sequence, as in the feed that has them together
+  const t1 = split.tripIndex.get('T1');
+  assert.deepEqual(Array.from(split.stopsOf(t1), (s) => split.stops.id[s]), ['A', 'B', 'C']);
+  assert.deepEqual(split.vehicles(at('10:05'), null).map((v) => [v.id, v.lat, v.lon]), timetable.vehicles(at('10:05'), null).map((v) => [v.id, v.lat, v.lon]));
 });
 
 test('an area without stops is reported with a hint at the settings', async () => {
