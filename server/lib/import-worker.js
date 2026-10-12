@@ -10,7 +10,7 @@
 
 import { parentPort, workerData } from 'node:worker_threads';
 import { Area } from './area.js';
-import { readGz, writeGz } from './files.js';
+import { readDataset, writeDataset } from './dataset.js';
 import { buildDataset } from './importer.js';
 import { buildSegments, loadNetworks } from './shapes.js';
 
@@ -22,13 +22,13 @@ let step = mode === 'routes' ? 'routes' : 'import';
 const onProgress = (message) => parentPort.postMessage({ step, progress: message });
 
 function save(data) {
-  writeGz(outPath, data);
+  writeDataset(outPath, data);
   parentPort.postMessage({ saved: true });
 }
 
 let data;
 if (mode === 'routes') {
-  data = readGz(outPath);
+  data = readDataset(outPath);
 } else {
   data = await buildDataset({ zipPath, area, onProgress });
   data.source = { ...source, osm: null };

@@ -71,7 +71,7 @@ services:
       # No daily question to GitHub whether there is a newer release, and no
       # marker in the page when there is one.
       # NETNOU_UPDATE_CHECK: "off"
-      # Importing a timetable takes about 1.5 GB of memory for a minute or two
+      # Importing a timetable takes about 1.1 GB of memory for a minute
       # (measured for the default area). Node derives its heap limit from the
       # memory it sees; on a small host, or with a memory limit on the
       # container, set it explicitly. Do not limit the container to less than

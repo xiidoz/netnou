@@ -169,7 +169,7 @@ test('once the feed is imported the API answers', async () => {
   // one look, one download; no OSM extract is configured and nobody has asked for vehicles yet
   assert.deepEqual(upstream.requests, { head: 1, get: 1, realtime: 0, osm: 0 });
   // the download is removed, the dataset stays
-  await until(() => fs.readdirSync(path.join(dir, 'data')).join() === 'region.json.gz', 'the data directory to be tidy');
+  await until(() => fs.readdirSync(path.join(dir, 'data')).join() === 'dataset.bin', 'the data directory to be tidy');
 });
 
 test('/api/area', async () => {

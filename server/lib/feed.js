@@ -4,8 +4,8 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { Worker } from 'node:worker_threads';
-import { download, publicUrl, readGz, reason } from './files.js';
-import { DATASET_VERSION } from './importer.js';
+import { DATASET_VERSION, readDataset } from './dataset.js';
+import { download, publicUrl, reason } from './files.js';
 import { Timetable } from './timetable.js';
 
 const HEAD_TIMEOUT_MS = 30_000;
@@ -31,7 +31,7 @@ export class FeedUpdater {
     this.downloadTimeoutMs = downloadTimeoutMs;
     this.onTimetable = onTimetable;
     this.log = log;
-    this.datasetPath = path.join(dataDir, 'region.json.gz');
+    this.datasetPath = path.join(dataDir, 'dataset.bin');
     this.zipPath = path.join(dataDir, 'feed.zip');
     this.dataDir = dataDir;
     this.current = null; // `source` of the loaded dataset
@@ -63,6 +63,9 @@ export class FeedUpdater {
     }
     // Left behind if the process was stopped in the middle of an import.
     fs.rmSync(this.zipPath, { force: true });
+    fs.rmSync(`${this.datasetPath}.tmp`, { force: true });
+    // What the dataset was stored as up to version 0.8.
+    fs.rmSync(path.join(this.dataDir, 'region.json.gz'), { force: true });
     if (fs.existsSync(this.datasetPath)) {
       try {
         this.load();
@@ -75,14 +78,14 @@ export class FeedUpdater {
   }
 
   load() {
-    const data = readGz(this.datasetPath);
+    const data = readDataset(this.datasetPath);
     if (data.version !== DATASET_VERSION) throw new Error('written by another version');
     if (data.area !== this.area.id) throw new Error('made for another area');
-    const timetable = new Timetable(data, this.area);
+    const timetable = new Timetable(data);
     this.current = data.source;
     this.routesMissing = this.osm.urls.length > 0 && !data.segments;
     this.status.state = 'ready';
-    this.status.message = `${timetable.tripCount} trips, ${timetable.stations.length} stations, ${timetable.segPts.length} routed hops`;
+    this.status.message = `${timetable.tripCount} trips, ${timetable.stations.length} stations, ${timetable.segmentCount} routed hops`;
     this.log(`Timetable loaded: ${this.status.message}, feed of ${data.source.lastModified ?? 'unknown date'}`);
     this.onTimetable(timetable);
   }

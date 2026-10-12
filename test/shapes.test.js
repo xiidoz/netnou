@@ -4,6 +4,8 @@ import os from 'node:os';
 import path from 'node:path';
 import { test } from 'node:test';
 import { Area } from '../server/lib/area.js';
+import { readDataset, writeDataset } from '../server/lib/dataset.js';
+import { packDataset } from '../server/lib/importer.js';
 import { Network, NetworkBuilder, classifyWay, pathLength, simplify } from '../server/lib/network.js';
 import { readPbfWays } from '../server/lib/osmpbf.js';
 import { buildSegments } from '../server/lib/shapes.js';
@@ -161,18 +163,22 @@ test('vehicles and trip paths follow the routed geometry', () => {
   // Bus 1 from a stop on the main road to one on the northern street,
   // 10:00 → 10:10. The cheapest road route turns north at B over the link.
   const area = Area.fromBbox([49.4, 10.9, 49.6, 11.1]);
-  const dataset = {
+  const dataset = packDataset({
     stops: { id: ['P', 'Q'], name: ['P', 'Q'], lat: [STOP.mainWest[0], STOP.north[0]], lon: [STOP.mainWest[1], STOP.north[1]], parent: [-1, -1], platform: ['', ''], region: [1, 1] },
     routes: { id: ['R'], short: ['1'], long: [''], type: [3], color: [''], text: [''], agency: [''] },
     headsigns: ['Q'],
     dates: ['20261003'],
     services: [[0]],
     trips: { id: ['T'], route: [0], service: [0], headsign: [0], stops: [[0, 1]], arr: [[36000, 36600]], dep: [[36000, 36600]], seq: [null] },
-  };
+  });
   dataset.segments = buildSegments(dataset, gridNetworks(), area);
-  assert.deepEqual(dataset.segments.net.map((n) => dataset.segments.nets[n]), ['road']);
+  assert.deepEqual(Array.from(dataset.segments.net, (n) => dataset.segments.nets[n]), ['road']);
 
-  const timetable = new Timetable(JSON.parse(JSON.stringify(dataset)), area);
+  // (as the server has it: written to a file and read again)
+  const file = path.join(os.tmpdir(), `netnou-shapes-${process.pid}.dataset`);
+  writeDataset(file, dataset);
+  const timetable = new Timetable(readDataset(file));
+  fs.rmSync(file);
   const trip = timetable.trip('T', '20261003', null);
   // the stop snapped onto A–B, then B, E, and the last stop snapped onto E–F
   assert.equal(trip.path.length / 2, 4);

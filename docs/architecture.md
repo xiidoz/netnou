@@ -24,7 +24,7 @@ flowchart LR
   feed[(GTFS timetable<br>zip, whole country)] --> worker
   osm[(OpenStreetMap<br>extracts)] --> worker
   subgraph server [Node.js process]
-    worker[import worker<br>thread] --> dataset[(region.json.gz)]
+    worker[import worker<br>thread] --> dataset[(dataset.bin)]
     dataset --> timetable[Timetable<br>in memory]
     rt[realtime poller] --> snapshot[delays per trip]
     timetable --> api[HTTP API]
@@ -37,7 +37,7 @@ flowchart LR
 
 One Node.js process does everything. A worker thread cuts the nationwide
 timetable down to the area and computes the route geometry; the result is one
-compressed file. The main thread loads that file into memory, fetches the
+file. The main thread loads that file into memory, fetches the
 realtime feed while somebody is looking, and answers the API. The page asks
 every ten seconds where the vehicles in view will be and animates them in
 between.
@@ -87,19 +87,20 @@ Server (`server/`):
 | `lib/area.js` | the area as a grid of cells with their distance to it (`Area`, `NEAR`) |
 | `lib/feed.js` | keeps the timetable current: version check, download, worker, retries (`FeedUpdater`) |
 | `lib/import-worker.js` | worker thread: import, route geometry, writing the dataset |
-| `lib/importer.js` | cuts the GTFS feed down to the area (`buildDataset`); documents the dataset layout |
+| `lib/importer.js` | cuts the GTFS feed down to the area and stores what repeats in it once (`buildDataset`); documents the dataset layout |
+| `lib/dataset.js` | the dataset as a binary file (`writeDataset`, `readDataset`), texts as one block (`Texts`) and lists that are stored once (`SharedLists`) |
 | `lib/zip.js`, `lib/csv.js` | read entries straight out of the zip (including zip64) and split CSV lines |
 | `lib/osmpbf.js` | reads the ways of an `.osm.pbf` extract |
 | `lib/network.js` | builds routable networks from the ways and finds paths (`classifyWay`, `Network`) |
 | `lib/shapes.js` | route geometry for every hop (`loadNetworks`, `buildSegments`) |
-| `lib/timetable.js` | the loaded dataset and the queries of the API (`Timetable`) |
+| `lib/timetable.js` | the loaded dataset and the queries of the API (`Timetable`); finds the trains that run coupled (`findSharedWays`) |
 | `lib/realtime.js` | fetches the realtime feed, matches it to the trips (`RealtimePoller`) and gives the portions of a coupled train the same delays where they share their way |
 | `lib/http.js` | the GET the realtime feed is fetched with: patient with a busy server (`get`) |
 | `lib/pb.js` | decodes the GTFS-Realtime message (`decodeFeed`) |
 | `lib/update.js` | what the server calls itself (`describeBuild`) and the daily look-out for a newer release (`UpdateChecker`) |
 | `lib/time.js` | service days and the time zone of the feed |
 | `lib/page.js` | which language the page is sent in, and what the server writes into it before it sends it: for search engines and previews of links, the header card as a visitor first sees it, and what the page is to fetch right away; `robots.txt` and the sitemap; which files of the operator's own take the place of built-in icons |
-| `lib/files.js` | downloads, gzipped JSON files, error texts |
+| `lib/files.js` | downloads, gzipped JSON files (the networks from OpenStreetMap), error texts |
 | `areas/vgn.geojson` | outline of the default area, see [its README](../server/areas/README.md) |
 
 Page (`public/`):
@@ -116,7 +117,9 @@ Page (`public/`):
 | `vendor/maplibre-gl/` | the map library, vendored, see [its README](../public/vendor/maplibre-gl/README.md) |
 | `vendor/material-design-icons/` | the shapes of the icons on the page's own buttons, see [its README](../public/vendor/material-design-icons/README.md) |
 
-`tools/` holds three scripts that are run by hand: `build-vgn-area.mjs`
+`tools/` holds four scripts that are run by hand: `measure-feed.mjs` imports a
+feed as the server does and prints what it comes to (trips, what repeats,
+size, the time to say which vehicles are under way); `build-vgn-area.mjs`
 regenerates the default area, `build-icons.mjs` renders the app icons from
 `favicon.svg`, and `build-social-preview.mjs` renders the image for link
 previews from the README screenshot.
@@ -152,8 +155,9 @@ of all of Germany to about 98,000 trips and 13,500 stations.
 2. **Trips.** `stop_times.txt` is streamed. Only the trip and stop ids of
    each row are looked at; a trip is kept if one of its stops is in the area,
    and only kept trips are parsed in full. This relies on the rows of a trip
-   being next to each other. Missing times are filled in from their
-   neighbours.
+   being next to each other; a trip whose rows come in two runs is put
+   together. Missing times are filled in from their neighbours. A trip is
+   stored as soon as it is whole, see [The dataset](#the-dataset).
 3. **The rest.** `trips.txt`, `routes.txt`, `agency.txt`, `calendar.txt` and
    `calendar_dates.txt` are read for the kept trips, then `stops.txt` again
    for every stop they call at, also outside the area, and their parent
@@ -162,9 +166,62 @@ of all of Germany to about 98,000 trips and 13,500 stations.
    saved without route geometry and loaded, so that the map works with
    straight lines while the next step runs.
 5. **Route geometry**, see below.
-6. **Dataset.** The result is written to `region.json.gz` and the main thread
-   loads it. Its layout, a set of parallel arrays, is described above
-   `buildDataset` in `lib/importer.js`.
+6. **Dataset.** The trains that run coupled are looked for
+   (`findSharedWays`), the result is written to `dataset.bin` and the main
+   thread loads it.
+
+## The dataset
+
+A timetable repeats itself: most trips run the same way as others, and many
+at the same pace. The dataset holds what repeats once.
+
+- **A pattern** is a sequence of stops. Every different one is stored once.
+- **A profile** is a set of running times: for every stop the arrival and the
+  departure in seconds, counted from the first departure of the trip. Every
+  different one is stored once.
+- **A trip** is a row of numbers: its pattern, its profile, its first
+  departure, its service, its route and its headsign. Its
+  `stop_sequence` numbers are a third kind of shared list, kept only where
+  they do not count 0, 1, 2, ….
+
+For the default area that is 16,000 patterns and 19,000 profiles for 93,000
+trips with 1.8 million stop times; for the feed of all of Germany 241,000
+and 272,000 for 1.9 million trips with 39 million.
+
+While the import reads, a pattern or a profile is found again by a hash of
+its numbers (`SharedLists`). Two different lists can have the same hash, so
+on a hit the numbers are compared.
+
+Everything is columns: a typed array for each property of all trips, all
+patterns, all stops. Nothing holds an array for every trip. Texts that are
+many, the ids of the trips, are one block of UTF-8 (`Texts`). A trip is
+found by its id in a list of all trips in the order of their ids, which is
+stored with them; there is no map with an entry for each trip.
+
+The file is those columns as they are, after a head of JSON with everything
+small (`lib/dataset.js`). Loading reads it into memory and lays the typed
+arrays over it; nothing is parsed but the head. The dataset of the default
+area is 38 MB, 27 of them route geometry, and is loaded in a tenth of a
+second.
+
+What the API asks goes by pattern, not by trip:
+
+- **A station knows the patterns that stop at it,** each with the position
+  of the stop in the pattern, and a pattern knows its trips in the order of
+  their first departures. A departure board looks among those for the trips
+  that leave in time.
+- **The vehicles under way:** the trips of a service day are put in the order
+  of their first departures when the day is first asked for. That list is
+  gone through up to the trips that have not started yet. A trip with
+  realtime data may be under way outside the times of the timetable and is
+  looked at by itself.
+- **Where a vehicle is** is worked out from its profile and the geometry of
+  the hop it is on. Its knots are only made when an answer needs them.
+
+Lines, stations and how much service a station has are worked out from the
+columns when the dataset is loaded, which takes a few hundredths of a second
+for the default area. The layout is described field by field above
+`buildDataset` in `lib/importer.js`.
 
 ## Route geometry
 
@@ -267,7 +324,7 @@ The data directory (`NETNOU_DATA_DIR`) holds:
 
 | File | Content | Lifetime |
 | --- | --- | --- |
-| `region.json.gz` | the dataset: timetable of the area with route geometry | until a new feed version is imported |
+| `dataset.bin` | the dataset: timetable of the area with route geometry | until a new feed version is imported |
 | `osm-networks.json.gz` | the routable networks | `NETNOU_OSM_MAX_AGE_DAYS` |
 | `feed.zip`, `osm-<n>.pbf` | downloads | only during an import |
 
@@ -276,7 +333,7 @@ Everything can be deleted at any time and is rebuilt.
 Two constants guard the formats. Bump them when you change what is stored;
 otherwise a server would load a file written by older code:
 
-- `DATASET_VERSION` in `lib/importer.js`: the layout or meaning of anything
+- `DATASET_VERSION` in `lib/dataset.js`: the layout or meaning of anything
   in the dataset, including the route geometry.
 - `NETWORKS_VERSION` in `lib/shapes.js`: `classifyWay`, the cost factors or
   the output of `NetworkBuilder`.
@@ -434,10 +491,12 @@ What these mean for other feeds and countries, and where to change them:
 | area | the region covered, from `NETNOU_BBOX` or `NETNOU_AREA_FILE` |
 | stop | a row of `stops.txt`, often a single platform |
 | station | the stop that groups platforms (`parent_station`); what the map shows and a departure board is for |
+| pattern | a sequence of stops, stored once for all the trips that run it |
+| profile | a set of running times, stored once: arrival and departure at every stop, counted from the first departure |
 | hop | two consecutive stops of a trip |
 | network, net | one of the four routable graphs: `road`, `rail`, `subway`, `tram` |
 | segment | the routed path of a hop on one network |
 | knots | `[time, lat, lon, …]` along a vehicle's way ahead |
 | mode | kind of transport as the page shows it, see [Modes](api.md#modes) |
 | service day | the day a trip belongs to in the timetable; its times can exceed 24:00 |
-| dataset | the timetable of the area with its route geometry, as stored in `region.json.gz` |
+| dataset | the timetable of the area with its route geometry, as stored in `dataset.bin`, see [The dataset](#the-dataset) |

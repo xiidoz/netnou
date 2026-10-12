@@ -17,9 +17,9 @@
   `download.gtfs.de`, `realtime.gtfs.de` and `download.geofabrik.de`. Once a
   day it also asks `api.github.com` for a newer release, unless that is
   switched off ([Version and updates](configuration.md#version-and-updates)).
-- Memory: about 1.5 GB for a minute or two while a timetable is imported, a
-  few hundred MB otherwise.
-- Disk: less than 1 GB in the data directory during an import, about 35 MB
+- Memory: about 1.1 GB for a minute while a timetable is imported, about
+  200 MB otherwise.
+- Disk: less than 1 GB in the data directory during an import, about 65 MB
   afterwards.
 
 The figures are approximate and were measured for the default area in October
