@@ -58,7 +58,10 @@ shortened where marked with `…`.
 
 While the server has no timetable, right after the first start or when the
 feed cannot be loaded, every `/api/` path except `/api/status` and `/api/area`
-answers 503:
+answers 503. An instance without an area
+([`NETNOU_AREA=all`](configuration.md#no-area-and-single-operators)) does
+not know what it covers until it has a timetable: there `/api/area` answers
+503 as well.
 
 ```json
 { "state": "loading", "step": "download", "message": "downloading https://download.gtfs.de/germany/free/latest.zip" }
@@ -99,7 +102,7 @@ the fetching of the realtime feed.
   },
   "routes": { "segments": 53399, "osmFetchedAt": "2026-10-04T16:34:20.781Z" },
   "realtime": { "polling": true, "fetchedAt": 1791148697, "feedTimestamp": 1791148698, "matchedTrips": 800, "error": null, "fetches": 412, "failures": 3 },
-  "area": { "name": "Großraum Nürnberg (VGN)", "bbox": [48.5842, 10.0399, 50.5232, 12.5939] },
+  "area": { "name": "Großraum Nürnberg (VGN)", "bbox": [48.5842, 10.0399, 50.5232, 12.5939], "agencies": null },
   "view": [49.376, 10.916, 49.604, 11.204]
 }
 ```
@@ -118,7 +121,7 @@ the fetching of the realtime feed.
 | `timetable.error` | string or null | why the last update failed. Can be set while `state` is `ready`: the previous timetable stays in use |
 | `timetable.feedLastModified` | string or null | `Last-Modified` header of the imported feed |
 | `timetable.importedAt` | string or null | when it was imported, ISO 8601 |
-| `timetable.trips` | integer | trips in the area |
+| `timetable.trips` | integer | trips of the instance |
 | `timetable.validFrom`, `validUntil` | service day or null | first and last day the timetable covers |
 | `routes.segments` | integer | hops that have route geometry; 0 means straight lines everywhere |
 | `routes.osmFetchedAt` | string or null | age of the OpenStreetMap data, ISO 8601 |
@@ -128,12 +131,15 @@ the fetching of the realtime feed.
 | `realtime.matchedTrips` | integer | trip updates that matched a trip of the timetable |
 | `realtime.error` | string or null | why the last fetch failed |
 | `realtime.fetches`, `realtime.failures` | integer | fetches begun and fetches failed since the server started |
-| `area.name`, `area.bbox`, `view` | | as in `/api/area` |
+| `area.name`, `area.bbox`, `view` | | as in `/api/area`; `bbox` and `view` are `null` for an instance without an area until it has a timetable |
+| `area.agencies` | array of strings or null | the operators whose trips the instance keeps, as they are set (`NETNOU_AGENCIES`); `null` for all |
 
 ## `GET /api/area`
 
-What a client needs to know about the instance. It does not change while the
-server runs and is available while the timetable is still loading.
+What a client needs to know about the instance. With an area it does not
+change while the server runs and is available while the timetable is still
+loading. Without one, `bbox` and with it `view` follow the timetable: the
+answer is there once a timetable is loaded and may be another with the next.
 
 ```json
 {
@@ -160,9 +166,9 @@ server runs and is available while the timetable is still loading.
 | `name` | string | name of the area, `""` if it has none |
 | `siteTitle` | object | the operator's own title of the page (`NETNOU_SITE_TITLE`), by the languages of the page: for each a text to be shown as it is, or `null` where they have none and the page words its own |
 | `siteDescription` | object | the same for what the page says about itself (`NETNOU_SITE_DESCRIPTION`) |
-| `bbox` | box | rectangle around the area |
+| `bbox` | box | rectangle around the area; without an area, around all stops of the instance |
 | `view` | box | map section to show first |
-| `outline` | array of rings | the edge of the area, each ring an array of `[latitude, longitude]`. Note the order: the GeoJSON file the area comes from has longitude first |
+| `outline` | array of rings | the edge of the area, each ring an array of `[latitude, longitude]`. Note the order: the GeoJSON file the area comes from has longitude first. Empty without an area |
 | `timeZone` | string | IANA name of the zone all times of day are meant in |
 | `styleUrl` | string or `null` | URL of the [MapLibre style](https://maplibre.org/maplibre-style-spec/) of the map behind the vehicles; `null` if the instance uses raster tiles |
 | `tileUrl` | string or `null` | URL template of raster tiles, with `{z}`, `{x}`, `{y}` and possibly `{s}` and `{r}`; `null` if the instance uses a style |

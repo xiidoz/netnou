@@ -6,6 +6,7 @@ gtfs.de feeds on port 8080.
 
 - [Settings](#settings)
 - [Choosing an area](#choosing-an-area)
+- [No area, and single operators](#no-area-and-single-operators)
 - [Example: another region in Germany](#example-another-region-in-germany)
 - [Realtime polling and traffic](#realtime-polling-and-traffic)
 - [The map](#the-map)
@@ -60,6 +61,8 @@ needs `NETNOU_PORT` set to the same number.
 | `NETNOU_DATA_DIR` | `data` in the project folder (`/data` in the image) | path | where the caches are kept; must be writable |
 | `NETNOU_AREA_FILE` | the built-in VGN outline | path | GeoJSON file with the polygons of the area, see [Choosing an area](#choosing-an-area) |
 | `NETNOU_BBOX` | – | `south,west,north,east` | a rectangle as the area, instead of `NETNOU_AREA_FILE` |
+| `NETNOU_AREA` | – | `all` | no area: everything the feed has, see [No area, and single operators](#no-area-and-single-operators) |
+| `NETNOU_AGENCIES` | all operators | names separated by commas, or a JSON array | only the trips of these operators, named as `agency.txt` of the feed names them |
 | `NETNOU_SITE_NAME` | `Netnou` | text | what the instance calls itself: in the heading and the title of the page, in previews of links and as the installed app. The credits on the map name Netnou and its version whatever is set here |
 | `NETNOU_SITE_TITLE` | the page's own, in each of its languages | text, or texts by language | the title of the page as the tab of a browser and a search result show it, in words of your own, see [Being found](#being-found) |
 | `NETNOU_SITE_DESCRIPTION` | the page's own, in each of its languages | text, or texts by language | what the page says about itself in a search result and in a preview of a link, in words of your own |
@@ -95,7 +98,7 @@ Rules that apply to all of them:
   number.
 - Relative paths in `NETNOU_DATA_DIR` and `NETNOU_AREA_FILE` are resolved against the
   working directory.
-- `NETNOU_AREA_FILE` and `NETNOU_BBOX` exclude each other.
+- `NETNOU_AREA_FILE`, `NETNOU_BBOX` and `NETNOU_AREA` exclude each other.
 - A value that is not acceptable stops the server at start with exit code 1
   and one line that names the variable, for example:
 
@@ -129,6 +132,58 @@ file has one; `tools/build-vgn-area.mjs` shows how it is derived.
 
 Changing the area makes the server import the timetable again and rebuild the
 route geometry on the next start.
+
+## No area, and single operators
+
+An instance need not have an area, and it need not show every operator.
+There are two limits, each optional, and a trip has to pass both:
+
+| Instance | Area | Operators |
+| --- | --- | --- |
+| A transit network | its outline (the VGN is built in) | all |
+| A state | its outline, as `NETNOU_AREA_FILE` | all |
+| Everything the feed has | `NETNOU_AREA=all` | all |
+| One operator, wherever it runs | `NETNOU_AREA=all` | `NETNOU_AGENCIES` |
+| One operator in a network | the outline of the network | `NETNOU_AGENCIES` |
+
+- **`NETNOU_AREA=all`** takes every trip of the feed. There is then nothing
+  that would be outside: every stop is listed, has a departure board and is
+  found by the search, no edge is drawn on the map, and the first view is the
+  rectangle around all stops unless `NETNOU_VIEW` says otherwise. For the feed
+  of a whole country set `NETNOU_VIEW`: a few lines that run abroad make that
+  rectangle much larger than the country.
+- **`NETNOU_AGENCIES`** keeps the trips of the operators named and drops all
+  others. The names are those of `agency.txt` in the feed (`agency_name`),
+  taken without regard to capitals and to spaces at their ends:
+
+  ```sh
+  NETNOU_AGENCIES="VerkehrsAG Nürnberg, infra fürth verkehr gmbh"
+  # a name with a comma in it needs the list as a JSON array
+  NETNOU_AGENCIES='["Stadtwerke, Verkehr", "VerkehrsAG Nürnberg"]'
+  ```
+
+  A name the feed does not have ends the import with an error that names it
+  and what the feed has that is like it; `/api/status` shows the error.
+- **Both limits count.** With `NETNOU_AGENCIES` and nothing else, the area is
+  still the built-in VGN: an operator from elsewhere then has no trips, and
+  the error says so. Give it its own area, or `NETNOU_AREA=all`.
+
+Without an area the instance still needs to know where its vehicles follow
+roads and tracks and which OpenStreetMap data to keep. It takes that from its
+trips: where their stops are, and the straight lines from each stop to the
+next. That is its extent. `NETNOU_OSM_PBF_URLS` works as for an area; the
+extracts have to cover the extent. The OpenStreetMap data kept for one
+timetable is used for the next as long as that one stays within it, so a new
+timetable alone does not fetch the extracts again.
+
+The feed of all of Germany can be shown this way, but an instance for it is
+not ready for visitors yet: zoomed out, the page asks for every vehicle in
+the country, and the roads of a whole country are more than the route
+geometry can be made from. Both are being worked on
+([#36](https://github.com/xiidoz/netnou/issues/36)).
+
+Changing the area or the operators makes the server import the timetable
+again on the next start.
 
 ## Example: another region in Germany
 

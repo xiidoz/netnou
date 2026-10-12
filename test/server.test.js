@@ -47,7 +47,7 @@ const REALTIME = encodeFeed({
 });
 
 // Every setting the server reads; none may leak in from the shell running the tests.
-const SETTINGS = ['NETNOU_PORT', 'NETNOU_HOST', 'NETNOU_DATA_DIR', 'NETNOU_AREA_FILE', 'NETNOU_BBOX', 'NETNOU_AREA_NAME', 'NETNOU_VIEW', 'NETNOU_TIMEZONE', 'NETNOU_MAP_STYLE_URL', 'NETNOU_MAP_ORIGINS', 'NETNOU_TILE_URL', 'NETNOU_TILE_ATTRIBUTION', 'NETNOU_DATA_ATTRIBUTION',
+const SETTINGS = ['NETNOU_PORT', 'NETNOU_HOST', 'NETNOU_DATA_DIR', 'NETNOU_AREA', 'NETNOU_AREA_FILE', 'NETNOU_BBOX', 'NETNOU_AGENCIES', 'NETNOU_AREA_NAME', 'NETNOU_VIEW', 'NETNOU_TIMEZONE', 'NETNOU_MAP_STYLE_URL', 'NETNOU_MAP_ORIGINS', 'NETNOU_TILE_URL', 'NETNOU_TILE_ATTRIBUTION', 'NETNOU_DATA_ATTRIBUTION',
   'NETNOU_OSM_PBF_URLS', 'NETNOU_OSM_MAX_AGE_DAYS', 'NETNOU_FEED_URL', 'NETNOU_FEED_CHECK_MINUTES', 'NETNOU_DOWNLOAD_TIMEOUT_MINUTES', 'NETNOU_REALTIME_URL', 'NETNOU_REALTIME_INTERVAL_SECONDS', 'NETNOU_REALTIME_IDLE_SECONDS', 'NETNOU_UPDATE_CHECK',
   'NETNOU_LANGUAGE', 'NETNOU_PUBLIC_URL', 'NETNOU_SEARCH_ENGINES', 'NETNOU_SITE_NAME', 'NETNOU_SITE_TITLE', 'NETNOU_SITE_DESCRIPTION', 'NETNOU_LINKS', 'NETNOU_BRAND_DIR',
   // (a title and a description may be set for one language alone)
@@ -222,7 +222,7 @@ test('/api/status', async () => {
   assert.ok(!Number.isNaN(Date.parse(importedAt)));
   assert.deepEqual(json.routes, { segments: 0, osmFetchedAt: null });
   assert.deepEqual(Object.keys(json.realtime).sort(), ['error', 'failures', 'feedTimestamp', 'fetchedAt', 'fetches', 'matchedTrips', 'polling']);
-  assert.deepEqual(json.area, { name: 'Testland', bbox: BBOX });
+  assert.deepEqual(json.area, { name: 'Testland', bbox: BBOX, agencies: null });
   assert.deepEqual(json.view, BBOX);
 });
 
@@ -630,6 +630,52 @@ test('an instance that is not to be listed says so with every answer', async () 
       proc.kill();
       await once(proc, 'exit');
     }
+  }
+});
+
+test('an instance without an area says what it covers once it has a timetable', async () => {
+  let go;
+  const feed = { zip: makeZip(FEED), etag: '"v1"', realtime: REALTIME, hold: new Promise((resolve) => { go = resolve; }) };
+  const other = await startUpstream(feed);
+  const proc = start({ NETNOU_PORT: '0', NETNOU_HOST: '127.0.0.1', NETNOU_DATA_DIR: path.join(dir, 'all'), NETNOU_AREA: 'all', NETNOU_AGENCIES: 'TESTBETRIEB', NETNOU_TIMEZONE: 'UTC', NETNOU_FEED_URL: `${other.url}/feed.zip`, NETNOU_REALTIME_URL: `${other.url}/realtime.pb` });
+  let text = '';
+  proc.stdout.on('data', (chunk) => { text += chunk; });
+  proc.stderr.on('data', (chunk) => { text += chunk; });
+  try {
+    port = Number((await until(() => /Netnou listening on http:\/\/127\.0\.0\.1:(\d+), no area, operators: TESTBETRIEB\n/.exec(text), 'the server without an area to listen'))[1]);
+    // While the timetable is on its way nobody knows where its stops are:
+    // the area is asked for in vain, as everything is but the status.
+    const loading = await until(async () => {
+      const res = await get('/api/area');
+      return res.json.state === 'loading' && res;
+    }, 'the download to begin');
+    assert.equal(loading.status, 503);
+    assert.deepEqual(Object.keys(loading.json).sort(), ['message', 'state', 'step']);
+    const before = (await get('/api/status')).json;
+    assert.deepEqual([before.area, before.view], [{ name: '', bbox: null, agencies: ['TESTBETRIEB'] }, null]);
+    assert.equal((await request('/')).status, 200);
+
+    go();
+    const area = await until(async () => {
+      const res = await get('/api/area');
+      return res.status === 200 && res;
+    }, 'the import to finish');
+    // the rectangle around all its stops, also those far from the others; no edge to draw
+    const around = [49.4, 11, 52, 13];
+    assert.deepEqual([area.json.bbox, area.json.view, area.json.outline, area.json.name], [around, around, [], '']);
+    const after = (await get('/api/status')).json;
+    assert.deepEqual([after.area, after.view], [{ name: '', bbox: around, agencies: ['TESTBETRIEB'] }, around]);
+    assert.equal(after.timetable.trips, 2);
+    // every station is one of its own
+    assert.deepEqual((await get('/api/stations')).json.map((station) => station.id).sort(), ['A', 'B', 'X', 'Y']);
+    assert.equal((await get('/api/departures?station=X')).status, 200);
+    // and the answer is kept by the browser until another timetable says otherwise
+    assert.equal((await request('/api/area', { headers: { 'If-None-Match': area.headers.etag } })).status, 304);
+  } finally {
+    go();
+    proc.kill();
+    await once(proc, 'exit');
+    await other.close();
   }
 });
 

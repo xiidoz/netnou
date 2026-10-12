@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import { test } from 'node:test';
-import { Area, NEAR } from '../server/lib/area.js';
+import { Area, NEAR, agencyKey, scopeId } from '../server/lib/area.js';
 
 test('a rectangular area knows what is inside and how far outside things are', () => {
   const area = Area.fromBbox([49.3, 10.8, 49.7, 11.3]);
@@ -55,4 +55,51 @@ test('the bundled VGN outline covers the network and not its neighbours', () => 
   const outside = { Schweinfurt: [50.05, 10.23], Regensburg: [49.01, 12.1], Würzburg: [49.79, 9.93], Ingolstadt: [48.76, 11.42], Crailsheim: [49.13, 10.07] };
   for (const [name, [lat, lon]] of Object.entries(inside)) assert.equal(vgn.distance(lat, lon), 0, name);
   for (const [name, [lat, lon]] of Object.entries(outside)) assert.ok(vgn.distance(lat, lon) > NEAR.exit, name);
+});
+
+test('the extent of an instance without an area is where its stops are, and the lines between them', () => {
+  // two stops next to each other and one 33 km to the east
+  const lat = [49.4, 49.41, 49.4];
+  const lon = [11.0, 11.0, 11.45];
+  const stops = Area.covering(lat, lon);
+  assert.deepEqual(stops.bbox, [49.4, 11.0, 49.41, 11.45]);
+  assert.deepEqual([stops.polygons, stops.id], [[], null]);
+  for (let i = 0; i < 3; i++) assert.equal(stops.distance(lat[i], lon[i]), 0);
+  assert.equal(stops.distance(49.4, 11.03), 2);
+  assert.equal(stops.distance(49.4, 11.22), 255); // halfway to the third, far from all of them
+  // with a trip from the first to the third, what lies between them is inside as well
+  const line = Area.covering(lat, lon, (hop) => hop(0, 2));
+  assert.equal(line.distance(49.4, 11.22), 0);
+  assert.equal(line.distance(49.42, 11.22), 2);
+  assert.equal(line.distance(49.4 + 7 * 0.01, 11.22), 7);
+  assert.equal(line.distance(49.6, 11.22), 255);
+
+  // kept beside what was made for it, and read again
+  const again = Area.fromJSON(JSON.parse(JSON.stringify(line)));
+  assert.deepEqual([again.bbox, again.rows, again.cols], [line.bbox, line.rows, line.cols]);
+  assert.deepEqual(again.cells, line.cells);
+  assert.throws(() => Area.fromJSON({ ...line.toJSON(), bbox: [49, 11, 50, 12] }), /does not fit/);
+
+  // One extent lies within another if nothing of it is far from that: what
+  // was read of OpenStreetMap for the one is then good for the other.
+  assert.ok(stops.within(line, 0));
+  assert.ok(!line.within(stops, NEAR.exit));
+  const grown = Area.covering([...lat, 49.43], [...lon, 11.02]); // one stop more, 2 km off
+  assert.ok(grown.within(stops, NEAR.exit));
+  assert.ok(!grown.within(stops, 1));
+  const elsewhere = Area.covering([...lat, 49.8], [...lon, 11.0]);
+  assert.ok(!elsewhere.within(stops, NEAR.exit));
+
+  // a single stop is an extent too; none is not
+  assert.equal(Area.covering([49.4], [11.0]).distance(49.4, 11.0), 0);
+  assert.throws(() => Area.covering([], []), /no stops/);
+});
+
+test('what an instance covers has an id of its own unless it is an area and nothing else', () => {
+  const area = Area.fromBbox([49.3, 10.8, 49.7, 11.3]);
+  assert.equal(scopeId(area, null), area.id);
+  const ids = [scopeId(area, null), scopeId(null, null), scopeId(null, ['a']), scopeId(area, ['a']), scopeId(area, ['a', 'b']), scopeId(Area.fromBbox([49, 10, 50, 11]), ['a'])];
+  assert.equal(new Set(ids).size, ids.length);
+  assert.equal(scopeId(area, ['b', 'a']), scopeId(area, ['a', 'b']));
+  assert.equal(agencyKey('  VerkehrsAG Nürnberg '), 'verkehrsag nürnberg');
 });

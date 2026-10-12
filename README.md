@@ -106,6 +106,8 @@ ones most people touch:
 | `NETNOU_DATA_DIR` | `./data` | where the caches are kept |
 | `NETNOU_BBOX` | – | area to cover as `south,west,north,east`, instead of the VGN |
 | `NETNOU_AREA_FILE` | built-in VGN | GeoJSON file with the polygons of the area |
+| `NETNOU_AREA` | – | `all` for no area: everything the feed has |
+| `NETNOU_AGENCIES` | all | only the trips of these operators, by their names in the feed |
 | `NETNOU_AREA_NAME` | `Großraum Nürnberg (VGN)` | shown next to the title |
 | `NETNOU_PUBLIC_URL` | – | the address visitors reach the instance under, for search engines and previews of links |
 | `NETNOU_OSM_PBF_URLS` | five Bavarian extracts | OpenStreetMap extracts covering the area |

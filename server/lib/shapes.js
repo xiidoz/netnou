@@ -6,7 +6,7 @@
 
 import fs from 'node:fs';
 import path from 'node:path';
-import { NEAR } from './area.js';
+import { Area, NEAR } from './area.js';
 import { download, publicUrl, readGz, reason, writeGz } from './files.js';
 import { NETS, Network, NetworkBuilder, simplify } from './network.js';
 import { readPbfWays } from './osmpbf.js';
@@ -33,20 +33,33 @@ const SIMPLIFY_M = 1.5;
  * if that is missing or older than maxAgeMs – from freshly downloaded OSM
  * extracts. Returns null if there is neither (the map then falls back to
  * straight lines between stops).
+ *
+ * An area of polygons stays what it is. The extent of an instance without an
+ * area follows the timetable: the networks read for an earlier one are used
+ * for as long as the present one lies within what was kept of OpenStreetMap
+ * then, so that a new timetable alone does not fetch the extracts again.
+ * @param area the area, or the extent of an instance without one (Area.covering)
+ * @param scope what the instance covers, which the networks are tied to (scopeId)
  * @param timeoutMs limit for the download of one extract
  */
-export async function loadNetworks({ dataDir, urls, area, maxAgeMs, timeoutMs, onProgress }) {
+export async function loadNetworks({ dataDir, urls, area, scope = area.id, maxAgeMs, timeoutMs, onProgress }) {
   if (!urls.length) return null;
   const cachePath = path.join(dataDir, 'osm-networks.json.gz');
+  const extent = area.polygons.length ? null : area;
 
   let cached = null;
+  let covered = true;
   try {
     const data = readGz(cachePath);
-    if (data.version === NETWORKS_VERSION && data.area === area.id && data.sources.join() === urls.join()) cached = data;
+    if (data.version === NETWORKS_VERSION && data.area === scope && data.sources.join() === urls.join()) {
+      cached = data;
+      covered = !extent || (Boolean(data.extent) && extent.within(Area.fromJSON(data.extent), NEAR.exit));
+    }
   } catch {
     // no usable cache
   }
-  if (cached && Date.now() - Date.parse(cached.fetchedAt) < maxAgeMs) return cached;
+  if (cached && covered && Date.now() - Date.parse(cached.fetchedAt) < maxAgeMs) return cached;
+  if (cached && !covered) onProgress('the timetable reaches beyond the OSM data that was kept: reading it again');
 
   try {
     const builder = new NetworkBuilder();
@@ -62,7 +75,7 @@ export async function loadNetworks({ dataDir, urls, area, maxAgeMs, timeoutMs, o
         fs.rmSync(file, { force: true });
       }
     }
-    const fresh = { version: NETWORKS_VERSION, fetchedAt: new Date().toISOString(), area: area.id, sources: urls, nets: builder.result() };
+    const fresh = { version: NETWORKS_VERSION, fetchedAt: new Date().toISOString(), area: scope, sources: urls, nets: builder.result(), ...(extent ? { extent: extent.toJSON() } : {}) };
     if (!NETS.some((net) => fresh.nets[net].a.length)) throw new Error('no roads or tracks found in the area; do the extracts in NETNOU_OSM_PBF_URLS cover it?');
     writeGz(cachePath, fresh);
     return fresh;

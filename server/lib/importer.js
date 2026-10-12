@@ -1,9 +1,10 @@
-// Cuts the nationwide GTFS feed down to the trips that serve at least one
-// stop inside the configured area and returns them as a dataset: columns of
+// Cuts the nationwide GTFS feed down to what the instance covers – the trips
+// that serve at least one stop inside the configured area, those of the
+// operators named, or everything – and returns them as a dataset: columns of
 // numbers in which every stop sequence and every set of running times is
 // stored once (see buildDataset for the layout).
 
-import { NEAR } from './area.js';
+import { NEAR, agencyKey, scopeId } from './area.js';
 import { eachLine, parseCsvLine } from './csv.js';
 import { DATASET_VERSION, Numbers, SharedLists, Texts, byteOrder } from './dataset.js';
 import { addDays, weekday } from './time.js';
@@ -74,6 +75,46 @@ function fillTimes(arr, dep) {
     i = j;
   }
   return true;
+}
+
+/**
+ * The ids of the trips of the operators named, for a feed of which only
+ * theirs are wanted. A name the feed does not have is an error of the
+ * operator of the instance: it is named, with what the feed has that is like it.
+ * @param agencies [{ name: as set, key: as compared }]
+ */
+async function findAgencyTrips(zip, agencies) {
+  const wanted = new Map(agencies.map(({ name, key }) => [key, name]));
+  const found = new Set();
+  const ids = new Set(); // agency_id of the operators named
+  const names = [];
+  if (zip.entries.has('agency.txt')) {
+    await readTable(zip, 'agency.txt', ['agency_name'], (f, col) => {
+      names.push(f[col.agency_name]);
+      const key = agencyKey(f[col.agency_name]);
+      if (!wanted.has(key)) return;
+      found.add(key);
+      ids.add(col.agency_id === undefined ? '' : f[col.agency_id]);
+    });
+  }
+  const missing = [...wanted].filter(([key]) => !found.has(key)).map(([key, name]) => {
+    // (what the feed has with these words in it, in case the name is only written differently)
+    const like = names.filter((other) => key.split(/\s+/).some((word) => word.length > 3 && agencyKey(other).includes(word))).slice(0, 5);
+    return `"${name}"${like.length ? ` (it has ${like.map((other) => `"${other}"`).join(', ')})` : ''}`;
+  });
+  if (missing.length) {
+    throw new Error(`the feed has no operator ${missing.join(' and none called ')}; NETNOU_AGENCIES takes the names as agency.txt of the feed has them (agency_name), of which there are ${names.length}`);
+  }
+
+  const routes = new Set();
+  await readTable(zip, 'routes.txt', ['route_id'], (f, col) => {
+    if (ids.has(col.agency_id === undefined ? '' : f[col.agency_id])) routes.add(detach(f[col.route_id]));
+  });
+  const trips = new Set();
+  await readTable(zip, 'trips.txt', ['trip_id', 'route_id'], (f, col) => {
+    if (routes.has(f[col.route_id])) trips.add(detach(f[col.trip_id]));
+  });
+  return trips;
 }
 
 async function findRegionStops(zip, area) {
@@ -160,7 +201,11 @@ export class TripCollector {
   }
 }
 
-async function readStopTimes(zip, regionStops, onProgress) {
+/**
+ * @param regionStops the ids of the stops in the area, or null where there is no area: every stop counts
+ * @param wantedTrips the ids of the trips of the operators named, or null for those of all
+ */
+async function readStopTimes(zip, regionStops, wantedTrips, onProgress) {
   const file = 'stop_times.txt';
   const stopIds = [];
   const stopIndex = new Map();
@@ -181,6 +226,7 @@ async function readStopTimes(zip, regionStops, onProgress) {
   let curId = null;
   let curLines = [];
   let curHit = false;
+  let curWanted = true; // (of an operator that is kept)
 
   const whole = ({ stops, arr, dep }) => stops.length >= 2 && !arr.some(Number.isNaN) && !dep.some(Number.isNaN);
   const sorted = (rows) => {
@@ -240,7 +286,7 @@ async function readStopTimes(zip, regionStops, onProgress) {
       lastFast = Math.max(iTrip, iStop);
       return;
     }
-    if (++lines % 5_000_000 === 0) onProgress(`${file}: ${lines / 1e6} million rows, ${collector.index.size} trips in the area`);
+    if (++lines % 5_000_000 === 0) onProgress(`${file}: ${lines / 1e6} million rows, ${collector.index.size} trips kept`);
 
     // Only trip_id and stop_id are needed to decide whether the trip matters,
     // so the full CSV parse is deferred to flush() for the few trips we keep.
@@ -264,9 +310,11 @@ async function readStopTimes(zip, regionStops, onProgress) {
     if (tripId !== curId) {
       flush();
       curId = tripId;
+      curWanted = !wantedTrips || wantedTrips.has(tripId);
     }
+    if (!curWanted) return;
     curLines.push(line);
-    if (!curHit && regionStops.has(stopId)) curHit = true;
+    if (!curHit && (!regionStops || regionStops.has(stopId))) curHit = true;
   });
   flush();
 
@@ -386,11 +434,13 @@ export function packDataset({ area = null, stops, routes, headsigns, dates, serv
 // the file). Index i of every array in a group describes the same stop,
 // route or trip. A typed array is a column of the file; "texts" is a Texts.
 //   version    DATASET_VERSION
-//   area       Area.id of the area the dataset was cut for
+//   area       what the dataset was cut for: the area and the operators
+//              (scopeId in area.js)
 //   source     { etag, lastModified, importedAt, osm } – which feed and OSM
 //              data it was made from; added by import-worker.js
 //   stops      { id, name, platform, lat, lon, parent: stop index or -1,
-//                region: 1 if in the area or within NEAR.region of it, else 0 }
+//                region: 1 if in the area or within NEAR.region of it, else
+//                0; without an area every stop is 1 }
 //   routes     { id, short, long, type: GTFS route_type, color, text,
 //                agency: name }   (color and text are not used yet)
 //   headsigns  [text]
@@ -414,20 +464,37 @@ export function packDataset({ area = null, stops, routes, headsigns, dates, serv
 //              see buildSegments in shapes.js
 
 /**
- * @param {{zipPath: string, area: import('./area.js').Area, onProgress?: (msg: string) => void}} options
+ * @param options.area the area, or null for an instance without one: every stop of the feed counts
+ * @param options.agencies the operators whose trips are kept, [{ name, key }] as loadConfig has them, or null for all
+ * @param {{zipPath: string, area: import('./area.js').Area | null, agencies?: {name: string, key: string}[] | null, onProgress?: (msg: string) => void}} options
  */
-export async function buildDataset({ zipPath, area, onProgress = () => {} }) {
+export async function buildDataset({ zipPath, area, agencies = null, onProgress = () => {} }) {
   const zip = await openZip(zipPath);
   try {
-    onProgress('stops.txt: looking for stops in the area');
-    const regionStops = await findRegionStops(zip, area);
-    if (regionStops.size === 0) {
-      throw new Error('the feed has no stops in the area; check NETNOU_BBOX or NETNOU_AREA_FILE (NETNOU_BBOX is "south,west,north,east", GeoJSON positions are [longitude, latitude])');
+    let wantedTrips = null;
+    if (agencies) {
+      onProgress(`looking for the trips of ${agencies.map(({ name }) => name).join(', ')}`);
+      wantedTrips = await findAgencyTrips(zip, agencies);
+      onProgress(`${wantedTrips.size} trips of ${agencies.length === 1 ? 'that operator' : 'these operators'}`);
     }
-    onProgress(`${regionStops.size} stops in the area`);
+    let regionStops = null;
+    if (area) {
+      onProgress('stops.txt: looking for stops in the area');
+      regionStops = await findRegionStops(zip, area);
+      if (regionStops.size === 0) {
+        throw new Error('the feed has no stops in the area; check NETNOU_BBOX or NETNOU_AREA_FILE (NETNOU_BBOX is "south,west,north,east", GeoJSON positions are [longitude, latitude])');
+      }
+      onProgress(`${regionStops.size} stops in the area`);
+    }
 
-    const { collector, stopIds, headsigns, headsignIndex, lines } = await readStopTimes(zip, regionStops, onProgress);
-    onProgress(`stop_times.txt: ${lines} rows read, ${collector.index.size} trips in the area`);
+    const { collector, stopIds, headsigns, headsignIndex, lines } = await readStopTimes(zip, regionStops, wantedTrips, onProgress);
+    onProgress(`stop_times.txt: ${lines} rows read, ${collector.index.size} trips kept`);
+    wantedTrips?.clear();
+    if (agencies && !collector.index.size) {
+      throw new Error(area
+        ? 'no trip of the operators in NETNOU_AGENCIES serves a stop in the area; NETNOU_AREA=all takes their trips wherever they run'
+        : 'the operators in NETNOU_AGENCIES have no trips in the feed');
+    }
 
     // trips.txt: route and service of every kept trip, and its headsign for
     // feeds that have none in stop_times.txt.
@@ -452,10 +519,10 @@ export async function buildDataset({ zipPath, area, onProgress = () => {} }) {
       }
     });
 
-    const agencies = new Map();
+    const agencyNames = new Map();
     if (zip.entries.has('agency.txt')) {
       await readTable(zip, 'agency.txt', ['agency_name'], (f, col) => {
-        agencies.set(col.agency_id === undefined ? '' : f[col.agency_id], f[col.agency_name]);
+        agencyNames.set(col.agency_id === undefined ? '' : f[col.agency_id], f[col.agency_name]);
       });
     }
 
@@ -469,7 +536,7 @@ export async function buildDataset({ zipPath, area, onProgress = () => {} }) {
       routes.type[r] = +f[col.route_type];
       routes.color[r] = get('route_color');
       routes.text[r] = get('route_text_color');
-      routes.agency[r] = agencies.get(get('agency_id')) ?? '';
+      routes.agency[r] = agencyNames.get(get('agency_id')) ?? '';
     });
 
     const serviceDates = await readServices(zip, serviceIds);
@@ -491,7 +558,7 @@ export async function buildDataset({ zipPath, area, onProgress = () => {} }) {
         stops.lat[i] = +f[col.stop_lat];
         stops.lon[i] = +f[col.stop_lon];
         stops.platform[i] = col.platform_code === undefined ? '' : f[col.platform_code];
-        stops.region[i] = regionStops.has(f[col.stop_id]) ? 1 : 0;
+        stops.region[i] = !regionStops || regionStops.has(f[col.stop_id]) ? 1 : 0;
         parentIds[i] = col.parent_station === undefined ? '' : f[col.parent_station];
       });
       for (let i = from; i < to; i++) {
@@ -509,10 +576,10 @@ export async function buildDataset({ zipPath, area, onProgress = () => {} }) {
       if (stops.lat[i] === undefined) throw new Error(`stops.txt: stop ${stopIds[i]} is referenced but missing`);
     }
 
-    regionStops.clear();
+    regionStops?.clear();
     stopIndex.clear();
     onProgress(`${collector.patterns.count} stop sequences and ${collector.profiles.count} sets of running times`);
-    return assemble({ area: area.id, stops, routes, headsigns, dates, services, collector, route, service });
+    return assemble({ area: scopeId(area, agencies?.map(({ key }) => key) ?? null), stops, routes, headsigns, dates, services, collector, route, service });
   } finally {
     await zip.close();
   }

@@ -4,29 +4,33 @@
 // under way. For judging what a machine has to have for an area, and for
 // seeing what a change to the import or the timetable does.
 //
-//   node tools/measure-feed.mjs <feed.zip> [south,west,north,east]
+//   node tools/measure-feed.mjs <feed.zip> [all | south,west,north,east] [operators]
 //
-// Without a rectangle the area is the built-in one. A rectangle around all of
-// Germany is 47.2,5.8,55.1,15.1. Route geometry is left out: it needs
+// Without a second word the area is the built-in one; "all" is no area, which
+// is everything the feed has. The operators are names as agency.txt of the
+// feed has them, separated by commas. Route geometry is left out: it needs
 // OpenStreetMap data and is measured where that is routed.
 
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { loadConfig, parseBox } from '../server/config.js';
-import { Area } from '../server/lib/area.js';
 import { readDataset, writeDataset } from '../server/lib/dataset.js';
 import { buildDataset } from '../server/lib/importer.js';
 import { addDays, serviceDayStart } from '../server/lib/time.js';
 import { Timetable } from '../server/lib/timetable.js';
 
-const [zipPath, rectangle] = process.argv.slice(2);
-const box = rectangle === undefined ? null : parseBox(rectangle);
-if (!zipPath || (rectangle !== undefined && !box)) {
-  console.error('usage: node tools/measure-feed.mjs <feed.zip> [south,west,north,east]');
+const [zipPath, where, operators] = process.argv.slice(2);
+const box = where === undefined || where === 'all' ? null : parseBox(where);
+if (!zipPath || (where !== undefined && where !== 'all' && !box)) {
+  console.error('usage: node tools/measure-feed.mjs <feed.zip> [all | south,west,north,east] [operators]');
   process.exit(1);
 }
-const area = box ? Area.fromBbox(box) : loadConfig({}).area;
+// (as the server reads its settings: the built-in area unless something else is said)
+const { area, agencies } = loadConfig({
+  ...(where === 'all' ? { NETNOU_AREA: 'all' } : box ? { NETNOU_BBOX: where } : {}),
+  ...(operators ? { NETNOU_AGENCIES: operators } : {}),
+});
 
 const megabytes = (bytes) => `${(bytes / 1e6).toFixed(1)} MB`;
 const number = (n) => n.toLocaleString('en-US');
@@ -40,7 +44,7 @@ const row = (what, value) => console.log(`${what.padEnd(46)} ${value}`);
 const collect = () => globalThis.gc?.();
 
 const start = performance.now();
-const data = await buildDataset({ zipPath, area });
+const data = await buildDataset({ zipPath, area, agencies });
 const importMs = performance.now() - start;
 const tripCount = data.trips.pattern.length;
 let stopTimes = 0;

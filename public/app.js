@@ -191,7 +191,8 @@ const state = {
   wasLive: false,
   online: false, // last poll delivered vehicles
   areaKnown: false, // api/area has answered: the map shows the area
-  outline: [], // the edge of the area: rings of [lat, lon]
+  outline: [], // the edge of the area: rings of [lat, lon]; none where the instance has no area
+  bbox: null, // the rectangle around the area, or around all the instance covers: [south, west, north, east]
   enabled: new Set([...MODES, 'other']),
   display: OPENED_AS_DISPLAY, // the map without the controls, see "display mode"
   colorBy: loadSetting('colorBy', 'mode') === 'delay' ? 'delay' : 'mode',
@@ -1007,8 +1008,13 @@ function showLocating() {
   classes.toggle('maplibregl-ctrl-geolocate-background-error', !follow && failing);
 }
 
-/** Whether a place is inside the outline of the area – by the even-odd rule, as the veil is drawn. */
+/**
+ * Whether a place is inside the outline of the area – by the even-odd rule, as
+ * the veil is drawn. An instance without an area has no outline: there it is
+ * the rectangle around all it covers.
+ */
 function inArea(lat, lon) {
+  if (!state.outline.length) return Boolean(state.bbox) && lat >= state.bbox[0] && lon >= state.bbox[1] && lat <= state.bbox[2] && lon <= state.bbox[3];
   let inside = false;
   for (const ring of state.outline) {
     for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
@@ -1898,9 +1904,15 @@ function versionCredit(about) {
   return `${credit} <a class="update" href="${escapeHtml(about.update.url)}" title="${note}" target="_blank" rel="noopener">↑ ${escapeHtml(about.update.version)}</a>`;
 }
 
+/**
+ * @returns nothing once the map shows the area. An instance without an area
+ *   does not know what it covers before it has a timetable: then what the
+ *   server says of how far it has got, as it does where vehicles are asked for.
+ */
 async function loadArea() {
   // (api/status says which version runs; the map does without it if need be)
   const [res, about] = await Promise.all([fetch('api/area'), fetch('api/status').then((status) => (status.ok ? status.json() : null)).catch(() => null)]);
+  if (res.status === 503) return res.json();
   if (!res.ok) throw new Error(`api/area: HTTP ${res.status}`);
   const area = await res.json();
   if (state.areaKnown) return; // asked twice at the same time
@@ -1944,6 +1956,7 @@ async function loadArea() {
   // (not every browser lets a page have the whole screen: an iPhone does not)
   if (document.fullscreenEnabled) map.addControl(fullscreenControl, 'bottom-right');
   state.outline = area.outline;
+  state.bbox = area.bbox;
   // What "how it works" ends with: the software by its name, as in the credits, with the way to its source.
   if (typeof about?.homepage === 'string') {
     const [before, after] = t('about.source').split('{software}');
@@ -1976,10 +1989,11 @@ async function poll() {
   const seq = ++pollSeq;
   let delay = POLL_MS;
   try {
-    if (!state.areaKnown) await loadArea();
+    // (without an area the server cannot say what it covers before it has a timetable)
+    const waiting = state.areaKnown ? null : await loadArea();
     const request = { box: boxAround(map.getBounds(), VEHICLE_MARGIN), detail: detailWanted() };
-    const res = await fetch(`api/vehicles?bbox=${boxQuery(request.box)}&detail=${request.detail}`);
-    const data = await res.json();
+    const res = waiting ? { status: 503 } : await fetch(`api/vehicles?bbox=${boxQuery(request.box)}&detail=${request.detail}`);
+    const data = waiting ?? await res.json();
     // The map was moved meanwhile and a newer request is under way.
     if (seq !== pollSeq) return;
     if (res.status === 503) {
