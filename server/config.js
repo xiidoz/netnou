@@ -25,29 +25,6 @@ const VGN = {
 
 const DECIMAL = /^[+-]?(\d+\.?\d*|\.\d+)$/;
 
-// Up to 0.7 the settings had no prefix. These are the names of then that can
-// hardly mean anything but a setting of Netnou. PORT, HOST and LANGUAGE are
-// not among them: a shell or a platform sets those for reasons of its own.
-const ONCE_PLAIN = [
-  'DATA_DIR', 'AREA_FILE', 'BBOX', 'AREA_NAME', 'VIEW', 'TIMEZONE', 'MAP_STYLE_URL', 'MAP_ORIGINS', 'TILE_URL', 'TILE_ATTRIBUTION',
-  'DATA_ATTRIBUTION', 'OSM_PBF_URLS', 'OSM_MAX_AGE_DAYS', 'FEED_URL', 'FEED_CHECK_MINUTES', 'DOWNLOAD_TIMEOUT_MINUTES', 'REALTIME_URL',
-  'REALTIME_INTERVAL_SECONDS', 'REALTIME_IDLE_SECONDS', 'UPDATE_CHECK', 'PUBLIC_URL', 'SEARCH_ENGINES', 'SITE_NAME', 'SITE_TITLE',
-  'SITE_DESCRIPTION', 'LINKS', 'BRAND_DIR',
-];
-// (the two that also came with a language at their end: SITE_TITLE_EN)
-const ONCE_PLAIN_BY_LANGUAGE = /^SITE_(TITLE|DESCRIPTION)_[A-Z]+$/;
-
-/**
- * The names without a prefix that are still set and no longer read, for a
- * line each in the log: an instance that was updated without them being
- * renamed would otherwise run with its defaults and say nothing. A name that
- * is set under its new name as well is left out.
- * @param {Record<string, string | undefined>} [env]
- */
-export function plainNames(env = process.env) {
-  return Object.keys(env).filter((name) => (ONCE_PLAIN.includes(name) || ONCE_PLAIN_BY_LANGUAGE.test(name)) && env[`NETNOU_${name}`] === undefined);
-}
-
 /** "south,west,north,east" -> four numbers, or null if the text is anything else. */
 export function parseBox(text) {
   const fields = (text ?? '').split(',').map((s) => s.trim());

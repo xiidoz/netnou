@@ -37,11 +37,7 @@ services:
 ```
 
 Every setting begins with `NETNOU_`, so that it is plain whose it is among
-the variables of a host or a stack. Up to version 0.7 the names had no
-prefix (`SITE_NAME`, `BBOX`). Those are no longer read. Where one of them
-is still set, the server says so in its log when it starts, with the name it
-has now; it does not for `PORT`, `HOST` and `LANGUAGE`, which a shell or a
-platform may set for reasons of its own.
+the variables of a host or a stack. A variable of another name is not read.
 
 In `compose.yaml` the port has two names. `NETNOU_PORT` is the setting: the
 port the server listens on inside the container. `PORT` is no setting of the

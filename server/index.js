@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import http from 'node:http';
 import path from 'node:path';
 import zlib from 'node:zlib';
-import { loadConfig, parseBox, plainNames } from './config.js';
+import { loadConfig, parseBox } from './config.js';
 import { FeedUpdater } from './lib/feed.js';
 import { RealtimePoller } from './lib/realtime.js';
 import { LANGUAGE_CODES, languageFor, ownFiles, pictureSize, renderManifest, renderPage, robotsTxt, sitemapXml } from './lib/page.js';
@@ -22,7 +22,6 @@ try {
   process.exit(1);
 }
 setTimeZone(config.timeZone);
-for (const name of plainNames()) log(`${name} is set but no longer read: the setting is NETNOU_${name} now`);
 const pkg = JSON.parse(fs.readFileSync(new URL('../package.json', import.meta.url), 'utf8'));
 const build = describeBuild(pkg);
 const homepage = pkg.homepage.replace(/#.*$/, '');
