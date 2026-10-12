@@ -654,10 +654,4 @@ test('a wrong setting or an unusable data directory ends the start with exit cod
   assert.equal(data.code, 1);
   assert.match(data.text, /Timetable: cannot start: the data directory .+ cannot be created or written \(/);
   assert.doesNotMatch(data.text, /\n\s+at /);
-
-  // A name from before the settings had their prefix is not read. The log
-  // says what it is called now; not for one that a shell or a platform sets.
-  const plain = await run({ NETNOU_DATA_DIR: path.join(dir, 'file', 'data'), SITE_NAME: 'Bus & Bahn', PORT: '9' });
-  assert.match(plain.text, /^\S+ SITE_NAME is set but no longer read: the setting is NETNOU_SITE_NAME now$/m);
-  assert.doesNotMatch(plain.text, /PORT is set/);
 });

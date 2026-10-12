@@ -4,7 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { after, test } from 'node:test';
 import { LANGUAGES } from '../public/i18n.js';
-import { loadConfig, parseBox, plainNames } from '../server/config.js';
+import { loadConfig, parseBox } from '../server/config.js';
 
 const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'netnou-config-'));
 after(() => fs.rmSync(dir, { recursive: true, force: true }));
@@ -282,19 +282,12 @@ test('wrong settings are refused with a message that names the variable', () => 
   }
 });
 
-test('a name without the prefix is not read, and is named for the log if it can only be a setting', () => {
+test('only names that begin with NETNOU_ are read', () => {
   const config = loadConfig({ SITE_NAME: 'Bus & Bahn', PORT: '9000', BBOX: '49.3,10.8,49.7,11.3', LINKS: 'Impressum=/impressum' });
   assert.equal(config.siteName, 'Netnou');
   assert.equal(config.port, 8080);
   assert.equal(config.areaName, 'Großraum Nürnberg (VGN)');
   assert.deepEqual(config.links, []);
-
-  assert.deepEqual(plainNames({ SITE_NAME: 'Bus & Bahn', BBOX: '49.3,10.8,49.7,11.3', SITE_TITLE_EN: 'Buses', PATH: '/usr/bin' }), ['SITE_NAME', 'BBOX', 'SITE_TITLE_EN']);
-  // what a shell or a platform sets for reasons of its own
-  assert.deepEqual(plainNames({ PORT: '9000', HOST: 'box', LANGUAGE: 'en_GB:en' }), []);
-  // set under its new name as well: somebody is changing over, or serves both
-  assert.deepEqual(plainNames({ SITE_NAME: 'Bus & Bahn', NETNOU_SITE_NAME: 'Bus & Bahn' }), []);
-  assert.deepEqual(plainNames({ NETNOU_SITE_NAME: 'Bus & Bahn', NETNOU_COMMIT: 'abc' }), []);
 });
 
 test('parseBox accepts four numbers and nothing else', () => {
