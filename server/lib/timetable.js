@@ -2,7 +2,7 @@
 // queries the API needs: vehicles right now, one trip, departures of a station.
 //
 // Terms used throughout server/:
-//   area     the region covered (BBOX or AREA_FILE), see area.js
+//   area     the region covered (NETNOU_BBOX or NETNOU_AREA_FILE), see area.js
 //   stop     a row of stops.txt, often a single platform
 //   station  the stop that groups platforms (parent_station) – what the map
 //            shows and a departure board is for

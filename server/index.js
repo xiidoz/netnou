@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import http from 'node:http';
 import path from 'node:path';
 import zlib from 'node:zlib';
-import { loadConfig, parseBox } from './config.js';
+import { loadConfig, parseBox, plainNames } from './config.js';
 import { FeedUpdater } from './lib/feed.js';
 import { RealtimePoller } from './lib/realtime.js';
 import { LANGUAGE_CODES, languageFor, ownFiles, pictureSize, renderManifest, renderPage, robotsTxt, sitemapXml } from './lib/page.js';
@@ -22,6 +22,7 @@ try {
   process.exit(1);
 }
 setTimeZone(config.timeZone);
+for (const name of plainNames()) log(`${name} is set but no longer read: the setting is NETNOU_${name} now`);
 const pkg = JSON.parse(fs.readFileSync(new URL('../package.json', import.meta.url), 'utf8'));
 const build = describeBuild(pkg);
 const homepage = pkg.homepage.replace(/#.*$/, '');
@@ -81,7 +82,7 @@ const COMPRESSIBLE = /^(text\/|application\/(json|manifest\+json|xml)|image\/svg
 
 const MAP_ORIGINS = config.mapOrigins.join(' ');
 // Data is no page for the results of a search engine, and on an instance that
-// is not to be found (SEARCH_ENGINES) nothing is. It may be read all the same:
+// is not to be found (NETNOU_SEARCH_ENGINES) nothing is. It may be read all the same:
 // a search engine that runs the page asks for data as a browser does, and one
 // that may not read an answer never sees that it is asked not to list it.
 const NOT_LISTED = { 'X-Robots-Tag': 'noindex' };
@@ -168,7 +169,7 @@ function etagMatches(req, etag) {
 const compressed = new Map();
 
 // The operator's own icons and picture for previews of links, if they have
-// put any into a folder for them (BRAND_DIR): looked for once, at the start.
+// put any into a folder for them (NETNOU_BRAND_DIR): looked for once, at the start.
 const own = ownFiles(config.brandDir);
 const previewSize = own.preview ? pictureSize(own.files.get(own.preview)) : null;
 if (own.files.size) log(`Own files from ${config.brandDir}: ${[...own.files.keys()].join(', ')}`);
@@ -443,13 +444,13 @@ const server = http.createServer((req, res) => {
 });
 
 server.on('error', (err) => {
-  // E.g. the port is taken, or HOST is not an address of this machine.
+  // E.g. the port is taken, or NETNOU_HOST is not an address of this machine.
   console.error(`Cannot listen on ${config.host ? `${config.host}, ` : ''}port ${config.port}: ${err.message}`);
   process.exit(1);
 });
 
 server.listen(config.port, config.host, () => {
-  // The port actually bound (PORT=0 lets the system pick one). Listening on
+  // The port actually bound (NETNOU_PORT=0 lets the system pick one). Listening on
   // all interfaces, localhost is the address to try first.
   const { port } = server.address();
   const host = !config.host ? 'localhost' : config.host.includes(':') ? `[${config.host}]` : config.host;

@@ -223,6 +223,8 @@ running instances will load data written by older code:
   ([docs/configuration.md](docs/configuration.md),
   [docs/api.md](docs/api.md)). `CHANGELOG.md` is not edited: it is written
   from the commit messages.
+- The name of a new setting begins with `NETNOU_`, as all of them do, and
+  continues the family it belongs to (`NETNOU_SITE_…`, `NETNOU_REALTIME_…`).
 - A cache format version is bumped where needed (see above).
 - New text in the page is added to every locale file.
 

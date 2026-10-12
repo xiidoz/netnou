@@ -221,7 +221,7 @@ test('importer copes with a byte order mark, rows out of order, missing times an
 
 test('an area without stops is reported with a hint at the settings', async () => {
   const zipPath = path.join(dir, 'feed.zip');
-  await assert.rejects(buildDataset({ zipPath, area: Area.fromBbox([10.8, 49.3, 11.3, 49.7]) }), /no stops in the area; check BBOX or AREA_FILE/);
+  await assert.rejects(buildDataset({ zipPath, area: Area.fromBbox([10.8, 49.3, 11.3, 49.7]) }), /no stops in the area; check NETNOU_BBOX or NETNOU_AREA_FILE/);
 });
 
 test('calendar and calendar_dates decide which days a trip runs', () => {

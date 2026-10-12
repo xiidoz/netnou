@@ -13,7 +13,7 @@ import { NET_OF_MODE, hopKey, routeMode } from './timetable.js';
 
 // Bump when classifyWay, the cost factors or the output of NetworkBuilder
 // (all in network.js) change: the cached networks are then built again from a
-// fresh OSM download instead of being used for up to OSM_MAX_AGE_DAYS more.
+// fresh OSM download instead of being used for up to NETNOU_OSM_MAX_AGE_DAYS more.
 const NETWORKS_VERSION = 2;
 
 // snapRadius: how far a stop may be from its road/track (rail stops are often
@@ -62,7 +62,7 @@ export async function loadNetworks({ dataDir, urls, area, maxAgeMs, timeoutMs, o
       }
     }
     const fresh = { version: NETWORKS_VERSION, fetchedAt: new Date().toISOString(), area: area.id, sources: urls, nets: builder.result() };
-    if (!NETS.some((net) => fresh.nets[net].a.length)) throw new Error('no roads or tracks found in the area; do the extracts in OSM_PBF_URLS cover it?');
+    if (!NETS.some((net) => fresh.nets[net].a.length)) throw new Error('no roads or tracks found in the area; do the extracts in NETNOU_OSM_PBF_URLS cover it?');
     writeGz(cachePath, fresh);
     return fresh;
   } catch (err) {

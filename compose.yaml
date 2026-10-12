@@ -22,50 +22,55 @@ services:
     image: "ghcr.io/xiidoz/netnou:latest"
     restart: "unless-stopped"
     ports:
-      # host:container. Change the left side to publish another port, use
-      # "127.0.0.1:8080:8080" behind a reverse proxy on the same host, or remove
-      # the block when the proxy reaches the container over a Docker network.
-      - "8080:8080"
-    # Optional settings, all described in docs/configuration.md. To use one,
-    # uncomment "environment:" and the line itself.
-    # environment:
+      # host:container. PORT is the port this host publishes, NETNOU_PORT the
+      # one the server listens on inside the container. Both are 8080 unless
+      # set where Compose reads its variables: in a file ".env" next to this
+      # one, in the shell, or among the values of a stack. Put "127.0.0.1:" in
+      # front behind a reverse proxy on the same host, or remove the block
+      # when the proxy reaches the container over a Docker network.
+      - "${PORT:-8080}:${NETNOU_PORT:-8080}"
+    environment:
+      # (the right side above: the server has to listen where the port leads)
+      NETNOU_PORT: "${NETNOU_PORT:-8080}"
+      # Optional settings, all described in docs/configuration.md. To use one,
+      # uncomment its line.
       # Another area than the default (the VGN around Nürnberg): a rectangle
       # "south,west,north,east", its name, and the OpenStreetMap extracts that
       # cover it. Without extracts the vehicles move in straight lines.
-      # BBOX: "49.30,10.82,49.68,11.30"
-      # AREA_NAME: "Nürnberg, Fürth, Erlangen"
-      # OSM_PBF_URLS: "https://download.geofabrik.de/europe/germany/bayern/mittelfranken-latest.osm.pbf"
+      # NETNOU_BBOX: "49.30,10.82,49.68,11.30"
+      # NETNOU_AREA_NAME: "Nürnberg, Fürth, Erlangen"
+      # NETNOU_OSM_PBF_URLS: "https://download.geofabrik.de/europe/germany/bayern/mittelfranken-latest.osm.pbf"
       # Seconds between two fetches of the realtime feed (about 20 MB each)
       # while somebody is looking at the map.
-      # REALTIME_INTERVAL_SECONDS: "30"
+      # NETNOU_REALTIME_INTERVAL_SECONDS: "30"
       # Another map behind the vehicles: the address of any style for MapLibre.
       # The default is the "bright" style of OpenFreeMap.
-      # MAP_STYLE_URL: "https://tiles.openfreemap.org/styles/positron"
+      # NETNOU_MAP_STYLE_URL: "https://tiles.openfreemap.org/styles/positron"
       # A name of its own for this instance, where the page names itself.
       # The credits keep naming Netnou.
-      # SITE_NAME: "Bus & Bahn live"
+      # NETNOU_SITE_NAME: "Bus & Bahn live"
       # A title and a description of its own, as a search result and a
       # preview of a link show them, for the people this instance is for.
       # Without them the page words its own. One text is for every language;
       # texts by language are a JSON object, '{"de": "…", "en": "…"}', or a
-      # setting for each, SITE_TITLE_EN.
-      # SITE_TITLE: "Bus & Bahn live im Großraum Nürnberg"
-      # SITE_DESCRIPTION: "Wo ist meine Bahn? Busse, Straßenbahnen, U- und S-Bahnen live auf der Karte, mit Verspätungen und Abfahrten."
+      # setting for each, NETNOU_SITE_TITLE_EN.
+      # NETNOU_SITE_TITLE: "Bus & Bahn live im Großraum Nürnberg"
+      # NETNOU_SITE_DESCRIPTION: "Wo ist meine Bahn? Busse, Straßenbahnen, U- und S-Bahnen live auf der Karte, mit Verspätungen und Abfahrten."
       # (Icons of your own need no setting: see "volumes" below.)
       # Links of your own at the foot of the header card, such as an imprint
       # and a privacy notice: a text and an address each. The pages are yours.
-      # LINKS: "Impressum=/impressum, Datenschutz=/datenschutz"
+      # NETNOU_LINKS: "Impressum=/impressum, Datenschutz=/datenschutz"
       # The address visitors reach this instance under. With it the page can
       # name its own address to search engines and carry a picture for
       # previews of links, and there is a /sitemap.xml.
-      # PUBLIC_URL: "https://transit.example.org/"
+      # NETNOU_PUBLIC_URL: "https://transit.example.org/"
       # For an instance with an address that search engines are not to list,
       # such as a test instance next to the real one. Without an address an
       # instance is not listed anyway.
-      # SEARCH_ENGINES: "off"
+      # NETNOU_SEARCH_ENGINES: "off"
       # No daily question to GitHub whether there is a newer release, and no
       # marker in the page when there is one.
-      # UPDATE_CHECK: "off"
+      # NETNOU_UPDATE_CHECK: "off"
       # Importing a timetable takes about 1.5 GB of memory for a minute or two
       # (measured for the default area). Node derives its heap limit from the
       # memory it sees; on a small host, or with a memory limit on the

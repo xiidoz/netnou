@@ -1,6 +1,6 @@
 // GTFS times are seconds since "noon minus 12h" of the service day in the
 // agency time zone. One zone is used for the whole feed: the one set with
-// setTimeZone (TIMEZONE, default Europe/Berlin, which every agency in the
+// setTimeZone (NETNOU_TIMEZONE, default Europe/Berlin, which every agency in the
 // gtfs.de feed uses). agency_timezone in the feed is not read.
 //
 // The zone is module state and therefore per thread. The import worker has its

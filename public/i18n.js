@@ -22,7 +22,7 @@ const STORAGE_KEY = 'netnou.lang';
 // gets to read the page in each of them (see server/lib/page.js).
 const ADDRESS_KEY = 'lang';
 // What the software is called. An instance may call itself something else
-// (SITE_NAME of the server); the credits name the software all the same.
+// (NETNOU_SITE_NAME of the server); the credits name the software all the same.
 export const APP_NAME = 'Netnou';
 // The attributes data-i18n-<attribute> can fill in, see translatePage().
 export const ATTRIBUTES = ['aria-label', 'title', 'content', 'placeholder'];

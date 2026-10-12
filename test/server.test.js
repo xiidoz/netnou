@@ -47,11 +47,11 @@ const REALTIME = encodeFeed({
 });
 
 // Every setting the server reads; none may leak in from the shell running the tests.
-const SETTINGS = ['PORT', 'HOST', 'DATA_DIR', 'AREA_FILE', 'BBOX', 'AREA_NAME', 'VIEW', 'TIMEZONE', 'MAP_STYLE_URL', 'MAP_ORIGINS', 'TILE_URL', 'TILE_ATTRIBUTION', 'DATA_ATTRIBUTION',
-  'OSM_PBF_URLS', 'OSM_MAX_AGE_DAYS', 'FEED_URL', 'FEED_CHECK_MINUTES', 'DOWNLOAD_TIMEOUT_MINUTES', 'REALTIME_URL', 'REALTIME_INTERVAL_SECONDS', 'REALTIME_IDLE_SECONDS', 'UPDATE_CHECK',
-  'LANGUAGE', 'PUBLIC_URL', 'SEARCH_ENGINES', 'SITE_NAME', 'SITE_TITLE', 'SITE_DESCRIPTION', 'LINKS', 'BRAND_DIR',
+const SETTINGS = ['NETNOU_PORT', 'NETNOU_HOST', 'NETNOU_DATA_DIR', 'NETNOU_AREA_FILE', 'NETNOU_BBOX', 'NETNOU_AREA_NAME', 'NETNOU_VIEW', 'NETNOU_TIMEZONE', 'NETNOU_MAP_STYLE_URL', 'NETNOU_MAP_ORIGINS', 'NETNOU_TILE_URL', 'NETNOU_TILE_ATTRIBUTION', 'NETNOU_DATA_ATTRIBUTION',
+  'NETNOU_OSM_PBF_URLS', 'NETNOU_OSM_MAX_AGE_DAYS', 'NETNOU_FEED_URL', 'NETNOU_FEED_CHECK_MINUTES', 'NETNOU_DOWNLOAD_TIMEOUT_MINUTES', 'NETNOU_REALTIME_URL', 'NETNOU_REALTIME_INTERVAL_SECONDS', 'NETNOU_REALTIME_IDLE_SECONDS', 'NETNOU_UPDATE_CHECK',
+  'NETNOU_LANGUAGE', 'NETNOU_PUBLIC_URL', 'NETNOU_SEARCH_ENGINES', 'NETNOU_SITE_NAME', 'NETNOU_SITE_TITLE', 'NETNOU_SITE_DESCRIPTION', 'NETNOU_LINKS', 'NETNOU_BRAND_DIR',
   // (a title and a description may be set for one language alone)
-  ...LANGUAGES.flatMap(([code]) => [`SITE_TITLE_${code.toUpperCase()}`, `SITE_DESCRIPTION_${code.toUpperCase()}`])];
+  ...LANGUAGES.flatMap(([code]) => [`NETNOU_SITE_TITLE_${code.toUpperCase()}`, `NETNOU_SITE_DESCRIPTION_${code.toUpperCase()}`])];
 // Words of the operator's own for the page, the same in each of its languages; null for none.
 const inAll = (words) => Object.fromEntries(LANGUAGES.map(([code]) => [code, words]));
 // What an image carries about its build, which a checkout does not have.
@@ -68,7 +68,7 @@ function start(settings) {
   const env = { ...process.env };
   for (const name of [...SETTINGS, ...BUILD, 'NODE_TEST_CONTEXT']) delete env[name];
   // (no test asks GitHub for the latest release)
-  const proc = spawn(process.execPath, [path.join('server', 'index.js')], { cwd: root, env: { ...env, UPDATE_CHECK: 'off', ...settings }, stdio: ['ignore', 'pipe', 'pipe'] });
+  const proc = spawn(process.execPath, [path.join('server', 'index.js')], { cwd: root, env: { ...env, NETNOU_UPDATE_CHECK: 'off', ...settings }, stdio: ['ignore', 'pipe', 'pipe'] });
   proc.stdout.setEncoding('utf8');
   proc.stderr.setEncoding('utf8');
   return proc;
@@ -107,20 +107,20 @@ before(async () => {
   const feed = { zip: makeZip(FEED), etag: '"v1"', realtime: REALTIME, hold: new Promise((resolve) => { release = resolve; }) };
   upstream = await startUpstream(feed);
   child = start({
-    PORT: '0',
-    HOST: '127.0.0.1',
-    DATA_DIR: path.join(dir, 'data'),
-    BBOX: BBOX.join(','),
-    AREA_NAME: 'Testland',
-    TIMEZONE: 'UTC',
-    MAP_STYLE_URL: 'https://maps.example.org/styles/day.json',
-    MAP_ORIGINS: 'https://tiles.example.org',
-    OSM_PBF_URLS: '',
-    FEED_URL: `${upstream.url}/feed.zip`,
-    REALTIME_URL: `${upstream.url}/realtime.pb`,
-    REALTIME_INTERVAL_SECONDS: '10',
+    NETNOU_PORT: '0',
+    NETNOU_HOST: '127.0.0.1',
+    NETNOU_DATA_DIR: path.join(dir, 'data'),
+    NETNOU_BBOX: BBOX.join(','),
+    NETNOU_AREA_NAME: 'Testland',
+    NETNOU_TIMEZONE: 'UTC',
+    NETNOU_MAP_STYLE_URL: 'https://maps.example.org/styles/day.json',
+    NETNOU_MAP_ORIGINS: 'https://tiles.example.org',
+    NETNOU_OSM_PBF_URLS: '',
+    NETNOU_FEED_URL: `${upstream.url}/feed.zip`,
+    NETNOU_REALTIME_URL: `${upstream.url}/realtime.pb`,
+    NETNOU_REALTIME_INTERVAL_SECONDS: '10',
     // (given without the slash at its end)
-    PUBLIC_URL: 'https://karte.example.org/live',
+    NETNOU_PUBLIC_URL: 'https://karte.example.org/live',
   });
   child.stdout.on('data', (text) => { output += text; });
   child.stderr.on('data', (text) => { output += text; });
@@ -459,7 +459,7 @@ test('static files: types, revalidation, HEAD, gzip and Brotli', async () => {
 test('the page says what and where the instance is before any script runs', async () => {
   const text = async (pathname) => (await request(pathname)).body.toString();
   const address = 'https://karte.example.org/live/';
-  // in the main language, German unless LANGUAGE says otherwise
+  // in the main language, German unless NETNOU_LANGUAGE says otherwise
   const page = await text('/');
   assert.match(page, /<html lang="de"[ >]/);
   assert.match(page, /<title>ÖPNV-Live-Karte: Testland – Netnou<\/title>/);
@@ -578,8 +578,8 @@ test('an instance that is not to be listed says so with every answer', async () 
   fs.mkdirSync(brand);
   fs.writeFileSync(path.join(brand, 'favicon.svg'), '<svg xmlns="http://www.w3.org/2000/svg"/>');
   fs.writeFileSync(path.join(brand, 'preview.png'), 'not really a picture');
-  for (const [settings, address] of [[{}, null], [{ PUBLIC_URL: 'https://test.example.org/', SEARCH_ENGINES: 'off', SITE_NAME: 'Bus & Bahn live', SITE_TITLE: 'Wo ist mein Bus? Testland live', SITE_TITLE_EN: 'Where is my bus? Testland live', SITE_DESCRIPTION: 'Busse & Bahnen in Testland,\n live auf der Karte.', LINKS: 'Impressum=/impressum', BRAND_DIR: brand }, 'https://test.example.org/']]) {
-    const proc = start({ PORT: '0', HOST: '127.0.0.1', DATA_DIR: path.join(dir, 'unlisted'), BBOX: BBOX.join(','), FEED_URL: `${upstream.url}/feed.zip`, REALTIME_URL: `${upstream.url}/realtime.pb`, ...settings });
+  for (const [settings, address] of [[{}, null], [{ NETNOU_PUBLIC_URL: 'https://test.example.org/', NETNOU_SEARCH_ENGINES: 'off', NETNOU_SITE_NAME: 'Bus & Bahn live', NETNOU_SITE_TITLE: 'Wo ist mein Bus? Testland live', NETNOU_SITE_TITLE_EN: 'Where is my bus? Testland live', NETNOU_SITE_DESCRIPTION: 'Busse & Bahnen in Testland,\n live auf der Karte.', NETNOU_LINKS: 'Impressum=/impressum', NETNOU_BRAND_DIR: brand }, 'https://test.example.org/']]) {
+    const proc = start({ NETNOU_PORT: '0', NETNOU_HOST: '127.0.0.1', NETNOU_DATA_DIR: path.join(dir, 'unlisted'), NETNOU_BBOX: BBOX.join(','), NETNOU_FEED_URL: `${upstream.url}/feed.zip`, NETNOU_REALTIME_URL: `${upstream.url}/realtime.pb`, ...settings });
     let text = '';
     proc.stdout.on('data', (chunk) => { text += chunk; });
     proc.stderr.on('data', (chunk) => { text += chunk; });
@@ -592,37 +592,37 @@ test('an instance that is not to be listed says so with every answer', async () 
       assert.ok(page.includes('<meta name="robots" content="noindex">'));
       assert.ok(!page.includes('rel="canonical"') && !page.includes('hreflang'));
       // a link to it still shows what it is, with a picture if it knows its address
-      assert.ok(page.includes(`<meta property="og:title" content="${settings.SITE_TITLE ?? 'ÖPNV-Live-Karte – Netnou'}">`));
+      assert.ok(page.includes(`<meta property="og:title" content="${settings.NETNOU_SITE_TITLE ?? 'ÖPNV-Live-Karte – Netnou'}">`));
       // a title and a description of its own: in the page, for the script and for the installed app, as they are
       const area = (await get('/api/area')).json;
-      assert.deepEqual([area.siteTitle, area.siteDescription], settings.SITE_TITLE ? [{ ...inAll('Wo ist mein Bus? Testland live'), en: 'Where is my bus? Testland live' }, inAll('Busse & Bahnen in Testland, live auf der Karte.')] : [inAll(null), inAll(null)]);
+      assert.deepEqual([area.siteTitle, area.siteDescription], settings.NETNOU_SITE_TITLE ? [{ ...inAll('Wo ist mein Bus? Testland live'), en: 'Where is my bus? Testland live' }, inAll('Busse & Bahnen in Testland, live auf der Karte.')] : [inAll(null), inAll(null)]);
       // (the title has one for English alone: at the English address, and for a browser that asks for English; the description is the one for all)
       for (const english of [(await request('/?lang=en')).body.toString(), (await request('/', { headers: { 'Accept-Language': 'en-US,en;q=0.9' } })).body.toString()]) {
-        assert.equal(english.includes('<title>Where is my bus? Testland live</title>'), Boolean(settings.SITE_TITLE_EN));
-        assert.equal(english.includes('<meta property="og:title" content="Where is my bus? Testland live">'), Boolean(settings.SITE_TITLE_EN));
-        assert.equal(english.includes('<meta name="description" content="Busse &#38; Bahnen in Testland, live auf der Karte.">'), Boolean(settings.SITE_DESCRIPTION));
+        assert.equal(english.includes('<title>Where is my bus? Testland live</title>'), Boolean(settings.NETNOU_SITE_TITLE_EN));
+        assert.equal(english.includes('<meta property="og:title" content="Where is my bus? Testland live">'), Boolean(settings.NETNOU_SITE_TITLE_EN));
+        assert.equal(english.includes('<meta name="description" content="Busse &#38; Bahnen in Testland, live auf der Karte.">'), Boolean(settings.NETNOU_SITE_DESCRIPTION));
       }
-      assert.equal(page.includes('<title>Wo ist mein Bus? Testland live</title>'), Boolean(settings.SITE_TITLE));
-      assert.equal(page.includes('<meta name="description" content="Busse &#38; Bahnen in Testland, live auf der Karte.">'), Boolean(settings.SITE_DESCRIPTION));
-      assert.equal((await get('/manifest.webmanifest')).json.description, settings.SITE_DESCRIPTION ? 'Busse & Bahnen in Testland, live auf der Karte.' : 'Live-Karte des öffentlichen Nahverkehrs: Busse, Straßenbahnen, U-, S- und Regionalbahnen mit aktuellen Verspätungen.');
+      assert.equal(page.includes('<title>Wo ist mein Bus? Testland live</title>'), Boolean(settings.NETNOU_SITE_TITLE));
+      assert.equal(page.includes('<meta name="description" content="Busse &#38; Bahnen in Testland, live auf der Karte.">'), Boolean(settings.NETNOU_SITE_DESCRIPTION));
+      assert.equal((await get('/manifest.webmanifest')).json.description, settings.NETNOU_SITE_DESCRIPTION ? 'Busse & Bahnen in Testland, live auf der Karte.' : 'Live-Karte des öffentlichen Nahverkehrs: Busse, Straßenbahnen, U-, S- und Regionalbahnen mit aktuellen Verspätungen.');
       // what it calls itself: in the heading, for the script and for the installed app
-      assert.ok(page.includes(`<h1>${settings.SITE_NAME ? 'Bus &#38; Bahn live' : 'Netnou'}</h1>`));
-      assert.equal((await get('/api/area')).json.siteName, settings.SITE_NAME ?? 'Netnou');
-      assert.equal((await get('/manifest.webmanifest')).json.name, settings.SITE_NAME ?? 'Netnou');
-      assert.equal(page.includes('<a href="/impressum">Impressum</a></nav>'), Boolean(settings.LINKS));
-      assert.equal(/<nav class="links"[^>]* hidden>/.test(page), !settings.LINKS);
+      assert.ok(page.includes(`<h1>${settings.NETNOU_SITE_NAME ? 'Bus &#38; Bahn live' : 'Netnou'}</h1>`));
+      assert.equal((await get('/api/area')).json.siteName, settings.NETNOU_SITE_NAME ?? 'Netnou');
+      assert.equal((await get('/manifest.webmanifest')).json.name, settings.NETNOU_SITE_NAME ?? 'Netnou');
+      assert.equal(page.includes('<a href="/impressum">Impressum</a></nav>'), Boolean(settings.NETNOU_LINKS));
+      assert.equal(/<nav class="links"[^>]* hidden>/.test(page), !settings.NETNOU_LINKS);
       assert.equal(page.includes('og:image'), address !== null);
       if (address) assert.ok(page.includes(`<meta property="og:image" content="${address}preview.png">`));
       // files of its own take the place of the built-in ones of that name, and of those alone
       const builtIn = (name) => fs.readFileSync(path.join(root, 'public', name));
       const icon = await request('/favicon.svg');
       assert.equal(icon.headers['content-type'], 'image/svg+xml');
-      assert.equal(icon.body.equals(builtIn('favicon.svg')), !settings.BRAND_DIR);
-      if (settings.BRAND_DIR) assert.equal(icon.body.toString(), '<svg xmlns="http://www.w3.org/2000/svg"/>');
+      assert.equal(icon.body.equals(builtIn('favicon.svg')), !settings.NETNOU_BRAND_DIR);
+      if (settings.NETNOU_BRAND_DIR) assert.equal(icon.body.toString(), '<svg xmlns="http://www.w3.org/2000/svg"/>');
       assert.ok((await request('/icons/icon-192.png')).body.equals(builtIn('icons/icon-192.png')));
       const preview = await request('/preview.png');
-      assert.deepEqual([preview.status, preview.headers['content-type']], settings.BRAND_DIR ? [200, 'image/png'] : [404, 'application/json; charset=utf-8']);
-      assert.equal(text.includes('Own files from '), Boolean(settings.BRAND_DIR));
+      assert.deepEqual([preview.status, preview.headers['content-type']], settings.NETNOU_BRAND_DIR ? [200, 'image/png'] : [404, 'application/json; charset=utf-8']);
+      assert.equal(text.includes('Own files from '), Boolean(settings.NETNOU_BRAND_DIR));
       // it may be read, or nobody would see the request; but it is not handed out
       assert.equal((await request('/robots.txt')).body.toString(), 'User-agent: *\nAllow: /\n');
       assert.equal((await request('/sitemap.xml')).status, 404);
@@ -635,23 +635,29 @@ test('an instance that is not to be listed says so with every answer', async () 
 
 test('a wrong setting or an unusable data directory ends the start with exit code 1', async () => {
   const run = async (settings) => {
-    const proc = start({ PORT: '0', HOST: '127.0.0.1', BBOX: BBOX.join(','), FEED_URL: `${upstream.url}/feed.zip`, REALTIME_URL: `${upstream.url}/realtime.pb`, ...settings });
+    const proc = start({ NETNOU_PORT: '0', NETNOU_HOST: '127.0.0.1', NETNOU_BBOX: BBOX.join(','), NETNOU_FEED_URL: `${upstream.url}/feed.zip`, NETNOU_REALTIME_URL: `${upstream.url}/realtime.pb`, ...settings });
     let text = '';
     proc.stdout.on('data', (chunk) => { text += chunk; });
     proc.stderr.on('data', (chunk) => { text += chunk; });
     const [code] = await once(proc, 'close');
     return { code, text };
   };
-  const config = await run({ DATA_DIR: path.join(dir, 'unused'), REALTIME_INTERVAL_SECONDS: '0' });
+  const config = await run({ NETNOU_DATA_DIR: path.join(dir, 'unused'), NETNOU_REALTIME_INTERVAL_SECONDS: '0' });
   assert.equal(config.code, 1);
   // one line, no stack trace
-  assert.equal(config.text.trim(), 'Configuration error: REALTIME_INTERVAL_SECONDS must be a number from 10 to 3600 (got "0")');
+  assert.equal(config.text.trim(), 'Configuration error: NETNOU_REALTIME_INTERVAL_SECONDS must be a number from 10 to 3600 (got "0")');
   assert.ok(!fs.existsSync(path.join(dir, 'unused')));
 
   // a data directory below a file cannot be created
   fs.writeFileSync(path.join(dir, 'file'), '');
-  const data = await run({ DATA_DIR: path.join(dir, 'file', 'data') });
+  const data = await run({ NETNOU_DATA_DIR: path.join(dir, 'file', 'data') });
   assert.equal(data.code, 1);
   assert.match(data.text, /Timetable: cannot start: the data directory .+ cannot be created or written \(/);
   assert.doesNotMatch(data.text, /\n\s+at /);
+
+  // A name from before the settings had their prefix is not read. The log
+  // says what it is called now; not for one that a shell or a platform sets.
+  const plain = await run({ NETNOU_DATA_DIR: path.join(dir, 'file', 'data'), SITE_NAME: 'Bus & Bahn', PORT: '9' });
+  assert.match(plain.text, /^\S+ SITE_NAME is set but no longer read: the setting is NETNOU_SITE_NAME now$/m);
+  assert.doesNotMatch(plain.text, /PORT is set/);
 });

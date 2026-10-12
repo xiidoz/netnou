@@ -303,8 +303,8 @@ test('the header card shows at once where the page came as this visitor gets it'
 });
 
 // The script puts the title and the description of the page into the visitor's
-// language. Where the operator has words of their own for them (SITE_TITLE,
-// SITE_DESCRIPTION), the server sends those and tells the script of them with
+// language. Where the operator has words of their own for them (NETNOU_SITE_TITLE,
+// NETNOU_SITE_DESCRIPTION), the server sends those and tells the script of them with
 // the area, by language; the script has to take them, or a search engine,
 // which runs it, reads the page's own words after all.
 test('the script takes a title and a description of the operator\'s own for the visitor\'s language', () => {

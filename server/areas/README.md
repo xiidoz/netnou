@@ -44,5 +44,5 @@ again and downloads the OpenStreetMap extracts again after its next update.
 ## Other areas
 
 Other areas do not belong in this folder. They are supplied at run time
-through `AREA_FILE` or `BBOX`, see
+through `NETNOU_AREA_FILE` or `NETNOU_BBOX`, see
 [docs/configuration.md](../../docs/configuration.md#choosing-an-area).

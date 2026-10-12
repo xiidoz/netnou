@@ -21,7 +21,7 @@ VOLUME /data
 
 # An operator's own icons are looked for in /brand: mounting a folder there is
 # all it takes (see docs/configuration.md). Nothing is there otherwise.
-ENV DATA_DIR=/data PORT=8080 BRAND_DIR=/brand
+ENV NETNOU_DATA_DIR=/data NETNOU_PORT=8080 NETNOU_BRAND_DIR=/brand
 
 # What this image was built from, for the version the server reports: the
 # release workflow passes the commit and whether it is that of a release.
@@ -36,7 +36,7 @@ USER node
 # Uses node itself, so the image needs neither wget nor curl. /api/status does
 # not count as a visitor, so this does not start the realtime polling.
 HEALTHCHECK --interval=1m --timeout=5s --start-period=20s \
-  CMD ["node", "-e", "fetch('http://127.0.0.1:' + process.env.PORT + '/api/status').then((r) => process.exit(r.ok ? 0 : 1), () => process.exit(1))"]
+  CMD ["node", "-e", "fetch('http://127.0.0.1:' + process.env.NETNOU_PORT + '/api/status').then((r) => process.exit(r.ok ? 0 : 1), () => process.exit(1))"]
 
 # node runs as PID 1 and handles SIGTERM itself (server/index.js); it starts no
 # child processes, so no init process (tini) is needed. Not "npm start": npm
