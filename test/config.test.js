@@ -107,7 +107,7 @@ test('defaults: the VGN, its OSM extracts, the gtfs.de feeds and OpenStreetMap t
   assert.equal(config.realtimeUrl, 'https://realtime.gtfs.de/realtime-free.pb');
   assert.equal(config.feedCheckMs, 15 * 60_000);
   assert.equal(config.downloadTimeoutMs, 30 * 60_000);
-  assert.equal(config.realtimeIntervalMs, 30_000);
+  assert.equal(config.realtimeIntervalMs, 60_000);
   assert.equal(config.realtimeIdleMs, 120_000);
   assert.equal(config.updateCheck, true);
 
