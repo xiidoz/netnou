@@ -146,6 +146,8 @@ export default {
   'notes.title': 'Notice',
   // what a screen reader says for the sign of a note that warns, of the reason for a delay for example
   'notes.warning': 'Warning',
+  // the same where the sign stands alone, in a list of departures: {text} is what the warning says
+  'notes.warningOf': 'Warning: {text}',
 
   // The view of a line: its vehicles that are under way, under where they go ({destination}), each with the stop ahead of it.
   'line.vehicles': { one: '{count} vehicle under way', other: '{count} vehicles under way' },

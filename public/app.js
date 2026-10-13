@@ -1568,6 +1568,7 @@ function closePanel() {
   state.selection = null;
   pickedChanged(picked);
   clearTimeout(panelTimer);
+  hideSaid();
   panel.hidden = true;
   // (opened again, the sheet is as high as it is by itself)
   setSheetHeight(null);
@@ -1660,6 +1661,12 @@ function fillPanel(head, ...nodes) {
   panelHead.replaceChildren(...head);
   panelBody.replaceChildren(...nodes);
   fitNotes();
+  // (the sign a pointer is on was built anew with its row, or is gone)
+  if (!saidTip.hidden) {
+    const sign = document.elementFromPoint(saidAt.x, saidAt.y)?.closest('.sign[data-said]');
+    if (sign) showSaid(sign);
+    else hideSaid();
+  }
   if (focused >= 0) panelBody.querySelectorAll('.row')[focused]?.focus({ preventScroll: true });
   else if (inHead >= 0) (panelHead.querySelectorAll('button')[inHead] ?? panel).focus({ preventScroll: true });
 }
@@ -1679,15 +1686,73 @@ function delayNode(delay) {
 /** Whether a note of the feed warns: of what is wrong with a trip or a stop right now, such as the reason for a delay. */
 const warns = (note) => note.severity === 'warning' || note.severity === 'severe';
 
-/** The sign of a warning: it stands where a note that does not warn has its bullet, and a screen reader names it. */
-function warningSign() {
+/**
+ * The sign of a warning. In the notes it stands where a note that does not
+ * warn has its bullet, before what the warning says. In a list of trains it
+ * stands for the warning: `said` is then what the warning says, which a
+ * screen reader reads out and a pointer on the sign is shown (showSaid).
+ */
+function warningSign(said = '') {
   const sign = icon(mdiAlert);
   sign.classList.add('sign');
   sign.removeAttribute('aria-hidden');
   sign.setAttribute('role', 'img');
-  sign.setAttribute('aria-label', t('notes.warning'));
+  sign.setAttribute('aria-label', said ? t('notes.warningOf', { text: said }) : t('notes.warning'));
+  if (said) sign.dataset.said = said;
   return sign;
 }
+
+/** A note is long if it does not stand in the head of the details as it is: its headline does, or how it begins. */
+const isLong = (note) => note.text.length > NOTE_CHARS || note.text.includes('\n');
+
+/** What the warnings of a train say, for its sign in a list: a line each, and of a long one how it begins. */
+function saidOf(warnings) {
+  return warnings.map((note) => {
+    const line = note.text.replace(/\s+/g, ' ');
+    return line.length > NOTE_CHARS ? `${line.slice(0, NOTE_CHARS).trimEnd()} …` : line;
+  }).join('\n');
+}
+
+/**
+ * The delay of a train in a list and, if something is wrong with the train
+ * right now, the sign of a warning: after the delay, which the warning mostly
+ * explains, and before the train. In a list with such a train every row
+ * keeps the place of the sign, so that what follows begins at the same place
+ * in all of them.
+ * @param delay the delay as a node (delayNode), or an empty one of its kind
+ * @param signed whether a train of the list has something wrong with it
+ */
+function delayCell(delay, warnings, signed) {
+  if (!signed) return delay;
+  return el('span', { class: 'late' }, warnings.length ? [delay, warningSign(saidOf(warnings))] : [delay]);
+}
+
+// What the sign of a warning in a list says is shown at the sign while a
+// pointer is on it, in the look of the tooltip of the map. A finger does not
+// hover (`hovering`): its tap opens the train, whose first note the warning is.
+const saidTip = $('said');
+let saidAt = null; // where the pointer was when it came upon the sign: { x, y }
+const hideSaid = () => { saidTip.hidden = true; };
+
+function showSaid(sign) {
+  saidTip.textContent = sign.dataset.said;
+  saidTip.hidden = false;
+  const at = sign.getBoundingClientRect();
+  const page = document.documentElement;
+  // below the sign, or above it where there is no room below; and as far left as it takes to be seen whole
+  const x = Math.max(8, Math.min(at.left, page.clientWidth - saidTip.offsetWidth - 8));
+  const below = at.bottom + 6;
+  const y = below + saidTip.offsetHeight > page.clientHeight - 8 ? at.top - 6 - saidTip.offsetHeight : below;
+  saidTip.style.transform = `translate(${Math.round(x)}px, ${Math.round(y)}px)`;
+}
+
+panel.addEventListener('pointerover', (event) => {
+  const sign = hovering.matches ? event.target.closest('.sign[data-said]') : null;
+  if (!sign) return hideSaid();
+  saidAt = { x: event.clientX, y: event.clientY };
+  showSaid(sign);
+});
+panel.addEventListener('pointerleave', hideSaid);
 
 /**
  * The notes in the head of the details: what the page has to say itself, and
@@ -1719,8 +1784,7 @@ function notesList(notes, own = [], alert = null) {
   const urgent = notes.filter(warns);
   const ordered = [...urgent, ...notes.filter((note) => !warns(note))];
   const listed = ordered.map((note) => {
-    const long = note.text.length > NOTE_CHARS || note.text.includes('\n');
-    const item = long ? el('li', {}, [noteButton(note.title ?? note.text, [note])]) : line(note.text);
+    const item = isLong(note) ? el('li', {}, [noteButton(note.title ?? note.text, [note])]) : line(note.text);
     return warns(note) ? warning(item) : item;
   });
   if (!first.length && !items.length && !listed.length) return '';
@@ -1897,12 +1961,13 @@ function renderLine(line, first) {
   // under where they go, in the order of the server: the one with the fewest stops left first
   const byDestination = new Map();
   for (const v of line.vehicles) byDestination.set(v.to, [...(byDestination.get(v.to) ?? []), v]);
+  const signed = line.vehicles.some((v) => v.warnings.length > 0);
   const lists = [...byDestination].flatMap(([destination, vehicles]) => [
     el('h3', { class: 'rows-head', text: t('line.to', { destination }) }),
-    el('ul', { class: 'rows' }, vehicles.map((v) => el('li', {}, [
+    el('ul', { class: `rows${signed ? ' signed' : ''}` }, vehicles.map((v) => el('li', {}, [
       el('button', { type: 'button', class: 'row vehicle', onclick: () => select('trip', v.id, { from: selection.line }) }, [
         el('span', { class: 'name', text: t('line.next', { stop: v.next }), title: v.next }),
-        delayNode(v.delay),
+        delayCell(delayNode(v.delay), v.warnings, signed),
       ]),
     ]))),
   ]);
@@ -1926,11 +1991,12 @@ function renderLine(line, first) {
 
 function renderStation(board) {
   const scrollTop = panelBody.scrollTop;
+  const signed = board.departures.some((dep) => dep.warnings.length > 0);
   const rows = board.departures.map((dep) =>
     el('li', {}, [
       el('button', { type: 'button', class: `row departure${dep.cancelled ? ' cancelled' : ''}`, onclick: () => select('trip', dep.trip) }, [
         el('span', { class: 'time', text: formatTime(dep.planned) }),
-        dep.cancelled ? el('span') : delayNode(dep.delay),
+        delayCell(dep.cancelled ? el('span', { class: 'delay' }) : delayNode(dep.delay), dep.warnings, signed),
         badge(dep.line, dep.mode),
         el('span', { class: 'name', text: dep.to, title: dep.to }),
         el('span', { class: 'platform', text: dep.cancelled ? t('departures.cancelled') : platformText(dep.platform) }),
@@ -1940,7 +2006,7 @@ function renderStation(board) {
   fillPanel(
     [el('div', { class: 'panel-head' }, [el('h2', { text: board.name }), el('p', { class: 'sub', text: t('departures.title') }), notesList(board.notes)])],
     // (the two hours the text speaks of are the default window of departures() in server/lib/timetable.js)
-    rows.length ? el('ul', { class: 'rows' }, rows) : el('p', { class: 'panel-empty', text: t('departures.none') }),
+    rows.length ? el('ul', { class: `rows${signed ? ' signed' : ''}` }, rows) : el('p', { class: 'panel-empty', text: t('departures.none') }),
   );
   panelBody.scrollTop = scrollTop;
 }
