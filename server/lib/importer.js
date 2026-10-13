@@ -369,9 +369,13 @@ function assemble({ area, stops, routes, headsigns, dates, services, collector, 
   kept.sort((a, b) => rank[a] - rank[b]);
   const column = (values) => Int32Array.from(kept, (t) => values[t]);
   const ids = kept.map((t) => collector.ids[t]);
-  // (plain "<" is the order of the bytes unless a character from the far end of Unicode is among them)
-  const inOrder = ids.some((id) => /[\uD800-\uFFFF]/.test(id)) ? byteOrder : (a, b) => (a < b ? -1 : a > b ? 1 : 0);
-  const byId = Int32Array.from(ids, (_, t) => t).sort((a, b) => inOrder(ids[a], ids[b]));
+  /** The places of texts in the order of their bytes: where one is found by going through them (finder in timetable.js). */
+  const ordered = (texts) => {
+    // (plain "<" is the order of the bytes unless a character from the far end of Unicode is among them)
+    const inOrder = texts.some((text) => /[\uD800-\uFFFF]/.test(text)) ? byteOrder : (a, b) => (a < b ? -1 : a > b ? 1 : 0);
+    return Int32Array.from(texts, (_, i) => i).sort((a, b) => inOrder(texts[a], texts[b]));
+  };
+  const byId = ordered(ids);
 
   const patterns = collector.patterns.done();
   const profiles = collector.profiles.done();
@@ -380,7 +384,8 @@ function assemble({ area, stops, routes, headsigns, dates, services, collector, 
     version: DATASET_VERSION,
     area,
     stops: {
-      id: stops.id,
+      id: Texts.from(stops.id),
+      byId: ordered(stops.id),
       name: stops.name,
       platform: stops.platform,
       lat: Float64Array.from(stops.lat),
@@ -438,7 +443,8 @@ export function packDataset({ area = null, stops, routes, headsigns, dates, serv
 //              (scopeId in area.js)
 //   source     { etag, lastModified, importedAt, osm } – which feed and OSM
 //              data it was made from; added by import-worker.js
-//   stops      { id, name, platform, lat, lon, parent: stop index or -1,
+//   stops      { id: texts, byId: the stops in the order of their ids,
+//                name, platform, lat, lon, parent: stop index or -1,
 //                region: 1 if in the area or within NEAR.region of it, else
 //                0; without an area every stop is 1 }
 //   routes     { id, short, long, type: GTFS route_type, color, text,

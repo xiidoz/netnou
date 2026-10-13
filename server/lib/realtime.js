@@ -1,10 +1,11 @@
 // Polls the GTFS-Realtime feed and turns its TripUpdates into per-stop delays
-// for the trips of the regional timetable.
+// for the trips of the timetable. Fetching, reading and matching happen in a
+// thread of their own (realtime-worker.js), which is told from here when.
 
-import { publicUrl, reason } from './files.js';
-import { get } from './http.js';
-import { decodeFeed } from './pb.js';
-import { serviceDayStart } from './time.js';
+import { Worker } from 'node:worker_threads';
+import { reason } from './files.js';
+import { Gathering, Snapshot } from './snapshot.js';
+import { serviceDayStart, timeZone } from './time.js';
 
 const REL_SKIPPED = 1;
 const REL_NO_DATA = 2;
@@ -16,12 +17,6 @@ const MAX_PLAUSIBLE_DELAY_S = 6 * 3600;
 // page calls realtime data "live" up to the same age (LIVE_MAX_AGE_S in
 // public/app.js).
 const STALE_AFTER_S = 180;
-// One fetch may take this long, from the first attempt to connect to the last
-// byte. When the provider's server is busy it is slow to pick up and slow to
-// deliver, and a client that gives up early gets nothing and adds to the load
-// by starting over. Turns of the interval that come while a fetch is still
-// running are left out.
-const FETCH_LIMIT_MS = 90_000;
 
 function eventDelay(event, scheduled) {
   if (!event) return null;
@@ -58,7 +53,7 @@ export function tripDelays(timetable, t, date, update) {
     const stu = u < updates.length && updates[u].seq === seq ? updates[u] : null;
 
     if (stu) {
-      if (stu.stopId && stu.stopId !== timetable.stops.id[stops[p]]) return null;
+      if (stu.stopId && !timetable.stops.id.is(stops[p], stu.stopId)) return null;
       if (stu.rel === REL_NO_DATA) {
         carried = null;
         continue;
@@ -115,42 +110,45 @@ export function agreedDelay(reports) {
   return agreed;
 }
 
-// The two ends of a way: the departure from the stop it begins at, the arrival at the next one.
-const WAY_ENDS = [['depDelay', 'depReported', 0], ['arrDelay', 'arrReported', 1]];
-
 /**
  * Trains that run coupled are a trip each, in the timetable and in the feed,
  * and the feed may report a delay for one of them and not for the others. One
  * train cannot be at two places: on every way they share, all of them get
  * the same delay at either end (see agreedDelay). A portion the feed has no
  * word on gets what the others say for that way, and nothing else.
- * @param byDate service date -> trip index -> delays, changed in place
+ * @param gathered the delays of all trips (a Gathering), changed in place
  */
-function shareDelays(timetable, byDate) {
-  for (const [date, trips] of byDate) {
+function shareDelays(timetable, gathered) {
+  for (const [date, rows] of gathered.rows) {
     for (const way of timetable.sharedWays) {
       // (no word on any of them: nothing to share)
-      if (!way.some(([t]) => trips.has(t))) continue;
-      const running = way.filter(([t]) => timetable.runsOn(t, date) && !trips.get(t)?.cancelled);
+      if (!way.some(([t]) => rows.has(t))) continue;
+      const running = way.filter(([t]) => timetable.runsOn(t, date) && !(rows.has(t) && gathered.cancelled.array[rows.get(t)]));
       if (running.length < 2) continue;
-      for (const [delays, reported, ahead] of WAY_ENDS) {
-        const agreed = agreedDelay(running.map(([t, p]) => {
-          const rt = trips.get(t);
-          return rt ? [rt[delays][p + ahead], rt[reported][p + ahead] === 1] : [null, false];
-        }));
+      // The two ends of a way: the departure from the stop it begins at (0), the arrival at the next one (1).
+      for (const arrival of [0, 1]) {
+        const agreed = agreedDelay(running.map(([t, p]) => (rows.has(t) ? gathered.report(rows.get(t), p + arrival, arrival) : [null, false])));
         if (agreed === null) continue;
-        for (const [t, p] of running) {
-          let rt = trips.get(t);
-          if (!rt) {
-            const n = timetable.stopCount(t);
-            rt = { arrDelay: new Array(n).fill(null), depDelay: new Array(n).fill(null), arrReported: new Uint8Array(n), depReported: new Uint8Array(n), skipped: null, cancelled: false, first: 0, last: n - 1 };
-            trips.set(t, rt);
-          }
-          rt[delays][p + ahead] = agreed;
-        }
+        for (const [t, p] of running) gathered.agree(rows.get(t) ?? gathered.blank(date, t, timetable.stopCount(t)), p + arrival, arrival, agreed);
       }
     }
   }
+}
+
+/**
+ * Takes one trip update of the feed: if it is for a trip of the timetable on
+ * a day it runs, and fits it, its delays are written down.
+ * @param gathered a Gathering
+ * @returns whether it was
+ */
+export function takeTripUpdate(timetable, gathered, update) {
+  const t = timetable.tripIndex.get(update.trip.tripId);
+  const date = update.trip.startDate;
+  if (t === undefined || !date || !timetable.runsOn(t, date)) return false;
+  const rt = tripDelays(timetable, t, date, update);
+  if (!rt) return false;
+  gathered.put(date, t, rt);
+  return true;
 }
 
 // gtfs.de names the provider of a trip's realtime data in an "alert" of its
@@ -161,16 +159,20 @@ function shareDelays(timetable, byDate) {
 const SOURCE_NOTE = /^Echtzeitdaten aufbereitet von GTFS\.de, bereitgestellt von (.+)$/s;
 
 /**
- * Snapshot of one feed fetch:
+ * What one fetch of the feed says of the trips and stops of the timetable, as
+ * a Snapshot (snapshot.js): that has it in columns of numbers and is what the
+ * timetable is asked with. For whoever wants to look at it, it also has
  *   byDate        service date -> trip index -> delays (see tripDelays), those
  *                 of coupled trains made the same where they share their way
  *   tripNotes     trip index -> alert texts (disruption reasons, vehicle features)
  *   tripSources   trip index -> who provides the realtime data (see SOURCE_NOTE)
  *   stationNotes  station index -> alert texts (e.g. broken lifts)
  * @param now epoch seconds; alerts are only taken while one of their active periods is current
+ * @param taken the trip updates that were taken one by one while the feed was
+ *   read (takeTripUpdate), where it is not left to this to go through them:
+ *   { gathered, matched }
  */
-export function buildRealtime(timetable, feed, now = Math.floor(Date.now() / 1000)) {
-  const byDate = new Map();
+export function buildRealtime(timetable, feed, now = Math.floor(Date.now() / 1000), taken = { gathered: new Gathering(), matched: 0 }) {
   const tripNotes = new Map();
   const tripSources = new Map();
   const stationNotes = new Map();
@@ -196,26 +198,20 @@ export function buildRealtime(timetable, feed, now = Math.floor(Date.now() / 100
     }
   }
 
-  let matched = 0;
-  for (const update of feed.tripUpdates) {
-    const t = timetable.tripIndex.get(update.trip.tripId);
-    const date = update.trip.startDate;
-    if (t === undefined || !date || !timetable.runsOn(t, date)) continue;
-    const rt = tripDelays(timetable, t, date, update);
-    if (!rt) continue;
-    let trips = byDate.get(date);
-    if (!trips) byDate.set(date, (trips = new Map()));
-    trips.set(t, rt);
-    matched++;
-  }
-  shareDelays(timetable, byDate);
-  return { byDate, tripNotes, tripSources, stationNotes, matched };
+  const { gathered } = taken;
+  let { matched } = taken;
+  for (const update of feed.tripUpdates) if (takeTripUpdate(timetable, gathered, update)) matched++;
+  shareDelays(timetable, gathered);
+  return Object.assign(new Snapshot(gathered.columns({ tripNotes, tripSources, stationNotes, matched })), { tripNotes, tripSources, stationNotes });
 }
 
 /**
- * Fetches the feed on an interval, but only while somebody is looking: the
- * feed is ~20 MB per request and served uncompressed, so idle polling would
- * cost tens of GB per day for nothing.
+ * Has the feed fetched on an interval, but only while somebody is looking: it
+ * is about 15 MB per request, so idle polling would cost tens of GB per day
+ * for nothing. The fetching, the reading and the matching are done by a
+ * thread of their own, which lives for as long as there is polling for one
+ * timetable. A turn of the interval that comes while a fetch is still running
+ * is left out.
  */
 export class RealtimePoller {
   /** @param userAgent how the server names itself to the provider of the feed */
@@ -226,6 +222,7 @@ export class RealtimePoller {
     this.getTimetable = getTimetable;
     this.log = log;
     this.userAgent = userAgent;
+    /** The realtime data in use: a Snapshot (snapshot.js), or null for the timetable alone. */
     this.snapshot = null;
     // (fetches and failures count since the server started)
     this.status = { polling: false, fetchedAt: null, feedTimestamp: null, matchedTrips: 0, error: null, fetches: 0, failures: 0 };
@@ -233,6 +230,9 @@ export class RealtimePoller {
     this.timer = null;
     this.busy = false;
     this.etag = null;
+    // The thread that reads the feed, with the timetable it was started for
+    // and what waits for its answer: { worker, timetable, waiting }.
+    this.thread = null;
   }
 
   /** Called for every client request that needs realtime data. */
@@ -246,10 +246,58 @@ export class RealtimePoller {
     }
   }
 
-  /** Forget everything derived from the previous timetable. */
-  reset() {
+  /** Back to the timetable alone, until a fetch brings realtime data again. */
+  forget() {
     this.snapshot = null;
     this.etag = null;
+  }
+
+  /** Forget everything derived from the previous timetable, and end the thread that read the feed for it. */
+  reset() {
+    this.forget();
+    const thread = this.thread;
+    this.thread = null;
+    if (thread) {
+      thread.waiting?.reject(new Error('the timetable was replaced or the polling paused'));
+      thread.worker.terminate();
+    }
+  }
+
+  /**
+   * Has the thread fetch the feed and read it against this timetable; a thread
+   * is started if there is none for it.
+   * @returns what the thread answers: { columns, etag, timestamp } or { unchanged: true }
+   */
+  fetch(timetable) {
+    if (this.thread && this.thread.timetable !== timetable) this.reset();
+    if (!this.thread) {
+      if (!timetable.shared) throw new Error('the timetable is not in memory that threads share');
+      const worker = new Worker(new URL('./realtime-worker.js', import.meta.url), {
+        workerData: { shared: timetable.shared, timeZone: timeZone(), url: this.url, userAgent: this.userAgent },
+      });
+      const thread = { worker, timetable, waiting: null };
+      const settle = (how, value) => {
+        const { waiting } = thread;
+        thread.waiting = null;
+        waiting?.[how](value);
+      };
+      worker.on('message', (answer) => (answer.error ? settle('reject', new Error(answer.error)) : settle('resolve', answer)));
+      // A thread that fails or ends is not used again: the next turn starts another.
+      const gone = (err) => {
+        if (this.thread === thread) this.thread = null;
+        settle('reject', err);
+      };
+      worker.on('error', gone);
+      worker.on('exit', (code) => gone(new Error(`the thread that reads the feed stopped (exit code ${code})`)));
+      // (it does not keep the server from ending)
+      worker.unref();
+      this.thread = thread;
+    }
+    const { thread } = this;
+    return new Promise((resolve, reject) => {
+      thread.waiting = { resolve, reject };
+      thread.worker.postMessage({ etag: this.etag });
+    });
   }
 
   async tick() {
@@ -267,28 +315,23 @@ export class RealtimePoller {
     if (this.busy) return this.dropStale();
     this.busy = true;
     this.status.fetches++;
+    // Meanwhile the timetable may be replaced or the polling paused: what
+    // arrives then, or fails to, belongs to neither.
+    const current = () => timetable === this.getTimetable() && this.timer !== null;
     try {
-      const headers = {};
-      if (this.userAgent) headers['User-Agent'] = this.userAgent;
-      if (this.etag) headers['If-None-Match'] = this.etag;
-      const res = await get(this.url, { headers, timeoutMs: FETCH_LIMIT_MS });
-      // Meanwhile the timetable may have been replaced or the polling paused:
-      // what arrived belongs to neither.
-      if (timetable !== this.getTimetable() || !this.timer) return;
-      if (res.status !== 304) {
-        if (res.status < 200 || res.status > 299) throw new Error(`GET ${publicUrl(this.url)}: HTTP ${res.status}`);
-        const feed = decodeFeed(res.body, {
-          wantTrip: (trip) => timetable.tripIndex.has(trip.tripId),
-          wantAlert: (alert) => alert.informed.some((e) => timetable.tripIndex.has(e.tripId) || timetable.stopIndex.has(e.stopId)),
-        });
-        this.snapshot = buildRealtime(timetable, feed);
-        this.etag = res.headers.etag ?? null;
-        this.status.feedTimestamp = feed.timestamp || null;
+      // (a thread for another timetable has been ended by reset())
+      const answer = await this.fetch(timetable);
+      if (!current()) return;
+      if (!answer.unchanged) {
+        this.snapshot = new Snapshot(answer.columns);
+        this.etag = answer.etag;
+        this.status.feedTimestamp = answer.timestamp;
         this.status.matchedTrips = this.snapshot.matched;
       }
       this.status.fetchedAt = Math.floor(Date.now() / 1000);
       this.status.error = null;
     } catch (err) {
+      if (!current()) return;
       this.status.failures++;
       this.status.error = reason(err);
       this.log(`Realtime: update failed: ${this.status.error}`);
@@ -300,6 +343,6 @@ export class RealtimePoller {
 
   /** The last delays stay in use for a short while when fetching fails, then it is back to the schedule. */
   dropStale() {
-    if (this.status.fetchedAt && Date.now() / 1000 - this.status.fetchedAt > STALE_AFTER_S) this.reset();
+    if (this.status.fetchedAt && Date.now() / 1000 - this.status.fetchedAt > STALE_AFTER_S) this.forget();
   }
 }

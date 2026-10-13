@@ -11,7 +11,7 @@ import fs from 'node:fs';
 // including the route geometry (shapes.js) and what the importer puts into a
 // field: a stored dataset of another version is discarded and imported again
 // on start.
-export const DATASET_VERSION = 6;
+export const DATASET_VERSION = 7;
 
 const MAGIC = 'netnou dataset\n';
 // Columns begin at a multiple of this, so that a typed array can be laid over
@@ -57,6 +57,17 @@ export class Texts {
 
   get(i) {
     return this.bytes.toString('utf8', this.start[i], this.start[i + 1]);
+  }
+
+  /** Whether text i is `text`. Where both are plain ASCII, as ids nearly always are, no string is made for it. */
+  is(i, text) {
+    const from = this.start[i];
+    const length = this.start[i + 1] - from;
+    // (as many characters as bytes: each takes one byte, or it is not this text)
+    if (text.length !== length) return text.length < length && this.get(i) === text;
+    // (a character beyond ASCII takes more than one byte: the text is then longer than this one)
+    for (let k = 0; k < length; k++) if (text.charCodeAt(k) !== this.bytes[from + k] || this.bytes[from + k] > 127) return false;
+    return true;
   }
 
   /** The position of `text`, or -1. Only for texts that are in the order of their bytes (byteOrder). */
@@ -145,27 +156,45 @@ export function writeDataset(file, data) {
   fs.renameSync(tmp, file);
 }
 
-/**
- * Reads a dataset written by writeDataset. The typed arrays lie over the
- * bytes of the file as they were read: nothing is copied and nothing parsed
- * but the head.
- */
-export function readDataset(file) {
+/** The bytes of a file, in memory that threads can share if asked for. */
+function bytesOf(file, shared) {
   const fd = fs.openSync(file, 'r');
-  let bytes;
   try {
     const { size } = fs.fstatSync(fd);
     // (a buffer of its own, which begins at a multiple of ALIGN as the file does)
-    bytes = Buffer.from(new ArrayBuffer(size));
+    const bytes = Buffer.from(shared ? new SharedArrayBuffer(size) : new ArrayBuffer(size));
     for (let done = 0; done < size;) {
       const read = fs.readSync(fd, bytes, done, Math.min(CHUNK, size - done), done);
       if (!read) throw new Error('dataset: unexpected end of file');
       done += read;
     }
+    return bytes.buffer;
   } finally {
     fs.closeSync(fd);
   }
+}
 
+/**
+ * Reads the bytes of a dataset written by writeDataset into memory that
+ * threads can share: each of them lays its own dataset over it (datasetFrom),
+ * and none has a copy of the columns.
+ * @returns {SharedArrayBuffer}
+ */
+export function loadDataset(file) {
+  return bytesOf(file, true);
+}
+
+/**
+ * A dataset from the bytes of its file. The typed arrays lie over the bytes
+ * as they are: nothing is copied and nothing parsed but the head.
+ * @param buffer an ArrayBuffer or a SharedArrayBuffer
+ * @param options.lists the names of the long lists of texts that are read,
+ *   where not all of them are wanted; the others are null. Such a list is
+ *   strings of the thread that reads it, and a thread that needs few of them
+ *   does without the rest
+ */
+export function datasetFrom(buffer, { lists = null } = {}) {
+  const bytes = Buffer.from(buffer);
   const topLength = Number(bytes.toString('latin1', 0, 16));
   if (!(topLength > MAGIC.length) || bytes.toString('latin1', 16, 16 + MAGIC.length) !== MAGIC) throw new Error('not a dataset');
   const top = bytes.toString('utf8', 16 + MAGIC.length, 16 + topLength);
@@ -175,17 +204,23 @@ export function readDataset(file) {
 
   const made = columns.map(({ type, offset, bytes: length, count }) => {
     if (base + offset + length > bytes.byteLength) throw new Error('dataset: the file is cut short');
-    if (type === 'lines') return count ? bytes.toString('utf8', base + offset, base + offset + length).split('\n') : [];
-    return new TYPES[type](bytes.buffer, base + offset, count);
+    // (a list of texts is made when it turns out to be wanted, by its name)
+    if (type === 'lines') return () => (count ? bytes.toString('utf8', base + offset, base + offset + length).split('\n') : []);
+    return new TYPES[type](buffer, base + offset, count);
   });
   return JSON.parse(top.slice(cut + 1), (key, value) => {
     if (value && typeof value === 'object') {
       if (value.$column !== undefined) return made[value.$column];
-      if (value.$lines !== undefined) return made[value.$lines];
+      if (value.$lines !== undefined) return !lists || lists.includes(key) ? made[value.$lines]() : null;
       if (value.$texts !== undefined) return new Texts(made[value.$texts[0]], made[value.$texts[1]]);
     }
     return value;
   });
+}
+
+/** Reads a dataset written by writeDataset, into memory of this thread alone. */
+export function readDataset(file) {
+  return datasetFrom(bytesOf(file, false));
 }
 
 /** A list of whole numbers that grows as it is filled. */

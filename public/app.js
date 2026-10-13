@@ -91,7 +91,7 @@ const LIVE_MAX_AGE_S = 180;
 // Without any realtime data the page waits this long before it calls that an
 // outage: the server may be fetching the feed for the first time, or again
 // after a pause, and gives one fetch as long (FETCH_LIMIT_MS in
-// server/lib/realtime.js).
+// server/lib/realtime-worker.js).
 const REALTIME_GRACE_MS = 90_000;
 // The visitor's own position: the first one brings the map in to LOCATE_ZOOM,
 // and one that takes longer than LOCATE_TIMEOUT_MS to find counts as not found.
