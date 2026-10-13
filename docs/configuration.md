@@ -34,7 +34,7 @@ services:
   netnou:
     environment:
       NETNOU_AREA_NAME: "My town"
-      NETNOU_REALTIME_INTERVAL_SECONDS: "60"
+      NETNOU_REALTIME_INTERVAL_SECONDS: "30"
 ```
 
 Every setting begins with `NETNOU_`, so that it is plain whose it is among
@@ -77,7 +77,7 @@ needs `NETNOU_PORT` set to the same number.
 | `NETNOU_FEED_URL` | `https://download.gtfs.de/germany/free/latest.zip` | http(s) URL | the GTFS timetable (zip) |
 | `NETNOU_FEED_CHECK_MINUTES` | `15` | 1–1440 | how often to look for a new version of the timetable |
 | `NETNOU_REALTIME_URL` | `https://realtime.gtfs.de/realtime-free.pb` | http(s) URL | the GTFS-Realtime feed |
-| `NETNOU_REALTIME_INTERVAL_SECONDS` | `30` | 10–3600 | how often the realtime feed is fetched while the map is in use |
+| `NETNOU_REALTIME_INTERVAL_SECONDS` | `60` | 10–3600 | how often the realtime feed is fetched while the map is in use |
 | `NETNOU_REALTIME_IDLE_SECONDS` | `120` | 30–86400 | fetching stops this long after the last request from a browser |
 | `NETNOU_OSM_PBF_URLS` | five Geofabrik extracts of Bavaria; none for a custom area | comma-separated http(s) URLs | OpenStreetMap extracts (`.osm.pbf`) that together cover the area; empty means no route geometry |
 | `NETNOU_OSM_MAX_AGE_DAYS` | `30` | 1–3650 | how long the OpenStreetMap data is used before it is downloaded again |
@@ -364,7 +364,7 @@ Three intervals are involved, and they are independent:
 | Who | Interval | Setting |
 | --- | --- | --- |
 | The provider republishes the realtime feed | about every 30 s (gtfs.de, observed) | – |
-| The server fetches the realtime feed | 30 s | `NETNOU_REALTIME_INTERVAL_SECONDS` |
+| The server fetches the realtime feed | 60 s | `NETNOU_REALTIME_INTERVAL_SECONDS` |
 | The page asks the server for vehicles | 10 s | fixed (`POLL_MS` in `public/app.js`) |
 
 The gtfs.de realtime feed is about 20 MB per fetch and is served
@@ -381,6 +381,13 @@ given up to 90 seconds, and the next one starts with the first turn of the
 interval after it has ended. Until then the vehicles keep the delays of the
 last fetch, for at most three minutes. How often fetching fails is counted in
 `realtime.fetches` and `realtime.failures` of `/api/status`.
+
+The server fetches once a minute, half as often as the provider republishes,
+because of the traffic: an instance that is looked at around the clock
+transfers 15 to 20 GB a day that way. A delay shows up to a minute after it
+is reported, and the last delays outlive two failed fetches in a row. With
+`NETNOU_REALTIME_INTERVAL_SECONDS=30` a delay shows half a minute sooner and
+the last delays outlive five failed fetches, for twice the traffic.
 
 The timetable itself (about 300 MB) is only downloaded when the provider
 publishes a new version, which gtfs.de does once a day. The check every

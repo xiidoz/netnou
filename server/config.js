@@ -340,7 +340,9 @@ export function loadConfig(env = process.env) {
     osmMaxAgeMs: number('NETNOU_OSM_MAX_AGE_DAYS', 30, 1, 3650) * 86_400_000,
 
     realtimeUrl: httpUrl('NETNOU_REALTIME_URL', text('NETNOU_REALTIME_URL') || 'https://realtime.gtfs.de/realtime-free.pb'),
-    realtimeIntervalMs: number('NETNOU_REALTIME_INTERVAL_SECONDS', 30, 10, 3600) * 1000,
+    // Once a minute: the feed is that of a whole country, and half the
+    // fetches are half the traffic, for the provider as well.
+    realtimeIntervalMs: number('NETNOU_REALTIME_INTERVAL_SECONDS', 60, 10, 3600) * 1000,
     // Polling stops this long after the last browser request.
     realtimeIdleMs: number('NETNOU_REALTIME_IDLE_SECONDS', 120, 30, 86400) * 1000,
 

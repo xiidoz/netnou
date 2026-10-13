@@ -43,8 +43,9 @@ services:
       # One operator and no others, by its name in the feed. With
       # NETNOU_AREA: "all" in place of an area, wherever its lines run.
       # NETNOU_AGENCIES: "VerkehrsAG Nürnberg"
-      # Seconds between two fetches of the realtime feed (about 20 MB each)
-      # while somebody is looking at the map.
+      # Seconds between two fetches of the realtime feed (10 to 15 MB each)
+      # while somebody is looking at the map: 60 unless set. With 30 a delay
+      # shows half a minute sooner, for twice the traffic.
       # NETNOU_REALTIME_INTERVAL_SECONDS: "30"
       # Another map behind the vehicles: the address of any style for MapLibre.
       # The default is the "bright" style of OpenFreeMap.

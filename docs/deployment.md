@@ -248,7 +248,7 @@ Worth watching:
 - **Load.** The API has no rate limiting of its own. Limit requests to
   `/api/` at the reverse proxy if the instance is exposed to the internet.
   Every client that asks for vehicles also keeps the server fetching the
-  realtime feed, about 20 MB every 30 seconds with the defaults
+  realtime feed, 10 to 15 MB a minute with the defaults
   ([Realtime polling and traffic](configuration.md#realtime-polling-and-traffic)).
 - **What is stored and logged.** The server sets no cookies, has no accounts
   and writes no access log; it logs a request only when handling it failed
