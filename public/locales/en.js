@@ -139,6 +139,12 @@ export default {
   'trip.source': 'Realtime data: {source}',
   'trip.cancelled': 'Trip cancelled',
 
+  // The notes of the operator about a trip or a stop, in the head of the details. Past the first few, a button
+  // names the rest by their number and opens them; it is also the heading of the dialog they open in.
+  'notes.more': { one: '{count} more notice', other: '{count} more notices' },
+  // the heading of the dialog for a single note that has no headline of its own
+  'notes.title': 'Notice',
+
   // The view of a line: its vehicles that are under way, under where they go ({destination}), each with the stop ahead of it.
   'line.vehicles': { one: '{count} vehicle under way', other: '{count} vehicles under way' },
   'line.none': 'No vehicle of this line is under way right now.',

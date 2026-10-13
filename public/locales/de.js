@@ -105,6 +105,9 @@ export default {
   'trip.source': 'Echtzeitdaten: {source}',
   'trip.cancelled': 'Fahrt fällt aus',
 
+  'notes.more': { one: '{count} weiterer Hinweis', other: '{count} weitere Hinweise' },
+  'notes.title': 'Hinweis',
+
   'line.vehicles': { one: '{count} Fahrzeug unterwegs', other: '{count} Fahrzeuge unterwegs' },
   'line.none': 'Von dieser Linie ist gerade kein Fahrzeug unterwegs.',
   'line.to': 'nach {destination}',

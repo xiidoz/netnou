@@ -515,7 +515,7 @@ test('realtime delays shift positions and carry forward to later stops', () => {
   const trip = timetable.trip('T1', DAY, rt);
   // the gtfs.de note about where the data comes from is the source, not a note
   assert.equal(trip.source, 'VAG Nürnberg');
-  assert.deepEqual(trip.notes, ['Technische Störung am Zug']);
+  assert.deepEqual(trip.notes, [{ title: null, text: 'Technische Störung am Zug' }]);
   assert.equal(trip.stops[1].depDelay, 300);
   assert.equal(trip.stops[0].station, 'SA');
   assert.equal(timetable.trip('T1', '20261005', rt), null); // does not run that day
@@ -523,7 +523,7 @@ test('realtime delays shift positions and carry forward to later stops', () => {
   assert.equal(timetable.trip('T1', DAY, null).source, null);
 
   const board = timetable.departures('SA', at('09:58'), rt);
-  assert.deepEqual(board.notes, ['Aufzug außer Betrieb']);
+  assert.deepEqual(board.notes, [{ title: null, text: 'Aufzug außer Betrieb' }]);
   assert.deepEqual(board.departures.map((d) => [d.line, d.to, d.planned, d.delay]), [['U1', 'Gamma, Endstation', at('10:00'), 300]]);
   // a terminus has no departures: T4 ends at A, T1 ends at C
   assert.deepEqual(timetable.departures('C', at('10:15'), rt).departures, []);
@@ -543,7 +543,7 @@ test('alerts are shown only during their active periods', () => {
   const sa = timetable.stopIndex.get('SA');
   const notes = (now) => {
     const rt = buildRealtime(timetable, feed, now);
-    return [rt.tripNotes.get(t1), rt.stationNotes.get(sa) ?? []];
+    return [rt.tripNotes.get(t1), rt.stationNotes.get(sa) ?? []].map((list) => list.map((note) => note.text));
   };
   assert.deepEqual(notes(at('05:00')), [['always'], ['until noon']]);
   assert.deepEqual(notes(at('06:00')), [['always', 'in the morning'], ['until noon']]);
@@ -551,6 +551,41 @@ test('alerts are shown only during their active periods', () => {
   assert.deepEqual(notes(at('21:00')), [['always', 'in the evening and from tomorrow'], []]);
   assert.deepEqual(notes(at('23:00')), [['always'], []]);
   assert.deepEqual(notes(at('30:00')), [['always', 'in the evening and from tomorrow'], []]);
+});
+
+test('a note is the text of an alert, and its headline where that says something else', () => {
+  const notes = (...alerts) => {
+    const feed = decodeFeed(encodeFeed({ timestamp: 1, alerts: alerts.map((alert) => ({ tripId: 'T1', ...alert })) }));
+    return buildRealtime(timetable, feed).tripNotes.get(timetable.tripIndex.get('T1')) ?? [];
+  };
+  assert.deepEqual(
+    notes(
+      { text: 'Niederflur' },
+      { title: 'WLAN verfügbar', text: 'WLAN verfügbar' },
+      { title: 'Umleitung wegen Bauarbeiten' },
+      { title: 'Haltestelle Burg entfällt', text: 'Bis Sonntag wird die Haltestelle Burg nicht bedient.' },
+    ),
+    [
+      { title: null, text: 'Niederflur' },
+      { title: null, text: 'WLAN verfügbar' },
+      { title: null, text: 'Umleitung wegen Bauarbeiten' },
+      { title: 'Haltestelle Burg entfällt', text: 'Bis Sonntag wird die Haltestelle Burg nicht bedient.' },
+    ],
+  );
+  // The lines of a text stay, the room operators leave around them does not; a headline is one line.
+  assert.deepEqual(
+    notes({ title: ' Linie 345:\n Umleitung ', text: '\n\n   \n        \nLinie 345: \r\n\u00a0Die Linie wird umgeleitet.\n \n \n\n  Dauer: bis Januar\u00a0\n' }),
+    [{ title: 'Linie 345: Umleitung', text: 'Linie 345:\nDie Linie wird umgeleitet.\n\nDauer: bis Januar' }],
+  );
+  assert.deepEqual(notes({ title: 'Bus hält   nicht', text: 'Bus hält\nnicht' }), [{ title: null, text: 'Bus hält\nnicht' }]);
+  // the same note twice is one; the same text under another headline is another
+  assert.deepEqual(
+    notes({ title: 'A', text: 'gesperrt' }, { title: 'A', text: 'gesperrt' }, { title: 'B', text: 'gesperrt' }).map((note) => note.title),
+    ['A', 'B'],
+  );
+  // an alert that says nothing is no note
+  assert.deepEqual(notes({ text: ' \n ' }, { title: '', text: '' }), []);
+  assert.deepEqual(notes({ title: 'Nur die Überschrift', text: ' \n' }), [{ title: null, text: 'Nur die Überschrift' }]);
 });
 
 test('negative delays, skipped stops, cancellations and stale updates', () => {

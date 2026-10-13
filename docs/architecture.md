@@ -332,9 +332,10 @@ Each fetch produces a new snapshot:
   later stops until the next update. Skipped stops and cancelled trips are
   recorded.
 - **Alerts** addressed to a trip or a stop become notes, shown while one of
-  their active periods is current. gtfs.de also uses an alert to name the
-  operator who provides a trip's realtime data; that is recognised and offered
-  as the trip's `source` instead of a note.
+  their active periods is current. A note is the text of the alert and,
+  where it has one of its own, its headline. gtfs.de also uses an alert to
+  name the operator who provides a trip's realtime data; that is recognised
+  and offered as the trip's `source` instead of a note.
 - **Staleness.** When fetching fails, the last delays are used until they are
   three minutes old; after that the server falls back to the timetable. When
   nobody is looking, the snapshot is dropped.
@@ -430,6 +431,16 @@ otherwise a server would load a file written by older code:
   vehicles alone, with their names at any zoom and whatever the filters say.
   A trip opened from the list of a line leads back to it. What the details
   are of, their head, stays at the top while what is listed scrolls below it.
+- **Notes in the head.** Some operators write whole pages into one note and
+  attach dozens to one trip, and the head does not scroll. So a note that
+  does not fit shows its headline, or its first lines where it has none, on
+  a button that opens it in full in a dialog, and the notes there is no room
+  for are a line that names their number and opens them. On a narrow
+  screen, where the details are a sheet, every note is one line and there
+  are four lines for all of them, the page's own among them. On a wide one
+  a note of up to 120 characters stands there in full and a longer one has
+  two lines, and the notes of the feed may take a quarter of the height the
+  details have by themselves, four lines in any case.
 - **The details as a sheet.** On a narrow screen the details are a sheet
   from the bottom. The bar at its top and its head move it between three
   heights: its head alone, about half the screen, and up to the header

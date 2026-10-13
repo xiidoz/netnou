@@ -471,10 +471,38 @@ button:focus-visible, select:focus-visible, .row:focus-visible, .panel:focus-vis
   flex-wrap: wrap;
 }
 .panel-head .sub { margin: 4px 0 0; color: var(--text-muted); font-size: 13px; }
-.panel-head .notes { margin: 8px 0 0; padding: 0; list-style: none; font-size: 12.5px; color: var(--text-muted); }
+/* (the notes go out to the edge the rows below end at: the button that closes is above them) */
+.panel-head .notes { margin: 8px -34px 0 0; padding: 0; list-style: none; font-size: 12.5px; color: var(--text-muted); }
 .panel-head .notes li { padding-left: 14px; position: relative; }
 .panel-head .notes li::before { content: "•"; position: absolute; left: 3px; }
 .panel-head .alert { color: var(--delay-severe); font-weight: 600; }
+/* A note that says more than the head has room for: its headline or its
+   first lines, two at most (one on a narrow screen, see there), on a button
+   that opens it in full. The arrow at its end is the sign of that. */
+.note {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  text-align: left;
+  cursor: pointer;
+}
+.note span {
+  flex: 1;
+  min-width: 0;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+}
+/* (the arrow itself, not the box it is drawn in, ends where the rows below do) */
+.note .icon { width: 16px; height: 16px; margin-right: -4px; }
+.note:hover { color: var(--text); }
 .panel-empty { padding: 14px; color: var(--text-muted); margin: 0; }
 
 .badge {
@@ -663,6 +691,12 @@ li:last-child > .row.stop .rail::before { bottom: 50%; }
 .dialog p { margin: 0; line-height: 1.45; }
 .dialog a { color: var(--accent); }
 .dialog .about-source { margin-top: 16px; padding-top: 12px; border-top: 1px solid var(--border); color: var(--text-muted); font-size: 13px; }
+/* What notes say in full (showNotes in app.js): each with its lines as the
+   operator set them, and a line between one and the next. */
+#notes-text { margin-top: 8px; }
+.note-full p { white-space: pre-line; overflow-wrap: anywhere; }
+.note-full h3 { margin-top: 0; }
+.note-full + .note-full { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border); }
 
 /* ---------- small screens: controls on top, details as bottom sheet ---------- */
 
@@ -771,7 +805,7 @@ li:last-child > .row.stop .rail::before { bottom: 50%; }
     background: var(--border);
   }
   /* (a finger on these moves the sheet, not the page under it) */
-  .handle, #panel-head, #about-title { touch-action: none; }
+  .handle, #panel-head, #about-title, #notes-title { touch-action: none; }
   /* No button to close on the sheets: they are dragged down, or the map
      beside them is tapped. The button is still there for a screen reader and
      for the keyboard, and shows itself when it has the focus. */
@@ -790,6 +824,11 @@ li:last-child > .row.stop .rail::before { bottom: 50%; }
   }
   /* (so what is at their top has the whole width) */
   .panel .panel-head, .panel .back-row { padding-right: 14px; }
+  .panel-head .notes { margin-right: 0; }
+  /* A sheet has little room: every note is one line there, cut where it does
+     not fit. app.js makes a button of what is cut, and keeps all notes to a
+     few lines (fitNotes). */
+  .panel-head .notes span { display: block; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
   .dialog h2 { margin-right: 0; }
   .panel .panel-head { padding-top: 2px; }
   .panel .back-row { padding-top: 0; }
