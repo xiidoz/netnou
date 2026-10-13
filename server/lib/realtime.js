@@ -163,17 +163,28 @@ const SOURCE_NOTE = /^Echtzeitdaten aufbereitet von GTFS\.de, bereitgestellt von
 // line in a row, of which some leave a dozen.
 const tidy = (text) => text.replace(/\r\n?/g, '\n').replace(/^[ \t\u00a0]+|[ \t\u00a0]+$/gm, '').replace(/\n{3,}/g, '\n\n').trim();
 
+// How serious the feed says an alert is, as a note names it (the numbers are
+// those of severity_level in GTFS Realtime; 1 stands for "not known"). gtfs.de
+// marks what is wrong with a trip right now, the reason for a delay, as a
+// warning or as severe, and all else as information: what a vehicle offers,
+// and what an operator announces.
+const SEVERITIES = { 2: 'info', 3: 'warning', 4: 'severe' };
+const WARNING = 3;
+/** Where an alert stands among the notes: what warns comes first, the most severe before the others. */
+const rank = (alert) => (alert.severity >= WARNING && SEVERITIES[alert.severity] ? alert.severity : 0);
+
 /**
  * What an alert says, as a note: its `text` in full, and as its `title` the
  * headline the feed gives it – null where it has none of its own, as the
  * short ones ("Niederflur") do not. Some operators write whole pages into the
- * text; whoever shows a note has the title to keep to then.
+ * text; whoever shows a note has the title to keep to then. Its `severity`
+ * is how serious the feed says it is (SEVERITIES), null where it does not.
  * @returns null for an alert that says nothing
  */
 function noteOf(alert) {
   const title = tidy(alert.header).replace(/\s+/g, ' ');
   const text = tidy(alert.description) || title;
-  return text ? { title: title && title !== text.replace(/\s+/g, ' ') ? title : null, text } : null;
+  return text ? { title: title && title !== text.replace(/\s+/g, ' ') ? title : null, text, severity: SEVERITIES[alert.severity] ?? null } : null;
 }
 
 /**
@@ -182,9 +193,10 @@ function noteOf(alert) {
  * timetable is asked with. For whoever wants to look at it, it also has
  *   byDate        service date -> trip index -> delays (see tripDelays), those
  *                 of coupled trains made the same where they share their way
- *   tripNotes     trip index -> notes (see noteOf): disruption reasons, vehicle features
+ *   tripNotes     trip index -> notes (see noteOf): disruption reasons, vehicle features;
+ *                 those that warn first, the others in the order of the feed
  *   tripSources   trip index -> who provides the realtime data (see SOURCE_NOTE)
- *   stationNotes  station index -> notes, e.g. broken lifts
+ *   stationNotes  station index -> notes, e.g. broken lifts, in the same order
  * @param now epoch seconds; alerts are only taken while one of their active periods is current
  * @param taken the trip updates that were taken one by one while the feed was
  *   read (takeTripUpdate), where it is not left to this to go through them:
@@ -199,7 +211,7 @@ export function buildRealtime(timetable, feed, now = Math.floor(Date.now() / 100
     if (!list) map.set(key, [note]);
     else if (!list.some((other) => other.title === note.title && other.text === note.text)) list.push(note);
   };
-  for (const alert of feed.alerts) {
+  for (const alert of [...feed.alerts].sort((a, b) => rank(b) - rank(a))) {
     const note = noteOf(alert);
     if (!note) continue;
     // Without active periods an alert applies for as long as it is in the feed.

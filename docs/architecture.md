@@ -333,7 +333,8 @@ Each fetch produces a new snapshot:
   recorded.
 - **Alerts** addressed to a trip or a stop become notes, shown while one of
   their active periods is current. A note is the text of the alert and,
-  where it has one of its own, its headline. gtfs.de also uses an alert to
+  where it has one of its own, its headline, with how serious the feed says
+  it is; notes that warn come first. gtfs.de also uses an alert to
   name the operator who provides a trip's realtime data; that is recognised
   and offered as the trip's `source` instead of a note.
 - **Staleness.** When fetching fails, the last delays are used until they are
@@ -440,7 +441,9 @@ otherwise a server would load a file written by older code:
   are four lines for all of them, the page's own among them. On a wide one
   a note of up to 120 characters stands there in full and a longer one has
   two lines, and the notes of the feed may take a quarter of the height the
-  details have by themselves, four lines in any case.
+  details have by themselves, four lines in any case. What warns comes
+  first, with the sign of a warning where the other notes have a bullet:
+  that the trip is cancelled, then the notes the feed marks as warnings.
 - **The details as a sheet.** On a narrow screen the details are a sheet
   from the bottom. The bar at its top and its head move it between three
   heights: its head alone, about half the screen, and up to the header

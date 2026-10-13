@@ -515,7 +515,7 @@ test('realtime delays shift positions and carry forward to later stops', () => {
   const trip = timetable.trip('T1', DAY, rt);
   // the gtfs.de note about where the data comes from is the source, not a note
   assert.equal(trip.source, 'VAG Nürnberg');
-  assert.deepEqual(trip.notes, [{ title: null, text: 'Technische Störung am Zug' }]);
+  assert.deepEqual(trip.notes, [{ title: null, text: 'Technische Störung am Zug', severity: null }]);
   assert.equal(trip.stops[1].depDelay, 300);
   assert.equal(trip.stops[0].station, 'SA');
   assert.equal(timetable.trip('T1', '20261005', rt), null); // does not run that day
@@ -523,7 +523,7 @@ test('realtime delays shift positions and carry forward to later stops', () => {
   assert.equal(timetable.trip('T1', DAY, null).source, null);
 
   const board = timetable.departures('SA', at('09:58'), rt);
-  assert.deepEqual(board.notes, [{ title: null, text: 'Aufzug außer Betrieb' }]);
+  assert.deepEqual(board.notes, [{ title: null, text: 'Aufzug außer Betrieb', severity: null }]);
   assert.deepEqual(board.departures.map((d) => [d.line, d.to, d.planned, d.delay]), [['U1', 'Gamma, Endstation', at('10:00'), 300]]);
   // a terminus has no departures: T4 ends at A, T1 ends at C
   assert.deepEqual(timetable.departures('C', at('10:15'), rt).departures, []);
@@ -556,7 +556,7 @@ test('alerts are shown only during their active periods', () => {
 test('a note is the text of an alert, and its headline where that says something else', () => {
   const notes = (...alerts) => {
     const feed = decodeFeed(encodeFeed({ timestamp: 1, alerts: alerts.map((alert) => ({ tripId: 'T1', ...alert })) }));
-    return buildRealtime(timetable, feed).tripNotes.get(timetable.tripIndex.get('T1')) ?? [];
+    return (buildRealtime(timetable, feed).tripNotes.get(timetable.tripIndex.get('T1')) ?? []).map(({ title, text }) => ({ title, text }));
   };
   assert.deepEqual(
     notes(
@@ -586,6 +586,39 @@ test('a note is the text of an alert, and its headline where that says something
   // an alert that says nothing is no note
   assert.deepEqual(notes({ text: ' \n ' }, { title: '', text: '' }), []);
   assert.deepEqual(notes({ title: 'Nur die Überschrift', text: ' \n' }), [{ title: null, text: 'Nur die Überschrift' }]);
+});
+
+test('a note says how serious the feed takes it, and what warns comes first', () => {
+  const feed = decodeFeed(encodeFeed({
+    timestamp: 1,
+    alerts: [
+      { tripId: 'T1', text: 'Niederflur', severity: 2 },
+      { tripId: 'T1', text: 'WLAN verfügbar' },
+      { tripId: 'T1', text: 'Verspätetes Personal aus vorheriger Fahrt', severity: 3 },
+      { tripId: 'T1', text: 'Barrierefreies Fahrzeug', severity: 1 },
+      { tripId: 'T1', text: 'Reparatur an der Strecke', severity: 4 },
+      { tripId: 'T1', text: 'Polizeieinsatz', severity: 3 },
+      // a level the feed may come to know one day: no warning as long as nobody knows what it means
+      { tripId: 'T1', text: 'Etwas Neues', severity: 9 },
+      { stopId: 'A', text: 'Aufzug außer Betrieb', severity: 2 },
+      { stopId: 'A', text: 'Bahnsteig gesperrt', severity: 3 },
+    ],
+  }));
+  const rt = buildRealtime(timetable, feed);
+  const said = (notes) => notes.map((note) => [note.text, note.severity]);
+  // the most severe first, then the other warnings, then the rest, each kind in the order of the feed
+  assert.deepEqual(said(rt.tripNotes.get(timetable.tripIndex.get('T1'))), [
+    ['Reparatur an der Strecke', 'severe'],
+    ['Verspätetes Personal aus vorheriger Fahrt', 'warning'],
+    ['Polizeieinsatz', 'warning'],
+    ['Niederflur', 'info'],
+    ['WLAN verfügbar', null],
+    ['Barrierefreies Fahrzeug', null],
+    ['Etwas Neues', null],
+  ]);
+  assert.deepEqual(said(rt.stationNotes.get(timetable.stopIndex.get('SA'))), [['Bahnsteig gesperrt', 'warning'], ['Aufzug außer Betrieb', 'info']]);
+  // and so they are handed out
+  assert.deepEqual(said(timetable.trip('T1', DAY, rt).notes).slice(0, 2), [['Reparatur an der Strecke', 'severe'], ['Verspätetes Personal aus vorheriger Fahrt', 'warning']]);
 });
 
 test('negative delays, skipped stops, cancellations and stale updates', () => {

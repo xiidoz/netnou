@@ -107,6 +107,7 @@ export default {
 
   'notes.more': { one: '{count} weiterer Hinweis', other: '{count} weitere Hinweise' },
   'notes.title': 'Hinweis',
+  'notes.warning': 'Warnung',
 
   'line.vehicles': { one: '{count} Fahrzeug unterwegs', other: '{count} Fahrzeuge unterwegs' },
   'line.none': 'Von dieser Linie ist gerade kein Fahrzeug unterwegs.',

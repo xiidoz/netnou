@@ -532,7 +532,8 @@ What the realtime feed must provide:
   and `stop_sequence` in their stop time updates. Vehicle positions are not
   used.
 - Alerts are shown for trips and stops; alerts addressed to a whole agency or
-  route are not.
+  route are not. Where an alert says how serious it is (`severity_level`),
+  warnings are shown first and with a sign of their own.
 
 What is fixed in the code and written for Germany. Each item names the place
 to change:

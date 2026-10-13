@@ -472,13 +472,20 @@ A note is what an alert of the realtime feed says:
 
 ```json
 { "title": "Stuttgart-Degerloch: Haltestelle Peregrinastraße stadteinwärts entfällt",
-  "text": "Noch bis voraussichtlich Sonntag, 18. Oktober 2026, wird die Haltestelle Peregrinastraße …" }
+  "text": "Noch bis voraussichtlich Sonntag, 18. Oktober 2026, wird die Haltestelle Peregrinastraße …",
+  "severity": "info" }
 ```
 
 | Field | Type | Meaning |
 | --- | --- | --- |
 | `title` | string or null | the headline the feed gives the alert, in one line; `null` where it has none or it is the same as the text |
 | `text` | string | what the alert says, in full: it can be a word (`"Niederflur"`) or several pages, with line breaks (`\n`) between its lines and paragraphs |
+| `severity` | string or null | how serious the feed says the alert is: `"info"`, `"warning"` or `"severe"`; `null` where it does not say |
+
+Notes that warn come first, the severe ones before the others; the rest
+follows in the order of the feed. With the feed of gtfs.de a warning is what
+is wrong with a trip right now, such as the reason for a delay; what a
+vehicle offers and what an operator announces is information.
 
 ## `GET /api/departures`
 

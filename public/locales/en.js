@@ -144,6 +144,8 @@ export default {
   'notes.more': { one: '{count} more notice', other: '{count} more notices' },
   // the heading of the dialog for a single note that has no headline of its own
   'notes.title': 'Notice',
+  // what a screen reader says for the sign of a note that warns, of the reason for a delay for example
+  'notes.warning': 'Warning',
 
   // The view of a line: its vehicles that are under way, under where they go ({destination}), each with the stop ahead of it.
   'line.vehicles': { one: '{count} vehicle under way', other: '{count} vehicles under way' },
