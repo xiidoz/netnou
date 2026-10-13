@@ -367,13 +367,14 @@ Three intervals are involved, and they are independent:
 | The server fetches the realtime feed | 60 s | `NETNOU_REALTIME_INTERVAL_SECONDS` |
 | The page asks the server for vehicles | 10 s | fixed (`POLL_MS` in `public/app.js`) |
 
-The gtfs.de realtime feed is about 20 MB per fetch and is served
-uncompressed, so fetching it around the clock would transfer roughly 60 GB a
-day. The server therefore fetches it only while somebody uses the map: the
-first request for vehicles, a trip or a departure board starts the fetching,
-and it stops `NETNOU_REALTIME_IDLE_SECONDS` after the last such request. A tab in the
-background stops asking, and `/api/status` does not count, so monitoring does
-not keep the fetching alive.
+The gtfs.de realtime feed is 10 to 15 MB per fetch as it comes compressed
+(18 to 50 MB unpacked, by the hour), which around the clock adds up to tens
+of GB a day. It covers the whole country whatever the instance covers. The
+server therefore fetches it only while somebody uses the map: the first
+request for vehicles, a trip or a departure board starts the fetching, and
+it stops `NETNOU_REALTIME_IDLE_SECONDS` after the last such request. A tab
+in the background stops asking, and `/api/status` does not count, so
+monitoring does not keep the fetching alive.
 
 The interval is the pace when all is well. At busy times the server of gtfs.de
 takes long to accept a connection and delivers slowly. A fetch is therefore

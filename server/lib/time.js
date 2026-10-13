@@ -6,12 +6,15 @@
 // The zone is module state and therefore per thread. The import worker has its
 // own copy of this module and never sets the zone – it only uses addDays and
 // weekday, which are plain calendar arithmetic and the same in every zone.
+// The thread that reads the realtime feed is told the zone (timeZone below).
 
 let partsFormat;
+let zone;
 const dayStartCache = new Map();
 
 /** Sets the time zone of the feed (an IANA name); throws a RangeError for an unknown one. */
 export function setTimeZone(timeZone) {
+  zone = timeZone;
   partsFormat = new Intl.DateTimeFormat('en-US', {
     timeZone,
     hourCycle: 'h23',
@@ -25,6 +28,9 @@ export function setTimeZone(timeZone) {
   dayStartCache.clear();
 }
 setTimeZone('Europe/Berlin');
+
+/** The time zone that is set. */
+export const timeZone = () => zone;
 
 function localParts(epochMs) {
   const p = {};

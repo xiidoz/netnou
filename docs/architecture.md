@@ -26,7 +26,8 @@ flowchart LR
   subgraph server [Node.js process]
     worker[import worker<br>thread] --> dataset[(dataset.bin)]
     dataset --> timetable[Timetable<br>in memory]
-    rt[realtime poller] --> snapshot[delays per trip]
+    dataset --> rt
+    rt[realtime thread] --> snapshot[delays per trip]
     timetable --> api[HTTP API]
     snapshot --> api
   end
@@ -37,10 +38,10 @@ flowchart LR
 
 One Node.js process does everything. A worker thread cuts the nationwide
 timetable down to the area and computes the route geometry; the result is one
-file. The main thread loads that file into memory, fetches the
-realtime feed while somebody is looking, and answers the API. The page asks
-every ten seconds where the vehicles in view will be and animates them in
-between.
+file. The main thread loads that file into memory and answers the API. While
+somebody is looking, another thread fetches the realtime feed and reads it
+against the same memory. The page asks every ten seconds where the vehicles
+in view will be and animates them in between.
 
 There is no database and there are no npm dependencies at run time: the zip,
 CSV, Protocol Buffers and OpenStreetMap PBF formats are read by small readers
@@ -88,13 +89,15 @@ Server (`server/`):
 | `lib/feed.js` | keeps the timetable current: version check, download, worker, retries (`FeedUpdater`) |
 | `lib/import-worker.js` | worker thread: import, route geometry, writing the dataset |
 | `lib/importer.js` | cuts the GTFS feed down to the area and stores what repeats in it once (`buildDataset`); documents the dataset layout |
-| `lib/dataset.js` | the dataset as a binary file (`writeDataset`, `readDataset`), texts as one block (`Texts`) and lists that are stored once (`SharedLists`) |
+| `lib/dataset.js` | the dataset as a binary file (`writeDataset`, `readDataset`), loaded into memory that threads share (`loadDataset`, `datasetFrom`), texts as one block (`Texts`) and lists that are stored once (`SharedLists`) |
 | `lib/zip.js`, `lib/csv.js` | read entries straight out of the zip (including zip64) and split CSV lines |
 | `lib/osmpbf.js` | reads the ways of an `.osm.pbf` extract |
 | `lib/network.js` | builds routable networks from the ways and finds paths (`classifyWay`, `Network`) |
 | `lib/shapes.js` | route geometry for every hop (`loadNetworks`, `buildSegments`) |
-| `lib/timetable.js` | the loaded dataset and the queries of the API (`Timetable`); finds the trains that run coupled (`findSharedWays`) |
-| `lib/realtime.js` | fetches the realtime feed, matches it to the trips (`RealtimePoller`) and gives the portions of a coupled train the same delays where they share their way |
+| `lib/timetable.js` | the loaded dataset and the queries of the API (`Timetable`), and the part of it that realtime data is matched against (`Schedule`); finds the trains that run coupled (`findSharedWays`) |
+| `lib/realtime.js` | says when the realtime feed is fetched (`RealtimePoller`), matches it to the trips and gives the portions of a coupled train the same delays where they share their way |
+| `lib/realtime-worker.js` | the thread that fetches the feed, reads it and matches it |
+| `lib/snapshot.js` | the realtime data of one fetch in columns: filled while the feed is read (`Gathering`), read by the timetable (`Snapshot`) |
 | `lib/http.js` | the GET the realtime feed is fetched with: patient with a busy server (`get`) |
 | `lib/pb.js` | decodes the GTFS-Realtime message (`decodeFeed`) |
 | `lib/update.js` | what the server calls itself (`describeBuild`) and the daily look-out for a newer release (`UpdateChecker`) |
@@ -212,13 +215,16 @@ on a hit the numbers are compared.
 
 Everything is columns: a typed array for each property of all trips, all
 patterns, all stops. Nothing holds an array for every trip. Texts that are
-many, the ids of the trips, are one block of UTF-8 (`Texts`). A trip is
-found by its id in a list of all trips in the order of their ids, which is
-stored with them; there is no map with an entry for each trip.
+many and looked up, the ids of the trips and of the stops, are one block of
+UTF-8 each (`Texts`). A trip or a stop is found by its id in a list of them
+all in the order of their ids, which is stored with them; there is no map
+with an entry for each.
 
 The file is those columns as they are, after a head of JSON with everything
 small (`lib/dataset.js`). Loading reads it into memory and lays the typed
-arrays over it; nothing is parsed but the head. The dataset of the default
+arrays over it; nothing is parsed but the head. The memory is such that
+threads share it: the one that reads the realtime feed lays its own arrays
+over the same bytes (see [Realtime](#realtime)). The dataset of the default
 area is 38 MB, 27 of them route geometry, and is loaded in a tenth of a
 second.
 
@@ -289,9 +295,32 @@ lines.
 
 ## Realtime
 
-`RealtimePoller` fetches the GTFS-Realtime feed every
+`RealtimePoller` has the GTFS-Realtime feed fetched every
 `NETNOU_REALTIME_INTERVAL_SECONDS`, but only while the API is in use (see
 [Realtime polling and traffic](configuration.md#realtime-polling-and-traffic)).
+
+Fetching, reading and matching the feed are the work of a thread of their
+own (`lib/realtime-worker.js`). The feed covers a whole country whatever the
+instance covers: reading it takes a third of a second for one transit
+network and more than a second for all of Germany, which the thread that
+answers requests would otherwise stand still for.
+
+- **The timetable is not copied.** The dataset is loaded into memory that
+  threads share, and the realtime thread lays a schedule of its own over it
+  (`Schedule`, the part of `Timetable` that matching needs), without the
+  lists of texts.
+- **What a fetch comes to is columns of numbers** (`lib/snapshot.js`): for
+  each service day the trips with realtime data in their order, so that one
+  is found by looking through them, and for each of their stops the two
+  delays as 16-bit numbers. The trip updates are taken one by one as the
+  feed is read and written into the columns; none is kept. For all of
+  Germany that is 10 MB, which change hands between the threads without a
+  copy.
+- **The thread lives for as long as there is polling for one timetable.** A
+  new timetable ends it and the next fetch starts another, and so does the
+  pause when nobody is looking. A thread that fails counts as a failed
+  fetch.
+
 Each fetch produces a new snapshot:
 
 - **Matching.** A trip update is matched by `trip_id` and `start_date`. It is

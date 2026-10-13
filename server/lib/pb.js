@@ -200,8 +200,10 @@ function readAlert(r) {
 /**
  * Decode a GTFS-Realtime FeedMessage.
  * @param {Buffer} buf
- * @param {{wantTrip?: (trip: object) => boolean, wantAlert?: (alert: object) => boolean}} [filter]
- *   Predicates to drop entities early; the feed covers a whole country.
+ * @param {{wantTrip?: (trip: object) => boolean, wantAlert?: (alert: object) => boolean, onTripUpdate?: (update: object) => void}} [filter]
+ *   Predicates to drop entities early; the feed covers a whole country. With
+ *   onTripUpdate each trip update is handed over as it is read and not kept:
+ *   a million stop time updates are then never in memory together.
  */
 export function decodeFeed(buf, filter = {}) {
   const r = new Reader(buf);
@@ -218,7 +220,8 @@ export function decodeFeed(buf, filter = {}) {
       for (let g; (g = e.next());) {
         if (g === 3) {
           const tu = readTripUpdate(e.sub(), filter.wantTrip);
-          if (tu) out.tripUpdates.push(tu);
+          if (tu && filter.onTripUpdate) filter.onTripUpdate(tu);
+          else if (tu) out.tripUpdates.push(tu);
         } else if (g === 5) {
           const alert = readAlert(e.sub());
           if (!filter.wantAlert || filter.wantAlert(alert)) out.alerts.push(alert);

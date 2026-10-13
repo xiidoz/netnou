@@ -6,7 +6,8 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { after, test } from 'node:test';
-import { SharedLists, Texts, byteOrder, readDataset, writeDataset } from '../server/lib/dataset.js';
+import { Worker } from 'node:worker_threads';
+import { SharedLists, Texts, byteOrder, datasetFrom, loadDataset, readDataset, writeDataset } from '../server/lib/dataset.js';
 import { packDataset } from '../server/lib/importer.js';
 import { Timetable } from '../server/lib/timetable.js';
 
@@ -47,6 +48,14 @@ test('a dataset is read as it was written: columns, texts, long lists and what i
   // nothing is left of the writing but the file
   assert.deepEqual(fs.readdirSync(dir), ['round.bin']);
 
+  // Of the long lists of texts only those that are named, where not all are
+  // wanted: the others are null. What is in the head of the file is there
+  // all the same: a short list, and one whose texts have line breaks.
+  const none = datasetFrom(loadDataset(file), { lists: [] });
+  assert.deepEqual([none.names, none.withBreak, none.few], [null, data.withBreak, ['a', 'b']]);
+  assert.deepEqual([[...none.ids], [...none.numbers]], [[...data.ids], [...data.numbers]]);
+  assert.deepEqual(datasetFrom(loadDataset(file), { lists: ['names'] }).names, names);
+
   // what is no dataset, or only the beginning of one, is refused
   fs.writeFileSync(path.join(dir, 'other.bin'), 'something else entirely, and long enough to hold a head');
   assert.throws(() => readDataset(path.join(dir, 'other.bin')), /not a dataset/);
@@ -54,6 +63,46 @@ test('a dataset is read as it was written: columns, texts, long lists and what i
   assert.throws(() => readDataset(path.join(dir, 'cut.bin')), /cut short/);
   fs.rmSync(path.join(dir, 'other.bin'));
   fs.rmSync(path.join(dir, 'cut.bin'));
+});
+
+test('a dataset is loaded into memory that threads share, and each lays its own over it', async () => {
+  const file = path.join(dir, 'shared.bin');
+  writeDataset(file, { version: 7, counts: Int32Array.from([1, 2, 3]), ids: Texts.from(['A', 'Ölberg']), names: Array.from({ length: 80 }, (_, i) => `Halt ${i}`) });
+  const shared = loadDataset(file);
+  assert.ok(shared instanceof SharedArrayBuffer);
+  const mine = datasetFrom(shared);
+  assert.deepEqual([[...mine.counts], [...mine.ids], mine.names.length], [[1, 2, 3], ['A', 'Ölberg'], 80]);
+  assert.equal(mine.counts.buffer, shared);
+  // Another thread reads the same and writes into it: this one sees that, for
+  // there is one memory and no copy of it. It does without the list of names.
+  const worker = new Worker(`
+    const { parentPort, workerData } = require('node:worker_threads');
+    import(workerData.module).then(({ datasetFrom }) => {
+      const theirs = datasetFrom(workerData.shared, { lists: [] });
+      const seen = { counts: [...theirs.counts], ids: [...theirs.ids], names: theirs.names };
+      theirs.counts[1] = 20;
+      parentPort.postMessage(seen);
+    });`, { eval: true, workerData: { shared, module: new URL('../server/lib/dataset.js', import.meta.url).href } });
+  const seen = await new Promise((resolve, reject) => worker.once('message', resolve).once('error', reject));
+  assert.deepEqual(seen, { counts: [1, 2, 3], ids: ['A', 'Ölberg'], names: null });
+  assert.deepEqual([...mine.counts], [1, 20, 3]);
+  await worker.terminate();
+  // (read the plain way, a dataset is this thread's alone)
+  assert.ok(!(readDataset(file).counts.buffer instanceof SharedArrayBuffer));
+  fs.rmSync(file);
+});
+
+test('whether a text is a given one is told without making a string of it', () => {
+  const texts = Texts.from(['de:09564:704', 'Ölberg', '', 'Zug 😀', 'é']);
+  for (const [i, text] of ['de:09564:704', 'Ölberg', '', 'Zug 😀', 'é'].entries()) assert.ok(texts.is(i, text), text);
+  assert.ok(!texts.is(0, 'de:09564:705'));
+  assert.ok(!texts.is(0, 'de:09564:70'));
+  assert.ok(!texts.is(0, ''));
+  assert.ok(!texts.is(2, 'x'));
+  assert.ok(!texts.is(1, 'Olberg'));
+  // as many characters as the other has bytes, and the same ones byte for byte: still another text
+  assert.ok(!texts.is(4, 'Ã©'));
+  assert.ok(!texts.is(1, 'Ã\u0096lberg'));
 });
 
 test('a text is found among texts in the order of their bytes', () => {
