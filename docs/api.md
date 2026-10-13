@@ -183,8 +183,13 @@ keeps it going.
 | --- | --- |
 | `bbox` | box; only vehicles currently inside are returned |
 | `detail=lite` | the reduced form of [knots](#knots) |
+| `detail=minimal` | [the smallest form](#the-smallest-form): what a map needs to draw a dot for each vehicle |
+| `zoom` | the zoom of the map the answer is for, as MapLibre counts it (the world is 512 px wide at zoom 0): where a screen cannot take every vehicle, the answer is [thinned out](#zoomed-out) |
+| `modes` | the [modes](#modes) a map shows, separated by commas: the answer has no others, and where it is thinned out they take no room |
+| `line`, `mode`, `agency` | a line as `/api/line` takes it: its vehicles are in the answer whatever is left out |
+| `vehicle` | the id of a vehicle: it is in the answer whatever is left out |
 
-Without a valid `bbox`, all vehicles are returned, always in the reduced
+Without a valid `bbox`, all vehicles are returned, always in a reduced
 form.
 
 ```json
@@ -192,6 +197,7 @@ form.
   "now": 1791148705,
   "realtime": 1791148698,
   "counts": { "bus": 225, "tram": 17, "subway": 18, "regional": 75, "longdistance": 23, "suburban": 15 },
+  "thinned": {},
   "vehicles": [
     {
       "id": "671753_20261004",
@@ -210,7 +216,8 @@ form.
 | --- | --- | --- |
 | `now` | time | clock of the server; positions are computed against it, so a client should follow it instead of its own clock |
 | `realtime` | time or null | timestamp of the realtime feed in use; `null` means the answer is based on the timetable alone |
-| `counts` | object | vehicles per [mode](#modes) in the whole area, whatever the `bbox`; a mode without vehicles is absent |
+| `counts` | object | vehicles per [mode](#modes) in the whole instance, whatever the `bbox` and the `zoom`; a mode without vehicles is absent |
+| `thinned` | object | for each [mode](#modes) of which the answer leaves vehicles out, the share of them it holds, see [Zoomed out](#zoomed-out); empty where nothing is left out |
 | `vehicles[].id` | trip id | for `/api/trip` |
 | `vehicles[].line` | string | name of the line |
 | `vehicles[].mode` | string | see [Modes](#modes) |
@@ -222,6 +229,89 @@ form.
 A vehicle appears 30 seconds before it leaves its first stop and disappears
 15 seconds after it has reached its last one. The server computes the
 vehicles at most once a second.
+
+### Zoomed out
+
+A large instance has more vehicles than a zoomed-out map can show: the feed
+of all of Germany has 35,000 under way on a weekday morning. With `zoom`,
+an answer leaves vehicles out where a screen at that zoom cannot take them
+all.
+
+- **Nothing is left out while it fits.** The measure is the busiest screen
+  of a phone, which may hold 2,500 vehicles: about what an instance for one
+  transit network has at its busiest. Such an instance is not thinned out
+  at any zoom, and a large one from the zoom at which its busiest place
+  fits, for all of Germany from zoom 9. From zoom 12 nothing is left out
+  anywhere, and without `zoom` neither.
+- **Where it does not fit, the same share of every mode is shown,** picked
+  by chance, and the same vehicles from one moment to the next. Where there
+  are twice as many buses as trams, the answer has twice as many, and a
+  city with ten times the buses of the country around it has ten times as
+  many. For all of Germany on a weekday morning the share is 7 % at zoom
+  5, 11 % at zoom 6, 25 % at zoom 7 and 47 % at zoom 8.
+- **What there is little of stays.** A mode with no more than 125 vehicles
+  on a screen, a twentieth of what it may hold, is shown whole, and of a
+  larger one at least about as many: three long-distance trains among a
+  thousand buses are all there. For all of Germany that is every
+  long-distance train from zoom 6 on, and at zoom 5 a quarter of the U-Bahn
+  trains beside the 7 % of the buses.
+- **A vehicle far from all others is always shown:** the map is cut into
+  squares of 32 px, and the first vehicle of a mode in a square is in the
+  answer whatever its chance.
+- **Only the modes a map shows count.** With `modes` the answer has no
+  others, and more of those it has fit: with the buses switched off, the
+  room they took goes to the rest.
+- **Zooming in adds vehicles and takes none away.** Quarters of a zoom
+  count: the share grows from each whole zoom to the next.
+- A line or a vehicle that the request names (`line`, `vehicle`) is in the
+  answer whatever is left out: what somebody has picked stays on the map.
+
+`thinned` says what share of which modes the answer holds, here for all of
+Germany at zoom 7:
+
+```json
+"thinned": { "subway": 0.786, "tram": 0.252, "bus": 0.252, "suburban": 0.498, "regional": 0.442 }
+```
+
+The shares follow the number of vehicles under way and are worked out again
+every minute: at night more is shown of fewer.
+
+### The smallest form
+
+Zoomed out, a map draws a dot for each vehicle, and thousands of them. With
+`detail=minimal` an answer has no more than that takes: one column for each
+property instead of one object for each vehicle, the two positions of the
+reduced form as whole numbers, and not where a vehicle goes. That is about
+half the size of the reduced form. The page asks for it while it is zoomed
+out on a device without a pointer that could rest on a vehicle and ask where
+it goes, and on any device while an answer holds thousands of vehicles.
+
+```json
+{
+  "now": 1791148705,
+  "realtime": 1791148698,
+  "counts": { "bus": 29415, "regional": 1639, "longdistance": 201, "suburban": 781, "subway": 625, "tram": 1846 },
+  "thinned": { "subway": 0.259, "tram": 0.088, "bus": 0.067, "suburban": 0.219, "regional": 0.102, "longdistance": 0.718 },
+  "ahead": 60,
+  "vehicles": {
+    "id": ["2713340_20261013", "1503271_20261013", …],
+    "line": ["RE 19", "ICE 29", …],
+    "mode": ["regional", "longdistance", …],
+    "delay": [null, 120, …],
+    "unit": [null, null, …],
+    "at": [4945362, 1106960, -31, 12, 5212044, 1338517, 208, -377, …]
+  }
+}
+```
+
+`now`, `realtime`, `counts` and `thinned` are as in the other forms.
+
+| Field | Type | Meaning |
+| --- | --- | --- |
+| `ahead` | seconds | how far ahead the second position of each vehicle is |
+| `vehicles.id`, `line`, `mode`, `delay` | arrays | as in the other forms, one entry for each vehicle |
+| `vehicles.unit` | array | as in the other forms; `null` for a vehicle that is on its own |
+| `vehicles.at` | array of whole numbers | four for each vehicle: its latitude and longitude now in 1e-5 degrees, and how far north and east of there it is `ahead` seconds on. The two knots of the reduced form are made of them |
 
 ## `GET /api/stations`
 
@@ -419,13 +509,15 @@ A client finds the two knots around the current server time and interpolates
 linearly between them. Two successive knots with the same position mean the
 vehicle is standing at a stop.
 
-- **Full form** (with `bbox`, without `detail=lite`): the knots follow the
+- **Full form** (with `bbox`, without `detail`): the knots follow the
   route geometry. They start at or before `now` and reach at least 90 seconds
   ahead, or to the end of the trip. A client therefore has to ask again well
   within 90 seconds; the page does so every 10.
-- **Reduced form**: exactly two knots, the position now and the position in 60
-  seconds. It is meant for zoomed-out views with many vehicles, where the
-  route geometry is smaller than a pixel.
+- **Reduced form** (`detail=lite`): exactly two knots, the position now and
+  the position in 60 seconds. It is meant for zoomed-out views with many
+  vehicles, where the route geometry is smaller than a pixel.
+- [The smallest form](#the-smallest-form) (`detail=minimal`) has the same two
+  positions, written as whole numbers and not as knots.
 
 `positionAt` in `public/app.js` is a reference implementation.
 

@@ -87,6 +87,8 @@ export default {
   'about.positionsText': 'Kein Fahrzeug meldet dieser Karte seinen Standort. Jedes wird dort gezeichnet, wo es laut Fahrplan gerade sein müsste, verschoben um die gemeldete Verspätung. Ein Fahrzeug kann deshalb etwas vor oder hinter seiner Markierung sein. Fahrzeuge ohne gemeldete Verspätung tragen ein Fragezeichen und fahren hier nach Fahrplan.',
   'about.routes': 'Streckenverlauf',
   'about.routesText': 'Auch der Streckenverlauf zwischen zwei Halten ist berechnet: der kürzeste plausible Weg über Straßen und Gleise aus OpenStreetMap, nicht der offizielle des Betreibers. Zwischen nahen Halten ist das fast immer derselbe. Wo er abweicht, nimmt ein Fahrzeug auf der Karte einen anderen Weg als in Wirklichkeit; wo sich keiner findet, fährt es Luftlinie.',
+  'about.thinned': 'Herausgezoomt',
+  'about.thinnedText': 'Wo sehr viele Fahrzeuge unterwegs sind, zeigt die herausgezoomte Karte nur einen Teil davon: So viele auf einmal könnte ein Handy nicht flüssig zeichnen, und das Laden würde lange dauern. Gezeigt wird von jedem Verkehrsmittel der gleiche Anteil, zufällig ausgewählt. Eine Stadt bleibt deshalb auch auf der Karte deutlich voller als ihr Umland. Verkehrsmittel mit nur wenigen Fahrzeugen bleiben vollständig, und ein einzelnes Fahrzeug weit draußen ist immer zu sehen. Näher herangezoomt sind alle da.',
   'about.outside': 'Außerhalb des Gebiets',
   'about.outsideText': 'Grau: Dort nur Linien mit Halt im Gebiet, Position als Luftlinie zwischen den Halten.',
   'about.source': 'Alle Einzelheiten stehen im offenen Quelltext von {software}, der Software hinter dieser Karte.',

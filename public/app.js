@@ -193,6 +193,8 @@ const state = {
   areaKnown: false, // api/area has answered: the map shows the area
   outline: [], // the edge of the area: rings of [lat, lon]; none where the instance has no area
   bbox: null, // the rectangle around the area, or around all the instance covers: [south, west, north, east]
+  thinned: false, // the last answer left vehicles out: zoomed out, where a screen cannot take them all
+  many: true, // the last answer held thousands of vehicles (MANY); assumed until the first one is there
   enabled: new Set([...MODES, 'other']),
   display: OPENED_AS_DISPLAY, // the map without the controls, see "display mode"
   colorBy: loadSetting('colorBy', 'mode') === 'delay' ? 'delay' : 'mode',
@@ -340,7 +342,67 @@ function boxAround(bounds, margin) {
 }
 const boxQuery = (box) => box.map((v) => v.toFixed(4)).join(',');
 const boxCovers = (box, bounds) => box[0] <= bounds.getSouth() && box[1] <= bounds.getWest() && box[2] >= bounds.getNorth() && box[3] >= bounds.getEast();
-const detailWanted = () => (map.getZoom() >= LABEL_ZOOM ? 'full' : 'lite');
+// Whether there is a pointer that can rest on something without pressing it:
+// a mouse can, a finger cannot.
+const hovering = matchMedia('(hover: hover)');
+// An answer with more vehicles than the first number counts as one of
+// thousands, until one has fewer than the second.
+const MANY = [3000, 2500];
+/**
+ * How much of each vehicle the map asks for. Zoomed in, its way along its
+ * route. Zoomed out it is a dot, and where it is and where it gets in a
+ * minute is all the map draws of it: a pointer that rests on it is also told
+ * where it goes ('lite'). Without such a pointer nothing would show that, and
+ * among thousands of vehicles it is not worth twice the size: the answer is
+ * then the smallest there is ('minimal').
+ */
+const detailWanted = () => (map.getZoom() >= LABEL_ZOOM ? 'full' : hovering.matches && !state.many ? 'lite' : 'minimal');
+/** The zoom a request names, in quarters: where a screen cannot take every vehicle, the answer is thinned out for that zoom. */
+const zoomAsked = () => Math.floor(map.getZoom() * 4) / 4;
+
+/**
+ * The kinds of transport that are switched on, for the request for the
+ * vehicles, where any is off: the answer leaves the others out, and where it
+ * is thinned out, more of these fit.
+ */
+function modesQuery() {
+  const on = [...MODES, 'other'].filter((mode) => state.enabled.has(mode));
+  return on.length > MODES.length ? '' : `&modes=${on.join(',')}`;
+}
+
+/**
+ * What a visitor has picked, for the request for the vehicles: a line shown
+ * alone and the vehicle of an open trip are on the map at every zoom, also
+ * where the answer is thinned out.
+ */
+function pickedQuery() {
+  const selection = state.selection;
+  if (selection?.type === 'trip') return `&vehicle=${encodeURIComponent(selection.id)}`;
+  if (selection?.type === 'line') return `&${new URLSearchParams({ line: selection.line.name, mode: selection.line.mode, agency: selection.line.agency })}`;
+  return '';
+}
+
+/**
+ * After something was picked or let go of: where vehicles are left out, they
+ * are asked for again at once, so that what is picked comes and what no
+ * longer is goes. `before` is pickedQuery() as it was.
+ */
+function pickedChanged(before) {
+  if (state.thinned && pickedQuery() !== before) poll();
+}
+
+/** The vehicles of an answer in the smallest form, which has a column for each property, as an object each. */
+function fromColumns({ now, ahead, vehicles: { id, line, mode, delay, unit, at } }) {
+  return id.map((value, i) => ({
+    id: value,
+    line: line[i],
+    mode: mode[i],
+    delay: delay[i],
+    unit: unit[i] ?? undefined,
+    // where it is now and where in `ahead` seconds: the first as whole numbers of 1e-5 degrees, the second as how far from there
+    knots: [now, at[4 * i] / 1e5, at[4 * i + 1] / 1e5, now + ahead, (at[4 * i] + at[4 * i + 2]) / 1e5, (at[4 * i + 1] + at[4 * i + 3]) / 1e5],
+  }));
+}
 /** How many metres a pixel of the map stands for at a latitude and a zoom level. */
 const metresPerPixel = (lat, zoom) => (EQUATOR_M * Math.cos((lat * Math.PI) / 180)) / (512 * 2 ** zoom);
 
@@ -927,16 +989,16 @@ function hitTest(point) {
 const tooltip = $('tooltip');
 
 function vehicleSummary(v) {
-  const parts = [`${v.line} → ${v.to}`];
+  // (in the smallest form a vehicle comes without where it goes)
+  const parts = [v.to ? `${v.line} → ${v.to}` : v.line];
   if (v.delay === null) parts.push(t('delay.none'));
   else parts.push(Math.round(v.delay / 60) === 0 ? t('delay.onTime') : t('delay.minutes', { delay: delayText(v.delay) }));
   return parts.join(' · ');
 }
 
-// The tooltip names what the pointer hovers over. A finger does not hover: its
-// tap arrives as a pointer that moved there, and would leave the tooltip
-// standing.
-const hovering = matchMedia('(hover: hover)');
+// The tooltip names what the pointer hovers over. A finger does not hover
+// (`hovering`, above): its tap arrives as a pointer that moved there, and
+// would leave the tooltip standing.
 const hideTooltip = () => { tooltip.hidden = true; };
 
 map.on('mousemove', (event) => {
@@ -1309,6 +1371,8 @@ function buildControls() {
       saveSetting('hiddenModes', MODES.filter((other) => !state.enabled.has(other)));
       updateStatus();
       draw();
+      // (the answers hold the kinds that are on, and no others: asked for again at once)
+      if (state.loaded) poll();
     });
   }
   watchChipRow(container, $('modes-back'), $('modes-on'));
@@ -1486,7 +1550,9 @@ const panelBody = $('panel-body');
 let panelTimer = null;
 
 function closePanel() {
+  const picked = pickedQuery();
   state.selection = null;
+  pickedChanged(picked);
   clearTimeout(panelTimer);
   panel.hidden = true;
   // (opened again, the sheet is as high as it is by itself)
@@ -1516,7 +1582,9 @@ document.addEventListener('keydown', (event) => {
 function select(type, id, more = {}) {
   // The row that was activated is about to go: keep the keyboard focus in the panel.
   if (panelBody.contains(document.activeElement) || panelHead.contains(document.activeElement)) panel.focus({ preventScroll: true });
+  const picked = pickedQuery();
   state.selection = { type, id, data: null, ...more };
+  pickedChanged(picked);
   panel.hidden = false;
   panelHead.replaceChildren();
   panelBody.replaceChildren(el('p', { class: 'panel-empty', text: t('panel.loading') }));
@@ -1991,8 +2059,8 @@ async function poll() {
   try {
     // (without an area the server cannot say what it covers before it has a timetable)
     const waiting = state.areaKnown ? null : await loadArea();
-    const request = { box: boxAround(map.getBounds(), VEHICLE_MARGIN), detail: detailWanted() };
-    const res = waiting ? { status: 503 } : await fetch(`api/vehicles?bbox=${boxQuery(request.box)}&detail=${request.detail}`);
+    const request = { box: boxAround(map.getBounds(), VEHICLE_MARGIN), detail: detailWanted(), zoom: zoomAsked() };
+    const res = waiting ? { status: 503 } : await fetch(`api/vehicles?bbox=${boxQuery(request.box)}&detail=${request.detail}&zoom=${request.zoom}${modesQuery()}${pickedQuery()}`);
     const data = waiting ?? await res.json();
     // The map was moved meanwhile and a newer request is under way.
     if (seq !== pollSeq) return;
@@ -2015,13 +2083,20 @@ async function poll() {
       if (realtimeState() === 'live') state.wasLive = true;
       state.counts = data.counts;
       state.loaded = request;
-      applyVehicles(data.vehicles);
+      // (zoomed out, an instance with very many vehicles shows a share of them: "How it works" says so from then on)
+      state.thinned = Object.keys(data.thinned).length > 0;
+      if (state.thinned) $('about-thinned').hidden = false;
+      const list = Array.isArray(data.vehicles) ? data.vehicles : fromColumns(data);
+      state.many = list.length > MANY[state.many ? 1 : 0];
+      applyVehicles(list);
       state.online = true;
       updateStatus();
       loadStations();
       // The first answer usually predates the server's first realtime fetch.
       state.scheduleOnly = data.realtime === null ? state.scheduleOnly + 1 : 0;
       if (data.realtime === null && state.scheduleOnly <= QUICK_RETRIES) delay = RETRY_NO_REALTIME_MS;
+      // (asked for before it was known how many there are: again at once, in the form that fits their number)
+      if (request.detail !== detailWanted() && request.zoom === zoomAsked()) delay = 0;
     } else {
       throw new Error(`HTTP ${res.status}`);
     }
@@ -2039,7 +2114,8 @@ async function poll() {
 }
 
 // After moving the map: reload at once if the new section is not covered by
-// what was loaded, or needs the other level of detail.
+// what was loaded, needs the other level of detail, or was thinned out for
+// another zoom.
 let moveTimer = null;
 map.on('moveend', () => {
   if (!state.areaKnown) return; // still the placeholder view
@@ -2047,7 +2123,7 @@ map.on('moveend', () => {
   saveSetting('view', { lat: center.lat, lon: center.lng, zoom: map.getZoom() });
   clearTimeout(moveTimer);
   if (!state.loaded) return; // the first poll has not happened yet
-  if (state.loaded.detail !== detailWanted() || !boxCovers(state.loaded.box, map.getBounds())) moveTimer = setTimeout(poll, MOVE_SETTLE_MS);
+  if (state.loaded.detail !== detailWanted() || (state.thinned && state.loaded.zoom !== zoomAsked()) || !boxCovers(state.loaded.box, map.getBounds())) moveTimer = setTimeout(poll, MOVE_SETTLE_MS);
   else loadStations();
 });
 

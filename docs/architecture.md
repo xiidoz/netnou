@@ -235,6 +235,15 @@ What the API asks goes by pattern, not by trip:
   looked at by itself.
 - **Where a vehicle is** is worked out from its profile and the geometry of
   the hop it is on. Its knots are only made when an answer needs them.
+- **A zoomed-out map of a large instance** does not get every vehicle
+  (`lib/thinning.js`). Once a minute the server counts the vehicles under
+  way on the busiest screen of a phone, for every zoom; where that is more
+  than a phone draws without trouble, an answer holds the same share of
+  every kind of transport, picked by a number of chance that a trip keeps
+  while it runs. So the kinds keep their proportions and a city stays as
+  crowded beside the country as it is. A kind of which there are only a
+  few is there whole, and so is the first vehicle of a kind in every square
+  of the map: a single bus far out stays on it. `docs/api.md` has the rule.
 
 Lines, stations and how much service a station has are worked out from the
 columns when the dataset is loaded, which takes a few hundredths of a second
@@ -364,11 +373,15 @@ otherwise a server would load a file written by older code:
   the route of the selected trip, the visitor's own position, vehicles. The
   map is never rotated or tilted.
 - **Polling.** Every 10 seconds the page asks for the vehicles in the visible
-  section plus a margin, in full detail from zoom level 12 and in the reduced
-  form below. (Zoom levels are those of MapLibre, one less than the number in
-  the address of a raster tile.) Moving the map beyond what is loaded asks again at once. A tab
-  in the background stops asking, which lets the server pause the realtime
-  feed.
+  section plus a margin, in full detail from zoom level 12 and in a reduced
+  form below: with where each vehicle goes where a pointer can rest on it
+  and ask, and in the smallest form on a touch screen and among thousands
+  of vehicles. (Zoom levels are those of MapLibre, one less than the number
+  in the address of a raster tile.) The page names its zoom and the kinds
+  that are switched on, for which a large instance thins out its answer.
+  Moving the map beyond what is loaded asks again at once, and so do
+  switching a kind and zooming while vehicles are left out. A tab in the
+  background stops asking, which lets the server pause the realtime feed.
 - **Animation.** Vehicles are placed along their knots against the server's
   clock, and eased towards a new position when a changed delay moves them.
 - **Several at one place.** Markers that would hide each other are drawn as

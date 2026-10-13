@@ -136,6 +136,12 @@
       <p data-i18n="about.positionsText">No vehicle reports its position to this map. Each one is drawn where the timetable says it should be right now, moved by the delay reported for it. So a vehicle can be somewhat ahead of or behind its marker. Vehicles without a reported delay carry a question mark and run by the timetable here.</p>
       <h3 data-i18n="about.routes">Routes</h3>
       <p data-i18n="about.routesText">The route between two stops is computed too: the shortest plausible way along the roads and tracks of OpenStreetMap, not the official one of the operator. Between stops close to each other it is almost always the same. Where it differs, a vehicle takes another way on the map than in reality; where none is found, it moves in a straight line.</p>
+      <!-- Only on an instance with more vehicles than a zoomed-out map can
+           show: there from the first answer that left some out (app.js). -->
+      <div id="about-thinned" hidden>
+        <h3 data-i18n="about.thinned">Zoomed out</h3>
+        <p data-i18n="about.thinnedText">Where very many vehicles are under way, the zoomed-out map shows only some of them: a phone could not draw that many at once, and loading them would take long. It shows the same share of every kind of transport, picked by chance, so a city stays much busier on the map than the country around it. A kind with only a few vehicles is shown whole, and a single vehicle far from all others always stays. Zoom in, and all of them are there.</p>
+      </div>
       <h3 data-i18n="about.outside">Outside the area</h3>
       <p><span class="swatch veil"></span><span data-i18n="about.outsideText">Grey: only lines that stop inside the area are shown there, on a straight line between their stops.</span></p>
       <p class="about-source" id="about-source" hidden></p>

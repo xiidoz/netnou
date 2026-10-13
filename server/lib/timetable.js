@@ -62,9 +62,20 @@ const COUPLED_MODES = new Set(['subway', 'tram', 'suburban', 'regional', 'longdi
 const HORIZON_S = 90;
 // In the reduced form of a vehicle (see lite()) the browser gets its position
 // now and this many seconds ahead.
-const LITE_AHEAD_S = 60;
+export const LITE_AHEAD_S = 60;
 
 const round5 = (x) => Math.round(x * 1e5) / 1e5;
+/**
+ * Spreads the bits of a whole number (the last step of MurmurHash3): numbers
+ * that follow each other come out far apart, as whole numbers below 2^32.
+ */
+export const mix = (h) => {
+  h ^= h >>> 16;
+  h = Math.imul(h, 0x85ebca6b);
+  h ^= h >>> 13;
+  h = Math.imul(h, 0xc2b2ae35);
+  return (h ^ (h >>> 16)) >>> 0;
+};
 // The time of a knot along route geometry, in tenths of a second.
 const round10 = (x) => Math.round(x * 10) / 10;
 
@@ -233,6 +244,20 @@ class Vehicle {
     this.lineIndex = timetable.lineOf[route];
     this.next = timetable.stops.name[timetable.patternStops[timetable.patternStart[timetable.tripPattern[t]] + next]];
     this.stopsLeft = last - next;
+  }
+
+  /** Whether it is the vehicle of this trip on this service day: what its id says, without making it. */
+  is(t, date) {
+    return this.#trip === t && this.#date === date;
+  }
+
+  /**
+   * A number by chance, below 2^32, that a trip keeps for as long as it runs.
+   * Where a zoomed-out map cannot show every vehicle, the numbers decide
+   * which ones it shows (thinning.js): the same ones from one moment to the next.
+   */
+  get rank() {
+    return mix(this.#trip + 1);
   }
 
   /** The id of its trip and its service day: "671753_20261004". */
@@ -880,13 +905,18 @@ export class Timetable {
     };
   }
 
+  /** The number of a line as vehicles carry it (lineIndex), or undefined if there is no such line. */
+  lineNumber(line) {
+    return this.lineIndex.get(lineKey(line));
+  }
+
   /**
    * The vehicles of one line among those under way, by where they go and how
    * far they have got, or null if there is no such line.
    * @param vehicles from vehicles()
    */
   lineVehicles(line, vehicles) {
-    const index = this.lineIndex.get(lineKey(line));
+    const index = this.lineNumber(line);
     if (index === undefined) return null;
     const { name, mode, agency } = this.lines[index];
     const list = vehicles
