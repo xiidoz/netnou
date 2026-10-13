@@ -477,8 +477,8 @@ button:focus-visible, select:focus-visible, .row:focus-visible, .panel:focus-vis
 .panel-head .notes li::before { content: "•"; position: absolute; left: 3px; }
 .panel-head .alert { color: var(--delay-severe); font-weight: 600; }
 /* A note that says more than the head has room for: its headline or its
-   first lines, two at most, on a button that opens it in full. The arrow at
-   its end is the sign of that. */
+   first lines, two at most (one on a narrow screen, see there), on a button
+   that opens it in full. The arrow at its end is the sign of that. */
 .note {
   display: flex;
   align-items: center;
@@ -825,6 +825,10 @@ li:last-child > .row.stop .rail::before { bottom: 50%; }
   /* (so what is at their top has the whole width) */
   .panel .panel-head, .panel .back-row { padding-right: 14px; }
   .panel-head .notes { margin-right: 0; }
+  /* A sheet has little room: every note is one line there, cut where it does
+     not fit. app.js makes a button of what is cut, and keeps all notes to a
+     few lines (fitNotes). */
+  .panel-head .notes span { display: block; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
   .dialog h2 { margin-right: 0; }
   .panel .panel-head { padding-top: 2px; }
   .panel .back-row { padding-top: 0; }

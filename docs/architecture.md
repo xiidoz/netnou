@@ -432,12 +432,15 @@ otherwise a server would load a file written by older code:
   A trip opened from the list of a line leads back to it. What the details
   are of, their head, stays at the top while what is listed scrolls below it.
 - **Notes in the head.** Some operators write whole pages into one note and
-  attach dozens to one trip, and the head does not scroll. A note of more
-  than 120 characters shows its headline, or its first lines where it has
-  none, two lines at most, on a button that opens it in full in a dialog.
-  The notes may take a quarter of the height the details have by
-  themselves, and six lines in any case; those beyond that are a line that
-  names their number and opens them. Short notes stand there as they are.
+  attach dozens to one trip, and the head does not scroll. So a note that
+  does not fit shows its headline, or its first lines where it has none, on
+  a button that opens it in full in a dialog, and the notes there is no room
+  for are a line that names their number and opens them. On a narrow
+  screen, where the details are a sheet, every note is one line and there
+  are four lines for all of them, the page's own among them. On a wide one
+  a note of up to 120 characters stands there in full and a longer one has
+  two lines, and the notes of the feed may take a quarter of the height the
+  details have by themselves, four lines in any case.
 - **The details as a sheet.** On a narrow screen the details are a sheet
   from the bottom. The bar at its top and its head move it between three
   heights: its head alone, about half the screen, and up to the header

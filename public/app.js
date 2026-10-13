@@ -84,12 +84,14 @@ const SHEET_MIDDLE = 0.48;
 const SHEET_DRAG_PX = 6;
 const SHEET_CLOSE_PX = 56;
 const SHEET_FLICK = 0.3;
-// The notes of the feed in the head of the details, which does not scroll: the
-// share they may take of the height the details have by themselves, the lines
-// they may take whatever that comes to, and how many characters a note may
-// have to stand there in full.
+// The notes in the head of the details, which does not scroll. On a narrow
+// screen, where the details are a sheet and every note is one line: how many
+// lines there are for all notes, the page's own among them. On a wide one
+// those of the feed have these lines at least and a share of the height the
+// details have by themselves, and a note may have so many characters to
+// stand there in full.
+const NOTES_LINES = 4;
 const NOTES_SHARE = 0.25;
-const NOTES_LINES = 6;
 const NOTE_CHARS = 120;
 // Realtime data older than this counts as timetable only. When its fetches
 // fail, the server keeps the last delays up to the same age (STALE_AFTER_S in
@@ -1620,9 +1622,7 @@ async function loadSelection(first = false) {
     if (state.selection !== selection) return; // user moved on meanwhile
     if (data) {
       selection.data = data;
-      if (selection.type === 'trip') renderTrip(data, first);
-      else if (selection.type === 'line') renderLine(data, first);
-      else renderStation(data);
+      showSelection(first);
       draw();
     } else if (first) {
       panelBody.replaceChildren(el('p', { class: 'panel-empty', text: t('panel.noData') }));
@@ -1633,6 +1633,20 @@ async function loadSelection(first = false) {
   }
   if (state.selection === selection && !document.hidden) panelTimer = setTimeout(loadSelection, PANEL_REFRESH_MS);
 }
+
+/**
+ * Shows the details of what is chosen, from what the server said of it last.
+ * @param first whether it is shown for the first time
+ */
+function showSelection(first = false) {
+  const { type, data } = state.selection ?? {};
+  if (!data) return;
+  if (type === 'trip') renderTrip(data, first);
+  else if (type === 'line') renderLine(data, first);
+  else renderStation(data);
+}
+// When the page gets another size, the notes in the head have other room (fitNotes).
+map.on('resize', () => showSelection());
 
 /**
  * Replaces what the panel shows: its head, which stays, and what scrolls
@@ -1668,49 +1682,70 @@ function delayNode(delay) {
  * dozens on one trip, while the head does not scroll and what is listed below
  * it must stay in sight. So a long note shows its headline, or its first
  * lines where it has none, on a button that opens it in full (showNotes); and
- * of many only as many are listed as there is room for (fitNotes). A short
+ * the notes are fitted to the room there is for them (fitNotes). A short
  * one stands there as it is.
  * @param notes those of the feed: { title, text }, title null where it has none
  * @param own lines of the page's own
  * @param alert a line of the page's own that warns
  */
 function notesList(notes, own = [], alert = null) {
-  const items = own.map((text) => el('li', { text }));
-  if (alert) items.unshift(el('li', { class: 'alert', text: alert }));
+  // (the text in a part of its own: that is what a narrow screen cuts where it does not fit)
+  const line = (text, name) => el('li', name ? { class: name } : {}, [el('span', { text })]);
+  const items = own.map((text) => line(text));
+  if (alert) items.unshift(line(alert, 'alert'));
   const listed = notes.map((note) => {
     const long = note.text.length > NOTE_CHARS || note.text.includes('\n');
-    return el('li', {}, [long ? noteButton(note.title ?? note.text, [note]) : note.text]);
+    return long ? el('li', {}, [noteButton(note.title ?? note.text, [note])]) : line(note.text);
   });
   if (!items.length && !listed.length) return '';
   const list = el('ul', { class: 'notes' }, [...items, ...listed]);
-  notesToFit = { list, listed, notes };
+  notesToFit = { list, items, listed, notes };
   return list;
 }
 
-let notesToFit = null; // the list notesList() made last, until it is in the page: { list, listed, notes }
+let notesToFit = null; // the list notesList() made last, until it is in the page: { list, items, listed, notes }
 
 /**
- * Takes from the notes of the feed in the head those there is no room for,
- * last ones first, and names them by their number instead, on a button that
- * opens them. Their room is a share of the height the details have by
- * themselves. Only in the page does a note have a height: fillPanel() calls
- * this once the head is there.
+ * Fits the notes in the head to the room there is for them. Only in the page
+ * does a note have a size: fillPanel() calls this once the head is there.
+ *
+ * Of the notes of the feed, those there is no room for are taken out, last
+ * ones first, and named by their number instead, on a button that opens
+ * them. On a wide screen their room is a share of the height the details have
+ * by themselves. On a narrow one, where the details are a sheet, all notes
+ * together have NOTES_LINES lines, and each is one line, cut where it does
+ * not fit (style.css). A note that is cut becomes a button as well, with its
+ * headline if it has one.
  */
 function fitNotes() {
-  const { list, listed, notes } = notesToFit ?? {};
+  const { list, items, listed, notes } = notesToFit ?? {};
   notesToFit = null;
-  if (!list?.isConnected || !listed.length) return;
-  const room = Math.max(NOTES_LINES * parseFloat(getComputedStyle(list).lineHeight), NOTES_SHARE * (narrowScreen.matches ? SHEET_MIDDLE : 1) * viewSize.y);
-  // (they are the last of the list)
-  const taken = () => list.getBoundingClientRect().bottom - listed[0].getBoundingClientRect().top;
-  let rest = null; // the line that names those taken out
-  for (let shown = listed.length - 1; shown > 0 && taken() > room + 1; shown--) {
-    listed[shown].remove();
-    rest?.remove();
-    const text = t('notes.more', { count: notes.length - shown });
-    rest = el('li', {}, [noteButton(text, notes.slice(shown), text)]);
-    list.append(rest);
+  if (!list?.isConnected) return;
+  const narrow = narrowScreen.matches;
+  if (listed.length) {
+    const style = getComputedStyle(list);
+    const line = parseFloat(style.lineHeight) || 1.4 * parseFloat(style.fontSize);
+    // (those of the feed are the last of the list; of a sheet's lines the page's own have taken theirs)
+    const top = listed[0].getBoundingClientRect().top;
+    const room = narrow ? NOTES_LINES * line - (top - list.getBoundingClientRect().top) : Math.max(NOTES_LINES * line, NOTES_SHARE * viewSize.y);
+    let rest = null; // the line that names those taken out
+    for (let shown = listed.length - 1; shown > 0 && list.getBoundingClientRect().bottom - top > room + 1; shown--) {
+      listed[shown].remove();
+      rest?.remove();
+      const text = t('notes.more', { count: notes.length - shown });
+      rest = el('li', {}, [noteButton(text, notes.slice(shown), text)]);
+      list.append(rest);
+    }
   }
+  if (!narrow) return;
+  const cut = (item) => {
+    const part = item.firstElementChild;
+    return item.isConnected && part.tagName === 'SPAN' && part.scrollWidth > part.clientWidth;
+  };
+  for (const item of items) if (cut(item)) item.replaceChildren(noteButton(item.textContent, [{ title: null, text: item.textContent }]));
+  listed.forEach((item, i) => {
+    if (cut(item)) item.replaceChildren(noteButton(notes[i].title ?? notes[i].text, [notes[i]]));
+  });
 }
 
 function noteButton(text, notes, heading) {
