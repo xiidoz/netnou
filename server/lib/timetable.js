@@ -20,6 +20,7 @@
 //            interpolates between them
 
 import { NETS } from './network.js';
+import { searchList } from './search-list.js';
 import { addDays, localDate, serviceDayStart } from './time.js';
 
 // The ids are part of the API; the page has a colour and a label for each.
@@ -926,28 +927,27 @@ export class Timetable extends Schedule {
   }
 
   /**
-   * What the page searches in: all stations with their service and all lines,
-   * as one column per property, which is a quarter less to send than one
-   * object for each.
+   * What the page searches in: all stations with their service and all lines
+   * (search-list.js).
+   * @returns { list, stationAt }: what api/search sends, and a function that
+   *   says for a place of that list the id of the station there, if one is
    */
-  searchIndex() {
-    const column = (key) => this.stations.map((station) => station[key]);
+  searchList() {
+    const stations = this.stations.map((station, i) => ({ ...station, service: this.stationService[i] }));
     // A line that only passes the area without a stop in it has no place there.
-    const lines = this.lines.filter((line) => line.stops > 0);
-    return {
-      stations: { id: column('id'), name: column('name'), lat: column('lat'), lon: column('lon'), modes: column('modes'), service: this.stationService },
-      lines: {
-        name: lines.map((line) => line.name),
-        mode: lines.map((line) => line.mode),
-        agency: lines.map((line) => line.agency),
-        // The feed has no word on where a line runs: the two destinations most of its trips have say it best.
-        to: lines.map((line) => [...line.headsigns].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).slice(0, 2).map(([headsign]) => headsign)),
-        // the middle of its stops in the area
-        lat: lines.map((line) => round5(line.lat / line.stops)),
-        lon: lines.map((line) => round5(line.lon / line.stops)),
-        service: lines.map((line) => line.trips),
-      },
-    };
+    const lines = this.lines.filter((line) => line.stops > 0).map((line) => ({
+      name: line.name,
+      mode: line.mode,
+      agency: line.agency,
+      // The feed has no word on where a line runs: the two destinations most of its trips have say it best.
+      to: [...line.headsigns].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).slice(0, 2).map(([headsign]) => headsign),
+      // the middle of its stops in the area
+      lat: line.lat / line.stops,
+      lon: line.lon / line.stops,
+      service: line.trips,
+    }));
+    const { list, at } = searchList(stations, lines, MODES);
+    return { list, stationAt: (lat, lon) => this.stations[at(lat, lon)]?.id };
   }
 
   /** The number of a line as vehicles carry it (lineIndex), or undefined if there is no such line. */

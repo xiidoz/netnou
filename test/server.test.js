@@ -288,13 +288,14 @@ test('/api/search: all stations and lines as columns, sent again only when they 
   const { status, headers, json } = await get('/api/search');
   assert.equal(status, 200);
   assert.deepEqual(json, {
-    // T1 stops 51 times at each of the two, T2 once more at B
-    stations: { id: ['A', 'B'], name: ['Alpha', 'Beta'], lat: [49.4, 49.5], lon: [11, 11], modes: [['subway'], ['subway', 'longdistance']], service: [51, 52] },
+    modes: ['subway', 'tram', 'bus', 'suburban', 'regional', 'longdistance', 'other'],
+    // The places in 1e-5 degrees, each as the difference from the one before
+    // (B comes first in the order of the list); a bit for each mode that stops
+    // there. T1 stops 51 times at each of the two, T2 once more at B.
+    stations: { names: 'Beta\nAlpha', lat: [4950000, -10000], lon: [1100000, 0], modes: [0b100001, 0b000001], service: [52, 51] },
     // each with its one trip and where that goes; the place is the middle of the stops inside the area
-    lines: { name: ['U1', 'ICE 5'], mode: ['subway', 'longdistance'], agency: ['Testbetrieb', 'Testbetrieb'], to: [['Rundkurs'], ['Beta']], lat: [49.45, 49.5], lon: [11, 11], service: [1, 1] },
+    lines: { name: ['ICE 5', 'U1'], mode: [5, 0], agencies: ['Testbetrieb'], agency: [0, 0], to: [['Beta'], ['Rundkurs']], lat: [4950000, -5000], lon: [1100000, 0], service: [1, 1] },
   });
-  // in the order of /api/stations
-  assert.deepEqual(json.stations.id, (await get('/api/stations')).json.map((station) => station.id));
   assert.equal(headers['cache-control'], 'no-cache');
   const again = await request('/api/search', { headers: { 'If-None-Match': headers.etag } });
   assert.equal(again.status, 304);
@@ -365,6 +366,23 @@ test('/api/trip', async () => {
     assert.equal(missing.status, 404, id);
     assert.deepEqual(missing.json, { error: 'trip not found' });
   }
+});
+
+test('/api/departures: a station by its place, as /api/search lists it', async () => {
+  const byId = await get('/api/departures?station=B');
+  const byPlace = await get('/api/departures?at=49.5,11');
+  assert.equal(byPlace.status, 200);
+  assert.deepEqual({ ...byPlace.json, now: 0 }, { ...byId.json, now: 0 });
+  assert.equal(byPlace.json.id, 'B');
+  assert.equal((await get('/api/departures?at=49.50000,11.00000')).json.name, 'Beta');
+  // no station there, or what is no place
+  for (const at of ['49.50001,11', '11,49.5', '49.5', '49.5,11,0', 'here', '']) {
+    const missing = await get(`/api/departures?at=${at}`);
+    assert.equal(missing.status, 404, at);
+    assert.deepEqual(missing.json, { error: 'station not found' });
+  }
+  // (with a place, an id beside it is not looked at)
+  assert.equal((await get('/api/departures?at=49.50001,11&station=B')).status, 404);
 });
 
 test('/api/departures', async () => {

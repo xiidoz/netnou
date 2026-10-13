@@ -10,7 +10,6 @@
 
 import { APP_NAME, formatNumber, formatTime, languagePicker, loadLanguage, pageTexts, setTimeZone, t, translatePage } from './i18n.js';
 import { displayQuery, readDisplay } from './display.js';
-import { buildIndex, search, searchLines } from './search.js';
 import { mdiAlert, mdiChevronLeft, mdiChevronRight, mdiEye, mdiEyeOff, mdiFullscreen, mdiFullscreenExit } from './vendor/material-design-icons/icons.js';
 import { AttributionControl, MapLibreMap, NavigationControl } from './vendor/maplibre-gl/maplibre-gl.mjs';
 
@@ -1180,30 +1179,45 @@ map.on('moveend', (event) => {
 
 // ---------- search ----------
 
-// Stops and lines are searched for in the browser (search.js): what is typed
-// is sent nowhere, and neither is the visitor's position, which puts what is
-// around them first. The list of both is fetched when the field is first used.
+// Stops and lines are searched for in the browser, in a thread of its own
+// (search-worker.js with search.js): what is typed is sent nowhere, and
+// neither is the visitor's position, which puts what is around them first.
+// The list of both is fetched when the field is first used.
 
 const searchBox = $('search');
 const searchField = $('search-field');
 const searchResults = $('search-results');
 const narrowScreen = matchMedia('(max-width: 720px)'); // as in style.css
-let searchable = null; // what search.js looks through, once it is there
-let searchableLoading = null; // the request for it while it is under way
+let finder = null; // the thread that searches, once the field has been used
+let finderHasList = false; // whether it has the list, as far as its answers say: until the first one it is loading it
+let turn = 0; // the number of the question it was asked last; an answer to an earlier one is too late
 let found = []; // what choosing each of the results listed does
 let active = -1; // the one the arrow keys have reached, as an index into them
 
-function loadSearchable() {
-  searchableLoading ??= fetch('api/search')
-    .then((res) => (res.ok ? res.json() : Promise.reject(new Error(`HTTP ${res.status}`))))
-    // (with the names of the modes as the visitor reads them: "bus 33" is a line of the buses)
-    .then((data) => { searchable = buildIndex(data, Object.fromEntries(DRAW_ORDER.map((mode) => [mode, t(`mode.${mode}`)]))); })
-    .catch((err) => {
-      // (also while the server has no timetable yet; asked for again with the next letter)
-      console.warn('stops and lines not loaded:', err);
-      searchableLoading = null;
+/** Has the thread look for what was typed; with nothing typed, it gets the list ready. */
+function ask(query) {
+  if (!finder) {
+    finder = new Worker('search-worker.js', { type: 'module' });
+    finder.addEventListener('message', ({ data }) => answered(data));
+    finder.addEventListener('error', (event) => {
+      // (it could not be started, without a connection for one: the next letter starts it again)
+      console.warn('search not started:', event.message);
+      finder.terminate();
+      finder = null;
+      finderHasList = false;
+      answered({ turn, failed: true });
     });
-  return searchableLoading;
+  }
+  const near = state.position && { lat: state.position.lat, lon: state.position.lon };
+  // (with the names of the modes as the visitor reads them: "bus 33" is a line of the buses)
+  const modeNames = Object.fromEntries(DRAW_ORDER.map((mode) => [mode, t(`mode.${mode}`)]));
+  finder.postMessage({ turn: ++turn, query, near, limits: { lines: LINE_LIMIT, stops: SEARCH_LIMIT }, modeNames });
+}
+
+/** The list the thread has is not the server's any more: it loads it again with the next question. */
+function forgetSearchList() {
+  finder?.postMessage({ forget: true });
+  finderHasList = false;
 }
 
 /** Marks the result the arrow keys have reached, for the eye and for a screen reader; -1 for none. */
@@ -1253,23 +1267,27 @@ function listResults(lines, stops, note = '') {
   searchField.setAttribute('aria-expanded', String(found.length > 0));
 }
 
-async function runSearch() {
+function runSearch() {
   const query = searchField.value;
-  if (!query.trim()) return listResults([], []);
-  if (!searchable) {
-    listResults([], [], t('search.loading'));
-    await loadSearchable();
-    // typed on meanwhile: that letter has its own turn
-    if (searchField.value !== query) return undefined;
-    if (!searchable) return listResults([], [], t('search.failed'));
-  }
-  const lines = searchLines(searchable, query, { near: state.position, limit: LINE_LIMIT });
-  const stops = search(searchable, query, { near: state.position, limit: SEARCH_LIMIT });
-  return listResults(lines, stops, lines.length || stops.length ? '' : t('search.none'));
+  ask(query);
+  if (!query.trim()) listResults([], []);
+  else if (!finderHasList) listResults([], [], t('search.loading'));
+}
+
+/** Shows what the thread found, unless something else has been typed since. */
+function answered({ turn: of, failed = false, lines, stops }) {
+  // (whatever it was asked: it has the list now, or has not)
+  finderHasList = !failed;
+  // (asked for the list alone, or typed on meanwhile)
+  if (of !== turn || !searchField.value.trim()) return;
+  if (failed) listResults([], [], t('search.failed'));
+  else listResults(lines, stops, lines.length || stops.length ? '' : t('search.none'));
 }
 
 /** Shuts the list, and on a narrow screen the field with it. */
 function closeSearch() {
+  // (an answer that is still to come would open it again)
+  turn++;
   listResults([], []);
   $('controls').classList.remove('searching');
 }
@@ -1295,12 +1313,12 @@ function chooseStop(stop) {
   leaveSearch(stop.name);
   // On a narrow screen the departures cover the lower half: the stop goes above the middle.
   map.flyTo({ center: [stop.lon, stop.lat], zoom: Math.max(map.getZoom(), SEARCH_ZOOM), offset: [0, narrowScreen.matches ? -0.12 * viewSize.y : 0] });
-  select('station', stop.id);
+  // (the list has no ids: a stop of it is asked for by its place)
+  select('station', null, { at: stop });
 }
 
 searchField.addEventListener('input', runSearch);
 searchField.addEventListener('focus', () => {
-  loadSearchable();
   // what is in the field from last time is typed over, and found again until then
   searchField.select();
   runSearch();
@@ -1591,8 +1609,10 @@ document.addEventListener('keydown', (event) => {
 
 /**
  * Opens the details of a trip, a station or a line.
+ * @param id of a trip or a station; null for a line, and for a station of the search
  * @param more what else there is to know: of a line what it is ({ line }),
- *   of a trip the line it was chosen from ({ from }), to which the way leads back
+ *   of a trip the line it was chosen from ({ from }), to which the way leads
+ *   back, of a station of the search where it is ({ at })
  */
 function select(type, id, more = {}) {
   // The row that was activated is about to go: keep the keyboard focus in the panel.
@@ -1606,11 +1626,11 @@ function select(type, id, more = {}) {
   loadSelection(true);
 }
 
-function selectionUrl({ type, id, line }) {
+function selectionUrl({ type, id, line, at }) {
   if (type === 'trip') return `api/trip?id=${encodeURIComponent(id)}`;
   // (a line is its name, its mode and its operator together)
   if (type === 'line') return `api/line?${new URLSearchParams({ name: line.name, mode: line.mode, agency: line.agency })}`;
-  return `api/departures?station=${encodeURIComponent(id)}`;
+  return at ? `api/departures?at=${at.lat.toFixed(5)},${at.lon.toFixed(5)}` : `api/departures?station=${encodeURIComponent(id)}`;
 }
 
 async function loadSelection(first = false) {
@@ -1627,6 +1647,8 @@ async function loadSelection(first = false) {
       draw();
     } else if (first) {
       panelBody.replaceChildren(el('p', { class: 'panel-empty', text: t('panel.noData') }));
+      // (no station where the search has one: its list is of another timetable than the server's)
+      if (selection.at) forgetSearchList();
     }
   } catch (err) {
     console.warn('details not loaded:', err);

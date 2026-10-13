@@ -46,6 +46,7 @@ server/
 public/
   index.html, app.js, style.css   the page
   search.js           finding stops and lines by name
+  search-worker.js    the thread it runs in
   i18n.js, locales/   texts per language
   sw.js, manifest.webmanifest, icons/   installable app
   vendor/maplibre-gl/ vendored map library

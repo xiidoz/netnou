@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import http from 'node:http';
 import path from 'node:path';
 import zlib from 'node:zlib';
-import { loadConfig, parseBox } from './config.js';
+import { loadConfig, parseBox, parsePlace } from './config.js';
 import { FeedUpdater } from './lib/feed.js';
 import { RealtimePoller } from './lib/realtime.js';
 import { LANGUAGE_CODES, languageFor, ownFiles, pictureSize, renderManifest, renderPage, robotsTxt, sitemapXml } from './lib/page.js';
@@ -300,15 +300,17 @@ function thinned(zoom, counted) {
 }
 
 // What the page searches stops and lines in is the same for every browser and
-// only changes with the timetable. It is a quarter of a megabyte even compressed,
-// so it is put together and compressed once, and its ETag lets a browser that
-// has it keep it.
+// only changes with the timetable. Even compressed it is megabytes for a
+// whole country, so it is put together and compressed once, and its ETag lets
+// a browser that has it keep it. With it comes what finds the station that
+// the list has at a place: the list has no ids.
 let searchCache = null;
 
-function searchIndex() {
+function searchList() {
   if (!searchCache) {
-    const body = Buffer.from(JSON.stringify(timetable.searchIndex()));
-    searchCache = { body, etag: `"${crypto.createHash('sha1').update(body).digest('hex').slice(0, 16)}"`, packed: null };
+    const { list, stationAt } = timetable.searchList();
+    const body = Buffer.from(JSON.stringify(list));
+    searchCache = { body, etag: `"${crypto.createHash('sha1').update(body).digest('hex').slice(0, 16)}"`, packed: null, stationAt };
   }
   return searchCache;
 }
@@ -459,13 +461,13 @@ function handleApi(req, res, url) {
     // happens in the browser: what somebody types is nothing the server gets
     // to see.
     case '/api/search': {
-      const index = searchIndex();
-      const headers = { ETag: index.etag, 'Cache-Control': 'no-cache', ...NOT_LISTED };
-      if (etagMatches(req, index.etag)) {
+      const list = searchList();
+      const headers = { ETag: list.etag, 'Cache-Control': 'no-cache', ...NOT_LISTED };
+      if (etagMatches(req, list.etag)) {
         res.writeHead(304, { ...headers, Vary: 'Accept-Encoding' });
         return res.end();
       }
-      return send(req, res, 200, MIME['.json'], index.body, headers, (index.packed ??= keep(index.body)));
+      return send(req, res, 200, MIME['.json'], list.body, headers, (list.packed ??= keep(list.body)));
     }
 
     // The vehicles of one line that are under way. A line is named as
@@ -490,7 +492,10 @@ function handleApi(req, res, url) {
     }
 
     case '/api/departures': {
-      const board = timetable.departures(url.searchParams.get('station') ?? '', now, realtime.snapshot);
+      // A station is named by its id, or by its place as /api/search lists it.
+      const at = parsePlace(url.searchParams.get('at'));
+      const station = at ? searchList().stationAt(...at) : url.searchParams.get('station');
+      const board = timetable.departures(station ?? '', now, realtime.snapshot);
       if (!board) return sendJson(req, res, 404, { error: 'station not found' });
       realtime.touch();
       return sendJson(req, res, 200, { now, ...board });

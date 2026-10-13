@@ -98,6 +98,7 @@ Server (`server/`):
 | `lib/realtime.js` | says when the realtime feed is fetched (`RealtimePoller`), matches it to the trips and gives the portions of a coupled train the same delays where they share their way |
 | `lib/realtime-worker.js` | the thread that fetches the feed, reads it and matches it |
 | `lib/snapshot.js` | the realtime data of one fetch in columns: filled while the feed is read (`Gathering`), read by the timetable (`Snapshot`) |
+| `lib/search-list.js` | the list the page searches in, as small as it gets: the stations in an order in which neighbours follow each other, with their places as differences, and the lines by operator (`searchList`); finds the station the list has at a place |
 | `lib/http.js` | the GET the realtime feed is fetched with: patient with a busy server (`get`) |
 | `lib/pb.js` | decodes the GTFS-Realtime message (`decodeFeed`) |
 | `lib/update.js` | what the server calls itself (`describeBuild`) and the daily look-out for a newer release (`UpdateChecker`) |
@@ -114,6 +115,7 @@ Page (`public/`):
 | `app.js` | map, polling, animation, drawing on a canvas, detail panel |
 | `display.js` | display mode in the address of the page: what an address asks for, and the address for what is shown |
 | `search.js` | finding stops and lines by name: matching and order, without the page around it |
+| `search-worker.js` | the thread that loads the list of stops and lines and searches it |
 | `i18n.js`, `locales/` | texts in the visitor's language, see [translating.md](translating.md) |
 | `first.js` | what is settled before the page is drawn: light or dark, by the visitor's choice or else the scheme of the device, and whether the header card shows at once |
 | `sw.js`, `manifest.webmanifest`, `icons/` | installable app and offline start |
@@ -473,6 +475,34 @@ otherwise a server would load a file written by older code:
   there and opens its departure board. A line is found by the beginning of
   its name, with its mode in front if somebody types one ("bus 33"), and is
   told from others of the same name by where it goes and who runs it.
+- **The list of the search.** All of Germany is a quarter of a million
+  stations, and every visitor who searches loads the list of them. It is
+  therefore as small as it gets (`lib/search-list.js`,
+  [`/api/search`](api.md#get-apisearch)): one column for each property, the
+  names as one text and the places as whole numbers. The stations are in the
+  order of a curve that goes through every place of the map (Hilbert's), so
+  each is near the one before it, and a place is written as the small
+  difference from that one. Compressed that is 2.9 MB for all of Germany and
+  160 kB for the default area.
+- **A station of the search has no id.** The ids of a feed need not outlast
+  one version of it: of the 112,000 stations that gtfs.de had under the same
+  name at the same place in January and in October 2026, not one had kept
+  its id. In the list they would be a quarter of its size. The departures of
+  a station found by the search are asked for by its place instead, and the
+  list gives every station a place of its own.
+- **The search has a thread of its own.** `search-worker.js` loads the
+  list, gets it ready and searches it, so that none of this holds up the
+  page: with the list of a country, getting it ready takes a phone about a
+  second. Of the questions that come in while the thread is busy it answers
+  the last.
+- **A word is looked for by reading through the names.** Nothing is built
+  for each stop. The words of all names, as they are compared, are one text,
+  and a word typed is looked for in it from end to end. The longest word
+  typed comes first, as the fewest names have it, and the other words are
+  looked for only in the names it left. What a name abbreviates ("Hbf",
+  "…str.") is found by the forms of the word typed that such a name answers
+  to. For the list of a country a search takes a few milliseconds on a
+  desktop machine.
 - **Own position.** A button above the zoom buttons shows where the visitor
   is and has the map follow them, until they move the map themselves or
   switch it off. It is off at every start, and a visitor outside the area is

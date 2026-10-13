@@ -58,6 +58,16 @@ test('the service worker precaches files that exist', () => {
   for (const file of ['app.js', 'i18n.js', 'search.js', 'style.css']) assert.ok(shell.includes(file), `${file} is missing in SHELL of sw.js`);
 });
 
+// The search runs in a thread of its own, which the page starts by the name
+// of its script. An installed app has that script with the others.
+test('the thread the page starts is a script of its own that is precached', () => {
+  const started = [...withoutComments(read('app.js')).matchAll(/new Worker\('([^']+)', \{ type: 'module' \}\)/g)].map(([, file]) => file);
+  assert.deepEqual(started, ['search-worker.js']);
+  for (const file of started) assert.ok(shell.includes(file), `${file} is missing in SHELL of sw.js`);
+  // (it fetches the list from where the page has its data)
+  assert.match(withoutComments(read('search-worker.js')), /fetch\('api\/search'\)/);
+});
+
 // The page is sent in the language its browser asks for, and says so (Vary). A
 // start without a connection takes the one that was kept, whatever the browser
 // asks for by then: a cache that held that against it would have no page at all.

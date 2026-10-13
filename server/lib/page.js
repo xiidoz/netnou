@@ -49,7 +49,6 @@ export const PAGE_MODULES = [
   'i18n.js',
   'locales/en.js',
   'display.js',
-  'search.js',
   'vendor/material-design-icons/icons.js',
   'vendor/maplibre-gl/maplibre-gl.mjs',
   'vendor/maplibre-gl/maplibre-gl-shared.mjs',
