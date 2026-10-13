@@ -25,7 +25,7 @@ shortened where marked with `…`.
 - Only `GET` and `HEAD`. There is no authentication and there are no CORS
   headers, so a page on another origin cannot call the API from a browser.
 - Answers are JSON in UTF-8, compressed with gzip when the client accepts it
-  and the body is larger than 1 kB. The index of the search, which is the
+  and the body is larger than 1 kB. The list for the search, which is the
   same for everybody, comes with Brotli where the client accepts that.
 - Answers carry `Cache-Control: no-store`, except `/api/area` and
   `/api/search`, which have an `ETag` and answer `304` to a matching
@@ -327,7 +327,8 @@ platforms of one stop. Does not touch the realtime feed.
 ```
 
 The answer is a plain array. `id` is for `/api/departures`; `modes` lists the
-modes that call at the station.
+modes that call at the station. Like the ids of trips, those of stations
+change when the feed is republished.
 
 ## `GET /api/search`
 
@@ -338,37 +339,51 @@ realtime feed.
 
 ```json
 {
+  "modes": ["subway", "tram", "bus", "suburban", "regional", "longdistance", "other"],
   "stations": {
-    "id": ["258216", "435287", …],
-    "name": ["Nürnberg Tiergärtnertor", "Nürnberg Hallertor", …],
-    "lat": [49.45812, 49.45518, …],
-    "lon": [11.07301, 11.07032, …],
-    "modes": [["tram", "bus"], ["tram", "bus"], …],
-    "service": [1634, 3446, …]
+    "names": "Harra, Sportplatz\nProbstzella, Bahnhof\nProbstzella\n…",
+    "lat": [5041383, 11499, -55, …],
+    "lon": [1168584, -30253, 47, …],
+    "modes": [4, 4, 16, …],
+    "service": [15, 49, 54, …]
   },
   "lines": {
-    "name": ["U1", "33", …],
-    "mode": ["subway", "bus", …],
-    "agency": ["VerkehrsAG Nürnberg", "Stadtverkehr Fürth", …],
-    "to": [["Fürth Hardhöhe", "Langwasser Süd"], ["Fürth Hauptbahnhof", "Flughafen N U E"], …],
-    "lat": [49.44428, 49.48582, …],
-    "lon": [11.05986, 11.03156, …],
-    "service": [1911, 296, …]
+    "name": ["750 Anrufsammeltaxi Wüstenbruck", "750 Rufbus Wüstenbruck - AN Bf.", …],
+    "mode": [2, 2, …],
+    "agencies": ["Ansbacher Bäder und Verkehrs GmbH", "Arverio Bayern GmbH", …],
+    "agency": [0, 0, …],
+    "to": [["Ansbach Wüstenbruck", "Ansbach Bahnhof"], ["Ansbach Bahnhof", "Ansbach Wüstenbruck"], …],
+    "lat": [4928809, 190, …],
+    "lon": [1055474, -377, …],
+    "service": [46, 54, …]
   }
 }
 ```
 
-Both are sent as one array per property: the n-th entries of all arrays of
-`stations` belong to one station, those of `lines` to one line. That is a
-quarter less to transfer than one object for each, about 290 kB compressed
-for the default area with its 13,489 stations and 1,506 lines.
+Every visitor who searches loads this list, and for a whole country it is a
+quarter of a million stations, so it is written to be small: one column for
+each property, in which the n-th entries belong to one station or one line,
+and numbers in place of what repeats. Compressed it is about 190 kB for the
+default area with its 13,412 stations and 1,500 lines, and about 3 MB for
+all of Germany.
 
-The stations are those of `/api/stations`, in the same order.
+`modes` names the [modes](#modes) once; a mode is its number in that list.
+
+The stations:
 
 | Field | Type | Meaning |
 | --- | --- | --- |
-| `id`, `name`, `lat`, `lon`, `modes` | arrays | as in [`/api/stations`](#get-apistations) |
-| `service` | array of integers | how often a trip stops at the station over the whole timetable; a measure of how much is going on there compared with other stations, not a number of departures per day |
+| `names` | string | the names of all stations, one on each line |
+| `lat`, `lon` | arrays of whole numbers | where a station is, in 1e-5 degrees, as the difference from the station before it; the first is as it is |
+| `modes` | array of whole numbers | the modes that call at the station: the bit with the number of a mode is set if it does, so `6` is tram and bus |
+| `service` | array of whole numbers | how often a trip stops at the station over the whole timetable; a measure of how much is going on there compared with other stations, not a number of departures per day |
+
+The stations are in an order in which each is near the one before it, which
+keeps the differences small; it is not the order of `/api/stations`. They
+have no ids. The departures of a station of this list are asked for by its
+place, [`/api/departures?at=`](#get-apidepartures), and so every station has
+a place of its own: where the feed has several at one place, all but one are
+listed a metre further east each.
 
 A line is the routes of the feed that have the same name, the same mode and
 the same agency. The name alone does not say which line it is: agencies
@@ -378,11 +393,12 @@ of its train. Lines without a stop in the area are left out.
 | Field | Type | Meaning |
 | --- | --- | --- |
 | `name` | array of strings | what the line is called, as `line` of a vehicle |
-| `mode` | array of strings | one of the [modes](#modes) |
-| `agency` | array of strings | who runs it |
+| `mode` | array of whole numbers | its mode, as the number of it in `modes` |
+| `agencies` | array of strings | all who run lines, each once |
+| `agency` | array of whole numbers | who runs the line, as the number of it in `agencies` |
 | `to` | array of arrays | the one or two destinations most of its trips have; the feed has no other description of a line |
-| `lat`, `lon` | arrays of numbers | the middle of its stops inside the area |
-| `service` | array of integers | the number of its trips in the whole timetable |
+| `lat`, `lon` | arrays of whole numbers | the middle of its stops inside the area, written as the places of the stations are |
+| `service` | array of whole numbers | the number of its trips in the whole timetable |
 
 The answer only changes with the timetable. It carries an `ETag`, and a
 request with a matching `If-None-Match` is answered with 304.
@@ -490,9 +506,16 @@ vehicle offers and what an operator announces is information.
 
 ## `GET /api/departures`
 
-The departure board of a station: `?station=<station id>`. Keeps the fetching
-of the realtime feed going. 404 `{ "error": "station not found" }` for an
-unknown id.
+The departure board of a station. Keeps the fetching of the realtime feed
+going.
+
+| Parameter | Meaning |
+| --- | --- |
+| `station` | the id of the station, as [`/api/stations`](#get-apistations) and the stops of [a trip](#get-apitrip) have it |
+| `at` | in place of the id, where the station is: `latitude,longitude` as [`/api/search`](#get-apisearch) lists it, in degrees, for example `at=49.44561,11.08299`. It is the station at that very place, not the nearest one |
+
+404 `{ "error": "station not found" }` for an unknown id and for a place
+without a station.
 
 ```json
 {

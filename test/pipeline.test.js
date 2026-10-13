@@ -289,7 +289,7 @@ test('an instance may keep the trips of some operators, in its area or wherever 
   assert.deepEqual([...fernbus.tripIndex.keys()], ['T3']);
   assert.deepEqual(fernbus.stations.map((s) => s.id).sort(), ['X', 'Y']);
   assert.deepEqual(fernbus.bbox, [48, 11.5, 52, 13]);
-  assert.deepEqual(fernbus.searchIndex().lines.agency, ['Fernbus, Nord GmbH']);
+  assert.deepEqual(fernbus.searchList().list.lines.agencies, ['Fernbus, Nord GmbH']);
   // the name counts without its capitals
   assert.deepEqual(await ids({ area: null, agencies: [operator('TESTBETRIEB')] }), ['T1', 'T2', 'T4']);
   // an area and operators: a trip has to pass both

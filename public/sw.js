@@ -17,6 +17,7 @@ const SHELL = [
   'display.js',
   'i18n.js',
   'search.js',
+  'search-worker.js',
   'first.js',
   'locales/de.js',
   'locales/en.js',

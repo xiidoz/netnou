@@ -1,11 +1,13 @@
 // The search for stops and lines (public/search.js) needs no browser and is
-// run as it is. The stops and lines are real ones of the default area, with
-// their positions and with how much service they have in a timetable of
-// October 2026.
+// run as it is, on a list as the server makes it (server/lib/search-list.js).
+// The stops and lines are real ones of the default area, with their positions
+// and with how much service they have in a timetable of October 2026.
 
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { buildIndex, fold, search, searchLines, wordsOf } from '../public/search.js';
+import { searchList } from '../server/lib/search-list.js';
+import { MODES } from '../server/lib/timetable.js';
 
 // [name, lat, lon, service, modes]
 const STOPS = [
@@ -45,13 +47,19 @@ const LINES = [
   ['RB16', 'regional', 'DB Regio AG Bayern', ['München Hbf', 'Nürnberg Hbf'], 49.10328, 10.99763, 153],
   ['RB16', 'bus', 'DB Regio AG Bayern', ['Bahnhof, Treuchtlingen', 'Bahnhof, Roth (Mittelfranken)'], 49.13429, 11.00186, 4],
 ];
-const column = (rows, n) => rows.map((row) => row[n]);
-const DATA = {
-  stations: { id: STOPS.map((_, i) => `s${i}`), name: column(STOPS, 0), lat: column(STOPS, 1), lon: column(STOPS, 2), service: column(STOPS, 3), modes: column(STOPS, 4) },
-  lines: { name: column(LINES, 0), mode: column(LINES, 1), agency: column(LINES, 2), to: column(LINES, 3), lat: column(LINES, 4), lon: column(LINES, 5), service: column(LINES, 6) },
-};
+/** What api/search sends for these stops and lines, as a browser gets it. */
+function listOf(stops, lines = []) {
+  const { list } = searchList(
+    stops.map(([name, lat, lon, service, modes]) => ({ name, lat, lon, service, modes })),
+    lines.map(([name, mode, agency, to, lat, lon, service]) => ({ name, mode, agency, to, lat, lon, service })),
+    MODES,
+  );
+  return JSON.parse(JSON.stringify(list));
+}
+const DATA = listOf(STOPS, LINES);
 // what the German page calls the modes
-const index = buildIndex(DATA, { subway: 'U-Bahn', tram: 'Tram', bus: 'Bus', suburban: 'S-Bahn', regional: 'Regionalzug', longdistance: 'Fernverkehr' });
+const MODE_NAMES = { subway: 'U-Bahn', tram: 'Tram', bus: 'Bus', suburban: 'S-Bahn', regional: 'Regionalzug', longdistance: 'Fernverkehr' };
+const index = buildIndex(DATA, MODE_NAMES);
 const names = (query, options) => search(index, query, options).map((stop) => stop.name);
 // a line as "name mode"
 const lines = (query, options) => searchLines(index, query, options).map((line) => `${line.name} ${line.mode}`);
@@ -75,7 +83,9 @@ test('a stop is found by the beginnings of its words, in any order', () => {
 });
 
 test('a result is what the page needs to show the stop', () => {
-  assert.deepEqual(search(index, 'hersbruck'), [{ id: 's14', name: 'Hersbruck Plärrer', lat: 49.50526, lon: 11.43553, modes: ['bus'] }]);
+  assert.deepEqual(search(index, 'hersbruck'), [{ name: 'Hersbruck Plärrer', lat: 49.50526, lon: 11.43553, modes: ['bus'] }]);
+  assert.deepEqual(search(index, 'fürth hbf')[0].modes, ['subway', 'bus', 'suburban', 'regional']);
+  assert.deepEqual(search(index, 'nürnberg', { limit: 0 }), []);
 });
 
 test('umlauts may be typed as they are, without their dots or as two letters', () => {
@@ -215,4 +225,100 @@ test('lines of one name are told apart, and the nearer one comes first', () => {
   assert.deepEqual(lines('5', { near: { lat: 49.4539, lon: 11.0773 } }), ['5 tram', '5 bus']);
   // the exact name still comes first: next to where the 331 runs, "33" is the 33
   assert.deepEqual(searchLines(index, '33', { near: { lat: 49.447, lon: 11.312 } }).map((line) => line.name), ['33', '331', '330']);
+});
+
+test('a single letter finds the words that begin with it, and what has it inside where those are too few', () => {
+  assert.deepEqual(names('h', { limit: 3 }), ['Nürnberg Hbf', 'Fürth (Bay) Hbf', 'Nürnberg, Eibach Bf/Hafenstr.']);
+  // seven have a word that begins with it; the eighth is the busiest of those that have it inside
+  assert.deepEqual(names('h'), [
+    'Nürnberg Hbf', 'Fürth (Bay) Hbf', 'Nürnberg, Eibach Bf/Hafenstr.', 'Nürnberg Hauptmarkt', 'Erlangen Hauptfeuerwache', 'Fürth G.-Hauptmann-Str.', 'Hersbruck Plärrer',
+    'Fürth Rathaus',
+  ]);
+  // "b" is the beginning of "Bahnhof" too, which the stations are and "Bf" stands for
+  assert.deepEqual(names('b'), [
+    'Nürnberg Hbf', 'Fürth (Bay) Hbf', 'Erlangen', 'Bamberg, Bahnhof/Ludwigstr.', 'Nürnberg, Eibach Bf/Hafenstr.', 'Erlangen Berliner Pl.', 'Buchdorf, Alte B2',
+    'Nürnberg Plärrer',
+  ]);
+  assert.deepEqual(names('e n'), [
+    'Erlangen Neuer Markt / Rathaus', 'Nürnberg, Eibach Bf/Hafenstr.',
+    'Nürnberg Hbf', 'Nürnberg Plärrer', 'Fürth (Bay) Hbf', 'Erlangen', 'Nürnberg Rathaus', 'Bamberg, Bahnhof/Ludwigstr.',
+  ]);
+});
+
+test('what a name abbreviates may be typed in part, or be what a longer word typed has inside', () => {
+  assert.deepEqual(names('hauptb'), ['Nürnberg Hbf', 'Fürth (Bay) Hbf']);
+  assert.deepEqual(names('bahn'), ['Nürnberg Hbf', 'Fürth (Bay) Hbf', 'Erlangen', 'Bamberg, Bahnhof/Ludwigstr.', 'Nürnberg, Eibach Bf/Hafenstr.']);
+  assert.deepEqual(names('platz'), ['Erlangen Berliner Pl.']);
+  assert.deepEqual(names('pl'), ['Nürnberg Plärrer', 'Erlangen Berliner Pl.', 'Hersbruck Plärrer']);
+  // the "Str." that is a word of its own before the names that end in it
+  for (const typed of ['strasse', 'stras']) assert.deepEqual(names(typed), ['Fürth G.-Hauptmann-Str.', 'Bamberg, Bahnhof/Ludwigstr.', 'Nürnberg, Eibach Bf/Hafenstr.', 'Weißenstadt, Poststraße'], typed);
+  for (const typed of ['tras', 'asse']) assert.deepEqual(names(typed), ['Bamberg, Bahnhof/Ludwigstr.', 'Nürnberg, Eibach Bf/Hafenstr.', 'Fürth G.-Hauptmann-Str.', 'Weißenstadt, Poststraße'], typed);
+  assert.deepEqual(names('fue'), ['Fürth (Bay) Hbf', 'Fürth Rathaus', 'Fürth G.-Hauptmann-Str.']);
+  assert.deepEqual(names('nuernb', { limit: 2 }), ['Nürnberg Hbf', 'Nürnberg Plärrer']);
+});
+
+test('what a name abbreviates is found by a close spelling too', () => {
+  assert.deepEqual(names('bahnhov'), ['Nürnberg Hbf', 'Fürth (Bay) Hbf', 'Erlangen', 'Bamberg, Bahnhof/Ludwigstr.', 'Nürnberg, Eibach Bf/Hafenstr.']);
+  assert.deepEqual(names('hauptbanhof'), ['Nürnberg Hbf', 'Fürth (Bay) Hbf']);
+  assert.deepEqual(names('strase'), ['Fürth G.-Hauptmann-Str.']);
+  assert.deepEqual(names('plaz'), ['Nürnberg Plärrer', 'Erlangen Berliner Pl.', 'Hersbruck Plärrer']);
+});
+
+test('a search finds the same whatever was searched for before it', () => {
+  // (what the longest word found is kept, for the search that follows when the next word is typed)
+  const TYPED = [
+    'nürnberg h', 'nürnberg ha', 'nürnberg r', 'nürnberg', 'h', 'ha', 'h', 'b', 'bahnhof', 'bahnhov', 'bahnhof',
+    'erlagen', 'erlagen h', 'erlagen haupt', 'erlagen', 'erlangen', 'erlangen h', 'plärer', 'plärrer', 'plärer h', 'nürnberg hauptmakt', 'nürnberg hauptmarkt',
+  ];
+  for (const typed of [...TYPED, ...TYPED.toReversed()]) assert.deepEqual(names(typed), search(buildIndex(DATA), typed).map((stop) => stop.name), typed);
+  assert.deepEqual(names('nürnberg h'), ['Nürnberg Hbf', 'Nürnberg, Eibach Bf/Hafenstr.', 'Nürnberg Hauptmarkt', 'Nürnberg Rathaus']);
+  assert.deepEqual(names('erlagen h'), ['Erlangen', 'Erlangen Neuer Markt / Rathaus', 'Erlangen Hauptfeuerwache']);
+  assert.deepEqual(names('erlagen haupt'), ['Erlangen Hauptfeuerwache']);
+});
+
+test('among tens of thousands of stops with a word in common, the other words are found as among a few', () => {
+  // The ways of one town, more of them than the search looks at one by one
+  // and each with more service than the one before, its station, and a way elsewhere.
+  const WAYS = 31_000;
+  const many = Array.from({ length: WAYS }, (_, n) => [`Musterstadt, Weg ${n}`, 50 + n / 1e4, 10, n + 1, ['bus']]);
+  const town = buildIndex(listOf([...many, ['Musterstadt', 49.9, 10, 99999, ['bus', 'regional']], ['Anderswo, Weg 471', 51, 11, 5, ['bus']]]));
+  const found = (query, options) => search(town, query, options).map((stop) => stop.name);
+  /** The busiest eight of the ways whose number passes. */
+  const ways = (passes) => Array.from({ length: WAYS }, (_, n) => WAYS - 1 - n).filter((n) => passes(String(n))).slice(0, 8).map((n) => `Musterstadt, Weg ${n}`);
+  // the way of that number, then the ones that have it inside theirs
+  assert.deepEqual(found('musterstadt weg 4711'), ['Musterstadt, Weg 4711', 'Musterstadt, Weg 24711', 'Musterstadt, Weg 14711']);
+  assert.deepEqual(found('weg 471 musterstadt'), ways((number) => number.startsWith('471')));
+  assert.deepEqual(found('musterstadt', { limit: 3 }), ['Musterstadt', 'Musterstadt, Weg 30999', 'Musterstadt, Weg 30998']);
+  assert.deepEqual(found('musterstadt bahnhof'), ['Musterstadt']);
+  assert.deepEqual(found('musterstadt bahnhov'), ['Musterstadt']);
+  // A slip in the word they all have: a match is as close as its worst word,
+  // so the numbers with 47 inside are among those that begin with it. A word
+  // too short for a slip has to be right.
+  assert.deepEqual(found('mustrestadt weg 47'), ways((number) => number.includes('47')));
+  assert.deepEqual(found('mustrestadt wge 47'), []);
+  assert.deepEqual(found('anderswo weg'), ['Anderswo, Weg 471']);
+  assert.deepEqual(found('weg 471', { near: { lat: 51, lon: 11 }, limit: 1 }), ['Anderswo, Weg 471']);
+  // the place of each is the one it was listed with
+  assert.deepEqual(search(town, 'musterstadt weg 4711', { limit: 1 }), [{ name: 'Musterstadt, Weg 4711', lat: 50.4711, lon: 10, modes: ['bus'] }]);
+});
+
+test('names are compared as they are written, whatever the letters', () => {
+  const odd = buildIndex(listOf([
+    ['Łódź Fabryczna', 51.77, 19.47, 9, ['regional']],
+    ['Świnoujście Centrum', 53.91, 14.24, 8, ['regional']],
+    ['Århus H', 56.15, 10.2, 7, ['regional']],
+    ['Straße der Jugend/Ecke Weg', 51.76, 14.33, 6, ['tram']],
+    ['Zoo (Tiergarten) – Eingang "Süd"', 49.45, 11.14, 5, ['bus']],
+    ['', 49, 11, 4, ['bus']],
+    ['Ostbahnhof', 52.51, 13.43, 3, ['suburban']],
+  ]));
+  const found = (query) => search(odd, query).map((stop) => stop.name);
+  assert.deepEqual(found('łódź'), ['Łódź Fabryczna']);
+  assert.deepEqual(found('swinoujscie'), ['Świnoujście Centrum']);
+  assert.deepEqual(found('arhus'), ['Århus H']);
+  assert.deepEqual(found('ecke strasse'), ['Straße der Jugend/Ecke Weg']);
+  assert.deepEqual(found('sued eingang zoo'), ['Zoo (Tiergarten) – Eingang "Süd"']);
+  assert.deepEqual(found('tiergarten)'), ['Zoo (Tiergarten) – Eingang "Süd"']);
+  assert.deepEqual(found('bahnhof'), ['Łódź Fabryczna', 'Świnoujście Centrum', 'Århus H', 'Ostbahnhof']);
+  assert.deepEqual(search(buildIndex(listOf([])), 'bahnhof'), []);
 });

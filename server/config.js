@@ -25,11 +25,16 @@ const VGN = {
 
 const DECIMAL = /^[+-]?(\d+\.?\d*|\.\d+)$/;
 
-/** "south,west,north,east" -> four numbers, or null if the text is anything else. */
-export function parseBox(text) {
+const numbers = (text, count) => {
   const fields = (text ?? '').split(',').map((s) => s.trim());
-  return fields.length === 4 && fields.every((s) => DECIMAL.test(s)) ? fields.map(Number) : null;
-}
+  return fields.length === count && fields.every((s) => DECIMAL.test(s)) ? fields.map(Number) : null;
+};
+
+/** "south,west,north,east" -> four numbers, or null if the text is anything else. */
+export const parseBox = (text) => numbers(text, 4);
+
+/** "latitude,longitude" -> two numbers, or null if the text is anything else. */
+export const parsePlace = (text) => numbers(text, 2);
 
 /** An address as NETNOU_PUBLIC_URL may be: http(s), and nothing after the path. With a slash at its end, null if it is none. */
 function pageAddress(value) {
