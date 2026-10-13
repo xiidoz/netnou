@@ -18,6 +18,7 @@
 //                     departure in seconds, NONE where nothing is known
 //   skip              1 for a stop that is passed
 //   noteBytes, noteStart  every note once, as JSON, one after the other
+//   noteWarns         for each of these notes 1 if it warns (see warns)
 //   tripNote…, stationNote…  the trips and the stations with notes, in their
 //                     order (keys), and for each where its notes begin (start)
 //                     in the list of them (ids, which point into the notes)
@@ -28,6 +29,14 @@ import { Numbers } from './dataset.js';
 
 /** In the columns of delays: nothing is known for this stop. Delays are within six hours either way (realtime.js). */
 const NONE = -32768;
+
+/**
+ * Whether a note warns: of what is wrong with a trip or a stop right now,
+ * such as the reason for a delay. The notes realtime.js makes say how serious
+ * the feed takes them (noteOf there); a note made of anything else does not
+ * warn.
+ */
+const warns = (note) => note?.severity === 'warning' || note?.severity === 'severe';
 
 /** Where `value` is in sorted[from … to - 1], or -1. */
 function find(sorted, from, to, value) {
@@ -178,6 +187,7 @@ export class Gathering {
 
     // Every note once, whatever it is made of: as the JSON of it.
     const texts = [];
+    const urgent = [];
     const known = new Map();
     const idOf = (note) => {
       const json = JSON.stringify(note);
@@ -185,6 +195,7 @@ export class Gathering {
       if (id === undefined) {
         known.set(json, (id = texts.length));
         texts.push(Buffer.from(json));
+        urgent.push(warns(note) ? 1 : 0);
       }
       return id;
     };
@@ -222,7 +233,7 @@ export class Gathering {
 
     return {
       dates, dayStart, trip, at, first, last, cancelled, arr, dep, skip,
-      noteBytes, noteStart,
+      noteBytes, noteStart, noteWarns: Uint8Array.from(urgent),
       tripNoteKeys: ofTrips.keys, tripNoteStart: ofTrips.start, tripNoteIds: ofTrips.ids,
       stationNoteKeys: ofStations.keys, stationNoteStart: ofStations.start, stationNoteIds: ofStations.ids,
       sourceKeys, sourceIds, sources,
@@ -300,17 +311,24 @@ export class Snapshot {
     return this.columns.skip[this.columns.at[r] + p] === 1;
   }
 
-  #notes(keys, start, ids, key) {
+  /** @param warning only the notes that warn: the others are not even read */
+  #notes(keys, start, ids, key, warning = false) {
     const i = find(keys, 0, keys.length, key);
     if (i < 0) return [];
-    const { noteBytes, noteStart } = this.columns;
+    const { noteBytes, noteStart, noteWarns } = this.columns;
     const bytes = Buffer.from(noteBytes.buffer, noteBytes.byteOffset, noteBytes.byteLength);
-    return Array.from(ids.subarray(start[i], start[i + 1]), (id) => JSON.parse(bytes.toString('utf8', noteStart[id], noteStart[id + 1])));
+    const of = ids.subarray(start[i], start[i + 1]);
+    return Array.from(warning ? of.filter((id) => noteWarns[id] === 1) : of, (id) => JSON.parse(bytes.toString('utf8', noteStart[id], noteStart[id + 1])));
   }
 
   /** The notes on trip t: disruption reasons, vehicle features. */
   notesOfTrip(t) {
     return this.#notes(this.columns.tripNoteKeys, this.columns.tripNoteStart, this.columns.tripNoteIds, t);
+  }
+
+  /** Those of the notes on trip t that warn: what is wrong with it right now, such as the reason for a delay. */
+  warningsOfTrip(t) {
+    return this.#notes(this.columns.tripNoteKeys, this.columns.tripNoteStart, this.columns.tripNoteIds, t, true);
   }
 
   /** The notes on a station, e.g. broken lifts. */

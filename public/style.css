@@ -488,7 +488,7 @@ button:focus-visible, select:focus-visible, .row:focus-visible, .panel:focus-vis
 .panel-head .notes .warning::before { content: none; }
 .panel-head .notes .warning span { padding-left: 14px; text-indent: -14px; }
 .panel-head .notes .warning > span { display: block; }
-.panel-head .notes .warning .sign, .note-full .sign { display: inline-block; width: 0.96em; height: 0.96em; vertical-align: -0.12em; color: var(--delay-major); }
+.panel-head .notes .warning .sign, .note-full .sign, .row .sign { display: inline-block; width: 0.96em; height: 0.96em; vertical-align: -0.12em; color: var(--delay-major); }
 .panel-head .notes .warning .sign { margin-right: 2px; }
 /* (the page's own warning: that the trip is cancelled) */
 .panel-head .notes .alert { color: var(--delay-severe); font-weight: 600; }
@@ -552,9 +552,22 @@ button:focus-visible, select:focus-visible, .row:focus-visible, .panel:focus-vis
 .row .name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .row .platform { color: var(--text-muted); font-size: 12.5px; white-space: nowrap; }
 .row.cancelled .name, .row.cancelled .time { text-decoration: line-through; color: var(--text-muted); }
+/* A train that has something wrong with it right now has the sign of a
+   warning (as in the notes, see .warning) after its delay, which the warning
+   mostly explains, and before the train. In a list with such a train the
+   delay of every row is in a part that keeps the place of the sign (.late):
+   so what follows begins at the same place in each of them. The delay and
+   the sign are one line of text there, and the sign stands on it as in the
+   notes. */
+.row .late { white-space: nowrap; }
+.row .late .delay { display: inline-block; width: 32px; }
+.rows.signed .row.departure { grid-template-columns: var(--time-width) 45px auto 1fr auto; }
 
 /* the vehicles of a line: the stop ahead and the delay, under a heading that says where they go */
 .row.vehicle { grid-template-columns: 1fr auto; }
+/* (their delays are at the end of the rows: the sign after them, a little apart) */
+.rows.signed .row.vehicle { grid-template-columns: 1fr 48px; }
+.row.vehicle .late .delay { margin-right: 3px; text-align: right; }
 .rows-head { margin: 0; padding: 10px 14px 0; color: var(--text-muted); font-size: 13px; font-weight: 650; }
 /* From a trip back to the line it was chosen from: a row above the head, left of the button that closes. */
 .back-row { padding: 10px 48px 0 12px; }
@@ -632,6 +645,9 @@ li:last-child > .row.stop .rail::before { bottom: 50%; }
   overflow: hidden;
   text-overflow: ellipsis;
 }
+
+/* What the sign of a warning in a list says, at the sign: with room for a sentence or two. */
+.tooltip.said { max-width: 260px; padding: 5px 9px; white-space: pre-line; line-height: 1.35; }
 
 .banner {
   position: absolute;

@@ -444,6 +444,10 @@ otherwise a server would load a file written by older code:
   details have by themselves, four lines in any case. What warns comes
   first, with the sign of a warning where the other notes have a bullet:
   that the trip is cancelled, then the notes the feed marks as warnings.
+  In the lists of trains, the departures of a station and the vehicles of
+  a line, a train with such a note has the sign after its delay, which the
+  warning mostly explains; a pointer on the sign is shown what the warning
+  says.
 - **The details as a sheet.** On a narrow screen the details are a sheet
   from the bottom. The bar at its top and its head move it between three
   heights: its head alone, about half the screen, and up to the header

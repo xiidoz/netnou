@@ -619,6 +619,12 @@ test('a note says how serious the feed takes it, and what warns comes first', ()
   assert.deepEqual(said(rt.stationNotes.get(timetable.stopIndex.get('SA'))), [['Bahnsteig gesperrt', 'warning'], ['Aufzug außer Betrieb', 'info']]);
   // and so they are handed out
   assert.deepEqual(said(timetable.trip('T1', DAY, rt).notes).slice(0, 2), [['Reparatur an der Strecke', 'severe'], ['Verspätetes Personal aus vorheriger Fahrt', 'warning']]);
+  // A board says of each departure what is wrong with its trip, and nothing else of the trip's notes.
+  assert.deepEqual(
+    timetable.departures('SA', at('09:58'), rt).departures.map((d) => [d.line, said(d.warnings)]),
+    [['U1', [['Reparatur an der Strecke', 'severe'], ['Verspätetes Personal aus vorheriger Fahrt', 'warning'], ['Polizeieinsatz', 'warning']]]],
+  );
+  assert.deepEqual(timetable.departures('SA', at('09:58'), null).departures.map((d) => d.warnings), [[]]);
 });
 
 test('negative delays, skipped stops, cancellations and stale updates', () => {

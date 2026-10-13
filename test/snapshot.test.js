@@ -68,6 +68,23 @@ test('a later word on a trip takes the place of an earlier one, and coupled trai
   assert.deepEqual([maps.get(9).cancelled, maps.get(9).first, maps.get(9).last], [false, 0, 2]);
 });
 
+test('of the notes of a trip, those that warn are found by themselves', () => {
+  const severe = { title: 'Störung', text: 'Reparatur an einem Signal', severity: 'severe' };
+  const warning = { title: null, text: 'Signalstörung', severity: 'warning' };
+  const info = { title: null, text: 'Niederflur', severity: 'info' };
+  const columns = new Gathering().columns({
+    tripNotes: new Map([[3, [severe, warning, info, 'WLAN']], [5, [info]], [9, [warning]]]),
+    tripSources: new Map(),
+    stationNotes: new Map([[2, [warning]]]),
+    matched: 0,
+  });
+  const snapshot = new Snapshot(structuredClone(columns, { transfer: memoryOf(columns) }));
+  assert.deepEqual([3, 5, 9, 4].map((t) => snapshot.warningsOfTrip(t)), [[severe, warning], [], [warning], []]);
+  assert.deepEqual(snapshot.notesOfTrip(3), [severe, warning, info, 'WLAN']);
+  // each note once, with whether it warns: a note made of anything else does not
+  assert.deepEqual([...snapshot.columns.noteWarns], [1, 1, 0, 0]);
+});
+
 test('notes are kept once each, whatever they are made of, and found by trip and station', () => {
   const long = 'Wegen einer Baustelle fährt die Linie eine Umleitung. – «Ölberg» entfällt 😀\nErsatz: Linie 5';
   const note = { title: 'Aufzug defekt', text: 'Der Aufzug zu Gleis 2 ist außer Betrieb.' };

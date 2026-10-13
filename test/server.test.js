@@ -313,7 +313,9 @@ test('/api/line: the vehicles of one line that are under way', async () => {
   // yesterday's run and today's, both somewhere between A and B
   assert.deepEqual(json.vehicles.map((v) => v.id).sort(), [`T1_${addDays(today, -1)}`, `T1_${today}`]);
   for (const v of json.vehicles) {
-    assert.deepEqual(Object.keys(v).sort(), ['delay', 'id', 'lat', 'lon', 'next', 'to']);
+    assert.deepEqual(Object.keys(v).sort(), ['delay', 'id', 'lat', 'lon', 'next', 'to', 'warnings']);
+    // (what is wrong with T1, as the departures have it)
+    assert.deepEqual(v.warnings, [{ title: null, text: 'Signalstörung', severity: 'warning' }]);
     assert.equal(v.to, 'Rundkurs');
     assert.ok(['Alpha', 'Beta'].includes(v.next), v.next);
     assert.ok(v.lat >= 49.4 && v.lat <= 49.5 && v.lon === 11);
@@ -322,7 +324,7 @@ test('/api/line: the vehicles of one line that are under way', async () => {
 
   // the ICE is under way too, far outside the area
   const { json: ice } = await get('/api/line?name=ICE%205&mode=longdistance&agency=Testbetrieb');
-  assert.deepEqual(ice.vehicles.map((v) => [v.to, v.next]), [['Beta', 'Fern Mitte'], ['Beta', 'Fern Mitte']]);
+  assert.deepEqual(ice.vehicles.map((v) => [v.to, v.next, v.warnings]), [['Beta', 'Fern Mitte', []], ['Beta', 'Fern Mitte', []]]);
   // name, mode and agency together are the line
   for (const query of ['name=U1&mode=bus&agency=Testbetrieb', 'name=U1&mode=subway&agency=Anderer', 'name=U2&mode=subway&agency=Testbetrieb', 'name=U1', '']) {
     const res = await get(`/api/line?${query}`);
@@ -373,7 +375,9 @@ test('/api/departures', async () => {
   // one an hour from each of the runs under way, for the next two hours
   assert.ok(departures.length >= 4 && departures.length <= 9, `${departures.length} departures`);
   for (const d of departures) {
-    assert.deepEqual(Object.keys(d).sort(), ['cancelled', 'delay', 'line', 'mode', 'planned', 'platform', 'to', 'trip']);
+    assert.deepEqual(Object.keys(d).sort(), ['cancelled', 'delay', 'line', 'mode', 'planned', 'platform', 'to', 'trip', 'warnings']);
+    // what is wrong with T1 is said of each of its runs, as its notes are; the note about the lift is the station's
+    assert.deepEqual(d.warnings, d.trip.startsWith('T1_') ? [{ title: null, text: 'Signalstörung', severity: 'warning' }] : []);
     assert.deepEqual([d.line, d.mode, d.to, d.platform, d.cancelled], ['U1', 'subway', 'Rundkurs', '', false]);
     assert.equal(d.planned % 3600, 0);
     assert.equal(d.delay, d.trip === `T1_${today}` ? 120 : null);

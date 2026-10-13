@@ -268,6 +268,11 @@ class Vehicle {
     return (this.#id ??= `${this.#timetable.tripId(this.#trip)}_${this.#date}`);
   }
 
+  /** Those of the notes of its trip that warn: what is wrong with it right now (Snapshot.warningsOfTrip). */
+  get warnings() {
+    return this.#realtime?.warningsOfTrip(this.#trip) ?? [];
+  }
+
   /** [time, lat, lon, …] along its way ahead, see Timetable.knots. */
   get knots() {
     if (!this.#knots) {
@@ -962,7 +967,7 @@ export class Timetable extends Schedule {
     const list = vehicles
       .filter((v) => v.lineIndex === index)
       .sort((a, b) => a.to.localeCompare(b.to) || a.stopsLeft - b.stopsLeft)
-      .map((v) => ({ id: v.id, to: v.to, next: v.next, delay: v.delay, lat: round5(v.lat), lon: round5(v.lon) }));
+      .map((v) => ({ id: v.id, to: v.to, next: v.next, delay: v.delay, lat: round5(v.lat), lon: round5(v.lon), warnings: v.warnings }));
     return { name, mode, agency, vehicles: list };
   }
 
@@ -1076,6 +1081,8 @@ export class Timetable extends Schedule {
           planned,
           delay,
           cancelled,
+          // What is wrong with the trip right now, for a list that marks such a departure.
+          warnings: realtime?.warningsOfTrip(t) ?? [],
         };
       }),
     };

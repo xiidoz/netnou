@@ -402,8 +402,8 @@ The vehicles of one line that are under way.
   "mode": "subway",
   "agency": "VerkehrsAG Nürnberg",
   "vehicles": [
-    { "id": "1441544_20261006", "to": "Eberhardshof", "next": "Nürnberg Plärrer", "delay": null, "lat": 49.44936, "lon": 11.06877 },
-    { "id": "1362834_20261006", "to": "Eberhardshof", "next": "Nürnberg Hasenbuck", "delay": null, "lat": 49.42065, "lon": 11.09807 },
+    { "id": "1441544_20261006", "to": "Eberhardshof", "next": "Nürnberg Plärrer", "delay": null, "lat": 49.44936, "lon": 11.06877, "warnings": [] },
+    { "id": "1362834_20261006", "to": "Eberhardshof", "next": "Nürnberg Hasenbuck", "delay": null, "lat": 49.42065, "lon": 11.09807, "warnings": [] },
     …
   ]
 }
@@ -416,6 +416,7 @@ The vehicles of one line that are under way.
 | `next` | string | the name of the stop ahead of it |
 | `delay` | integer or `null` | seconds at that stop; `null` without realtime data |
 | `lat`, `lon` | numbers | where it is at `now` |
+| `warnings` | array of notes | those of the notes of its trip that warn, as [`/api/departures`](#get-apidepartures) has them; empty for most |
 
 The vehicles are sorted by destination and, among those with the same one,
 by how many stops they have left. A line with no vehicle under way answers
@@ -502,8 +503,9 @@ unknown id.
   "lon": 11.066786,
   "notes": [],
   "departures": [
-    { "trip": "21032_20261004", "line": "4", "mode": "tram", "to": "Am Wegfeld", "platform": "", "planned": 1791148680, "delay": 0, "cancelled": false },
-    { "trip": "671753_20261004", "line": "10", "mode": "tram", "to": "Dutzendteich", "platform": "", "planned": 1791148740, "delay": 41, "cancelled": false },
+    { "trip": "21032_20261004", "line": "4", "mode": "tram", "to": "Am Wegfeld", "platform": "", "planned": 1791148680, "delay": 0, "cancelled": false, "warnings": [] },
+    { "trip": "671753_20261004", "line": "10", "mode": "tram", "to": "Dutzendteich", "platform": "", "planned": 1791148740, "delay": 41, "cancelled": false,
+      "warnings": [{ "title": null, "text": "Technische Störung am Zug", "severity": "warning" }] },
     …
   ]
 }
@@ -514,7 +516,11 @@ platforms of the station, sorted by expected time (`planned` + `delay`). A
 departure stays on the board until 30 seconds after its expected time.
 `cancelled` is true when the run is cancelled or skips this station. `notes`
 are notes of the feed about the station, such as a lift out of order, each
-with a `title` and a `text` as for [a trip](#get-apitrip).
+with a `title`, a `text` and a `severity` as for [a trip](#get-apitrip).
+`warnings` of a departure are those of the notes of its trip that warn, the
+ones with the `severity` `"warning"` or `"severe"`: what is wrong with it
+right now, such as the reason for a delay. For most departures there are
+none.
 
 ## Knots
 
