@@ -233,7 +233,9 @@ test('/api/vehicles: all of them reduced, a map section in full', async () => {
     return res.json.realtime !== null && res;
   }, 'realtime data');
   assert.equal(status, 200);
-  assert.deepEqual(Object.keys(all).sort(), ['counts', 'now', 'realtime', 'vehicles']);
+  assert.deepEqual(Object.keys(all).sort(), ['counts', 'now', 'realtime', 'thinned', 'vehicles']);
+  // (so few that nothing is left out, whatever the zoom)
+  assert.deepEqual(all.thinned, {});
   assert.ok(Math.abs(all.now - Date.now() / 1000) < 5);
   assert.deepEqual(all.counts, { subway: 2, longdistance: 2 });
   assert.equal(all.vehicles.length, 4);
@@ -673,6 +675,125 @@ test('an instance without an area says what it covers once it has a timetable', 
     assert.equal((await request('/api/area', { headers: { 'If-None-Match': area.headers.etag } })).status, 304);
   } finally {
     go();
+    proc.kill();
+    await once(proc, 'exit');
+    await other.close();
+  }
+});
+
+test('a zoomed-out map of a large instance is thinned out', async () => {
+  // 2,605 buses side by side over 150 km, five of them of line 2, a bus far
+  // from all others and a regional train, each under way at any time and for
+  // yesterday's service day once more: twice what a screen is to hold.
+  const buses = 2605;
+  const lines = {
+    stops: ['stop_id,stop_name,stop_lat,stop_lon', 'X,Nord,49.45,9.5', 'Y,Süd,49.35,9.5', 'F,Fern,52.00,14.00', 'G,Ferner,52.01,14.00'],
+    trips: ['route_id,service_id,trip_id', 'RE,DAILY,TRAIN', 'B3,DAILY,ALONE'],
+    times: ['trip_id,arrival_time,departure_time,stop_id,stop_sequence', 'TRAIN,0:00:00,0:00:00,X,0', 'TRAIN,72:00:00,72:00:00,Y,1', 'ALONE,0:00:00,0:00:00,F,0', 'ALONE,72:00:00,72:00:00,G,1'],
+  };
+  for (let i = 0; i < buses; i++) {
+    const lon = (9 + (2 * i) / buses).toFixed(5);
+    lines.stops.push(`A${i},Anfang ${i},49.40,${lon}`, `B${i},Ende ${i},49.41,${lon}`);
+    lines.trips.push(`${i < 5 ? 'B2' : 'B1'},DAILY,BUS${i}`);
+    lines.times.push(`BUS${i},0:00:00,0:00:00,A${i},0`, `BUS${i},72:00:00,72:00:00,B${i},1`);
+  }
+  const feed = {
+    zip: makeZip({
+      'agency.txt': FEED['agency.txt'],
+      'stops.txt': lines.stops.join('\n'),
+      'routes.txt': 'route_id,agency_id,route_short_name,route_type\nB1,1,1,3\nB2,1,2,3\nB3,1,3,3\nRE,1,RE 1,2\n',
+      'trips.txt': lines.trips.join('\n'),
+      'calendar.txt': FEED['calendar.txt'],
+      'stop_times.txt': lines.times.join('\n'),
+    }),
+    etag: '"v1"',
+    realtime: encodeFeed({ timestamp: Math.floor(Date.now() / 1000), tripUpdates: [], alerts: [] }),
+  };
+  const other = await startUpstream(feed);
+  const proc = start({ NETNOU_PORT: '0', NETNOU_HOST: '127.0.0.1', NETNOU_DATA_DIR: path.join(dir, 'large'), NETNOU_AREA: 'all', NETNOU_TIMEZONE: 'UTC', NETNOU_FEED_URL: `${other.url}/feed.zip`, NETNOU_REALTIME_URL: `${other.url}/realtime.pb` });
+  let text = '';
+  proc.stdout.on('data', (chunk) => { text += chunk; });
+  proc.stderr.on('data', (chunk) => { text += chunk; });
+  try {
+    port = Number((await until(() => /Netnou listening on http:\/\/127\.0\.0\.1:(\d+), no area\n/.exec(text), 'the large server to listen'))[1]);
+    await until(async () => (await request('/api/area')).status === 200, 'the import to finish');
+    const everywhere = 'bbox=45,5,55,15';
+    const everything = 2 * (buses + 2);
+    const ofLine = (vehicles, name) => vehicles.filter((v) => v.line === name).length;
+
+    // Without a zoom nothing is left out: all of them reduced, as ever.
+    const all = (await get('/api/vehicles')).json;
+    assert.deepEqual([all.vehicles.length, all.thinned, all.counts], [everything, {}, { regional: 2, bus: 2 * (buses + 1) }]);
+
+    // The whole of it on one screen: a share of the buses, and both trains,
+    // of which there are so few. The answer says what share it holds, and has
+    // as many vehicles as a screen takes.
+    const out = (await get(`/api/vehicles?${everywhere}&detail=lite&zoom=5`)).json;
+    assert.deepEqual(Object.keys(out.thinned), ['bus']);
+    assert.ok(out.thinned.bus > 0.4 && out.thinned.bus < 0.5, `buses at ${out.thinned.bus}`);
+    assert.ok(out.vehicles.length <= 2500 && out.vehicles.length > 2400, `${out.vehicles.length} vehicles`);
+    assert.equal(ofLine(out.vehicles, 'RE 1'), 2);
+    // the bus far from all others is there: the first of its square, whatever its chance
+    assert.ok(ofLine(out.vehicles, '3') >= 1);
+    // the numbers are those of everything
+    assert.deepEqual(out.counts, all.counts);
+    // the same vehicles a moment later
+    const again = (await get(`/api/vehicles?${everywhere}&detail=lite&zoom=5`)).json;
+    assert.deepEqual(again.vehicles.map((v) => v.id), out.vehicles.map((v) => v.id));
+
+    // Zooming in adds: more between two zooms, and everything where a screen holds less of the ground.
+    const ids = async (query) => new Set((await get(`/api/vehicles?${everywhere}&detail=lite&${query}`)).json.vehicles.map((v) => v.id));
+    const [at5, at8, at85, at9] = [await ids('zoom=5'), await ids('zoom=8'), await ids('zoom=8.5'), await ids('zoom=9')];
+    assert.ok(at8.size > at5.size && at85.size > at8.size && at9.size > at85.size, `${[at5.size, at8.size, at85.size, at9.size]}`);
+    for (const id of at5) assert.ok(at8.has(id) && at85.has(id), id);
+    for (const id of at8) assert.ok(at85.has(id), id);
+    assert.equal(at9.size, everything);
+    assert.deepEqual((await get(`/api/vehicles?${everywhere}&detail=lite&zoom=9`)).json.thinned, {});
+    assert.equal((await ids('zoom=4')).size, at5.size);
+
+    // A line that a visitor has picked is on the map whole, and so is a vehicle.
+    const line = (await get(`/api/vehicles?${everywhere}&detail=lite&zoom=5&line=2&mode=bus&agency=Testbetrieb`)).json;
+    assert.ok(ofLine(out.vehicles, '2') < 10);
+    assert.equal(ofLine(line.vehicles, '2'), 10);
+    const hidden = [...at9].find((id) => id.startsWith('BUS') && !at5.has(id));
+    assert.ok((await ids(`zoom=5&vehicle=${hidden}`)).has(hidden));
+    assert.equal((await ids('zoom=5&vehicle=nothing&line=nothing')).size, at5.size);
+
+    // The kinds a map shows: no others are in the answer, and they take no
+    // room. But a line that was picked is there whatever its kind.
+    const trains = (await get(`/api/vehicles?${everywhere}&detail=lite&zoom=5&modes=regional,tram`)).json;
+    assert.deepEqual([trains.vehicles.map((v) => v.line), trains.thinned, trains.counts], [['RE 1', 'RE 1'], {}, all.counts]);
+    const both = (await get(`/api/vehicles?${everywhere}&detail=lite&zoom=5&modes=regional&line=2&mode=bus&agency=Testbetrieb`)).json;
+    assert.deepEqual([ofLine(both.vehicles, 'RE 1'), ofLine(both.vehicles, '2'), both.vehicles.length], [2, 10, 12]);
+    assert.equal((await get('/api/vehicles?modes=bus')).json.vehicles.length, everything - 2);
+    assert.equal((await get('/api/vehicles?modes=')).json.vehicles.length, 0);
+
+    // The smallest form: a column for each property, where each vehicle is
+    // now in 1e-5 degrees and how far it gets in `ahead` seconds, and not
+    // where it goes. The same vehicles as in the other reduced form.
+    const least = (await get(`/api/vehicles?${everywhere}&detail=minimal&zoom=5`)).json;
+    assert.deepEqual(Object.keys(least).sort(), ['ahead', 'counts', 'now', 'realtime', 'thinned', 'vehicles']);
+    assert.deepEqual([least.thinned, least.counts, least.ahead], [out.thinned, out.counts, 60]);
+    assert.deepEqual(Object.keys(least.vehicles), ['id', 'line', 'mode', 'delay', 'unit', 'at']);
+    assert.deepEqual(least.vehicles.id, out.vehicles.map((v) => v.id));
+    assert.deepEqual([least.vehicles.line, least.vehicles.mode], [out.vehicles.map((v) => v.line), out.vehicles.map((v) => v.mode)]);
+    assert.ok(least.vehicles.delay.every((delay) => delay === null) && least.vehicles.unit.every((unit) => unit === null));
+    assert.equal(least.vehicles.at.length, 4 * least.vehicles.id.length);
+    assert.ok(least.vehicles.at.every(Number.isInteger));
+    // (a train: what the two knots of the other form say, within the clock's step between the two requests)
+    const train = least.vehicles.line.indexOf('RE 1');
+    const [lat, lon, north, east] = least.vehicles.at.slice(4 * train, 4 * train + 4);
+    const [, lat0, lon0, , lat1] = out.vehicles[train].knots;
+    assert.ok(lat > 4935000 && lat < 4945000 && lon === 950000 && north < 0 && east === 0, `a train at ${[lat, lon, north, east]}`);
+    assert.ok(Math.abs(lat / 1e5 - lat0) < 1e-4 && lon / 1e5 === lon0 && Math.abs(north / 1e5 - (lat1 - lat0)) < 2e-5, `${[lat, north]} beside ${[lat0, lat1]}`);
+    assert.equal((await get('/api/vehicles?detail=minimal')).json.vehicles.id.length, everything);
+
+    // A map section in full is thinned out as well if it names such a zoom, which the page never does.
+    const full = (await get('/api/vehicles?bbox=49.39,9,49.42,9.1')).json;
+    assert.ok(full.vehicles.length > 200 && full.vehicles.every((v) => v.mode === 'bus' && v.knots.length >= 6));
+    assert.ok((await get('/api/vehicles?bbox=49.39,9,49.42,9.1&zoom=5')).json.vehicles.length < full.vehicles.length / 2);
+    assert.equal((await get('/api/vehicles?bbox=49.39,9,49.42,9.1&zoom=12')).json.vehicles.length, full.vehicles.length);
+  } finally {
     proc.kill();
     await once(proc, 'exit');
     await other.close();

@@ -8,7 +8,8 @@ import { FeedUpdater } from './lib/feed.js';
 import { RealtimePoller } from './lib/realtime.js';
 import { LANGUAGE_CODES, languageFor, ownFiles, pictureSize, renderManifest, renderPage, robotsTxt, sitemapXml } from './lib/page.js';
 import { setTimeZone } from './lib/time.js';
-import { lite } from './lib/timetable.js';
+import { sharesFor, thinOut, ZOOM_ALL, ZOOM_MIN } from './lib/thinning.js';
+import { LITE_AHEAD_S, MODES, lite } from './lib/timetable.js';
 import { describeBuild, githubReleases, UpdateChecker } from './lib/update.js';
 
 const log = (message) => console.log(`${new Date().toISOString()} ${message}`);
@@ -267,9 +268,35 @@ function vehicles() {
     const all = timetable.vehicles(now, realtime.snapshot);
     const counts = {};
     for (const v of all) counts[v.mode] = (counts[v.mode] ?? 0) + 1;
-    vehicleCache = { now, realtime: realtime.snapshot ? realtime.status.feedTimestamp : null, counts, all };
+    vehicleCache = { now, realtime: realtime.snapshot ? realtime.status.feedTimestamp : null, counts, all, thinned: new Map() };
   }
   return vehicleCache;
+}
+
+// Where a screen cannot take every vehicle, a zoomed-out map shows a share of
+// them (lib/thinning.js). The shares follow the number of vehicles under way
+// and are worked out again after this many seconds, for each choice of kinds
+// that a map shows.
+const SHARES_S = 60;
+let shareCache = { timetable: null, byKinds: new Map() };
+
+/**
+ * Which of the vehicles of this second an answer for a map at this zoom
+ * holds: { shown, shares } as thinOut gives it, or null where nothing is left
+ * out. Worked out once for each quarter of a zoom.
+ * @param counted for each of MODES whether the map shows it
+ */
+function thinned(zoom, counted) {
+  const cache = vehicles();
+  if (shareCache.timetable !== timetable) shareCache = { timetable, byKinds: new Map() };
+  const kinds = counted.reduce((bits, is, k) => bits | (is << k), 0);
+  let known = shareCache.byKinds.get(kinds);
+  const age = known ? cache.now - known.at : Infinity;
+  if (age < 0 || age >= SHARES_S) shareCache.byKinds.set(kinds, (known = { at: cache.now, shares: sharesFor(cache.all, counted) }));
+  const quarter = Math.floor(Math.min(ZOOM_ALL, Math.max(ZOOM_MIN, zoom)) * 4) / 4;
+  const key = `${kinds}/${quarter}`;
+  if (!cache.thinned.has(key)) cache.thinned.set(key, thinOut(cache.all, quarter, known.shares));
+  return cache.thinned.get(key);
 }
 
 // What the page searches stops and lines in is the same for every browser and
@@ -365,21 +392,62 @@ function handleApi(req, res, url) {
   const now = Math.floor(Date.now() / 1000);
   switch (url.pathname) {
     // ?bbox=south,west,north,east limits the answer to a map section;
-    // ?detail=lite sends two knots per vehicle instead of its route geometry.
-    // Without a map section the answer is always the reduced one: the full
+    // ?detail=lite sends two knots per vehicle instead of its route geometry,
+    // and ?detail=minimal less still: what a map needs for a dot for each.
+    // Without a map section the answer is always a reduced one: the full
     // geometry of every vehicle is more than any client should ask for.
+    //
+    // ?zoom= is the zoom of the map the answer is for. Where a screen at that
+    // zoom cannot take every vehicle, the answer is thinned out
+    // (lib/thinning.js) and says of which kinds it holds what share. Without
+    // a zoom nothing is left out.
+    // ?modes=bus,tram,… are the kinds of transport a map shows: the answer
+    // has no others, and where it is thinned out they take no room.
+    // A line (?line=, &mode=, &agency= as /api/line takes them) and a vehicle
+    // (?vehicle=<id>) are in the answer whatever is left out: what a visitor
+    // has picked stays on the map.
     case '/api/vehicles': {
       realtime.touch();
       const { now: at, realtime: feedTime, counts, all } = vehicles();
       const box = parseBox(url.searchParams.get('bbox'));
-      const reduced = !box || url.searchParams.get('detail') === 'lite';
+      const detail = url.searchParams.get('detail');
+      const reduced = !box || detail === 'lite' || detail === 'minimal';
+      const zoom = url.searchParams.get('zoom') ?? '';
+      const only = url.searchParams.get('modes')?.split(',');
+      const counted = MODES.map((mode) => !only || only.includes(mode));
+      const wanted = new Set(MODES.filter((mode, k) => counted[k]));
+      const thin = /^\d+(\.\d+)?$/.test(zoom) ? thinned(Number(zoom), counted) : null;
+      const line = url.searchParams.has('line') ? timetable.lineNumber({ name: url.searchParams.get('line'), mode: url.searchParams.get('mode') ?? '', agency: url.searchParams.get('agency') ?? '' }) : undefined;
+      const picked = /^(.+)_(\d{8})$/.exec(url.searchParams.get('vehicle') ?? '');
+      const pickedTrip = picked ? timetable.tripIndex.get(picked[1]) : undefined;
       const list = [];
-      for (const v of all) {
+      for (let i = 0; i < all.length; i++) {
+        const v = all[i];
         if (box && !inBox(box, v.lat, v.lon)) continue;
-        // (unit: only there for trains that run coupled, and then the same for each of them)
-        list.push({ id: v.id, line: v.line, mode: v.mode, to: v.to, delay: v.delay, unit: v.unit, knots: reduced ? lite(v, at) : v.knots });
+        const left = !wanted.has(v.mode) || (thin && !thin.shown[i]);
+        if (left && v.lineIndex !== line && !(pickedTrip !== undefined && v.is(pickedTrip, picked[2]))) continue;
+        list.push(v);
       }
-      return sendJson(req, res, 200, { now: at, realtime: feedTime, counts, vehicles: list });
+      const head = { now: at, realtime: feedTime, counts, thinned: thin?.shares ?? {} };
+      // The smallest form: a column for each property of all vehicles, and
+      // where each is now and how far it gets in LITE_AHEAD_S, as whole
+      // numbers of 1e-5 degrees. Not where it goes, which a dot does not say.
+      // About half of what an object for each comes to.
+      if (detail === 'minimal') {
+        const where = [];
+        for (const v of list) {
+          const [, lat, lon, , aheadLat, aheadLon] = lite(v, at);
+          const [iLat, iLon] = [Math.round(lat * 1e5), Math.round(lon * 1e5)];
+          where.push(iLat, iLon, Math.round(aheadLat * 1e5) - iLat, Math.round(aheadLon * 1e5) - iLon);
+        }
+        return sendJson(req, res, 200, {
+          ...head,
+          ahead: LITE_AHEAD_S,
+          vehicles: { id: list.map((v) => v.id), line: list.map((v) => v.line), mode: list.map((v) => v.mode), delay: list.map((v) => v.delay), unit: list.map((v) => v.unit ?? null), at: where },
+        });
+      }
+      // (unit: only there for trains that run coupled, and then the same for each of them)
+      return sendJson(req, res, 200, { ...head, vehicles: list.map((v) => ({ id: v.id, line: v.line, mode: v.mode, to: v.to, delay: v.delay, unit: v.unit, knots: reduced ? lite(v, at) : v.knots })) });
     }
 
     case '/api/stations': {

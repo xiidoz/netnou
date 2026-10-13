@@ -116,6 +116,9 @@ export default {
   'about.positionsText': 'No vehicle reports its position to this map. Each one is drawn where the timetable says it should be right now, moved by the delay reported for it. So a vehicle can be somewhat ahead of or behind its marker. Vehicles without a reported delay carry a question mark and run by the timetable here.',
   'about.routes': 'Routes',
   'about.routesText': 'The route between two stops is computed too: the shortest plausible way along the roads and tracks of OpenStreetMap, not the official one of the operator. Between stops close to each other it is almost always the same. Where it differs, a vehicle takes another way on the map than in reality; where none is found, it moves in a straight line.',
+  // Only shown where the instance has more vehicles than a zoomed-out map can show
+  'about.thinned': 'Zoomed out',
+  'about.thinnedText': 'Where very many vehicles are under way, the zoomed-out map shows only some of them: a phone could not draw that many at once, and loading them would take long. It shows the same share of every kind of transport, picked by chance, so a city stays much busier on the map than the country around it. A kind with only a few vehicles is shown whole, and a single vehicle far from all others always stays. Zoom in, and all of them are there.',
   'about.outside': 'Outside the area',
   // next to a sample of the grey that lies over the map there
   'about.outsideText': 'Grey: only lines that stop inside the area are shown there, on a straight line between their stops.',
