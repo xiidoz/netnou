@@ -345,7 +345,9 @@ realtime feed.
     "lat": [5041383, 11499, -55, …],
     "lon": [1168584, -30253, 47, …],
     "modes": [4, 4, 16, …],
-    "service": [15, 49, 54, …]
+    "service": [15, 49, 54, …],
+    "town": [-1, -1, -1, …, 0, 0, 1, …],
+    "towns": ["Ludwigsstadt", "Steinbach am Wald", …]
   },
   "lines": {
     "name": ["750 Anrufsammeltaxi Wüstenbruck", "750 Rufbus Wüstenbruck - AN Bf.", …],
@@ -363,7 +365,7 @@ realtime feed.
 Every visitor who searches loads this list, and for a whole country it is a
 quarter of a million stations, so it is written to be small: one column for
 each property, in which the n-th entries belong to one station or one line,
-and numbers in place of what repeats. Compressed it is about 190 kB for the
+and numbers in place of what repeats. Compressed it is about 200 kB for the
 default area with its 13,412 stations and 1,500 lines, and about 3 MB for
 all of Germany.
 
@@ -377,6 +379,8 @@ The stations:
 | `lat`, `lon` | arrays of whole numbers | where a station is, in 1e-5 degrees, as the difference from the station before it; the first is as it is |
 | `modes` | array of whole numbers | the modes that call at the station: the bit with the number of a mode is set if it does, so `6` is tram and bus |
 | `service` | array of whole numbers | how often a trip stops at the station over the whole timetable; a measure of how much is going on there compared with other stations, not a number of departures per day |
+| `town` | array of whole numbers | the town the station is in, as the number of it in `towns`; `-1` where none is known |
+| `towns` | array of strings | the towns that have a station, each once |
 
 The stations are in an order in which each is near the one before it, which
 keeps the differences small; it is not the order of `/api/stations`. They
@@ -384,6 +388,13 @@ have no ids. The departures of a station of this list are asked for by its
 place, [`/api/departures?at=`](#get-apidepartures), and so every station has
 a place of its own: where the feed has several at one place, all but one are
 listed a metre further east each.
+
+A town is the municipality whose border in OpenStreetMap is around the
+station, under the name it has there. The feed does not name towns, so they
+are known as far as the [OpenStreetMap extracts](configuration.md#settings)
+of the instance reach: a station beyond them has none, and an instance
+without extracts has an empty `towns`. The page finds a station by its town
+as well as by its name and shows the town where the name does not say it.
 
 A line is the routes of the feed that have the same name, the same mode and
 the same agency. The name alone does not say which line it is: agencies
