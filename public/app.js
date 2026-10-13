@@ -11,7 +11,7 @@
 import { APP_NAME, formatNumber, formatTime, languagePicker, loadLanguage, pageTexts, setTimeZone, t, translatePage } from './i18n.js';
 import { displayQuery, readDisplay } from './display.js';
 import { buildIndex, search, searchLines } from './search.js';
-import { mdiChevronLeft, mdiEye, mdiEyeOff, mdiFullscreen, mdiFullscreenExit } from './vendor/material-design-icons/icons.js';
+import { mdiChevronLeft, mdiChevronRight, mdiEye, mdiEyeOff, mdiFullscreen, mdiFullscreenExit } from './vendor/material-design-icons/icons.js';
 import { AttributionControl, MapLibreMap, NavigationControl } from './vendor/maplibre-gl/maplibre-gl.mjs';
 
 // The modes with a chip. Same ids as MODES in server/lib/timetable.js, the
@@ -84,6 +84,13 @@ const SHEET_MIDDLE = 0.48;
 const SHEET_DRAG_PX = 6;
 const SHEET_CLOSE_PX = 56;
 const SHEET_FLICK = 0.3;
+// The notes of the feed in the head of the details, which does not scroll: the
+// share they may take of the height the details have by themselves, the lines
+// they may take whatever that comes to, and how many characters a note may
+// have to stand there in full.
+const NOTES_SHARE = 0.25;
+const NOTES_LINES = 6;
+const NOTE_CHARS = 120;
 // Realtime data older than this counts as timetable only. When its fetches
 // fail, the server keeps the last delays up to the same age (STALE_AFTER_S in
 // server/lib/realtime.js).
@@ -1481,11 +1488,16 @@ function loadingText({ state: phase, step }) {
 // was opened with.
 const aboutDialog = $('about');
 $('about-open').addEventListener('click', () => aboutDialog.showModal());
-$('about-close').addEventListener('click', () => aboutDialog.close());
-// (a click beside it lands on the dialog itself: what it says fills it, see .dialog-body in style.css)
-aboutDialog.addEventListener('click', (event) => {
-  if (event.target === aboutDialog) aboutDialog.close();
-});
+closesByClick(aboutDialog, $('about-close'));
+
+/** A dialog closes with its button, and with a click beside it. */
+function closesByClick(dialog, button) {
+  button.addEventListener('click', () => dialog.close());
+  // (a click beside it lands on the dialog itself: what it says fills it, see .dialog-body in style.css)
+  dialog.addEventListener('click', (event) => {
+    if (event.target === dialog) dialog.close();
+  });
+}
 
 // ---------- settings ----------
 
@@ -1562,8 +1574,8 @@ function closePanel() {
 $('panel-close').addEventListener('click', closePanel);
 document.addEventListener('keydown', (event) => {
   if (event.key !== 'Escape') return;
-  // Escape closes what is on top: the dialog lies over all else and closes by itself, then the settings, then the details.
-  if (aboutDialog.open) return;
+  // Escape closes what is on top: a dialog lies over all else and closes by itself, then the settings, then the details.
+  if (aboutDialog.open || notesDialog.open) return;
   if (!settings.hidden) {
     showSettings(false);
     settingsButton.focus();
@@ -1624,17 +1636,18 @@ async function loadSelection(first = false) {
 
 /**
  * Replaces what the panel shows: its head, which stays, and what scrolls
- * below it. Both are rebuilt with every refresh, so the row that has the
- * keyboard focus gets it back.
+ * below it. Both are rebuilt with every refresh, so the row or the button of
+ * the head that has the keyboard focus gets it back.
  * @param head the nodes of the head
  */
 function fillPanel(head, ...nodes) {
   const focused = [...panelBody.querySelectorAll('.row')].indexOf(document.activeElement);
-  const onBack = panelHead.contains(document.activeElement);
+  const inHead = [...panelHead.querySelectorAll('button')].indexOf(document.activeElement);
   panelHead.replaceChildren(...head);
   panelBody.replaceChildren(...nodes);
+  fitNotes();
   if (focused >= 0) panelBody.querySelectorAll('.row')[focused]?.focus({ preventScroll: true });
-  else if (onBack) (panelHead.querySelector('button') ?? panel).focus({ preventScroll: true });
+  else if (inHead >= 0) (panelHead.querySelectorAll('button')[inHead] ?? panel).focus({ preventScroll: true });
 }
 
 const platformText = (platform) => (platform ? t('stop.platform', { platform }) : '');
@@ -1649,10 +1662,91 @@ function delayNode(delay) {
   return el('span', { class: 'delay', text: delayText(delay), data: { delay: delayClass(delay) } });
 }
 
-function notesList(notes, alert) {
-  const items = notes.map((note) => el('li', { text: note }));
+/**
+ * The notes in the head of the details: what the page has to say itself, then
+ * the notes of the feed. Of those some operators write whole pages, and hang
+ * dozens on one trip, while the head does not scroll and what is listed below
+ * it must stay in sight. So a long note shows its headline, or its first
+ * lines where it has none, on a button that opens it in full (showNotes); and
+ * of many only as many are listed as there is room for (fitNotes). A short
+ * one stands there as it is.
+ * @param notes those of the feed: { title, text }, title null where it has none
+ * @param own lines of the page's own
+ * @param alert a line of the page's own that warns
+ */
+function notesList(notes, own = [], alert = null) {
+  const items = own.map((text) => el('li', { text }));
   if (alert) items.unshift(el('li', { class: 'alert', text: alert }));
-  return items.length ? el('ul', { class: 'notes' }, items) : '';
+  const listed = notes.map((note) => {
+    const long = note.text.length > NOTE_CHARS || note.text.includes('\n');
+    return el('li', {}, [long ? noteButton(note.title ?? note.text, [note]) : note.text]);
+  });
+  if (!items.length && !listed.length) return '';
+  const list = el('ul', { class: 'notes' }, [...items, ...listed]);
+  notesToFit = { list, listed, notes };
+  return list;
+}
+
+let notesToFit = null; // the list notesList() made last, until it is in the page: { list, listed, notes }
+
+/**
+ * Takes from the notes of the feed in the head those there is no room for,
+ * last ones first, and names them by their number instead, on a button that
+ * opens them. Their room is a share of the height the details have by
+ * themselves. Only in the page does a note have a height: fillPanel() calls
+ * this once the head is there.
+ */
+function fitNotes() {
+  const { list, listed, notes } = notesToFit ?? {};
+  notesToFit = null;
+  if (!list?.isConnected || !listed.length) return;
+  const room = Math.max(NOTES_LINES * parseFloat(getComputedStyle(list).lineHeight), NOTES_SHARE * (narrowScreen.matches ? SHEET_MIDDLE : 1) * viewSize.y);
+  // (they are the last of the list)
+  const taken = () => list.getBoundingClientRect().bottom - listed[0].getBoundingClientRect().top;
+  let rest = null; // the line that names those taken out
+  for (let shown = listed.length - 1; shown > 0 && taken() > room + 1; shown--) {
+    listed[shown].remove();
+    rest?.remove();
+    const text = t('notes.more', { count: notes.length - shown });
+    rest = el('li', {}, [noteButton(text, notes.slice(shown), text)]);
+    list.append(rest);
+  }
+}
+
+function noteButton(text, notes, heading) {
+  return el('button', { type: 'button', class: 'note', 'aria-haspopup': 'dialog', onclick: (event) => showNotes(notes, heading, event.currentTarget) }, [
+    el('span', { text }),
+    icon(mdiChevronRight),
+  ]);
+}
+
+// What notes say in full: a dialog like "How it works", in the middle of a
+// wide screen and a sheet from the bottom on a narrow one.
+const notesDialog = $('notes');
+let notesFrom = -1; // which button of the head opened it
+closesByClick(notesDialog, $('notes-close'));
+// The browser gives the focus back to the button the dialog was opened with.
+// That one is gone if the details were refreshed meanwhile: the one in its place gets it then.
+notesDialog.addEventListener('close', () => {
+  if (!panelHead.contains(document.activeElement)) (panelHead.querySelectorAll('button')[notesFrom] ?? panel).focus({ preventScroll: true });
+});
+
+/**
+ * Opens the dialog with one note or several.
+ * @param heading what the dialog is called; without it, by the headline of its one note
+ * @param from the button that opens it
+ */
+function showNotes(notes, heading, from) {
+  const [only] = notes;
+  $('notes-title').textContent = heading ?? only.title ?? t('notes.title');
+  $('notes-text').replaceChildren(...notes.map((note) => el('div', { class: 'note-full' }, [
+    // (the headline of a single note is that of the dialog)
+    note.title !== null && heading ? el('h3', { text: note.title }) : '',
+    el('p', { text: note.text }),
+  ])));
+  notesFrom = [...panelHead.querySelectorAll('button')].indexOf(from);
+  notesDialog.showModal();
+  $('notes-text').parentNode.scrollTop = 0;
 }
 
 function renderTrip(trip, scrollToNext) {
@@ -1688,7 +1782,7 @@ function renderTrip(trip, scrollToNext) {
   list.style.setProperty('--badge-color', `var(--mode-${trip.mode})`);
   const mode = t(`mode.${DRAW_ORDER.includes(trip.mode) ? trip.mode : 'other'}`);
   // Who provides the realtime data shown leads the notes, which are feed content and stay as they are.
-  const notes = trip.realtime && trip.source ? [t('trip.source', { source: trip.source }), ...trip.notes] : trip.notes;
+  const source = trip.realtime && trip.source ? [t('trip.source', { source: trip.source })] : [];
   // A trip chosen from the vehicles of a line leads back to them, with a
   // button in a row of its own above the head.
   const from = state.selection.from;
@@ -1701,7 +1795,7 @@ function renderTrip(trip, scrollToNext) {
       el('div', { class: 'panel-head' }, [
         el('h2', {}, [badge(trip.line, trip.mode), el('span', { text: `→ ${trip.to}` })]),
         el('p', { class: 'sub', text: [mode, trip.agency, trip.realtime ? t('trip.realtime') : t('trip.scheduleOnly')].filter(Boolean).join(' · ') }),
-        notesList(notes, trip.cancelled ? t('trip.cancelled') : null),
+        notesList(trip.notes, source, trip.cancelled ? t('trip.cancelled') : null),
       ]),
     ],
     list,
@@ -1909,11 +2003,11 @@ sheetHandle.addEventListener('click', () => {
 // On a wide screen the details are a card at the side, as high as they are by themselves.
 narrowScreen.addEventListener('change', () => setSheetHeight(null));
 
-// "How it works" is a sheet on a narrow screen as well: its bar and its
-// heading drag it down, and let go of far enough down it closes.
-{
+// A dialog is a sheet on a narrow screen as well: its bar and its heading
+// drag it down, and let go of far enough down it closes.
+for (const [dialog, ...parts] of [[aboutDialog, $('about-handle'), $('about-title')], [notesDialog, $('notes-handle'), $('notes-title')]]) {
   let drag = null;
-  const shift = (px) => { aboutDialog.style.transform = px ? `translateY(${Math.round(px)}px)` : ''; };
+  const shift = (px) => { dialog.style.transform = px ? `translateY(${Math.round(px)}px)` : ''; };
   const begin = (event) => {
     if (!narrowScreen.matches || !event.isPrimary || event.button !== 0) return;
     drag = { id: event.pointerId, y: event.clientY, moved: false };
@@ -1925,7 +2019,7 @@ narrowScreen.addEventListener('change', () => setSheetHeight(null));
     if (!drag.moved) {
       if (Math.abs(by) < SHEET_DRAG_PX) return;
       drag.moved = true;
-      aboutDialog.classList.add('dragging');
+      dialog.classList.add('dragging');
     }
     shift(Math.max(0, by));
   };
@@ -1934,11 +2028,11 @@ narrowScreen.addEventListener('change', () => setSheetHeight(null));
     const { moved, y } = drag;
     drag = null;
     if (!moved) return;
-    aboutDialog.classList.remove('dragging');
+    dialog.classList.remove('dragging');
     shift(0);
-    if (event.type !== 'pointercancel' && event.clientY - y > SHEET_CLOSE_PX) aboutDialog.close();
+    if (event.type !== 'pointercancel' && event.clientY - y > SHEET_CLOSE_PX) dialog.close();
   };
-  for (const part of [$('about-handle'), $('about-title')]) {
+  for (const part of parts) {
     part.addEventListener('pointerdown', begin);
     part.addEventListener('pointermove', move);
     part.addEventListener('pointerup', end);

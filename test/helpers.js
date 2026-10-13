@@ -117,8 +117,9 @@ export function encodeFeed({ timestamp, tripUpdates = [], alerts = [] }) {
     // periods: [{ start, end }] in epoch seconds, either may be left out
     const periods = (alert.periods ?? []).map((p) => pb.bytes(1, ...(p.start ? [pb.int(1, p.start)] : []), ...(p.end ? [pb.int(2, p.end)] : [])));
     const informed = alert.tripId ? pb.bytes(5, pb.bytes(4, pb.bytes(1, alert.tripId))) : pb.bytes(5, pb.bytes(5, alert.stopId));
-    const text = pb.bytes(11, pb.bytes(1, pb.bytes(1, alert.text), pb.bytes(2, 'de')));
-    entities.push(pb.bytes(2, pb.bytes(1, `al${entities.length}`), pb.bytes(5, ...periods, informed, text)));
+    // text: what it says (its description); title: its headline, where it has one
+    const texts = [[10, alert.title], [11, alert.text]].filter(([, text]) => text !== undefined).map(([field, text]) => pb.bytes(field, pb.bytes(1, pb.bytes(1, text), pb.bytes(2, 'de'))));
+    entities.push(pb.bytes(2, pb.bytes(1, `al${entities.length}`), pb.bytes(5, ...periods, informed, ...texts)));
   }
   return Buffer.concat([pb.bytes(1, pb.bytes(1, '2.0'), pb.int(3, timestamp)), ...entities]);
 }

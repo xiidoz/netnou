@@ -458,7 +458,7 @@ trip or a day on which the trip does not run.
 | `realtime` | boolean | whether there is realtime data for this run |
 | `source` | string or null | who provides the realtime data of the trip, where the feed says so |
 | `cancelled` | boolean | the whole run is cancelled |
-| `notes` | array of strings | notes of the feed about the trip, in the language of the feed |
+| `notes` | array of objects | notes of the feed about the trip, in the language of the feed, see below |
 | `path` | array of numbers | the whole route as a flat list `lat, lon, lat, lon, …` |
 | `stops[].station` | string | id for `/api/departures` |
 | `stops[].name`, `platform` | string | name of the stop; platform, `""` if unknown |
@@ -467,6 +467,18 @@ trip or a day on which the trip does not run.
 | `stops[].skipped` | boolean | the run does not call here today |
 
 The expected time is the timetable time plus the delay.
+
+A note is what an alert of the realtime feed says:
+
+```json
+{ "title": "Stuttgart-Degerloch: Haltestelle Peregrinastraße stadteinwärts entfällt",
+  "text": "Noch bis voraussichtlich Sonntag, 18. Oktober 2026, wird die Haltestelle Peregrinastraße …" }
+```
+
+| Field | Type | Meaning |
+| --- | --- | --- |
+| `title` | string or null | the headline the feed gives the alert, in one line; `null` where it has none or it is the same as the text |
+| `text` | string | what the alert says, in full: it can be a word (`"Niederflur"`) or several pages, with line breaks (`\n`) between its lines and paragraphs |
 
 ## `GET /api/departures`
 
@@ -494,7 +506,8 @@ The board covers the next two hours with at most 40 departures from all
 platforms of the station, sorted by expected time (`planned` + `delay`). A
 departure stays on the board until 30 seconds after its expected time.
 `cancelled` is true when the run is cancelled or skips this station. `notes`
-are notes of the feed about the station, such as a lift out of order.
+are notes of the feed about the station, such as a lift out of order, each
+with a `title` and a `text` as for [a trip](#get-apitrip).
 
 ## Knots
 

@@ -42,7 +42,7 @@ const REALTIME = encodeFeed({
   alerts: [
     { tripId: 'T1', text: 'Echtzeitdaten aufbereitet von GTFS.de, bereitgestellt von Testbetrieb' },
     { tripId: 'T1', text: 'Signalstörung' },
-    { stopId: 'A', text: 'Aufzug außer Betrieb' },
+    { stopId: 'A', title: 'Aufzug gestört', text: 'Aufzug außer Betrieb' },
   ],
 });
 
@@ -344,7 +344,7 @@ test('/api/trip', async () => {
     realtime: true,
     source: 'Testbetrieb', // from the gtfs.de note, which is not one of the notes
     cancelled: false,
-    notes: ['Signalstörung'],
+    notes: [{ title: null, text: 'Signalstörung' }],
   });
   assert.ok(Math.abs(now - Date.now() / 1000) < 5);
   assert.equal(stops.length, 102);
@@ -354,7 +354,7 @@ test('/api/trip', async () => {
 
   // yesterday's run has no delays; notes and source belong to the trip, whatever the day
   const { json: yesterday } = await get(`/api/trip?id=T1_${addDays(today, -1)}`);
-  assert.deepEqual([yesterday.realtime, yesterday.stops[0].depDelay, yesterday.source, yesterday.notes], [false, null, 'Testbetrieb', ['Signalstörung']]);
+  assert.deepEqual([yesterday.realtime, yesterday.stops[0].depDelay, yesterday.source, yesterday.notes], [false, null, 'Testbetrieb', [{ title: null, text: 'Signalstörung' }]]);
   const { json: other } = await get(`/api/trip?id=T2_${today}`);
   assert.deepEqual([other.mode, other.agency, other.realtime, other.source, other.notes], ['longdistance', 'Testbetrieb', false, null, []]);
 
@@ -369,7 +369,7 @@ test('/api/departures', async () => {
   const { status, json } = await get('/api/departures?station=A');
   assert.equal(status, 200);
   const { now, departures, ...board } = json;
-  assert.deepEqual(board, { id: 'A', name: 'Alpha', lat: 49.4, lon: 11, notes: ['Aufzug außer Betrieb'] });
+  assert.deepEqual(board, { id: 'A', name: 'Alpha', lat: 49.4, lon: 11, notes: [{ title: 'Aufzug gestört', text: 'Aufzug außer Betrieb' }] });
   // one an hour from each of the runs under way, for the next two hours
   assert.ok(departures.length >= 4 && departures.length <= 9, `${departures.length} departures`);
   for (const d of departures) {

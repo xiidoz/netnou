@@ -148,6 +148,17 @@
     </div>
   </dialog>
 
+  <!-- What the notes of a trip or a stop say in full, of which the details
+       only show a headline each: a dialog of the same kind. app.js writes
+       into it what the note that was pressed says. -->
+  <dialog class="dialog" id="notes" aria-labelledby="notes-title">
+    <div class="handle" id="notes-handle"></div>
+    <button type="button" class="close" id="notes-close" aria-label="Close" data-i18n-aria-label="panel.close" data-icon="mdiClose"></button>
+    <div class="dialog-body">
+      <h2 id="notes-title"></h2>
+      <div id="notes-text"></div>
+    </div>
+  </dialog>
 
   <!-- The way back from a display on a wall (display=fixed, see "display
        mode" in app.js), where nothing else is left to press: it shows for a

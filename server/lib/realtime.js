@@ -158,15 +158,33 @@ export function takeTripUpdate(timetable, gathered, update) {
 // is no source.
 const SOURCE_NOTE = /^Echtzeitdaten aufbereitet von GTFS\.de, bereitgestellt von (.+)$/s;
 
+// An alert's text with its lines as the operator set them, but without what
+// only takes room: blanks at either end of a line, and more than one empty
+// line in a row, of which some leave a dozen.
+const tidy = (text) => text.replace(/\r\n?/g, '\n').replace(/^[ \t\u00a0]+|[ \t\u00a0]+$/gm, '').replace(/\n{3,}/g, '\n\n').trim();
+
+/**
+ * What an alert says, as a note: its `text` in full, and as its `title` the
+ * headline the feed gives it – null where it has none of its own, as the
+ * short ones ("Niederflur") do not. Some operators write whole pages into the
+ * text; whoever shows a note has the title to keep to then.
+ * @returns null for an alert that says nothing
+ */
+function noteOf(alert) {
+  const title = tidy(alert.header).replace(/\s+/g, ' ');
+  const text = tidy(alert.description) || title;
+  return text ? { title: title && title !== text.replace(/\s+/g, ' ') ? title : null, text } : null;
+}
+
 /**
  * What one fetch of the feed says of the trips and stops of the timetable, as
  * a Snapshot (snapshot.js): that has it in columns of numbers and is what the
  * timetable is asked with. For whoever wants to look at it, it also has
  *   byDate        service date -> trip index -> delays (see tripDelays), those
  *                 of coupled trains made the same where they share their way
- *   tripNotes     trip index -> alert texts (disruption reasons, vehicle features)
+ *   tripNotes     trip index -> notes (see noteOf): disruption reasons, vehicle features
  *   tripSources   trip index -> who provides the realtime data (see SOURCE_NOTE)
- *   stationNotes  station index -> alert texts (e.g. broken lifts)
+ *   stationNotes  station index -> notes, e.g. broken lifts
  * @param now epoch seconds; alerts are only taken while one of their active periods is current
  * @param taken the trip updates that were taken one by one while the feed was
  *   read (takeTripUpdate), where it is not left to this to go through them:
@@ -176,25 +194,25 @@ export function buildRealtime(timetable, feed, now = Math.floor(Date.now() / 100
   const tripNotes = new Map();
   const tripSources = new Map();
   const stationNotes = new Map();
-  const addNote = (map, key, text) => {
+  const addNote = (map, key, note) => {
     const list = map.get(key);
-    if (!list) map.set(key, [text]);
-    else if (!list.includes(text)) list.push(text);
+    if (!list) map.set(key, [note]);
+    else if (!list.some((other) => other.title === note.title && other.text === note.text)) list.push(note);
   };
   for (const alert of feed.alerts) {
-    const text = alert.description || alert.header;
-    if (!text) continue;
+    const note = noteOf(alert);
+    if (!note) continue;
     // Without active periods an alert applies for as long as it is in the feed.
     if (alert.periods.length && !alert.periods.some((p) => p.start <= now && (!p.end || now < p.end))) continue;
-    const source = SOURCE_NOTE.exec(text)?.[1].trim();
+    const source = SOURCE_NOTE.exec(note.text)?.[1].trim();
     for (const target of alert.informed) {
       const t = timetable.tripIndex.get(target.tripId);
       if (t !== undefined) {
         if (source) tripSources.set(t, source);
-        else addNote(tripNotes, t, text);
+        else addNote(tripNotes, t, note);
       }
       const s = timetable.stopIndex.get(target.stopId);
-      if (s !== undefined && !source) addNote(stationNotes, timetable.stationOf[s], text);
+      if (s !== undefined && !source) addNote(stationNotes, timetable.stationOf[s], note);
     }
   }
 
