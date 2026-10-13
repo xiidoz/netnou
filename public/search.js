@@ -20,8 +20,9 @@ const INSIDE = 1;
 const SPELLING = 2;
 const NOT = 3;
 
-// What the names abbreviate. A name answers to both forms.
-const SPELLED_OUT = [['hbf', 'hauptbahnhof'], ['bf', 'bahnhof'], ['str', 'strasse'], ['pl', 'platz']];
+// What the names abbreviate. A name answers to both forms, and so does what
+// is typed: "hbf" finds a "Hauptbahnhof".
+const SPELLED_OUT = [['hbf', 'hauptbahnhof'], ['hauptbf', 'hauptbahnhof'], ['bf', 'bahnhof'], ['bhf', 'bahnhof'], ['str', 'strasse'], ['pl', 'platz']];
 // What a stop answers to besides the words of its name, as the signs it has:
 // one for each of the abbreviations, in their order, then
 // - RAIL: trains call at it. That is a "Bahnhof", whatever its name says.
@@ -272,13 +273,16 @@ function nearlyBegins(text, from, to, typed, slips, rows) {
 
 /**
  * What a word typed is looked for as.
- * @returns { word, ends, begins, inside, slips, rows, close, slip }.
+ * @returns { word, ends, begins, inside, slips, rows, close, slip, also }.
  *   - A stop with one of the signs `begins` matches as if a word of its name
  *     began with the word typed, one with a sign of `inside` as if it had it
  *     inside, and one with a sign of `slip` as a close spelling.
  *   - `ends` is what a word of a name may end on to do the same: for
  *     "ludwigstras" that is "ludwigstr".
  *   - `close(word)` says whether the word typed may be a slip of a word of a name.
+ *   - `also` is the same for what the word typed stands for, if it is an
+ *     abbreviation: "hbf" is looked for as "hauptbahnhof" as well. Not so
+ *     "str", which is the beginning of "strasse" and finds it as it is.
  */
 function formsOf(word) {
   let [begins, inside, slip] = [0, 0, 0];
@@ -308,7 +312,8 @@ function formsOf(word) {
   };
   // (the first letter has to be right)
   if (slips) ANSWERS.forEach((long, bit) => { if (long[0] === word[0] && close(long)) slip |= 1 << bit; });
-  return { word, ends, begins, inside, slips, rows, close, slip };
+  const long = SPELLED_OUT.find(([short, full]) => short === word && !full.startsWith(short))?.[1];
+  return { word, ends, begins, inside, slips, rows, close, slip, also: long ? formsOf(long) : null };
 }
 
 /**
@@ -350,12 +355,11 @@ const bySigns = (signs, form, level) => (signs & form.begins ? BEGINNING : level
 /**
  * Marks all stops by how closely they match a word typed (formsOf): with
  * BEGINNING where a word of the name begins with it, with INSIDE where one
- * has it elsewhere, if the search goes that far.
- * @param marks for every stop how closely it matches
+ * has it elsewhere, if the search goes that far. A mark only ever gets better.
+ * @param marks for every stop how closely it matches so far
  */
-function markAll(marks, index, form, level) {
+function markForm(marks, index, form, level) {
   const { word } = form;
-  marks.fill(NOT);
   /** Marks the stops that have `part`, by whether a word begins with it. */
   const mark = (names, part) => eachFound(names, part, (stop, begins) => {
     if (begins) marks[stop] = BEGINNING;
@@ -390,6 +394,13 @@ function markAll(marks, index, form, level) {
     const match = bySigns(signs[i], form, level);
     if (match < marks[i]) marks[i] = match;
   }
+}
+
+/** Marks all stops by how closely they match a word typed, or what it stands for (markForm). */
+function markAll(marks, index, form, level) {
+  marks.fill(NOT);
+  markForm(marks, index, form, level);
+  if (form.also) markForm(marks, index, form.also, level);
 }
 
 /** What a word of a name answers to as well for ending in "str". */
@@ -448,6 +459,13 @@ function markSlips(marks, index, form) {
 
 /** How closely one stop matches a word typed (formsOf), as far as the search goes: what markAll and markSlips mark it with. */
 function matchOf(index, i, form, level) {
+  // (what an abbreviation stands for is looked for as it is written, without slips)
+  const other = form.also ? matchOf(index, i, form.also, Math.min(level, INSIDE)) : NOT;
+  return other === BEGINNING ? BEGINNING : Math.min(other, matchOfWord(index, i, form, level));
+}
+
+/** The same for the word typed alone, without what it may stand for. */
+function matchOfWord(index, i, form, level) {
   const { plain, twoLetters } = index;
   const { word } = form;
   const name = plain.text.slice(plain.starts[i], plain.starts[i + 1]);

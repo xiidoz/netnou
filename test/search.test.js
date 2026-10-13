@@ -322,3 +322,34 @@ test('names are compared as they are written, whatever the letters', () => {
   assert.deepEqual(found('bahnhof'), ['Łódź Fabryczna', 'Świnoujście Centrum', 'Århus H', 'Ostbahnhof']);
   assert.deepEqual(search(buildIndex(listOf([])), 'bahnhof'), []);
 });
+
+test('an abbreviation that is typed finds the word it stands for, however a name writes it', () => {
+  const stations = buildIndex(listOf([
+    ['Kiel Hauptbahnhof', 54.3148, 10.1319, 900, ['bus']],
+    ['Kiel Hbf', 54.3145, 10.1316, 800, ['regional', 'longdistance']],
+    ['S+U Alexanderplatz Bhf (Berlin)', 52.5215, 13.4113, 700, ['subway', 'suburban']],
+    ['Hauptbf (Arnulf-Klett-Platz)', 48.7838, 9.1806, 600, ['subway']],
+    ['Kiel Bahnhofstraße', 54.32, 10.14, 500, ['bus']],
+    ['Kiel Busbahnhof', 54.313, 10.13, 400, ['bus']],
+    ['Kiel Rathaus', 54.3227, 10.1326, 300, ['bus']],
+    ['Balingen Bf', 48.2767, 8.8551, 200, ['bus']],
+  ]));
+  const found = (query) => search(stations, query).map((stop) => stop.name);
+  // the main stations, whether typed short or long and whichever of the three ways they are written
+  for (const typed of ['hbf', 'hauptbahnhof', 'hauptbf', 'hauptb']) assert.deepEqual(found(typed), ['Kiel Hauptbahnhof', 'Kiel Hbf', 'Hauptbf (Arnulf-Klett-Platz)'], typed);
+  assert.deepEqual(found('kiel hbf'), ['Kiel Hauptbahnhof', 'Kiel Hbf']);
+  // The stations: where trains call and what is called one, in any of its
+  // forms. After them the names that have the word inside.
+  for (const typed of ['bf', 'bhf', 'bahnhof']) {
+    assert.deepEqual(found(typed), [
+      'Kiel Hbf', 'S+U Alexanderplatz Bhf (Berlin)', 'Kiel Bahnhofstraße', 'Balingen Bf',
+      'Kiel Hauptbahnhof', 'Hauptbf (Arnulf-Klett-Platz)', 'Kiel Busbahnhof',
+    ], typed);
+  }
+  for (const typed of ['alexanderplatz bahnhof', 'alexanderplatz bf', 'alexanderplatz bhf']) assert.deepEqual(found(typed), ['S+U Alexanderplatz Bhf (Berlin)'], typed);
+  for (const typed of ['balingen bahnhof', 'balingen bhf', 'balingen bf']) assert.deepEqual(found(typed), ['Balingen Bf'], typed);
+  // an abbreviation that is not typed to its end is the beginning of a word like any other
+  assert.deepEqual(found('hb'), ['Kiel Hbf']);
+  // (and "str" is the beginning of "strasse" as it is)
+  assert.deepEqual(found('kiel bahnhofstr'), ['Kiel Bahnhofstraße']);
+});

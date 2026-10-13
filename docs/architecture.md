@@ -501,7 +501,8 @@ otherwise a server would load a file written by older code:
   typed comes first, as the fewest names have it, and the other words are
   looked for only in the names it left. What a name abbreviates ("Hbf",
   "…str.") is found by the forms of the word typed that such a name answers
-  to. For the list of a country a search takes a few milliseconds on a
+  to, and an abbreviation that is typed is looked for as the word it stands
+  for as well: "hbf" finds a "Hauptbahnhof". For the list of a country a search takes a few milliseconds on a
   desktop machine.
 - **Own position.** A button above the zoom buttons shows where the visitor
   is and has the map follow them, until they move the map themselves or
