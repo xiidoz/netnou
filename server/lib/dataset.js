@@ -97,7 +97,7 @@ export class Texts {
  */
 export function byteOrder(a, b) {
   if (a === b) return 0;
-  if (!/[\uD800-￿]/.test(a) && !/[\uD800-￿]/.test(b)) return a < b ? -1 : 1;
+  if (!/[\uD800-\uFFFF]/.test(a) && !/[\uD800-\uFFFF]/.test(b)) return a < b ? -1 : 1;
   return Buffer.compare(Buffer.from(a), Buffer.from(b));
 }
 
