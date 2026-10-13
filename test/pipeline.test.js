@@ -211,7 +211,7 @@ test('importer copes with a byte order mark, rows out of order, missing times an
   assert.deepEqual(other.stations.map((s) => s.id).sort(), ['B', 'C', 'SA']);
 
   const t1 = other.tripIndex.get('T1');
-  assert.deepEqual(Array.from(other.stopsOf(t1), (s) => other.stops.id[s]), ['A', 'B', 'C']);
+  assert.deepEqual(Array.from(other.stopsOf(t1), (s) => other.stops.id.get(s)), ['A', 'B', 'C']);
   assert.deepEqual([0, 1, 2].map((p) => other.seq(t1, p)), [10, 20, 30]);
   // B lies halfway between the departure from A and the arrival at C
   assert.deepEqual([0, 1, 2].map((p) => other.schedArr(t1, p)), [36000, 36660, 37200]);
@@ -247,7 +247,7 @@ test('a trip whose rows come in two runs is put together, where the feed first n
   }
   // T1 shared its two stops with nobody; the three it has now are one sequence, as in the feed that has them together
   const t1 = split.tripIndex.get('T1');
-  assert.deepEqual(Array.from(split.stopsOf(t1), (s) => split.stops.id[s]), ['A', 'B', 'C']);
+  assert.deepEqual(Array.from(split.stopsOf(t1), (s) => split.stops.id.get(s)), ['A', 'B', 'C']);
   assert.deepEqual(split.vehicles(at('10:05'), null).map((v) => [v.id, v.lat, v.lon]), timetable.vehicles(at('10:05'), null).map((v) => [v.id, v.lat, v.lon]));
 });
 

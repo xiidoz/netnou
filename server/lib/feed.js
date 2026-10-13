@@ -5,7 +5,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { Worker } from 'node:worker_threads';
 import { scopeId } from './area.js';
-import { DATASET_VERSION, readDataset } from './dataset.js';
+import { DATASET_VERSION, datasetFrom, loadDataset } from './dataset.js';
 import { download, publicUrl, reason } from './files.js';
 import { Timetable } from './timetable.js';
 
@@ -86,10 +86,12 @@ export class FeedUpdater {
   }
 
   load() {
-    const data = readDataset(this.datasetPath);
+    // (in memory that threads share: the one that reads the realtime feed lays its own schedule over it)
+    const shared = loadDataset(this.datasetPath);
+    const data = datasetFrom(shared);
     if (data.version !== DATASET_VERSION) throw new Error('written by another version');
     if (data.area !== this.scope) throw new Error('made for another area or other operators');
-    const timetable = new Timetable(data);
+    const timetable = new Timetable(data, shared);
     this.current = data.source;
     this.routesMissing = this.osm.urls.length > 0 && !data.segments;
     this.status.state = 'ready';

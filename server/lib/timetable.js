@@ -215,18 +215,21 @@ class Vehicle {
   #timetable;
   #trip;
   #date;
-  #rt;
+  #realtime;
+  #row;
   #from;
   #last;
   #now;
   #id = null;
   #knots = null;
 
-  constructor(timetable, t, date, rt, from, last, now, lat, lon) {
+  /** @param realtime, row the realtime data and the row of the trip in it (Snapshot in snapshot.js); -1 without any */
+  constructor(timetable, t, date, realtime, row, from, last, now, lat, lon) {
     this.#timetable = timetable;
     this.#trip = t;
     this.#date = date;
-    this.#rt = rt;
+    this.#realtime = realtime;
+    this.#row = row;
     this.#from = from;
     this.#last = last;
     this.#now = now;
@@ -236,7 +239,7 @@ class Vehicle {
     this.mode = timetable.routeModes[route];
     this.to = timetable.headsign(t);
     // Delay at the next stop in seconds; null when there is no realtime data.
-    this.delay = rt ? rt.arrDelay[next] : null;
+    this.delay = row < 0 ? null : realtime.arrDelay(row, next);
     // current position, for filtering by map section (not sent to the browser)
     this.lat = lat;
     this.lon = lon;
@@ -268,20 +271,51 @@ class Vehicle {
   /** [time, lat, lon, …] along its way ahead, see Timetable.knots. */
   get knots() {
     if (!this.#knots) {
-      const { arr, dep } = this.#timetable.times(this.#trip, this.#date, this.#rt);
+      const { arr, dep } = this.#timetable.times(this.#trip, this.#date, this.#realtime, this.#row);
       this.#knots = this.#timetable.knots(this.#trip, arr, dep, this.#from, this.#last, this.#now);
     }
     return this.#knots;
   }
 }
 
-export class Timetable {
-  /** @param data dataset from importer.js (plus segments from shapes.js) */
+/**
+ * A list of ids in which one is found without a map that has an entry for
+ * each of them: by looking through `order`, the places of the ids in the
+ * order of their bytes (the import writes it beside them).
+ * @param ids a Texts
+ */
+function finder(ids, order) {
+  const get = (id) => {
+    if (typeof id !== 'string') return undefined;
+    const wanted = Buffer.from(id);
+    const { bytes, start } = ids;
+    let low = 0;
+    let high = order.length - 1;
+    while (low <= high) {
+      const middle = (low + high) >> 1;
+      const i = order[middle];
+      const side = bytes.compare(wanted, 0, wanted.length, start[i], start[i + 1]);
+      if (side === 0) return i;
+      if (side < 0) low = middle + 1;
+      else high = middle - 1;
+    }
+    return undefined;
+  };
+  return { get, has: (id) => get(id) !== undefined, keys: () => ids[Symbol.iterator]() };
+}
+
+/**
+ * The timetable as far as realtime data is matched against it: the trips
+ * with their stops and times, the days they run on, the ways that coupled
+ * trains share, and trips and stops found by their ids. It lies over the
+ * columns of a dataset and works out next to nothing, so that the thread
+ * that reads the realtime feed has one of its own over the same memory
+ * (realtime-worker.js), also over a dataset without its lists of texts.
+ */
+export class Schedule {
+  /** @param data dataset from importer.js */
   constructor(data) {
-    this.source = data.source ?? {};
     this.stops = data.stops;
-    this.routes = data.routes;
-    this.headsigns = data.headsigns;
     this.dates = data.dates;
 
     const { trips, patterns, profiles, seqLists } = data;
@@ -299,37 +333,91 @@ export class Timetable {
     this.profileTimes = profiles.times;
     this.seqStart = seqLists.start;
     this.seqNumbers = seqLists.seq;
-
-    const tripCount = trips.pattern.length;
-    this.tripCount = tripCount;
-    // Trips are found by their id in the list of all trips in the order of
-    // their ids: there is no map with an entry for each of them.
-    const { byId } = trips;
-    const find = (id) => {
-      if (typeof id !== 'string') return undefined;
-      const wanted = Buffer.from(id);
-      const { bytes, start } = trips.id;
-      let low = 0;
-      let high = tripCount - 1;
-      while (low <= high) {
-        const middle = (low + high) >> 1;
-        const t = byId[middle];
-        const order = bytes.compare(wanted, 0, wanted.length, start[t], start[t + 1]);
-        if (order === 0) return t;
-        if (order < 0) low = middle + 1;
-        else high = middle - 1;
-      }
-      return undefined;
-    };
-    this.tripIndex = { get: find, has: (id) => find(id) !== undefined, keys: () => trips.id[Symbol.iterator]() };
+    this.tripCount = trips.pattern.length;
+    // Trips and stops are found by their ids in the lists of them in the
+    // order of their ids: there is no map with an entry for each.
+    this.tripIndex = finder(trips.id, trips.byId);
+    this.stopIndex = finder(this.stops.id, this.stops.byId);
     this.dateIndex = new Map(this.dates.map((d, i) => [d, i]));
-    this.routeModes = this.routes.type.map((type, r) => routeMode(type, this.routes.short[r]));
 
     // serviceOnDate[dateIdx][serviceIdx] = 1 if the service runs that day.
     this.serviceOnDate = this.dates.map(() => new Uint8Array(data.services.length));
     data.services.forEach((dateIdxs, s) => {
       for (const d of dateIdxs) this.serviceOnDate[d][s] = 1;
     });
+
+    // The ways on which trains run coupled, each with the trips on it and the
+    // position in each trip of the stop the way begins at: [[trip, position], …]
+    // (see findSharedWays, which the import has run).
+    this.sharedWays = [];
+    const shared = data.sharedWays;
+    for (let w = 0; shared && w + 1 < shared.start.length; w++) {
+      const sharers = [];
+      for (let k = shared.start[w]; k < shared.start[w + 1]; k++) sharers.push([shared.trip[k], shared.position[k]]);
+      this.sharedWays.push(sharers);
+    }
+
+    // Stations group the platforms of one stop; they are what the map shows
+    // and what a departure board is requested for.
+    const stopCount = this.stops.id.length;
+    this.stationOf = new Int32Array(stopCount);
+    for (let i = 0; i < stopCount; i++) this.stationOf[i] = this.stops.parent[i] >= 0 ? this.stops.parent[i] : i;
+  }
+
+  /** The stops of trip t, as indexes of stops, in the order it calls at them. */
+  stopsOf(t) {
+    const pattern = this.tripPattern[t];
+    return this.patternStops.subarray(this.patternStart[pattern], this.patternStart[pattern + 1]);
+  }
+
+  stopCount(t) {
+    const pattern = this.tripPattern[t];
+    return this.patternStart[pattern + 1] - this.patternStart[pattern];
+  }
+
+  /** The arrival of trip t at its stop at position p as the timetable has it, in seconds since the start of the service day; may exceed 86400. */
+  schedArr(t, p) {
+    return this.tripStart[t] + this.profileTimes[this.profileStart[this.tripProfile[t]] + 2 * p];
+  }
+
+  /** The departure, likewise. */
+  schedDep(t, p) {
+    return this.tripStart[t] + this.profileTimes[this.profileStart[this.tripProfile[t]] + 2 * p + 1];
+  }
+
+  tripId(t) {
+    return this.tripIds.get(t);
+  }
+
+  seq(t, p) {
+    const list = this.tripSeq[t];
+    return list < 0 ? p : this.seqNumbers[this.seqStart[list] + p];
+  }
+
+  runsOn(t, date) {
+    const d = this.dateIndex.get(date);
+    return d !== undefined && this.serviceOnDate[d][this.tripService[t]] === 1;
+  }
+
+}
+
+export class Timetable extends Schedule {
+  /**
+   * @param data dataset from importer.js (plus segments from shapes.js)
+   * @param shared the bytes the dataset lies over, where they are in memory
+   *   that threads can share (loadDataset in dataset.js): the thread for the
+   *   realtime data lays a schedule of its own over them
+   */
+  constructor(data, shared = null) {
+    super(data);
+    this.shared = shared;
+    this.source = data.source ?? {};
+    this.routes = data.routes;
+    this.headsigns = data.headsigns;
+
+    const { trips, patterns, profiles } = data;
+    const { tripCount } = this;
+    this.routeModes = this.routes.type.map((type, r) => routeMode(type, this.routes.short[r]));
     this.tripsOnDate = new Map();
 
     // How long a trip runs, from its first departure to its last arrival, and
@@ -350,19 +438,6 @@ export class Timetable {
       profileLatest[r] = latest;
     }
 
-    // The ways on which trains run coupled, each with the trips on it and the
-    // position in each trip of the stop the way begins at: [[trip, position], …]
-    // (see findSharedWays, which the import has run).
-    this.sharedWays = [];
-    const shared = data.sharedWays;
-    for (let w = 0; shared && w + 1 < shared.start.length; w++) {
-      const sharers = [];
-      for (let k = shared.start[w]; k < shared.start[w + 1]; k++) sharers.push([shared.trip[k], shared.position[k]]);
-      this.sharedWays.push(sharers);
-    }
-
-    // Stations group the platforms of one stop; they are what the map shows
-    // and what a departure board is requested for.
     const stopCount = this.stops.id.length;
     // The rectangle around the stops of the instance, [south, west, north,
     // east]: what an instance without an area has for one (its extent).
@@ -372,9 +447,6 @@ export class Timetable {
       const [lat, lon] = [this.stops.lat[i], this.stops.lon[i]];
       this.bbox = this.bbox ? [Math.min(this.bbox[0], lat), Math.min(this.bbox[1], lon), Math.max(this.bbox[2], lat), Math.max(this.bbox[3], lon)] : [lat, lon, lat, lon];
     }
-    this.stationOf = new Int32Array(stopCount);
-    for (let i = 0; i < stopCount; i++) this.stationOf[i] = this.stops.parent[i] >= 0 ? this.stops.parent[i] : i;
-    this.stopIndex = new Map(this.stops.id.map((id, i) => [id, i]));
 
     // A line is what its passengers take for one: the routes of the feed with
     // the same name, mode and operator. The name alone does not say which line
@@ -476,7 +548,7 @@ export class Timetable {
     }
 
     this.stations = order.map((s) => ({
-      id: this.stops.id[s],
+      id: this.stops.id.get(s),
       name: this.stops.name[s],
       lat: round5(this.stops.lat[s]),
       lon: round5(this.stops.lon[s]),
@@ -500,31 +572,6 @@ export class Timetable {
     this.segmentCount = this.segmentKey.length;
     // Where position() leaves its answer.
     this.at = new Float64Array(2);
-  }
-
-  /** The stops of trip t, as indexes of stops, in the order it calls at them. */
-  stopsOf(t) {
-    const pattern = this.tripPattern[t];
-    return this.patternStops.subarray(this.patternStart[pattern], this.patternStart[pattern + 1]);
-  }
-
-  stopCount(t) {
-    const pattern = this.tripPattern[t];
-    return this.patternStart[pattern + 1] - this.patternStart[pattern];
-  }
-
-  /** The arrival of trip t at its stop at position p as the timetable has it, in seconds since the start of the service day; may exceed 86400. */
-  schedArr(t, p) {
-    return this.tripStart[t] + this.profileTimes[this.profileStart[this.tripProfile[t]] + 2 * p];
-  }
-
-  /** The departure, likewise. */
-  schedDep(t, p) {
-    return this.tripStart[t] + this.profileTimes[this.profileStart[this.tripProfile[t]] + 2 * p + 1];
-  }
-
-  tripId(t) {
-    return this.tripIds.get(t);
   }
 
   /** Index of the route geometry for the hop from stop position p to p + 1, or -1. */
@@ -632,11 +679,6 @@ export class Timetable {
     }
   }
 
-  seq(t, p) {
-    const list = this.tripSeq[t];
-    return list < 0 ? p : this.seqNumbers[this.seqStart[list] + p];
-  }
-
   headsign(t) {
     const h = this.tripHeadsign[t];
     if (h >= 0) return this.headsigns[h];
@@ -691,17 +733,13 @@ export class Timetable {
     return list;
   }
 
-  runsOn(t, date) {
-    const d = this.dateIndex.get(date);
-    return d !== undefined && this.serviceOnDate[d][this.tripService[t]] === 1;
-  }
-
   /**
    * Predicted arrival/departure epoch seconds at every stop of a trip:
    * schedule plus realtime delay, forced to be non-decreasing because the
    * browser interpolates along these times.
+   * @param realtime, row the realtime data and the row of the trip in it; -1 without any
    */
-  times(t, date, rt) {
+  times(t, date, realtime = null, row = -1) {
     const base = serviceDayStart(date) + this.tripStart[t];
     const times = this.profileTimes;
     const from = this.profileStart[this.tripProfile[t]];
@@ -710,8 +748,8 @@ export class Timetable {
     const dep = new Array(n);
     let prev = -Infinity;
     for (let i = 0; i < n; i++) {
-      let a = base + times[from + 2 * i] + (rt?.arrDelay[i] ?? 0);
-      let d = base + times[from + 2 * i + 1] + (rt?.depDelay[i] ?? 0);
+      let a = base + times[from + 2 * i] + (row < 0 ? 0 : realtime.arrDelay(row, i) ?? 0);
+      let d = base + times[from + 2 * i + 1] + (row < 0 ? 0 : realtime.depDelay(row, i) ?? 0);
       if (a < prev) a = prev;
       if (d < a) d = a;
       arr[i] = a;
@@ -729,8 +767,9 @@ export class Timetable {
    * list, those that have not arrived yet the end of the other, and the
    * shorter of the two is gone through. A trip with realtime data may be
    * under way outside the times the timetable has for it.
+   * @param realtime, day the realtime data and the place of the service day in it; -1 without any
    */
-  underWay(date, rel, rtTrips) {
+  underWay(date, rel, realtime = null, day = -1) {
     const found = [];
     const start = this.tripStart;
     const run = this.profileRun;
@@ -762,11 +801,11 @@ export class Timetable {
         if (start[t] - LEAD_S <= rel) found.push(t);
       }
     }
-    if (rtTrips) {
-      for (const [t, rt] of rtTrips) {
-        if (rt.cancelled || (start[t] - LEAD_S <= rel && start[t] + run[profile[t]] + TRAIL_S >= rel)) continue;
-        if (rel >= this.schedDep(t, rt.first) + (rt.depDelay[rt.first] ?? 0) - LEAD_S && rel <= this.schedArr(t, rt.last) + (rt.arrDelay[rt.last] ?? 0) + TRAIL_S) found.push(t);
-      }
+    for (let r = day < 0 ? 0 : realtime.dayStart[day]; day >= 0 && r < realtime.dayStart[day + 1]; r++) {
+      const t = realtime.trip[r];
+      if (realtime.cancelled[r] || (start[t] - LEAD_S <= rel && start[t] + run[profile[t]] + TRAIL_S >= rel)) continue;
+      const [first, last] = [realtime.first[r], realtime.last[r]];
+      if (rel >= this.schedDep(t, first) + (realtime.depDelay(r, first) ?? 0) - LEAD_S && rel <= this.schedArr(t, last) + (realtime.arrDelay(r, last) ?? 0) + TRAIL_S) found.push(t);
     }
     return Int32Array.from(found).sort();
   }
@@ -778,7 +817,8 @@ export class Timetable {
    * positions, so each vehicle is described by "knots" – (time, lat, lon)
    * triples along its upcoming route – between which the browser interpolates.
    * They are made when a vehicle is asked for them (see Vehicle).
-   * `realtime` is a snapshot from buildRealtime() or null (schedule only).
+   * `realtime` is the realtime data (a Snapshot, see snapshot.js) or null
+   * (schedule only).
    *
    * Trains that run coupled are a trip each in the feed, which has no word on
    * that they belong together. They are found by what they share: the way
@@ -813,19 +853,19 @@ export class Timetable {
     for (const date of [addDays(today, -1), today]) {
       const dayStart = serviceDayStart(date);
       const rel = now - dayStart;
-      const rtTrips = realtime?.byDate.get(date);
+      const day = realtime ? realtime.day(date) : -1;
 
-      for (const t of this.underWay(date, rel, rtTrips)) {
-        const rt = rtTrips?.get(t);
+      for (const t of this.underWay(date, rel, realtime, day)) {
+        const row = day < 0 ? -1 : realtime.row(day, t);
         let first = 0;
         let last = this.stopCount(t) - 1;
-        if (rt) {
-          if (rt.cancelled) continue;
-          first = rt.first;
-          last = rt.last;
+        if (row >= 0) {
+          if (realtime.cancelled[row]) continue;
+          first = realtime.first[row];
+          last = realtime.last[row];
           // (without realtime data underWay has looked at the times already)
-          if (rel < this.schedDep(t, first) + (rt.depDelay[first] ?? 0) - LEAD_S) continue;
-          if (rel > this.schedArr(t, last) + (rt.arrDelay[last] ?? 0) + TRAIL_S) continue;
+          if (rel < this.schedDep(t, first) + (realtime.depDelay(row, first) ?? 0) - LEAD_S) continue;
+          if (rel > this.schedArr(t, last) + (realtime.arrDelay(row, last) ?? 0) + TRAIL_S) continue;
         }
 
         // i = the stop the vehicle left most recently (or its first stop),
@@ -839,8 +879,8 @@ export class Timetable {
         let arrived = false; // at the stop ahead, where it still stands
         let prev = -Infinity;
         for (let p = 0; p <= last; p++) {
-          let a = base + times[from + 2 * p] + (rt?.arrDelay[p] ?? 0);
-          let d = base + times[from + 2 * p + 1] + (rt?.depDelay[p] ?? 0);
+          let a = base + times[from + 2 * p] + (row < 0 ? 0 : realtime.arrDelay(row, p) ?? 0);
+          let d = base + times[from + 2 * p + 1] + (row < 0 ? 0 : realtime.depDelay(row, p) ?? 0);
           if (a < prev) a = prev;
           if (d < a) d = a;
           prev = d;
@@ -858,7 +898,7 @@ export class Timetable {
         }
 
         this.position(t, i, last, t0, t1, now);
-        const vehicle = new Vehicle(this, t, date, rt, i, last, now, this.at[0], this.at[1]);
+        const vehicle = new Vehicle(this, t, date, realtime, row, i, last, now, this.at[0], this.at[1]);
         const { mode } = vehicle;
         const next = Math.min(i + 1, last);
         out.push(vehicle);
@@ -929,7 +969,8 @@ export class Timetable {
   trip(tripId, date, realtime) {
     const t = this.tripIndex.get(tripId);
     if (t === undefined || !this.runsOn(t, date)) return null;
-    const rt = realtime?.byDate.get(date)?.get(t);
+    const day = realtime ? realtime.day(date) : -1;
+    const row = day < 0 ? -1 : realtime.row(day, t);
     const base = serviceDayStart(date);
     const route = this.tripRoute[t];
     const stops = this.stopsOf(t);
@@ -951,23 +992,23 @@ export class Timetable {
       mode: this.routeModes[route],
       to: this.headsign(t),
       agency: this.routes.agency[route],
-      realtime: !!rt,
+      realtime: row >= 0,
       // Who provides the realtime data of this trip, if the feed says so.
-      source: realtime?.tripSources.get(t) ?? null,
-      cancelled: !!rt?.cancelled,
-      notes: realtime?.tripNotes.get(t) ?? [],
+      source: realtime?.sourceOf(t) ?? null,
+      cancelled: row >= 0 && realtime.cancelled[row] === 1,
+      notes: realtime?.notesOfTrip(t) ?? [],
       path,
       stops: Array.from(stops, (s, p) => ({
-        station: this.stops.id[this.stationOf[s]],
+        station: this.stops.id.get(this.stationOf[s]),
         name: this.stops.name[s],
         platform: this.stops.platform[s],
         lat: this.stops.lat[s],
         lon: this.stops.lon[s],
         arr: base + this.schedArr(t, p),
         dep: base + this.schedDep(t, p),
-        arrDelay: rt ? rt.arrDelay[p] : null,
-        depDelay: rt ? rt.depDelay[p] : null,
-        skipped: !!rt?.skipped?.[p],
+        arrDelay: row < 0 ? null : realtime.arrDelay(row, p),
+        depDelay: row < 0 ? null : realtime.depDelay(row, p),
+        skipped: row >= 0 && realtime.skipped(row, p),
       })),
     };
   }
@@ -985,7 +1026,7 @@ export class Timetable {
       if (d === undefined) return;
       const active = this.serviceOnDate[d];
       const base = serviceDayStart(date);
-      const rtTrips = realtime?.byDate.get(date);
+      const rtDay = realtime ? realtime.day(date) : -1;
 
       for (let visit = this.visitStart[station]; visit < this.visitStart[station + 1]; visit++) {
         const pattern = this.visitPattern[visit];
@@ -1008,11 +1049,11 @@ export class Timetable {
           if (!active[this.tripService[t]]) continue;
           const planned = base + this.schedDep(t, p);
           if (planned > now + windowS || planned < now - 3 * 3600) continue;
-          const rt = rtTrips?.get(t);
-          const delay = rt ? rt.depDelay[p] : null;
+          const row = rtDay < 0 ? -1 : realtime.row(rtDay, t);
+          const delay = row < 0 ? null : realtime.depDelay(row, p);
           const expected = planned + (delay ?? 0);
           if (expected < now - 30 || expected > now + windowS) continue;
-          found.push({ day, t, p, date, planned, delay, cancelled: !!rt && (rt.cancelled || !!rt.skipped?.[p]) });
+          found.push({ day, t, p, date, planned, delay, cancelled: row >= 0 && (realtime.cancelled[row] === 1 || realtime.skipped(row, p)) });
         }
       }
     });
@@ -1023,7 +1064,7 @@ export class Timetable {
       name: this.stops.name[station],
       lat: this.stops.lat[station],
       lon: this.stops.lon[station],
-      notes: realtime?.stationNotes.get(station) ?? [],
+      notes: realtime?.notesOfStation(station) ?? [],
       departures: found.slice(0, limit).map(({ t, p, date, planned, delay, cancelled }) => {
         const route = this.tripRoute[t];
         return {
