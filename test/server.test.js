@@ -41,8 +41,8 @@ const REALTIME = encodeFeed({
   tripUpdates: [{ tripId: 'T1', startDate: today, stops: [{ seq: 0, stopId: 'A', dep: { delay: 120 } }] }],
   alerts: [
     { tripId: 'T1', text: 'Echtzeitdaten aufbereitet von GTFS.de, bereitgestellt von Testbetrieb' },
-    { tripId: 'T1', text: 'Signalstörung' },
-    { stopId: 'A', title: 'Aufzug gestört', text: 'Aufzug außer Betrieb' },
+    { tripId: 'T1', text: 'Signalstörung', severity: 3 },
+    { stopId: 'A', title: 'Aufzug gestört', text: 'Aufzug außer Betrieb', severity: 2 },
   ],
 });
 
@@ -344,7 +344,7 @@ test('/api/trip', async () => {
     realtime: true,
     source: 'Testbetrieb', // from the gtfs.de note, which is not one of the notes
     cancelled: false,
-    notes: [{ title: null, text: 'Signalstörung' }],
+    notes: [{ title: null, text: 'Signalstörung', severity: 'warning' }],
   });
   assert.ok(Math.abs(now - Date.now() / 1000) < 5);
   assert.equal(stops.length, 102);
@@ -354,7 +354,7 @@ test('/api/trip', async () => {
 
   // yesterday's run has no delays; notes and source belong to the trip, whatever the day
   const { json: yesterday } = await get(`/api/trip?id=T1_${addDays(today, -1)}`);
-  assert.deepEqual([yesterday.realtime, yesterday.stops[0].depDelay, yesterday.source, yesterday.notes], [false, null, 'Testbetrieb', [{ title: null, text: 'Signalstörung' }]]);
+  assert.deepEqual([yesterday.realtime, yesterday.stops[0].depDelay, yesterday.source, yesterday.notes], [false, null, 'Testbetrieb', [{ title: null, text: 'Signalstörung', severity: 'warning' }]]);
   const { json: other } = await get(`/api/trip?id=T2_${today}`);
   assert.deepEqual([other.mode, other.agency, other.realtime, other.source, other.notes], ['longdistance', 'Testbetrieb', false, null, []]);
 
@@ -369,7 +369,7 @@ test('/api/departures', async () => {
   const { status, json } = await get('/api/departures?station=A');
   assert.equal(status, 200);
   const { now, departures, ...board } = json;
-  assert.deepEqual(board, { id: 'A', name: 'Alpha', lat: 49.4, lon: 11, notes: [{ title: 'Aufzug gestört', text: 'Aufzug außer Betrieb' }] });
+  assert.deepEqual(board, { id: 'A', name: 'Alpha', lat: 49.4, lon: 11, notes: [{ title: 'Aufzug gestört', text: 'Aufzug außer Betrieb', severity: 'info' }] });
   // one an hour from each of the runs under way, for the next two hours
   assert.ok(departures.length >= 4 && departures.length <= 9, `${departures.length} departures`);
   for (const d of departures) {

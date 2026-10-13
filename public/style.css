@@ -475,7 +475,24 @@ button:focus-visible, select:focus-visible, .row:focus-visible, .panel:focus-vis
 .panel-head .notes { margin: 8px -34px 0 0; padding: 0; list-style: none; font-size: 12.5px; color: var(--text-muted); }
 .panel-head .notes li { padding-left: 14px; position: relative; }
 .panel-head .notes li::before { content: "•"; position: absolute; left: 3px; }
-.panel-head .alert { color: var(--delay-severe); font-weight: 600; }
+/* A note that warns, of what is wrong with a trip or a stop right now, has
+   the sign of a warning where the others have their bullet, the one the
+   status line has (.status .warn), and is as dark as the text of the page.
+   The sign is the first thing in the note's text and stands there as a
+   capital letter does, whatever the font of the device: about as high as
+   one, and on the line the letters stand on. Its shape leaves an eighth of
+   its box free below itself, so the box hangs below that line by as much.
+   For the sign the text hangs: its first line begins where a bullet would
+   be, the lines after it where the text of the other notes begins. */
+.panel-head .notes .warning { padding-left: 0; color: var(--text); }
+.panel-head .notes .warning::before { content: none; }
+.panel-head .notes .warning span { padding-left: 14px; text-indent: -14px; }
+.panel-head .notes .warning > span { display: block; }
+.panel-head .notes .warning .sign, .note-full .sign { display: inline-block; width: 0.96em; height: 0.96em; vertical-align: -0.12em; color: var(--delay-major); }
+.panel-head .notes .warning .sign { margin-right: 2px; }
+/* (the page's own warning: that the trip is cancelled) */
+.panel-head .notes .alert { color: var(--delay-severe); font-weight: 600; }
+.panel-head .notes .alert .sign { color: inherit; }
 /* A note that says more than the head has room for: its headline or its
    first lines, two at most (one on a narrow screen, see there), on a button
    that opens it in full. The arrow at its end is the sign of that. */
@@ -696,6 +713,8 @@ li:last-child > .row.stop .rail::before { bottom: 50%; }
 #notes-text { margin-top: 8px; }
 .note-full p { white-space: pre-line; overflow-wrap: anywhere; }
 .note-full h3 { margin-top: 0; }
+/* (the sign of a note that warns, before its first words: as in the head of the details) */
+.note-full .sign { margin-right: 6px; }
 .note-full + .note-full { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border); }
 
 /* ---------- small screens: controls on top, details as bottom sheet ---------- */

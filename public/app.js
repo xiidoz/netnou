@@ -11,7 +11,7 @@
 import { APP_NAME, formatNumber, formatTime, languagePicker, loadLanguage, pageTexts, setTimeZone, t, translatePage } from './i18n.js';
 import { displayQuery, readDisplay } from './display.js';
 import { buildIndex, search, searchLines } from './search.js';
-import { mdiChevronLeft, mdiChevronRight, mdiEye, mdiEyeOff, mdiFullscreen, mdiFullscreenExit } from './vendor/material-design-icons/icons.js';
+import { mdiAlert, mdiChevronLeft, mdiChevronRight, mdiEye, mdiEyeOff, mdiFullscreen, mdiFullscreenExit } from './vendor/material-design-icons/icons.js';
 import { AttributionControl, MapLibreMap, NavigationControl } from './vendor/maplibre-gl/maplibre-gl.mjs';
 
 // The modes with a chip. Same ids as MODES in server/lib/timetable.js, the
@@ -1676,30 +1676,56 @@ function delayNode(delay) {
   return el('span', { class: 'delay', text: delayText(delay), data: { delay: delayClass(delay) } });
 }
 
+/** Whether a note of the feed warns: of what is wrong with a trip or a stop right now, such as the reason for a delay. */
+const warns = (note) => note.severity === 'warning' || note.severity === 'severe';
+
+/** The sign of a warning: it stands where a note that does not warn has its bullet, and a screen reader names it. */
+function warningSign() {
+  const sign = icon(mdiAlert);
+  sign.classList.add('sign');
+  sign.removeAttribute('aria-hidden');
+  sign.setAttribute('role', 'img');
+  sign.setAttribute('aria-label', t('notes.warning'));
+  return sign;
+}
+
 /**
- * The notes in the head of the details: what the page has to say itself, then
+ * The notes in the head of the details: what the page has to say itself, and
  * the notes of the feed. Of those some operators write whole pages, and hang
  * dozens on one trip, while the head does not scroll and what is listed below
  * it must stay in sight. So a long note shows its headline, or its first
  * lines where it has none, on a button that opens it in full (showNotes); and
  * the notes are fitted to the room there is for them (fitNotes). A short
  * one stands there as it is.
- * @param notes those of the feed: { title, text }, title null where it has none
+ *
+ * What warns comes first, with the sign of a warning: the page's own warning,
+ * then the notes the feed marks as one. Then what else the page says, then
+ * the other notes.
+ * @param notes those of the feed: { title, text, severity }, title null where it has none
  * @param own lines of the page's own
  * @param alert a line of the page's own that warns
  */
 function notesList(notes, own = [], alert = null) {
   // (the text in a part of its own: that is what a narrow screen cuts where it does not fit)
   const line = (text, name) => el('li', name ? { class: name } : {}, [el('span', { text })]);
+  const warning = (item) => {
+    item.classList.add('warning');
+    item.querySelector('span').prepend(warningSign());
+    return item;
+  };
+  const first = alert ? [warning(line(alert, 'alert'))] : [];
   const items = own.map((text) => line(text));
-  if (alert) items.unshift(line(alert, 'alert'));
-  const listed = notes.map((note) => {
+  // (the server has them in this order already; the page does not count on it)
+  const urgent = notes.filter(warns);
+  const ordered = [...urgent, ...notes.filter((note) => !warns(note))];
+  const listed = ordered.map((note) => {
     const long = note.text.length > NOTE_CHARS || note.text.includes('\n');
-    return long ? el('li', {}, [noteButton(note.title ?? note.text, [note])]) : line(note.text);
+    const item = long ? el('li', {}, [noteButton(note.title ?? note.text, [note])]) : line(note.text);
+    return warns(note) ? warning(item) : item;
   });
-  if (!items.length && !listed.length) return '';
-  const list = el('ul', { class: 'notes' }, [...items, ...listed]);
-  notesToFit = { list, items, listed, notes };
+  if (!first.length && !items.length && !listed.length) return '';
+  const list = el('ul', { class: 'notes' }, [...first, ...listed.slice(0, urgent.length), ...items, ...listed.slice(urgent.length)]);
+  notesToFit = { list, items: [...first, ...items], listed, notes: ordered };
   return list;
 }
 
@@ -1725,11 +1751,12 @@ function fitNotes() {
   if (listed.length) {
     const style = getComputedStyle(list);
     const line = parseFloat(style.lineHeight) || 1.4 * parseFloat(style.fontSize);
-    // (those of the feed are the last of the list; of a sheet's lines the page's own have taken theirs)
-    const top = listed[0].getBoundingClientRect().top;
-    const room = narrow ? NOTES_LINES * line - (top - list.getBoundingClientRect().top) : Math.max(NOTES_LINES * line, NOTES_SHARE * viewSize.y);
+    const height = (part) => part.getBoundingClientRect().height;
+    // (of a sheet's lines the page's own have taken theirs)
+    const own = items.reduce((sum, item) => sum + height(item), 0);
+    const room = narrow ? NOTES_LINES * line - own : Math.max(NOTES_LINES * line, NOTES_SHARE * viewSize.y);
     let rest = null; // the line that names those taken out
-    for (let shown = listed.length - 1; shown > 0 && list.getBoundingClientRect().bottom - top > room + 1; shown--) {
+    for (let shown = listed.length - 1; shown > 0 && height(list) - own > room + 1; shown--) {
       listed[shown].remove();
       rest?.remove();
       const text = t('notes.more', { count: notes.length - shown });
@@ -1738,14 +1765,17 @@ function fitNotes() {
     }
   }
   if (!narrow) return;
-  const cut = (item) => {
-    const part = item.firstElementChild;
-    return item.isConnected && part.tagName === 'SPAN' && part.scrollWidth > part.clientWidth;
+  /** Makes a button of a line that is cut and not one yet: with the text given, opening the note given. */
+  const open = (item, text, note) => {
+    const part = item.querySelector(':scope > span');
+    if (!part || !item.isConnected || part.scrollWidth <= part.clientWidth) return;
+    const button = noteButton(text ?? part.textContent, [note ?? { title: null, text: part.textContent, severity: null }]);
+    // (the sign of a warning was in the text that goes)
+    if (item.classList.contains('warning')) button.querySelector('span').prepend(warningSign());
+    part.replaceWith(button);
   };
-  for (const item of items) if (cut(item)) item.replaceChildren(noteButton(item.textContent, [{ title: null, text: item.textContent }]));
-  listed.forEach((item, i) => {
-    if (cut(item)) item.replaceChildren(noteButton(notes[i].title ?? notes[i].text, [notes[i]]));
-  });
+  for (const item of items) open(item);
+  listed.forEach((item, i) => open(item, notes[i].title ?? notes[i].text, notes[i]));
 }
 
 function noteButton(text, notes, heading) {
@@ -1774,11 +1804,12 @@ notesDialog.addEventListener('close', () => {
 function showNotes(notes, heading, from) {
   const [only] = notes;
   $('notes-title').textContent = heading ?? only.title ?? t('notes.title');
-  $('notes-text').replaceChildren(...notes.map((note) => el('div', { class: 'note-full' }, [
+  $('notes-text').replaceChildren(...notes.map((note) => {
     // (the headline of a single note is that of the dialog)
-    note.title !== null && heading ? el('h3', { text: note.title }) : '',
-    el('p', { text: note.text }),
-  ])));
+    const parts = [...(note.title !== null && heading ? [el('h3', { text: note.title })] : []), el('p', { text: note.text })];
+    if (warns(note)) parts[0].prepend(warningSign());
+    return el('div', { class: 'note-full' }, parts);
+  }));
   notesFrom = [...panelHead.querySelectorAll('button')].indexOf(from);
   notesDialog.showModal();
   $('notes-text').parentNode.scrollTop = 0;

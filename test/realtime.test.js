@@ -106,7 +106,7 @@ test('a fetch that takes longer than the interval is waited for, and the turns i
   assert.equal(instance.status.matchedTrips, 1);
   const trip = timetable.trip('T1', DAY, instance.snapshot);
   assert.deepEqual(trip.stops.map((stop) => [stop.name, stop.arr - serviceDayStart(DAY), stop.arrDelay]), [['Alpha', 36000, null], ['Beta', 36600, 120], ['Gamma', 37200, 120]]);
-  assert.deepEqual([trip.realtime, trip.cancelled, trip.notes], [true, false, [{ title: null, text: 'Umleitung' }]]);
+  assert.deepEqual([trip.realtime, trip.cancelled, trip.notes], [true, false, [{ title: null, text: 'Umleitung', severity: null }]]);
   assert.equal(timetable.trip('T1', DAY, null).stops[1].arrDelay, null);
 });
 

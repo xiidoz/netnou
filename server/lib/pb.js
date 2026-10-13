@@ -176,8 +176,10 @@ function readEntitySelector(r) {
   return sel;
 }
 
+// severity: how serious the feed says the alert is (severity_level: 2 information,
+// 3 warning, 4 severe), 0 where it does not say.
 function readAlert(r) {
-  const alert = { periods: [], informed: [], header: '', description: '' };
+  const alert = { periods: [], informed: [], header: '', description: '', severity: 0 };
   for (let f; (f = r.next());) {
     if (f === 1) {
       // Active period in epoch seconds; 0 = open on that side.
@@ -192,6 +194,7 @@ function readAlert(r) {
     } else if (f === 5) alert.informed.push(readEntitySelector(r.sub()));
     else if (f === 10) alert.header = readTranslated(r.sub());
     else if (f === 11) alert.description = readTranslated(r.sub());
+    else if (f === 14) alert.severity = r.varint();
     else r.skip(r.wire);
   }
   return alert;
