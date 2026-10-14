@@ -17,13 +17,15 @@
   `download.gtfs.de`, `realtime.gtfs.de` and `download.geofabrik.de`. Once a
   day it also asks `api.github.com` for a newer release, unless that is
   switched off ([Version and updates](configuration.md#version-and-updates)).
-- Memory: about 1.1 GB for a minute while a timetable is imported, about
+- Memory: about 1 GB for a minute while a timetable is imported, about
   200 MB otherwise.
 - Disk: less than 1 GB in the data directory during an import, about 65 MB
   afterwards.
 
 The figures are approximate and were measured for the default area in October
-2026; a smaller area needs less.
+2026; a smaller area needs less. An instance for all of Germany, with the
+extract of Germany, needs about 3 GB of memory for the eight minutes of an
+import, and 6 GB of disk while the extract is read, 1.1 GB afterwards.
 
 Visitors' browsers load the map behind the vehicles themselves, by default
 from `tiles.openfreemap.org` (see [The map](configuration.md#the-map)), and
@@ -113,9 +115,10 @@ docker compose pull && docker compose up -d
 git pull && docker compose -f compose.yaml -f compose.build.yaml up -d --build
 ```
 
-Do not give the container a memory limit below about 2 GB. If it is killed
-during an import it restarts and downloads the timetable again. On a host with
-little memory, tell Node how much it may use, for example
+Do not give the container a memory limit below about 2 GB, or 4 GB for all of
+Germany. If it is killed during an import it restarts and downloads the
+timetable again. On a host with little memory, tell Node how much it may use,
+for example
 `NODE_OPTIONS: "--max-old-space-size=2048"`.
 
 ## Without Docker

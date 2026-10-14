@@ -23,7 +23,7 @@ const CHUNK = 1 << 30;
 // the head of the file.
 const LINES_FROM = 64;
 
-const TYPES = { Int32Array, Uint8Array, Float64Array };
+const TYPES = { Int32Array, Uint8Array, Uint16Array, Float64Array };
 
 /**
  * Many short texts as one block of UTF-8 with the place each begins at: what

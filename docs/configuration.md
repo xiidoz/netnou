@@ -176,11 +176,15 @@ extracts have to cover the extent. The OpenStreetMap data kept for one
 timetable is used for the next as long as that one stays within it, so a new
 timetable alone does not fetch the extracts again.
 
-The feed of all of Germany can be shown this way, but an instance for it is
-not ready for visitors yet: zoomed out, the page asks for every vehicle in
-the country, and the roads of a whole country are more than the route
-geometry can be made from. Both are being worked on
-([#36](https://github.com/xiidoz/netnou/issues/36)).
+The feed of all of Germany can be shown this way. For its route geometry
+take the extract of Germany,
+`https://download.geofabrik.de/europe/germany-latest.osm.pbf` (4.9 GB): its
+roads are routed in tiles ([architecture.md](architecture.md#route-geometry)).
+An import then takes the test machine about eight minutes and at most 3 GB
+of memory, and the data directory needs 6 GB while the extract is read,
+1.1 GB afterwards. For now every import routes all hops again; keeping the
+routes from one import to the next is the rest of
+[#106](https://github.com/xiidoz/netnou/issues/106).
 
 Changing the area or the operators makes the server import the timetable
 again on the next start.

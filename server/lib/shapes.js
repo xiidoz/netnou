@@ -7,16 +7,17 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { Area, NEAR } from './area.js';
-import { download, publicUrl, readGz, reason, writeGz } from './files.js';
-import { NETS, Network, NetworkBuilder, simplify } from './network.js';
+import { Numbers, readDataset, writeDataset } from './dataset.js';
+import { download, publicUrl, reason } from './files.js';
+import { NETS, Network, ROADS_AT_ONCE, TILE, buildNetworks, classifyWay, simplify, tilesOf, windowOf } from './network.js';
 import { readPbfBoundaries, readPbfWays } from './osmpbf.js';
 import { NET_OF_MODE, hopKey, routeMode } from './timetable.js';
 import { BORDER_LEVELS, readTowns, townsAmong, writeTowns } from './towns.js';
 
-// Bump when classifyWay, the cost factors or the output of NetworkBuilder
+// Bump when classifyWay, the cost factors or the output of buildNetworks
 // (all in network.js) change: the cached networks are then built again from a
 // fresh OSM download instead of being used for up to NETNOU_OSM_MAX_AGE_DAYS more.
-const NETWORKS_VERSION = 2;
+const NETWORKS_VERSION = 3;
 
 // snapRadius: how far a stop may be from its road/track (rail stops are often
 // the station centre). snapPenalty: cost per metre of that offset.
@@ -49,14 +50,14 @@ const SIMPLIFY_M = 1.5;
  */
 export async function loadNetworks({ dataDir, urls, area, scope = area.id, maxAgeMs, timeoutMs, onProgress }) {
   if (!urls.length) return null;
-  const cachePath = path.join(dataDir, 'osm-networks.json.gz');
+  const cachePath = path.join(dataDir, 'osm-networks.bin');
   const townsPath = path.join(dataDir, 'osm-towns.json.gz');
   const extent = area.polygons.length ? null : area;
 
   let cached = null;
   let covered = true;
   try {
-    const data = readGz(cachePath);
+    const data = readDataset(cachePath);
     if (data.version === NETWORKS_VERSION && data.area === scope && data.sources.join() === urls.join()) {
       // (networks without the towns of their reading are as good as none: both are read again)
       const towns = readTowns(townsPath, { scope, sources: urls, fetchedAt: data.fetchedAt });
@@ -70,28 +71,32 @@ export async function loadNetworks({ dataDir, urls, area, scope = area.id, maxAg
   if (cached && !covered) onProgress('the timetable reaches beyond the OSM data that was kept: reading it again');
 
   try {
-    const builder = new NetworkBuilder();
     const keepNode = (lat, lon) => area.distance(lat, lon) <= NEAR.osm;
-    const borders = []; // what each extract has of them
+    const readings = []; // what each extract has of roads and tracks
+    const borders = []; // and of borders
     for (const [i, url] of urls.entries()) {
       const file = path.join(dataDir, `osm-${i}.pbf`);
       onProgress(`downloading OSM extract ${publicUrl(url)}`);
       try {
         const { size } = await download(url, file, timeoutMs);
         onProgress(`reading OSM extract (${Math.round(size / 1e6)} MB)`);
-        readPbfWays(file, keepNode, ['highway', 'railway'], (way) => builder.addWay(way));
+        // (the borders first: what is read of the roads is the larger part, and it is kept until the networks are built)
         borders.push(readPbfBoundaries(file, BORDER_LEVELS));
+        readings.push(readPbfWays(file, { keys: ['highway', 'railway'], classify: classifyWay, keepNode }));
       } finally {
         fs.rmSync(file, { force: true });
       }
     }
-    const fresh = { version: NETWORKS_VERSION, fetchedAt: new Date().toISOString(), area: scope, sources: urls, nets: builder.result(), ...(extent ? { extent: extent.toJSON() } : {}) };
+    const fresh = { version: NETWORKS_VERSION, fetchedAt: new Date().toISOString(), area: scope, sources: urls, nets: buildNetworks(readings), ...(extent ? { extent: extent.toJSON() } : {}) };
+    readings.length = 0;
     if (!NETS.some((net) => fresh.nets[net].a.length)) throw new Error('no roads or tracks found in the area; do the extracts in NETNOU_OSM_PBF_URLS cover it?');
     const towns = townsAmong(borders);
     onProgress(`${towns.length} towns in the OSM extracts`);
     // (the towns first: networks that are kept have their towns beside them)
     writeTowns(townsPath, { fetchedAt: fresh.fetchedAt, scope, sources: urls, towns });
-    writeGz(cachePath, fresh);
+    writeDataset(cachePath, fresh);
+    // (where the networks were kept before, as JSON)
+    fs.rmSync(path.join(dataDir, 'osm-networks.json.gz'), { force: true });
     return { ...fresh, towns: readTowns(townsPath, { scope, sources: urls, fetchedAt: fresh.fetchedAt }) };
   } catch (err) {
     onProgress(`OSM data could not be updated (${reason(err)}), ${cached ? `using the copy of ${cached.fetchedAt}` : 'keeping straight lines'}`);
@@ -100,18 +105,19 @@ export async function loadNetworks({ dataDir, urls, area, scope = area.id, maxAg
 }
 
 /**
- * Routes every hop of every trip in `data` (an importer dataset).
+ * Routes every hop of every trip in `data` (an importer dataset) on the
+ * network of its mode: on roads of more than roadsAtOnce nodes in the tiles of
+ * `tile` degrees around it (routeInTiles).
  * @returns {{nets, net, key, start, points, share}} the segments as columns,
  *   in the order of their keys (hopKey), by which a hop finds its segment:
  *   segment i is on network nets[net[i]] and has the points start[i] to
  *   start[i + 1] - 1; `points` holds latitude and longitude of each in 1e-5
  *   degrees, `share` for each the share of the segment's length up to it.
  */
-export function buildSegments(data, graphs, area, onProgress = () => {}) {
+export function buildSegments(data, graphs, area, onProgress = () => {}, { roadsAtOnce = ROADS_AT_ONCE, tile = TILE } = {}) {
   const { stops, trips, routes, patterns } = data;
   const stopCount = stops.id.length;
   const originLat = (area.bbox[0] + area.bbox[2]) / 2;
-  const networks = NETS.map((net) => new Network(graphs[net], { originLat, ...SETTINGS[net] }));
 
   // Distinct hops, keyed by (network, from stop, to stop): those of every
   // stop sequence, on the network of every route that runs it.
@@ -130,69 +136,120 @@ export function buildSegments(data, graphs, area, onProgress = () => {}) {
   }
   onProgress(`routing ${hops.size} hops`);
 
-  const candidateCache = new Map();
-  const candidates = (n, stop) => {
-    const key = n * stopCount + stop;
-    let list = candidateCache.get(key);
-    if (!list) candidateCache.set(key, (list = networks[n].candidates(stops.lat[stop], stops.lon[stop])));
-    return list;
-  };
-
-  const routed = []; // { key, net, pts: [lat, lon, …] in 1e-5 degrees }
+  // The routes as they are found: of each its key, its network and where its points begin among all of them.
+  // (Not an array of points for each: there are three quarters of a million for all of Germany.)
+  const routed = { key: [], net: [], start: [], points: new Numbers() };
   const stats = NETS.map(() => ({ hops: 0, routed: 0 }));
   let done = 0;
+  const apart = (key) => ({ to: key % stopCount, from: Math.floor(key / stopCount) % stopCount, n: Math.floor(key / stopCount / stopCount) });
 
-  for (const key of hops) {
-    // hopKey taken apart again
-    const to = key % stopCount;
-    const from = Math.floor(key / stopCount) % stopCount;
-    const n = Math.floor(key / stopCount / stopCount);
-    const network = networks[n];
-    stats[n].hops++;
-    if (++done % 10000 === 0) onProgress(`${done} of ${hops.size} hops done`);
+  /** Routes hops on one network, or on the part of it that is around them. */
+  const routeHops = (network, keys) => {
+    const candidates = new Map(); // by stop
+    const candidatesOf = (stop) => {
+      let list = candidates.get(stop);
+      if (!list) candidates.set(stop, (list = network.candidates(stops.lat[stop], stops.lon[stop])));
+      return list;
+    };
+    for (const key of keys) {
+      const { from, to, n } = apart(key);
+      if (++done % 10000 === 0) onProgress(`${done} of ${hops.size} hops done`);
 
-    const a = candidates(n, from);
-    const b = candidates(n, to);
-    const [ax, ay] = network.toXY(stops.lat[from], stops.lon[from]);
-    const [bx, by] = network.toXY(stops.lat[to], stops.lon[to]);
-    let route = null;
-    const far = (stop) => area.distance(stops.lat[stop], stops.lon[stop]) > NEAR.exit;
-    const [factor, slack] = SETTINGS[NETS[n]].detour;
-    const maxLength = Math.hypot(bx - ax, by - ay) * factor + slack;
-    if (a.length && b.length) route = network.route(a, b, maxLength);
-    // One end is not on the network, or it lies beyond the area on a part of
-    // the network that is not connected to the rest (the OSM data ends a few
-    // km outside): follow the network towards it until the route has left the
-    // area, or as far as the network goes that way.
-    const inside = (x, y) => area.distance(...network.toLatLon(x, y)) <= NEAR.exit;
-    if (!route && a.length && (!b.length || far(to))) route = network.routeBeyond(a, bx, by, inside, false, maxLength);
-    if (!route && b.length && (!a.length || far(from))) route = network.routeBeyond(b, ax, ay, inside, true, maxLength);
-    if (!route) continue;
+      const a = candidatesOf(from);
+      const b = candidatesOf(to);
+      const [ax, ay] = network.toXY(stops.lat[from], stops.lon[from]);
+      const [bx, by] = network.toXY(stops.lat[to], stops.lon[to]);
+      let route = null;
+      const far = (stop) => area.distance(stops.lat[stop], stops.lon[stop]) > NEAR.exit;
+      const [factor, slack] = SETTINGS[NETS[n]].detour;
+      const maxLength = Math.hypot(bx - ax, by - ay) * factor + slack;
+      if (a.length && b.length) route = network.route(a, b, maxLength);
+      // One end is not on the network, or it lies beyond the area on a part of
+      // the network that is not connected to the rest (the OSM data ends a few
+      // km outside): follow the network towards it until the route has left the
+      // area, or as far as the network goes that way.
+      const inside = (x, y) => area.distance(...network.toLatLon(x, y)) <= NEAR.exit;
+      if (!route && a.length && (!b.length || far(to))) route = network.routeBeyond(a, bx, by, inside, false, maxLength);
+      if (!route && b.length && (!a.length || far(from))) route = network.routeBeyond(b, ax, ay, inside, true, maxLength);
+      if (!route) continue;
 
-    route = simplify(route, SIMPLIFY_M);
-    const pts = [];
-    for (let i = 0; i < route.length; i += 2) {
-      const [lat, lon] = network.toLatLon(route[i], route[i + 1]);
-      const iLat = Math.round(lat * 1e5);
-      const iLon = Math.round(lon * 1e5);
-      if (i && iLat === pts.at(-2) && iLon === pts.at(-1)) continue;
-      pts.push(iLat, iLon);
+      route = simplify(route, SIMPLIFY_M);
+      const pts = [];
+      for (let i = 0; i < route.length; i += 2) {
+        const [lat, lon] = network.toLatLon(route[i], route[i + 1]);
+        const iLat = Math.round(lat * 1e5);
+        const iLon = Math.round(lon * 1e5);
+        if (i && iLat === pts.at(-2) && iLon === pts.at(-1)) continue;
+        pts.push(iLat, iLon);
+      }
+      if (pts.length < 4) continue;
+      routed.key.push(key);
+      routed.net.push(n);
+      routed.start.push(routed.points.length / 2);
+      for (const value of pts) routed.points.push(value);
+      stats[n].routed++;
     }
-    if (pts.length < 4) continue;
-    routed.push({ key, net: n, pts });
-    stats[n].routed++;
-  }
+  };
+
+  /**
+   * Routes the hops on the roads of a country, tile by tile: a hop on the
+   * roads of the tile its middle is in and of the tiles around it, if both of
+   * its stops are within half a tile of that tile. A longer one has no route.
+   */
+  const routeInTiles = (graph, keys) => {
+    const tiles = tilesOf(graph, tile);
+    const unit = tiles.size * 1e7;
+    const scratch = new Int32Array(graph.lat.length).fill(-1);
+    const byTile = new Map();
+    let long = 0;
+    for (const key of keys) {
+      const { from, to } = apart(key);
+      // (the tile that the middle of the hop is in)
+      const [r, c] = [tiles.row(((stops.lat[from] + stops.lat[to]) / 2) * 1e7), tiles.col(((stops.lon[from] + stops.lon[to]) / 2) * 1e7)];
+      // (where a stop is, from the south-west corner of the tile, in tiles)
+      const within = (stop) => [(stops.lat[stop] * 1e7) / unit - r, (stops.lon[stop] * 1e7) / unit - c].every((at) => at >= -0.5 && at < 1.5);
+      if (!within(from) || !within(to)) {
+        long++;
+        continue;
+      }
+      const tile = tiles.key(r, c);
+      if (!byTile.has(tile)) byTile.set(tile, { r, c, keys: [] });
+      byTile.get(tile).keys.push(key);
+    }
+    if (long) onProgress(`${long} hops on roads are too long for the tiles`);
+    done += long;
+    for (const { r, c, keys: inTile } of [...byTile.values()].sort((p, q) => p.r - q.r || p.c - q.c)) {
+      const around = [];
+      for (let dr = -1; dr <= 1; dr++) for (let dc = -1; dc <= 1; dc++) around.push(tiles.key(r + dr, c + dc));
+      const part = windowOf(graph, tiles, around, scratch);
+      // (the latitude of the middle of the tile, for lengths in metres)
+      routeHops(new Network(part, { originLat: (r + 0.5) * tiles.size, ...SETTINGS.road }), inTile);
+    }
+  };
+
+  const byNet = NETS.map(() => []);
+  for (const key of hops) byNet[apart(key).n].push(key);
+  NETS.forEach((net, n) => {
+    stats[n].hops = byNet[n].length;
+    if (!byNet[n].length) return;
+    if (net === 'road' && graphs.road.lat.length > roadsAtOnce) routeInTiles(graphs.road, byNet[n]);
+    else routeHops(new Network(graphs[net], { originLat, ...SETTINGS[net] }), byNet[n]);
+  });
   onProgress(`hops routed: ${NETS.map((net, n) => `${net} ${stats[n].routed}/${stats[n].hops}`).join(', ')}`);
 
-  routed.sort((a, b) => a.key - b.key);
-  const start = new Int32Array(routed.length + 1);
-  routed.forEach(({ pts }, i) => { start[i + 1] = start[i] + pts.length / 2; });
-  const points = new Int32Array(2 * start[routed.length]);
-  const share = new Float64Array(start[routed.length]);
-  // (one latitude for the lengths of the whole area: a degree of longitude is shorter than one of latitude)
-  const kx = Math.cos(originLat * (Math.PI / 180));
-  routed.forEach(({ pts }, i) => {
+  // In the order of their keys.
+  const all = routed.points.array;
+  routed.start.push(routed.points.length / 2);
+  const order = Int32Array.from(routed.key.keys()).sort((p, q) => routed.key[p] - routed.key[q]);
+  const start = new Int32Array(order.length + 1);
+  order.forEach((h, i) => { start[i + 1] = start[i] + routed.start[h + 1] - routed.start[h]; });
+  const points = new Int32Array(2 * start[order.length]);
+  const share = new Float64Array(start[order.length]);
+  order.forEach((h, i) => {
+    const pts = all.subarray(2 * routed.start[h], 2 * routed.start[h + 1]);
     points.set(pts, 2 * start[i]);
+    // (a degree of longitude is shorter than one of latitude, the more so the further north: the latitude of the hop)
+    const kx = Math.cos((pts[0] / 1e5) * (Math.PI / 180));
     let length = 0;
     for (let k = 2; k < pts.length; k += 2) {
       length += Math.hypot(pts[k] - pts[k - 2], (pts[k + 1] - pts[k - 1]) * kx);
@@ -200,5 +257,5 @@ export function buildSegments(data, graphs, area, onProgress = () => {}) {
     }
     for (let k = start[i]; k < start[i + 1]; k++) share[k] = length ? share[k] / length : 1;
   });
-  return { nets: NETS, net: Uint8Array.from(routed, (segment) => segment.net), key: Float64Array.from(routed, (segment) => segment.key), start, points, share };
+  return { nets: NETS, net: Uint8Array.from(order, (h) => routed.net[h]), key: Float64Array.from(order, (h) => routed.key[h]), start, points, share };
 }
