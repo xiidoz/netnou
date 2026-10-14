@@ -35,7 +35,8 @@ services:
       # Optional settings, all described in docs/configuration.md. To use one,
       # uncomment its line.
       # All of Germany in place of the VGN, with the OpenStreetMap extract of
-      # Germany (4.9 GB). The import then needs up to 3.2 GB of memory.
+      # Germany (4.9 GB). The first start then takes 15 to 20 minutes at
+      # 100 Mbit/s, and an import up to 3.2 GB of memory and 6 GB of disk.
       # NETNOU_AREA: "Germany"
       # Another area than the default (the VGN around Nürnberg): a rectangle
       # "south,west,north,east", its name, and the OpenStreetMap extracts that
@@ -82,8 +83,9 @@ services:
       # (measured for the default area). Node derives its heap limit from the
       # memory it sees; on a small host, or with a memory limit on the
       # container, set it explicitly. Do not limit the container to less than
-      # about 2 GB: each time it is killed for running out of memory it
-      # restarts and downloads the 300 MB timetable again.
+      # about 2 GB, or 4 GB for all of Germany: each time it is killed for
+      # running out of memory it restarts and downloads the 300 MB timetable
+      # again.
       # NODE_OPTIONS: "--max-old-space-size=2048"
     read_only: true
     cap_drop:
@@ -91,8 +93,9 @@ services:
     security_opt:
       - "no-new-privileges:true"
     volumes:
-      # Timetable and OpenStreetMap caches, up to about 1 GB while importing;
-      # they are rebuilt from the feeds if lost, nothing else is written. A new
+      # Timetable and OpenStreetMap caches: about 400 MB while importing and
+      # 80 MB afterwards, for all of Germany 6 GB and 1.1 GB. They are rebuilt
+      # from the feeds if lost, nothing else is written. A new
       # named volume takes over the ownership of /data in the image, which
       # makes it writable for the unprivileged "node" user. A bind mount
       # instead has to be writable for uid 1000.
