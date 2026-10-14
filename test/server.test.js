@@ -168,6 +168,8 @@ test('once the feed is imported the API answers', async () => {
   await until(() => /Timetable loaded: 2 trips, 2 stations, 0 routed hops/.test(output), 'the log line');
   // one look, one download; no OSM extract is configured and nobody has asked for vehicles yet
   assert.deepEqual(upstream.requests, { head: 1, get: 1, realtime: 0, osm: 0 });
+  // (which the log says at start)
+  assert.match(output, /Routes: no OSM extracts set \(NETNOU_OSM_PBF_URLS\), so straight lines between stops and no towns in the search\n/);
   // the download is removed, the dataset stays
   await until(() => fs.readdirSync(path.join(dir, 'data')).join() === 'dataset.bin', 'the data directory to be tidy');
 });

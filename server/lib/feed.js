@@ -74,6 +74,8 @@ export class FeedUpdater {
     fs.rmSync(`${this.datasetPath}.tmp`, { force: true });
     // What the dataset was stored as up to version 0.8.
     fs.rmSync(path.join(this.dataDir, 'region.json.gz'), { force: true });
+    // (nothing is downloaded or routed then, and no other line would say why)
+    if (!this.osm.urls.length) this.log('Routes: no OSM extracts set (NETNOU_OSM_PBF_URLS), so straight lines between stops and no towns in the search');
     if (fs.existsSync(this.datasetPath)) {
       try {
         this.load();
