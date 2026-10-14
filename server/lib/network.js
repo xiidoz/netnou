@@ -1,7 +1,8 @@
 // Routable networks built from OpenStreetMap ways – one for buses (roads), one
-// each for trams, the U-Bahn and heavy rail, one for ferries and one for cable
-// cars and monorails – and the shortest-path search that turns "stop A, then
-// stop B" into the geometry in between.
+// each for trams, the U-Bahn and heavy rail (trams and the U-Bahn also on each
+// other's tracks and on those of the light rail), one for ferries and one for
+// cable cars and monorails – and the shortest-path search that turns "stop A,
+// then stop B" into the geometry in between.
 
 export const NETS = ['road', 'rail', 'subway', 'tram', 'ferry', 'cable'];
 
@@ -9,7 +10,7 @@ export const NETS = ['road', 'rail', 'subway', 'tram', 'ferry', 'cable'];
 // change: the cached networks are then built again from a fresh OSM download
 // instead of being used for up to NETNOU_OSM_MAX_AGE_DAYS more, and routes
 // found on older ones are found anew (shapes.js, feed.js).
-export const NETWORKS_VERSION = 4;
+export const NETWORKS_VERSION = 5;
 
 const M_PER_DEG = 111_320;
 
@@ -26,11 +27,20 @@ const NOT_A_ROAD = ['parking_aisle', 'driveway', 'drive-through', 'emergency_acc
 const AERIALWAYS = ['cable_car', 'gondola', 'mixed_lift', 'chair_lift'];
 // Sidings and yards are legal but unlikely routes for passenger trains.
 const SERVICE_FACTOR = { yard: 3, spur: 3, siding: 1.5, crossover: 1.2 };
+// The Stadtbahn of several cities is an underground in the feed and runs on
+// tracks that OpenStreetMap has as light rail and as tram, and trams of other
+// cities run on the tracks of a Stadtbahn and through its tunnels (#128). So
+// the networks of the U-Bahn and of trams have each other's tracks and those
+// of the light rail as well, at this many times the cost: a line keeps to
+// tracks of its own kind where it can.
+const SHARED_FACTOR = 1.5;
 const isYes = (value) => value === 'yes' || value === 'designated';
 
 const FORWARD = 1;
 const BACKWARD = 2;
 const BOTH = 3;
+// (with the directions of an edge: a track of another kind than the network's own, see SHARED_FACTOR)
+const SHARED = 4;
 
 function onewayDirection(tags, implied) {
   const oneway = tags.oneway;
@@ -40,8 +50,9 @@ function onewayDirection(tags, implied) {
 }
 
 /**
- * Decides which network an OSM way belongs to.
- * @returns {{net: string, factor: number, dir: number} | null}
+ * Decides which network an OSM way belongs to, and which others it is shared
+ * with (SHARED_FACTOR).
+ * @returns {{net: string, factor: number, dir: number, shared?: string[]} | null}
  */
 export function classifyWay(tags) {
   if (tags.area === 'yes') return null;
@@ -62,8 +73,10 @@ export function classifyWay(tags) {
 
   if (railway === 'rail' || railway === 'light_rail' || railway === 'subway' || railway === 'tram') {
     const factor = SERVICE_FACTOR[tags.service] ?? 1;
-    if (railway === 'subway' || railway === 'tram') return { net: railway, factor, dir: onewayDirection(tags, false) };
+    if (railway === 'subway') return { net: 'subway', factor, dir: onewayDirection(tags, false), shared: ['tram'] };
+    if (railway === 'tram') return { net: 'tram', factor, dir: onewayDirection(tags, false), shared: ['subway'] };
     // Mainline tracks are signalled for a usual direction but can be used both ways.
+    if (railway === 'light_rail') return { net: 'rail', factor, dir: BOTH, shared: ['subway', 'tram'] };
     return { net: 'rail', factor, dir: BOTH };
   }
 
@@ -132,9 +145,10 @@ function mergePlaces(list) {
  * classifyWay), in the form that Network reads: for each of NETS the places
  * of its nodes in 1e-7 degrees (lat, lon) and its edges from node a to node b,
  * with the factor of their cost in percent (f) and the directions they may be
- * used in (d). A way that two extracts have counts once, for the first. A
- * way is cut where a node was not kept, and nodes are numbered as they first
- * come up, in the order of the ways.
+ * used in (d), with SHARED for a track of another kind than the network's
+ * own. A way that two extracts have counts once, for the first. A way is cut
+ * where a node was not kept, and nodes are numbered as they first come up, in
+ * the order of the ways.
  */
 export function buildNetworks(readings) {
   const { places, numbers } = mergePlaces(readings.map((reading) => reading.places));
@@ -153,10 +167,15 @@ export function buildNetworks(readings) {
   }
   const numberOf = new Int32Array(places.id.length);
   return Object.fromEntries(NETS.map((net) => {
+    // What each kind of way is on this network: its own, shared with it, or nothing.
+    const asOf = readings.map(({ kinds }) => kinds.map((kind) => {
+      if (kind.net === net) return kind;
+      return kind.shared?.includes(net) ? { factor: kind.factor * SHARED_FACTOR, dir: kind.dir | SHARED } : null;
+    }));
     // (as long as it can be at most: as many nodes and edges as the ways of the network have nodes)
     let most = 0;
-    readings.forEach(({ kinds, ways }, r) => {
-      for (let w = 0; w < ways.id.length; w++) if (kinds[ways.kind[w]].net === net && (!counts[r] || counts[r][w])) most += ways.start[w + 1] - ways.start[w];
+    readings.forEach(({ ways }, r) => {
+      for (let w = 0; w < ways.id.length; w++) if (asOf[r][ways.kind[w]] && (!counts[r] || counts[r][w])) most += ways.start[w + 1] - ways.start[w];
     });
     const lat = new Int32Array(most);
     const lon = new Int32Array(most);
@@ -187,11 +206,11 @@ export function buildNetworks(readings) {
       }
       run.length = 0;
     };
-    readings.forEach(({ kinds, ways, nodes }, r) => {
-      const ofNet = kinds.map((kind) => kind.net === net);
+    readings.forEach(({ ways, nodes }, r) => {
       for (let w = 0; w < ways.id.length; w++) {
-        if (!ofNet[ways.kind[w]] || (counts[r] && !counts[r][w])) continue;
-        const { factor, dir } = kinds[ways.kind[w]];
+        const as = asOf[r][ways.kind[w]];
+        if (!as || (counts[r] && !counts[r][w])) continue;
+        const { factor, dir } = as;
         for (let k = ways.start[w]; k < ways.start[w + 1]; k++) {
           const place = nodes[k] < 0 || !numbers[r] ? nodes[k] : numbers[r][nodes[k]];
           if (place >= 0) run.push(place);
@@ -481,7 +500,12 @@ export class Network {
     return [y / this.ky, x / this.kx];
   }
 
-  /** Points on nearby edges a stop at (lat, lon) may be on, nearest first. */
+  /**
+   * Points on nearby edges a stop at (lat, lon) may be on, nearest first: up
+   * to maxCandidates on tracks of the network's own kind and as many on tracks
+   * it shares (`shared`), so that where shared ones are nearer, as a tunnel
+   * under a stop of trams is, they do not crowd out those of its own kind.
+   */
   candidates(lat, lon) {
     const [px, py] = this.toXY(lat, lon);
     const r = this.snapRadius;
@@ -501,11 +525,14 @@ export class Network {
           const x = ax + dx * t;
           const y = ay + dy * t;
           const distance = Math.hypot((px - x) * east, py - y);
-          if (distance <= r) found.push({ edge: e, t, x, y, penalty: distance * this.snapPenalty });
+          if (distance <= r) found.push({ edge: e, t, x, y, penalty: distance * this.snapPenalty, shared: (this.dir[e] & SHARED) > 0 });
         }
       }
     }
-    return found.sort((p, q) => p.penalty - q.penalty).slice(0, this.maxCandidates);
+    found.sort((p, q) => p.penalty - q.penalty);
+    const shared = found.filter((c) => c.shared);
+    if (!shared.length) return found.slice(0, this.maxCandidates);
+    return [...found.filter((c) => !c.shared).slice(0, this.maxCandidates), ...shared.slice(0, this.maxCandidates)].sort((p, q) => p.penalty - q.penalty);
   }
 
   // Seeds for a search leaving (forwards) or reaching (backwards) a candidate:
