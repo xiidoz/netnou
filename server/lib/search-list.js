@@ -4,15 +4,17 @@
 // for all of Germany it is a quarter of a million stations, and it is made as
 // small as it gets.
 //
-// - A station is its name, its place, what stops there and how much. It has
-//   no id: the ids of a feed need not outlast one version of it, and they
-//   would be a quarter of the list. A station is asked for by its place
-//   instead, so every station of the list has a place of its own: where a
-//   feed has several at one, all but the first are moved on, a metre each.
+// - A station is its name, its place, its town, what stops there and how
+//   much. It has no id: the ids of a feed need not outlast one version of it,
+//   and they would be a quarter of the list. A station is asked for by its
+//   place instead, so every station of the list has a place of its own: where
+//   a feed has several at one, all but the first are moved on, a metre each.
 // - The stations are in the order of a curve that goes through every place of
 //   the map (Hilbert's), so each is near the one before it, and a place is
 //   sent as the difference from the one before: small numbers that compress
 //   well. The names are one text with a line for each.
+// - The towns are named once, and a station has the number of its own: in
+//   that order the stations of a town follow each other.
 // - The lines are in the order of their operators, whose names are sent once.
 
 // A place is two whole numbers of 1e-5 degrees, about a metre.
@@ -50,8 +52,9 @@ const differences = (numbers) => Array.from(numbers, (number, i) => (i ? number 
 const inOrder = (a, b) => (a < b ? -1 : a > b ? 1 : 0);
 
 /**
- * @param stations [{ name, lat, lon, modes, service }]: the place in degrees,
- *   the modes by their names, and how often a trip stops there
+ * @param stations [{ name, lat, lon, modes, service, town }]: the place in
+ *   degrees, the modes by their names, how often a trip stops there, and the
+ *   name of the town it is in, if that is known
  * @param lines [{ name, mode, agency, to, lat, lon, service }]: where most of
  *   its trips go, the middle of its stops and the number of its trips
  * @param modes the names of all modes: a mode is sent as its number in them
@@ -77,6 +80,16 @@ export function searchList(stations, lines, modes) {
   const column = (of) => Array.from(order, of);
   const bits = (names) => names.reduce((sum, name) => sum | (1 << modes.indexOf(name)), 0);
 
+  // (the towns in the order in which the list comes to them)
+  const towns = [];
+  const townNumber = new Map();
+  const townOf = (i) => {
+    const name = stations[i].town;
+    if (!name) return -1;
+    if (!townNumber.has(name)) townNumber.set(name, towns.push(name) - 1);
+    return townNumber.get(name);
+  };
+
   const byOperator = [...lines].sort((a, b) => inOrder(a.agency, b.agency) || inOrder(a.name, b.name) || inOrder(a.mode, b.mode));
   const agencies = [...new Set(byOperator.map((line) => line.agency))];
   const operator = new Map(agencies.map((agency, i) => [agency, i]));
@@ -90,6 +103,8 @@ export function searchList(stations, lines, modes) {
       lon: differences(column((i) => lon[i])),
       modes: column((i) => bits(stations[i].modes)),
       service: column((i) => stations[i].service),
+      town: column(townOf),
+      towns,
     },
     lines: {
       name: byOperator.map((line) => line.name),

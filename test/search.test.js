@@ -50,7 +50,7 @@ const LINES = [
 /** What api/search sends for these stops and lines, as a browser gets it. */
 function listOf(stops, lines = []) {
   const { list } = searchList(
-    stops.map(([name, lat, lon, service, modes]) => ({ name, lat, lon, service, modes })),
+    stops.map(([name, lat, lon, service, modes, town = null]) => ({ name, lat, lon, service, modes, town })),
     lines.map(([name, mode, agency, to, lat, lon, service]) => ({ name, mode, agency, to, lat, lon, service })),
     MODES,
   );
@@ -352,4 +352,78 @@ test('an abbreviation that is typed finds the word it stands for, however a name
   assert.deepEqual(found('hb'), ['Kiel Hbf']);
   // (and "str" is the beginning of "strasse" as it is)
   assert.deepEqual(found('kiel bahnhofstr'), ['Kiel Bahnhofstraße']);
+});
+
+// [name, lat, lon, service, modes, town]: stops of all of Germany, of which many do not say their town
+const WITH_TOWNS = [
+  ['Sendlinger Tor', 48.1335, 11.5668, 17466, ['subway', 'tram'], 'München'],
+  ['Marienplatz', 48.13725, 11.57542, 8903, ['subway', 'suburban'], 'München'],
+  ['München Hbf', 48.1403, 11.5584, 4629, ['suburban', 'regional', 'longdistance'], 'München'],
+  ['Marienplatz (Theatinerstraße)', 48.1389, 11.5767, 2816, ['tram'], 'München'],
+  ['Frankfurt (Main) Weser-/Münchener Straße', 50.1071, 8.668, 2766, ['tram'], 'Frankfurt am Main'],
+  ['Marienplatz', 48.7709, 9.1728, 2552, ['subway'], 'Stuttgart'],
+  ['Schwerin Marienplatz', 53.6288, 11.4127, 1286, ['tram', 'bus'], 'Schwerin'],
+  ['Frankfurt (Main) Hauptwache', 50.1136, 8.679, 9000, ['subway', 'suburban'], 'Frankfurt am Main'],
+  ['D-Steinstraße U', 51.2196, 6.7838, 10425, ['subway'], 'Düsseldorf'],
+  ['Tennenlohe Kirche', 49.5488, 11.0288, 600, ['bus'], 'Erlangen'],
+  ['Erlangen Arcaden', 49.5958, 11.0019, 3000, ['bus'], 'Erlangen'],
+  ['Bahnhofstraße', 49.5021, 10.4172, 400, ['bus'], 'Bad Windsheim'],
+  ['Bad Windsheim Bahnhof', 49.5033, 10.4142, 300, ['regional', 'bus'], 'Bad Windsheim'],
+  ['Nürnberger Straße', 49.4407, 11.1063, 200, ['bus'], 'Nürnberg'],
+  ['Hof Hbf', 50.3082, 11.9226, 900, ['regional'], 'Hof'],
+  ['Hofer Straße', 50.3233, 11.9105, 150, ['bus'], 'Hof'],
+  ['Amsterdam Centraal', 52.3791, 4.9003, 100, ['longdistance']],
+];
+const germany = buildIndex(listOf(WITH_TOWNS));
+/** What a search finds, each as its name and, where the result has one, its town. */
+const inTowns = (query, options) => search(germany, query, options).map((stop) => (stop.town ? `${stop.name} · ${stop.town}` : stop.name));
+
+test('a stop is found by its town, whether its name says it or not', () => {
+  assert.deepEqual(inTowns('münchen marienplatz'), ['Marienplatz · München', 'Marienplatz (Theatinerstraße) · München']);
+  assert.deepEqual(inTowns('marienplatz münchen'), ['Marienplatz · München', 'Marienplatz (Theatinerstraße) · München']);
+  assert.deepEqual(inTowns('stuttgart marienplatz'), ['Marienplatz · Stuttgart']);
+  assert.deepEqual(inTowns('düsseldorf stein'), ['D-Steinstraße U · Düsseldorf']);
+  assert.deepEqual(inTowns('erlangen kirche'), ['Tennenlohe Kirche · Erlangen']);
+  // The town alone: its stops by their service, and with them the stops
+  // elsewhere that have the word in their name.
+  assert.deepEqual(inTowns('münchen'), ['Sendlinger Tor · München', 'Marienplatz · München', 'München Hbf', 'Marienplatz (Theatinerstraße) · München', 'Frankfurt (Main) Weser-/Münchener Straße']);
+  // any word of a town, as of a name
+  assert.deepEqual(inTowns('main hauptwache'), ['Frankfurt (Main) Hauptwache']);
+  assert.deepEqual(inTowns('windsheim bahn'), ['Bahnhofstraße · Bad Windsheim', 'Bad Windsheim Bahnhof']);
+  // a stop without a town is found by its name as before
+  assert.deepEqual(inTowns('amsterdam'), ['Amsterdam Centraal']);
+  assert.deepEqual(inTowns('amsterdam münchen'), []);
+});
+
+test('a town may be typed as a name may: without umlauts, in part, inside a word and with a slip', () => {
+  for (const typed of ['muenchen marienpl', 'munchen marienpl', 'münch marienpl', 'MÜNCHEN, Marienpl.']) assert.deepEqual(inTowns(typed), ['Marienplatz · München', 'Marienplatz (Theatinerstraße) · München'], typed);
+  // inside the town: after what begins with the word
+  assert.deepEqual(inTowns('dorf'), ['D-Steinstraße U · Düsseldorf']);
+  assert.deepEqual(inTowns('gart marienplatz'), ['Marienplatz · Stuttgart']);
+  // a slip in the town, where nothing is found without one
+  assert.deepEqual(inTowns('münchn marienplatz'), ['Marienplatz · München', 'Marienplatz (Theatinerstraße) · München']);
+  assert.deepEqual(inTowns('stutgart'), ['Marienplatz · Stuttgart']);
+  assert.deepEqual(inTowns('düsseldrof steinstr'), ['D-Steinstraße U · Düsseldorf']);
+  // (a town does not answer to what a name abbreviates: no stop of Bad Windsheim is found by "platz" for a "Pl.")
+  assert.deepEqual(inTowns('windsheim platz'), []);
+});
+
+test('a result has its town where its name does not say it', () => {
+  assert.deepEqual(search(germany, 'sendlinger'), [{ name: 'Sendlinger Tor', lat: 48.1335, lon: 11.5668, modes: ['subway', 'tram'], town: 'München' }]);
+  // said by the name: by a word that is the town, or its main word
+  assert.deepEqual(search(germany, 'münchen hbf'), [{ name: 'München Hbf', lat: 48.1403, lon: 11.5584, modes: ['suburban', 'regional', 'longdistance'] }]);
+  assert.deepEqual(inTowns('hauptwache'), ['Frankfurt (Main) Hauptwache']);
+  assert.deepEqual(inTowns('arcaden'), ['Erlangen Arcaden']);
+  assert.deepEqual(inTowns('bad windsheim'), ['Bahnhofstraße · Bad Windsheim', 'Bad Windsheim Bahnhof']);
+  assert.deepEqual(inTowns('weser'), ['Frankfurt (Main) Weser-/Münchener Straße']);
+  // a word that only begins like the town does not say it, nor does one that a short town begins
+  assert.deepEqual(inTowns('nürnberger'), ['Nürnberger Straße · Nürnberg']);
+  assert.deepEqual(inTowns('hof', { limit: 2 }), ['Hof Hbf', 'Hofer Straße · Hof']);
+  assert.deepEqual(inTowns('marienplatz'), ['Marienplatz · München', 'Marienplatz (Theatinerstraße) · München', 'Marienplatz · Stuttgart', 'Schwerin Marienplatz']);
+  assert.deepEqual(inTowns('centraal'), ['Amsterdam Centraal']);
+});
+
+test('with towns, a search finds the same whatever was searched for before it', () => {
+  const TYPED = ['münchen', 'münchen m', 'münchen marienplatz', 'münchn marienplatz', 'münchn', 'marienplatz', 'stuttgart marienplatz', 'm', 'mü', 'düsseldrof steinstr', 'düsseldorf', 'erlangen', 'erlangen k'];
+  for (const typed of [...TYPED, ...TYPED.toReversed()]) assert.deepEqual(inTowns(typed), search(buildIndex(listOf(WITH_TOWNS)), typed).map((stop) => (stop.town ? `${stop.name} · ${stop.town}` : stop.name)), typed);
 });

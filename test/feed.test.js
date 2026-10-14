@@ -272,14 +272,14 @@ test('route geometry: straight lines first, OSM data retried with growing waits,
   await updater.check();
   assert.deepEqual([requests.head, requests.get, requests.osm], [6, 2, 4]);
   assert.equal(updater.status.message, '1 trips, 2 stations, 1 routed hops');
-  assert.deepEqual(routesLog().slice(-4), ['Routes: downloading OSM extract URL', 'Routes: reading OSM extract (0 MB)', 'Routes: routing 1 hops', 'Routes: hops routed: road 0/0, rail 0/0, subway 1/1, tram 0/0']);
+  assert.deepEqual(routesLog().slice(-5), ['Routes: downloading OSM extract URL', 'Routes: reading OSM extract (0 MB)', 'Routes: 0 towns in the OSM extracts', 'Routes: routing 1 hops', 'Routes: hops routed: road 0/0, rail 0/0, subway 1/1, tram 0/0']);
   const routed = timetables.at(-1);
   assert.equal(routed.segmentCount, 1);
   // the trip runs over the bend at node 2 instead of straight from A to B
   assert.deepEqual(routed.trip('T1', '20261003', null).path.slice(2, 4), [49.45, 11.002]);
   assert.ok(!Number.isNaN(Date.parse(routed.source.osm)));
   assert.equal(updater.routesMissing, false);
-  assert.deepEqual(fs.readdirSync(dir).sort(), ['dataset.bin', 'osm-networks.json.gz']);
+  assert.deepEqual(fs.readdirSync(dir).sort(), ['dataset.bin', 'osm-networks.json.gz', 'osm-towns.json.gz']);
 
   // nothing more to do at the next check
   await updater.check();
@@ -291,6 +291,47 @@ test('route geometry: straight lines first, OSM data retried with growing waits,
   assert.deepEqual([requests.head, requests.get, requests.osm], [8, 3, 4]);
   assert.equal(timetables.at(-1).source.etag, '"v3"');
   assert.equal(timetables.at(-1).segmentCount, 1);
+});
+
+test('the stations get their towns from the borders in the OSM extract, with the route geometry', async (t) => {
+  const { feed, url, requests, dir, make } = await setup(t, FEED);
+  // A track from A to B, and the border of a town around A: two ways that meet at their ends.
+  feed.osm = makePbf(
+    [[1, 49.4, 11.0001], [2, 49.45, 11.002], [3, 49.5, 11.0001], [4, 49.35, 10.95], [5, 49.35, 11.05], [6, 49.45, 11.05], [7, 49.45, 10.95]],
+    [[10, [1, 2, 3], { railway: 'subway' }], [11, [4, 5, 6], {}], [12, [4, 7, 6], {}]],
+    [[20, { type: 'boundary', boundary: 'administrative', admin_level: '8', name: 'Alphastadt' }, [['way', 11, 'outer'], ['way', 12, 'outer']]]],
+  );
+  const { updater, timetables, log } = make({ osmUrls: [`${url}/area.osm.pbf`] });
+  const towns = (timetable) => {
+    const { names, town, towns: named } = timetable.searchList().list.stations;
+    return names.split('\n').map((name, i) => `${name}: ${named[town[i]] ?? '-'}`).sort();
+  };
+
+  await updater.check();
+  assert.equal(updater.status.error, null);
+  // at once without towns, as without routes, and with both when the OSM step is over
+  assert.deepEqual(timetables.map(towns), [['Alpha: -', 'Beta: -'], ['Alpha: Alphastadt', 'Beta: -']]);
+  assert.ok(log.includes('Routes: 1 towns in the OSM extracts'));
+  assert.equal(timetables.at(-1).segmentCount, 1);
+  assert.deepEqual(fs.readdirSync(dir).sort(), ['dataset.bin', 'osm-networks.json.gz', 'osm-towns.json.gz']);
+  assert.deepEqual([requests.get, requests.osm], [1, 1]);
+
+  // The next timetable, with one more station in the town: placed by the borders that were kept.
+  feed.zip = makeZip({ ...FEED, 'stops.txt': FEED['stops.txt'] + 'C,Gamma,49.44,11.04\n', 'stop_times.txt': FEED['stop_times.txt'] + 'T1,10:15:00,10:15:00,C,2\n' });
+  feed.etag = '"v2"';
+  await updater.check();
+  assert.equal(updater.status.error, null);
+  assert.deepEqual(towns(timetables.at(-1)), ['Alpha: Alphastadt', 'Beta: -', 'Gamma: Alphastadt']);
+  assert.deepEqual([requests.get, requests.osm], [2, 1]);
+
+  // Networks without the towns of their reading are as good as none: the extract is read again.
+  fs.rmSync(path.join(dir, 'osm-towns.json.gz'));
+  feed.etag = '"v3"';
+  await updater.check();
+  assert.equal(updater.status.error, null);
+  assert.deepEqual(towns(timetables.at(-1)), ['Alpha: Alphastadt', 'Beta: -', 'Gamma: Alphastadt']);
+  assert.deepEqual([requests.get, requests.osm], [3, 2]);
+  assert.deepEqual(fs.readdirSync(dir).sort(), ['dataset.bin', 'osm-networks.json.gz', 'osm-towns.json.gz']);
 });
 
 test('without an area the OSM data is kept where the trips run, and read again when they reach beyond it', async (t) => {

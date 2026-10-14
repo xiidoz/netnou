@@ -79,7 +79,7 @@ needs `NETNOU_PORT` set to the same number.
 | `NETNOU_REALTIME_URL` | `https://realtime.gtfs.de/realtime-free.pb` | http(s) URL | the GTFS-Realtime feed |
 | `NETNOU_REALTIME_INTERVAL_SECONDS` | `60` | 10–3600 | how often the realtime feed is fetched while the map is in use |
 | `NETNOU_REALTIME_IDLE_SECONDS` | `120` | 30–86400 | fetching stops this long after the last request from a browser |
-| `NETNOU_OSM_PBF_URLS` | five Geofabrik extracts of Bavaria; none for a custom area | comma-separated http(s) URLs | OpenStreetMap extracts (`.osm.pbf`) that together cover the area; empty means no route geometry |
+| `NETNOU_OSM_PBF_URLS` | five Geofabrik extracts of Bavaria; none for a custom area | comma-separated http(s) URLs | OpenStreetMap extracts (`.osm.pbf`) that together cover the area: the roads and tracks for the route geometry, and the borders of the towns the search finds a stop by; empty means neither |
 | `NETNOU_OSM_MAX_AGE_DAYS` | `30` | 1–3650 | how long the OpenStreetMap data is used before it is downloaded again |
 | `NETNOU_DOWNLOAD_TIMEOUT_MINUTES` | `30` | 1–1440 | limit for one download of the timetable or of an extract |
 | `NETNOU_MAP_STYLE_URL` | `https://tiles.openfreemap.org/styles/bright` | http(s) URL | the style of the map behind the vehicles, see [The map](#the-map) |
@@ -92,8 +92,8 @@ needs `NETNOU_PORT` set to the same number.
 Rules that apply to all of them:
 
 - An empty value counts as not set. The two exceptions are `NETNOU_AREA_NAME` (empty
-  means "no name") and `NETNOU_OSM_PBF_URLS` (empty means "no route geometry", also
-  for the built-in area).
+  means "no name") and `NETNOU_OSM_PBF_URLS` (empty means "no route geometry and no
+  towns", also for the built-in area).
 - Numbers are plain decimals (`30`, `0.5`); only `NETNOU_PORT` has to be a whole
   number.
 - Relative paths in `NETNOU_DATA_DIR` and `NETNOU_AREA_FILE` are resolved against the
@@ -206,7 +206,9 @@ NETNOU_OSM_PBF_URLS=https://download.geofabrik.de/europe/germany/bayern/oberbaye
    **and about 8 km around it**: routes to stops outside the area follow the
    network a few kilometres beyond its edge. Several extracts are separated by
    commas. Prefer the smallest extracts that do the job; each is downloaded in
-   full and read once.
+   full and read once. The extracts also say which town a stop is in, by the
+   borders of the municipalities in them: a stop beyond them is found by its
+   name alone.
 
 If the extracts do not cover the area, the map keeps using straight lines and
 the log says:
@@ -545,6 +547,7 @@ to change:
 | The operator behind the realtime data is recognised from the note gtfs.de attaches to each trip | `SOURCE_NOTE` in `server/lib/realtime.js` |
 | The grid that describes the area has cells of about 1.1 km at 49–50° north; far from that latitude the cells and all "about a kilometre" distances are stretched or squeezed east–west | `CELL_LON` in `server/lib/area.js` |
 | A feed's own `shapes.txt` is not used; route geometry always comes from OpenStreetMap | `server/lib/shapes.js` |
+| The town of a stop is the municipality that OpenStreetMap has at `admin_level` 8, or an area at level 6 or 4 with no municipality in it, as a city that is a district of its own and Berlin are. Where municipalities have another level, a stop has no town, or the name of a larger area | `BORDER_LEVELS` in `server/lib/towns.js` |
 | The labels "U-Bahn" and "S-Bahn" in the English texts | `public/locales/en.js` |
 | The departure board covers two hours and 40 entries | `departures` in `server/lib/timetable.js` |
 

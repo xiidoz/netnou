@@ -87,18 +87,19 @@ Server (`server/`):
 | `config.js` | reads and checks the settings (`loadConfig`) |
 | `lib/area.js` | the area as a grid of cells with their distance to it (`Area`, `NEAR`) |
 | `lib/feed.js` | keeps the timetable current: version check, download, worker, retries (`FeedUpdater`) |
-| `lib/import-worker.js` | worker thread: import, route geometry, writing the dataset |
+| `lib/import-worker.js` | worker thread: import, route geometry, the towns of the stations, writing the dataset |
 | `lib/importer.js` | cuts the GTFS feed down to the area and stores what repeats in it once (`buildDataset`); documents the dataset layout |
 | `lib/dataset.js` | the dataset as a binary file (`writeDataset`, `readDataset`), loaded into memory that threads share (`loadDataset`, `datasetFrom`), texts as one block (`Texts`) and lists that are stored once (`SharedLists`) |
 | `lib/zip.js`, `lib/csv.js` | read entries straight out of the zip (including zip64) and split CSV lines |
-| `lib/osmpbf.js` | reads the ways of an `.osm.pbf` extract |
+| `lib/osmpbf.js` | reads an `.osm.pbf` extract: its ways (`readPbfWays`) and its administrative borders (`readPbfBoundaries`) |
 | `lib/network.js` | builds routable networks from the ways and finds paths (`classifyWay`, `Network`) |
 | `lib/shapes.js` | route geometry for every hop (`loadNetworks`, `buildSegments`) |
+| `lib/towns.js` | which town a station is in: the towns among the borders of the extracts (`townsAmong`), kept between imports, and the town around a place (`townsOf`) |
 | `lib/timetable.js` | the loaded dataset and the queries of the API (`Timetable`), and the part of it that realtime data is matched against (`Schedule`); finds the trains that run coupled (`findSharedWays`) |
 | `lib/realtime.js` | says when the realtime feed is fetched (`RealtimePoller`), matches it to the trips and gives the portions of a coupled train the same delays where they share their way |
 | `lib/realtime-worker.js` | the thread that fetches the feed, reads it and matches it |
 | `lib/snapshot.js` | the realtime data of one fetch in columns: filled while the feed is read (`Gathering`), read by the timetable (`Snapshot`) |
-| `lib/search-list.js` | the list the page searches in, as small as it gets: the stations in an order in which neighbours follow each other, with their places as differences, and the lines by operator (`searchList`); finds the station the list has at a place |
+| `lib/search-list.js` | the list the page searches in, as small as it gets: the stations in an order in which neighbours follow each other, with their places as differences and their towns named once, and the lines by operator (`searchList`); finds the station the list has at a place |
 | `lib/http.js` | the GET the realtime feed is fetched with: patient with a busy server (`get`) |
 | `lib/pb.js` | decodes the GTFS-Realtime message (`decodeFeed`) |
 | `lib/update.js` | what the server calls itself (`describeBuild`) and the daily look-out for a newer release (`UpdateChecker`) |
@@ -295,6 +296,57 @@ the default area that is about 60,000 distinct hops.
 If no OpenStreetMap data can be loaded at all, the map works with straight
 lines.
 
+## Towns
+
+The feed has the name of a stop and its place, and no town. Many names do
+not say where they are: of the 245,000 stations that gtfs.de had for
+Germany in October 2026, 38 % have a name without their town in it, and in
+Munich, Stuttgart and Düsseldorf nearly all. The search is to find
+"Marienplatz" by "münchen marienplatz" and to tell it from the one in
+Stuttgart, so every station gets its town when the timetable is imported
+(`lib/towns.js`).
+
+- **Where the towns come from.** From the administrative borders of
+  OpenStreetMap, in the extracts that are read for the route geometry
+  anyway: no further download, and nobody else to credit. A municipality
+  has `admin_level` 8 in Germany and in most of its neighbours. A city that
+  is a district of its own has level 6, as the districts have, and Berlin
+  and Hamburg have level 4, as the states have: of the areas above the
+  municipalities those are towns that have no municipality in them. The
+  name is the one OpenStreetMap has as `name`, the one on the signs.
+- **Reading the borders.** A border is a relation that names ways, and a way
+  names nodes, and an extract has its nodes first and its relations last.
+  `readPbfBoundaries` therefore goes through the file three times, from its
+  end: for the relations, for their ways, for the nodes of those. An extract
+  says of itself that it is in that order, and each block is then unpacked
+  for one of the three only. That takes a good second for an extract of
+  100 MB, and for the one of all of Germany (4.9 GB, 11,000 towns) 55
+  seconds and half a gigabyte of memory.
+- **A border is its ways, not rings.** Two neighbours share the ways between
+  them, so each way is kept once, and whether a place is inside a border is
+  a matter of how many of its ways a line from there to the east crosses,
+  in whatever order they are. A border counts if it is whole: all its ways
+  are there, and at every point where one ends, an even number do. A way is
+  the same in every extract that has it, so a town that lies across two
+  extracts is whole with both, though with neither alone.
+- **Finding the town of a station.** The borders are sorted into cells of a
+  twentieth of a degree, and a station is tested against the few of its
+  cell: a quarter of a million stations take two seconds. Where a place is
+  in a municipality and in an area above, it is in the municipality.
+- **What is kept.** The towns of an instance are kept beside its networks,
+  in `osm-towns.json.gz`, and belong to the same reading of the extracts: a
+  new timetable gets its towns from there, and when the extracts are read
+  again, both files are written anew. For all of Germany that file is 19 MB.
+- **Where no town is known.** Outside the extracts, and where OpenStreetMap
+  has no whole border on the day: such a station is found by its name, as
+  before. An instance without extracts has no towns. What is mapped like a
+  town counts as one, so a stop in a forest or on a lake that belongs to no
+  municipality has the name of that area.
+
+In the dataset a station has the number of its town (`stops.town`), and the
+towns that have a station are named once (`towns`). The list of the search
+has them the same way.
+
 ## Realtime
 
 `RealtimePoller` has the GTFS-Realtime feed fetched every
@@ -386,17 +438,19 @@ The data directory (`NETNOU_DATA_DIR`) holds:
 | --- | --- | --- |
 | `dataset.bin` | the dataset: timetable of the area with route geometry | until a new feed version is imported |
 | `osm-networks.json.gz` | the routable networks | `NETNOU_OSM_MAX_AGE_DAYS` |
+| `osm-towns.json.gz` | the borders of the towns in the extracts | as the networks, with which they are read |
 | `feed.zip`, `osm-<n>.pbf` | downloads | only during an import |
 
 Everything can be deleted at any time and is rebuilt.
 
-Two constants guard the formats. Bump them when you change what is stored;
+Three constants guard the formats. Bump them when you change what is stored;
 otherwise a server would load a file written by older code:
 
 - `DATASET_VERSION` in `lib/dataset.js`: the layout or meaning of anything
   in the dataset, including the route geometry.
 - `NETWORKS_VERSION` in `lib/shapes.js`: `classifyWay`, the cost factors or
   the output of `NetworkBuilder`.
+- `TOWNS_VERSION` in `lib/towns.js`: what is kept of the borders.
 
 ## The page
 
@@ -475,6 +529,13 @@ otherwise a server would load a file written by older code:
   there and opens its departure board. A line is found by the beginning of
   its name, with its mode in front if somebody types one ("bus 33"), and is
   told from others of the same name by where it goes and who runs it.
+- **The town of a stop.** A word typed may also be a word of the [town](#towns)
+  a stop is in, whether its name says the town or not, and it may be typed
+  as a word of a name may: in part, without its umlauts, with a slip. A
+  result has its town below its name where the name does not say it, which
+  is where a word of the name is the town, or the first long word of it:
+  "Marienplatz" has "München" below it, "Nürnberg Plärrer" has nothing, and
+  "Nürnberger Straße" has its town, since many towns have one.
 - **The list of the search.** All of Germany is a quarter of a million
   stations, and every visitor who searches loads the list of them. It is
   therefore as small as it gets (`lib/search-list.js`,
@@ -482,8 +543,10 @@ otherwise a server would load a file written by older code:
   names as one text and the places as whole numbers. The stations are in the
   order of a curve that goes through every place of the map (Hilbert's), so
   each is near the one before it, and a place is written as the small
-  difference from that one. Compressed that is 2.9 MB for all of Germany and
-  160 kB for the default area.
+  difference from that one. The towns are named once, and a station has the
+  number of its own: in that order the stations of a town follow each
+  other, and the towns add 3 to 4 %. Compressed the list is 3.0 MB for all
+  of Germany and 170 kB for the default area.
 - **A station of the search has no id.** The ids of a feed need not outlast
   one version of it: of the 112,000 stations that gtfs.de had under the same
   name at the same place in January and in October 2026, not one had kept

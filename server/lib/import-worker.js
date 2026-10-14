@@ -1,7 +1,8 @@
 // Worker thread entry: builds the regional dataset from a downloaded feed, adds
-// the route geometry and writes the result to disk. Runs off the main thread
-// because parsing stop_times.txt and the OSM extracts keeps a core busy for a
-// while. In mode "routes" only the geometry of the stored dataset is redone.
+// the route geometry and the towns of the stops and writes the result to disk.
+// Runs off the main thread because parsing stop_times.txt and the OSM extracts
+// keeps a core busy for a while. In mode "routes" only what comes from the OSM
+// extracts is redone for the stored dataset.
 // Every time the dataset has been written the main thread is told to load it.
 //
 // The time zone set in the main thread (setTimeZone in time.js) does not reach
@@ -13,6 +14,7 @@ import { Area } from './area.js';
 import { readDataset, writeDataset } from './dataset.js';
 import { buildDataset } from './importer.js';
 import { buildSegments, loadNetworks } from './shapes.js';
+import { townsOf } from './towns.js';
 
 const { mode, interim, zipPath, outPath, dataDir, source, osm, downloadTimeoutMs, agencies, scope } = workerData;
 // (an instance may have no area: what it covers is then seen from its trips)
@@ -51,7 +53,12 @@ if (osm.urls.length) {
     }
   });
   networks = await loadNetworks({ dataDir, urls: osm.urls, area: region, scope, maxAgeMs: osm.maxAgeMs, timeoutMs: downloadTimeoutMs, onProgress });
-  if (networks) data.segments = buildSegments(data, networks.nets, region, onProgress);
+  if (networks) {
+    data.segments = buildSegments(data, networks.nets, region, onProgress);
+    // (the towns of the stations, by the borders in the same extracts)
+    const { names, of } = townsOf(data.stops, networks.towns);
+    Object.assign(data, { towns: names, stops: { ...data.stops, town: of } });
+  }
 }
 if (!networks) data.segments = null;
 data.source.osm = networks?.fetchedAt ?? null;

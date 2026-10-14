@@ -38,9 +38,10 @@ changes as breaking.
   places in the visitor's language.
 - Stop list with delays, skipped stops and cancellations for every trip;
   departure board for every station; notes from the feed.
-- Search for stops and lines that runs in the browser. For stops it forgives
-  abbreviations, missing umlauts and typing slips; a line shows its vehicles
-  under way, alone on the map.
+- Search for stops and lines that runs in the browser. A stop is found by
+  its town as well as by its name, and the search forgives abbreviations,
+  missing umlauts and typing slips; a line shows its vehicles under way,
+  alone on the map.
 - The visitor's own location on the map, if they ask for it; it stays in
   their browser.
 - A button hides the controls for more map, another gives the page the whole
@@ -200,8 +201,9 @@ terms:
 
 - Timetable and realtime data: [gtfs.de](https://gtfs.de), provided by DELFI
   e.V., CC BY-SA 4.0.
-- Roads and tracks for the routes: © OpenStreetMap contributors, ODbL 1.0,
-  as extracts from [Geofabrik](https://download.geofabrik.de/).
+- Roads and tracks for the routes, and the borders of the towns the search
+  knows: © OpenStreetMap contributors, ODbL 1.0, as extracts from
+  [Geofabrik](https://download.geofabrik.de/).
 - The map behind the vehicles: vector tiles of
   [OpenFreeMap](https://openfreemap.org) in the OpenMapTiles scheme, made
   from OpenStreetMap data and loaded by the visitor's browser. OpenFreeMap
