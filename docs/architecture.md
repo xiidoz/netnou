@@ -91,8 +91,8 @@ Server (`server/`):
 | `lib/importer.js` | cuts the GTFS feed down to the area and stores what repeats in it once (`buildDataset`); documents the dataset layout |
 | `lib/dataset.js` | the dataset as a binary file (`writeDataset`, `readDataset`), loaded into memory that threads share (`loadDataset`, `datasetFrom`), texts as one block (`Texts`) and lists that are stored once (`SharedLists`) |
 | `lib/zip.js`, `lib/csv.js` | read entries straight out of the zip (including zip64) and split CSV lines |
-| `lib/osmpbf.js` | reads an `.osm.pbf` extract: its ways (`readPbfWays`) and its administrative borders (`readPbfBoundaries`) |
-| `lib/network.js` | builds routable networks from the ways and finds paths (`classifyWay`, `Network`) |
+| `lib/osmpbf.js` | reads an `.osm.pbf` extract, the ways first and then the places of their nodes: its roads and tracks (`readPbfWays`) and its administrative borders (`readPbfBoundaries`) |
+| `lib/network.js` | builds routable networks from the ways (`classifyWay`, `buildNetworks`), cuts the roads of a country into tiles (`tilesOf`, `windowOf`) and finds paths (`Network`) |
 | `lib/shapes.js` | route geometry for every hop (`loadNetworks`, `buildSegments`) |
 | `lib/towns.js` | which town a station is in: the towns among the borders of the extracts (`townsAmong`), kept between imports, and the town around a place (`townsOf`) |
 | `lib/timetable.js` | the loaded dataset and the queries of the API (`Timetable`), and the part of it that realtime data is matched against (`Schedule`); finds the trains that run coupled (`findSharedWays`) |
@@ -263,21 +263,42 @@ for the default area. The layout is described field by field above
 
 The feed has no `shapes.txt`, so the path of every *hop* (two consecutive
 stops of a trip, on one network) is found by routing over OpenStreetMap. For
-the default area that is about 60,000 distinct hops.
+the default area that is about 60,000 distinct hops, for all of Germany
+790,000.
 
+- **Reading an extract.** A way names its nodes, and an extract has its
+  nodes first. `readPbfWays` therefore reads the ways first, keeps those
+  that `classifyWay` takes, and then the places of just their nodes: of the
+  441 million nodes of the extract of Germany, 32 million. That takes the
+  extract of Germany (4.9 GB) two minutes and at most 1.8 GB of memory, and
+  one of 100 MB a second or two.
 - **Networks.** `classifyWay` sorts OpenStreetMap ways into four networks:
   `road` for buses, and `tram`, `subway` and `rail` for vehicles on tracks.
   Roads carry a cost factor so that buses prefer main roads, and respect
   one-way streets, access restrictions and the exemptions for buses. The
-  networks are cached in `osm-networks.json.gz` and built again when the
-  OpenStreetMap data is older than `NETNOU_OSM_MAX_AGE_DAYS`, when the area or the
-  list of extracts changes.
+  networks are kept in `osm-networks.bin`, as columns that are read again
+  in a second, and built again when the OpenStreetMap data is older than
+  `NETNOU_OSM_MAX_AGE_DAYS`, when the area or the list of extracts changes.
+- **Tiles.** The roads of a region are one network, as those of the default
+  area are with 2 million nodes. Those of a country are too many for that:
+  above 4 million nodes (`ROADS_AT_ONCE`) they are cut into tiles of a
+  quarter of a degree (`tilesOf`), and a hop is routed on the roads of the
+  tile its middle is in and of the eight tiles around it. A hop that has a
+  stop more than half a tile beyond the tile of its middle is too long for
+  that and stays a straight line: in all of Germany 2,154 of the 756,709
+  hops on roads, most of them of long-distance coaches. The tracks of a
+  country are one network each.
+- **Lengths.** A network lies on a plane that is right at one latitude, that
+  of the middle of the area or of the tile. A metre from west to east is
+  measured at the latitude of each edge, and the distance of a stop from a
+  way at the latitude of the stop: from the middle of Germany to its north
+  and to its south that differs by a tenth.
 - **Snapping.** A stop is rarely exactly on its road or track. Candidates on
   nearby edges are considered, up to 70 m away for buses and up to 400 m for
   trains (whose stop is often the centre of the station), with a penalty per
   metre of offset.
-- **Search.** An A* search finds the cheapest path from a candidate of stop A
-  to a candidate of stop B.
+- **Search.** A search from the candidates of stop A finds the cheapest path
+  to one of stop B (Dijkstra's).
 - **Plausibility.** A path much longer than the straight line (more than 2 to
   2.5 times plus a few hundred metres, depending on the network) is thrown
   away. This is a shortest-path guess, not the operator's official route;
@@ -289,9 +310,18 @@ the default area that is about 60,000 distinct hops.
   the network stops leading towards the stop. The limit on the length applies
   here as well. Hops entirely outside mostly have no geometry.
 - **Fallback.** A hop without a path is a straight line. In October 2026 that
-  was the case for about 1 % of the hops inside the default area.
+  was the case for about 1 % of the hops inside the default area. For all of
+  Germany it was 1.3 % of the hops on roads, 15 % on rail, 10 % of trams and
+  half of those of the U-Bahn: the Stadtbahn of Stuttgart, Frankfurt,
+  Düsseldorf and the Ruhr, which the feed has as U-Bahn, runs on tracks that
+  OpenStreetMap has as light rail, which is a network of its own here
+  ([#128](https://github.com/xiidoz/netnou/issues/128)).
 - **Storage.** Paths are simplified to 1.5 m accuracy and stored once per
   hop, shared by all trips that use it.
+- **Time and memory.** For the default area the route step of an import
+  takes the test machine about 40 seconds, the server at most 1 GB of
+  memory. For all of Germany it takes 7 minutes, 3 to read the extract and 4
+  to route, and the server at most 3 GB. Every import routes all hops.
 
 If no OpenStreetMap data can be loaded at all, the map works with straight
 lines.
@@ -437,7 +467,7 @@ The data directory (`NETNOU_DATA_DIR`) holds:
 | File | Content | Lifetime |
 | --- | --- | --- |
 | `dataset.bin` | the dataset: timetable of the area with route geometry | until a new feed version is imported |
-| `osm-networks.json.gz` | the routable networks | `NETNOU_OSM_MAX_AGE_DAYS` |
+| `osm-networks.bin` | the routable networks | `NETNOU_OSM_MAX_AGE_DAYS` |
 | `osm-towns.json.gz` | the borders of the towns in the extracts | as the networks, with which they are read |
 | `feed.zip`, `osm-<n>.pbf` | downloads | only during an import |
 
@@ -449,7 +479,7 @@ otherwise a server would load a file written by older code:
 - `DATASET_VERSION` in `lib/dataset.js`: the layout or meaning of anything
   in the dataset, including the route geometry.
 - `NETWORKS_VERSION` in `lib/shapes.js`: `classifyWay`, the cost factors or
-  the output of `NetworkBuilder`.
+  the output of `buildNetworks`.
 - `TOWNS_VERSION` in `lib/towns.js`: what is kept of the borders.
 
 ## The page

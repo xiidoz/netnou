@@ -279,7 +279,7 @@ test('route geometry: straight lines first, OSM data retried with growing waits,
   assert.deepEqual(routed.trip('T1', '20261003', null).path.slice(2, 4), [49.45, 11.002]);
   assert.ok(!Number.isNaN(Date.parse(routed.source.osm)));
   assert.equal(updater.routesMissing, false);
-  assert.deepEqual(fs.readdirSync(dir).sort(), ['dataset.bin', 'osm-networks.json.gz', 'osm-towns.json.gz']);
+  assert.deepEqual(fs.readdirSync(dir).sort(), ['dataset.bin', 'osm-networks.bin', 'osm-towns.json.gz']);
 
   // nothing more to do at the next check
   await updater.check();
@@ -313,7 +313,7 @@ test('the stations get their towns from the borders in the OSM extract, with the
   assert.deepEqual(timetables.map(towns), [['Alpha: -', 'Beta: -'], ['Alpha: Alphastadt', 'Beta: -']]);
   assert.ok(log.includes('Routes: 1 towns in the OSM extracts'));
   assert.equal(timetables.at(-1).segmentCount, 1);
-  assert.deepEqual(fs.readdirSync(dir).sort(), ['dataset.bin', 'osm-networks.json.gz', 'osm-towns.json.gz']);
+  assert.deepEqual(fs.readdirSync(dir).sort(), ['dataset.bin', 'osm-networks.bin', 'osm-towns.json.gz']);
   assert.deepEqual([requests.get, requests.osm], [1, 1]);
 
   // The next timetable, with one more station in the town: placed by the borders that were kept.
@@ -331,7 +331,7 @@ test('the stations get their towns from the borders in the OSM extract, with the
   assert.equal(updater.status.error, null);
   assert.deepEqual(towns(timetables.at(-1)), ['Alpha: Alphastadt', 'Beta: -', 'Gamma: Alphastadt']);
   assert.deepEqual([requests.get, requests.osm], [3, 2]);
-  assert.deepEqual(fs.readdirSync(dir).sort(), ['dataset.bin', 'osm-networks.json.gz', 'osm-towns.json.gz']);
+  assert.deepEqual(fs.readdirSync(dir).sort(), ['dataset.bin', 'osm-networks.bin', 'osm-towns.json.gz']);
 });
 
 test('without an area the OSM data is kept where the trips run, and read again when they reach beyond it', async (t) => {

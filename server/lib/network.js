@@ -65,48 +65,226 @@ export function classifyWay(tags) {
   return { net: 'road', factor, dir };
 }
 
-/** Collects classified ways into the compact per-network form that Network reads. */
-export class NetworkBuilder {
-  constructor() {
-    this.seenWays = new Set();
-    this.nets = Object.fromEntries(NETS.map((net) => [net, { index: new Map(), lat: [], lon: [], a: [], b: [], f: [], d: [] }]));
+/** Where a number is among numbers in order, or -1 if it is not. */
+function indexIn(numbers, number) {
+  let low = 0;
+  for (let high = numbers.length; low < high;) {
+    const middle = (low + high) >> 1;
+    if (numbers[middle] < number) low = middle + 1;
+    else high = middle;
   }
+  return numbers[low] === number ? low : -1;
+}
 
-  /** `way` as delivered by readPbfWays; the same way may arrive from two extracts. */
-  addWay(way) {
-    const cls = classifyWay(way.tags);
-    if (!cls) return;
-    const key = `${way.id}:${way.nodes[0]}`;
-    if (this.seenWays.has(key)) return;
-    this.seenWays.add(key);
+/**
+ * The places of several extracts as one, in the order of the ids of the
+ * nodes, each once; and for each extract the number in it of each of its own.
+ */
+function mergePlaces(list) {
+  if (list.length === 1) return { places: list[0], numbers: [null] };
+  const total = list.reduce((sum, places) => sum + places.id.length, 0);
+  const all = new Float64Array(total);
+  let n = 0;
+  for (const places of list) {
+    all.set(places.id, n);
+    n += places.id.length;
+  }
+  all.sort();
+  let count = 0;
+  for (let i = 0; i < all.length; i++) if (!i || all[i] !== all[i - 1]) all[count++] = all[i];
+  const merged = { id: all.slice(0, count), lat: new Int32Array(count), lon: new Int32Array(count) };
+  const numbers = list.map((places) => Int32Array.from(places.id, (id) => indexIn(merged.id, id)));
+  // (a node of two extracts is the same node; should they have it in two places, as of two days, the first counts, as for a way)
+  for (let r = list.length - 1; r >= 0; r--) {
+    numbers[r].forEach((at, i) => {
+      merged.lat[at] = list[r].lat[i];
+      merged.lon[at] = list[r].lon[i];
+    });
+  }
+  return { places: merged, numbers };
+}
 
-    const g = this.nets[cls.net];
-    let prev = -1;
-    for (let i = 0; i < way.nodes.length; i++) {
-      let node = g.index.get(way.nodes[i]);
-      if (node === undefined) {
-        node = g.lat.length;
-        g.index.set(way.nodes[i], node);
-        g.lat.push(Math.round(way.lat[i] * 1e7));
-        g.lon.push(Math.round(way.lon[i] * 1e7));
+/**
+ * The networks in what readPbfWays read of the extracts (classify:
+ * classifyWay), in the form that Network reads: for each of NETS the places
+ * of its nodes in 1e-7 degrees (lat, lon) and its edges from node a to node b,
+ * with the factor of their cost in percent (f) and the directions they may be
+ * used in (d). A way that two extracts have counts once, for the first. A
+ * way is cut where a node was not kept, and nodes are numbered as they first
+ * come up, in the order of the ways.
+ */
+export function buildNetworks(readings) {
+  const { places, numbers } = mergePlaces(readings.map((reading) => reading.places));
+  // (of a way that two extracts have, the one of the first counts)
+  const counts = readings.map(() => null);
+  if (readings.length > 1) {
+    const seen = new Set();
+    readings.forEach(({ ways }, r) => {
+      counts[r] = new Uint8Array(ways.id.length);
+      ways.id.forEach((id, w) => {
+        if (seen.has(id)) return;
+        seen.add(id);
+        counts[r][w] = 1;
+      });
+    });
+  }
+  const numberOf = new Int32Array(places.id.length);
+  return Object.fromEntries(NETS.map((net) => {
+    // (as long as it can be at most: as many nodes and edges as the ways of the network have nodes)
+    let most = 0;
+    readings.forEach(({ kinds, ways }, r) => {
+      for (let w = 0; w < ways.id.length; w++) if (kinds[ways.kind[w]].net === net && (!counts[r] || counts[r][w])) most += ways.start[w + 1] - ways.start[w];
+    });
+    const lat = new Int32Array(most);
+    const lon = new Int32Array(most);
+    const [a, b, f, d] = [new Int32Array(most), new Int32Array(most), new Uint16Array(most), new Uint8Array(most)];
+    let [nodeCount, edgeCount] = [0, 0];
+    numberOf.fill(-1);
+    const run = [];
+    /** A run of nodes that were kept, as places: its edges, and its nodes as they first come up. */
+    const flush = (factor, dir) => {
+      if (run.length >= 2) {
+        let previous = -1;
+        for (const place of run) {
+          let node = numberOf[place];
+          if (node < 0) {
+            node = numberOf[place] = nodeCount++;
+            lat[node] = places.lat[place];
+            lon[node] = places.lon[place];
+          }
+          if (previous >= 0 && previous !== node) {
+            a[edgeCount] = previous;
+            b[edgeCount] = node;
+            f[edgeCount] = Math.round(factor * 100);
+            d[edgeCount] = dir;
+            edgeCount++;
+          }
+          previous = node;
+        }
       }
-      if (prev >= 0 && prev !== node) {
-        g.a.push(prev);
-        g.b.push(node);
-        g.f.push(Math.round(cls.factor * 100));
-        g.d.push(cls.dir);
+      run.length = 0;
+    };
+    readings.forEach(({ kinds, ways, nodes }, r) => {
+      const ofNet = kinds.map((kind) => kind.net === net);
+      for (let w = 0; w < ways.id.length; w++) {
+        if (!ofNet[ways.kind[w]] || (counts[r] && !counts[r][w])) continue;
+        const { factor, dir } = kinds[ways.kind[w]];
+        for (let k = ways.start[w]; k < ways.start[w + 1]; k++) {
+          const place = nodes[k] < 0 || !numbers[r] ? nodes[k] : numbers[r][nodes[k]];
+          if (place >= 0) run.push(place);
+          else flush(factor, dir);
+        }
+        flush(factor, dir);
       }
-      prev = node;
+    });
+    // (the part that was filled, without a copy)
+    return [net, { lat: lat.subarray(0, nodeCount), lon: lon.subarray(0, nodeCount), a: a.subarray(0, edgeCount), b: b.subarray(0, edgeCount), f: f.subarray(0, edgeCount), d: d.subarray(0, edgeCount) }];
+  }));
+}
+
+// The roads of an instance are one network as long as they have no more
+// nodes than this, as those of a region have (the default area 2 million).
+// The roads of a country are routed in tiles instead (tilesOf).
+export const ROADS_AT_ONCE = 4_000_000;
+// A tile is a square of this many degrees, about 28 km from north to south
+// and 18 km from west to east in Germany. A hop is routed on the roads of the
+// tile its middle is in and of the eight tiles around it: four in ten
+// thousand of the hops on roads of all of Germany are too long for that.
+export const TILE = 0.25;
+
+/**
+ * The roads in tiles: the nodes of every tile that has any, and the edges
+ * that begin in it, each in the order of their numbers.
+ * @param graph a network as buildNetworks gives it
+ * @returns { size, row, col, keys, nodeStart, nodes, edgeStart, edges }: the
+ *   tile of a place in 1e-7 degrees is key(row(lat), col(lon)); tile t of
+ *   the ones that have nodes is keys[t], its nodes are nodes[nodeStart[t]]
+ *   to nodes[nodeStart[t + 1] - 1] and its edges the same of `edges`.
+ */
+export function tilesOf(graph, size = TILE) {
+  const unit = size * 1e7;
+  const row = (lat) => Math.floor(lat / unit);
+  const col = (lon) => Math.floor(lon / unit);
+  const nodeCount = graph.lat.length;
+  let [south, west, north, east] = [Infinity, Infinity, -Infinity, -Infinity];
+  for (let i = 0; i < nodeCount; i++) {
+    south = Math.min(south, row(graph.lat[i]));
+    north = Math.max(north, row(graph.lat[i]));
+    west = Math.min(west, col(graph.lon[i]));
+    east = Math.max(east, col(graph.lon[i]));
+  }
+  // (a tile as one whole number, the rows and columns of the network and one more on each side; -1 for one beyond them)
+  const width = east - west + 3;
+  const key = (r, c) => (r >= south - 1 && r <= north + 1 && c >= west - 1 && c <= east + 1 ? (r - south + 1) * width + (c - west + 1) : -1);
+  const tileOfNode = new Int32Array(nodeCount);
+  for (let i = 0; i < nodeCount; i++) tileOfNode[i] = key(row(graph.lat[i]), col(graph.lon[i]));
+  // (by counting: there are some thousand tiles and millions of nodes)
+  const keys = Int32Array.from(new Set(tileOfNode)).sort();
+  const numberOf = new Map(Array.from(keys, (k, t) => [k, t]));
+  const sorted = (count, tileOf) => {
+    const start = new Int32Array(keys.length + 1);
+    for (let i = 0; i < count; i++) start[numberOf.get(tileOf(i)) + 1]++;
+    for (let t = 0; t < keys.length; t++) start[t + 1] += start[t];
+    const fill = start.slice(0, keys.length);
+    const list = new Int32Array(count);
+    for (let i = 0; i < count; i++) list[fill[numberOf.get(tileOf(i))]++] = i;
+    return { start, list };
+  };
+  const byNode = sorted(nodeCount, (i) => tileOfNode[i]);
+  const byEdge = sorted(graph.a.length, (e) => tileOfNode[graph.a[e]]);
+  return { size, row, col, key, keys, nodeStart: byNode.start, nodes: byNode.list, edgeStart: byEdge.start, edges: byEdge.list };
+}
+
+/**
+ * The part of a network that is in some of its tiles, in the form Network
+ * reads: the nodes of those tiles and the edges between them, in the order of
+ * their numbers in the whole network.
+ * @param keys the tiles, as keys of tilesOf
+ * @param scratch an Int32Array of -1 for every node of the network, which it
+ *   is again afterwards
+ * @returns the part, and `global`: the number of each of its nodes in the
+ *   whole network
+ */
+export function windowOf(graph, tiles, keys, scratch) {
+  const found = keys.map((key) => indexIn(tiles.keys, key)).filter((t) => t >= 0);
+  /** The numbers of the nodes or edges of those tiles, in order. */
+  const gather = (start, list) => {
+    const out = new Int32Array(found.reduce((sum, t) => sum + start[t + 1] - start[t], 0));
+    let n = 0;
+    for (const t of found) {
+      out.set(list.subarray(start[t], start[t + 1]), n);
+      n += start[t + 1] - start[t];
     }
+    return out.sort();
+  };
+  const global = gather(tiles.nodeStart, tiles.nodes);
+  for (let i = 0; i < global.length; i++) scratch[global[i]] = i;
+  const candidates = gather(tiles.edgeStart, tiles.edges);
+  let count = 0;
+  for (let k = 0; k < candidates.length; k++) if (scratch[graph.b[candidates[k]]] >= 0) candidates[count++] = candidates[k];
+  const edges = candidates.subarray(0, count);
+  const part = {
+    lat: new Int32Array(global.length),
+    lon: new Int32Array(global.length),
+    a: new Int32Array(count),
+    b: new Int32Array(count),
+    f: new Uint16Array(count),
+    d: new Uint8Array(count),
+    global,
+  };
+  for (let i = 0; i < global.length; i++) {
+    part.lat[i] = graph.lat[global[i]];
+    part.lon[i] = graph.lon[global[i]];
   }
-
-  /** Plain arrays only, ready for JSON: lat/lon in 1e-7 degrees, factor in percent. */
-  result() {
-    return Object.fromEntries(NETS.map((net) => {
-      const { lat, lon, a, b, f, d } = this.nets[net];
-      return [net, { lat, lon, a, b, f, d }];
-    }));
+  for (let k = 0; k < count; k++) {
+    const e = edges[k];
+    part.a[k] = scratch[graph.a[e]];
+    part.b[k] = scratch[graph.b[e]];
+    part.f[k] = graph.f[e];
+    part.d[k] = graph.d[e];
   }
+  for (let i = 0; i < global.length; i++) scratch[global[i]] = -1;
+  return part;
 }
 
 class MinHeap {
@@ -182,19 +360,30 @@ export class Network {
     this.maxCandidates = maxCandidates;
     this.kx = M_PER_DEG * Math.cos((originLat * Math.PI) / 180);
     this.ky = M_PER_DEG;
+    // The places are on a plane that is right at originLat. A metre from west
+    // to east is longer than that further south and shorter further north, by
+    // a tenth from the middle of Germany to its edges: lengths and distances
+    // are measured at their own latitude.
+    this.eastAt = (lat) => Math.cos((lat * Math.PI) / 180) / Math.cos((originLat * Math.PI) / 180);
 
     const n = graph.lat.length;
     const m = graph.a.length;
     this.nodeCount = n;
-    this.x = Float64Array.from(graph.lon, (v) => (v / 1e7) * this.kx);
-    this.y = Float64Array.from(graph.lat, (v) => (v / 1e7) * this.ky);
-    this.a = Int32Array.from(graph.a);
-    this.b = Int32Array.from(graph.b);
-    this.dir = Uint8Array.from(graph.d);
+    // (with loops: Float64Array.from with a function takes forty times as long)
+    this.x = new Float64Array(n);
+    this.y = new Float64Array(n);
+    for (let i = 0; i < n; i++) {
+      this.x[i] = (graph.lon[i] / 1e7) * this.kx;
+      this.y[i] = (graph.lat[i] / 1e7) * this.ky;
+    }
+    this.a = new Int32Array(graph.a);
+    this.b = new Int32Array(graph.b);
+    this.dir = new Uint8Array(graph.d);
     this.len = new Float64Array(m);
     this.cost = new Float64Array(m);
     for (let e = 0; e < m; e++) {
-      this.len[e] = Math.hypot(this.x[this.a[e]] - this.x[this.b[e]], this.y[this.a[e]] - this.y[this.b[e]]);
+      const east = this.eastAt((graph.lat[this.a[e]] + graph.lat[this.b[e]]) / 2e7);
+      this.len[e] = Math.hypot((this.x[this.a[e]] - this.x[this.b[e]]) * east, this.y[this.a[e]] - this.y[this.b[e]]);
       this.cost[e] = (this.len[e] * graph.f[e]) / 100;
     }
 
@@ -259,9 +448,10 @@ export class Network {
   candidates(lat, lon) {
     const [px, py] = this.toXY(lat, lon);
     const r = this.snapRadius;
+    const east = this.eastAt(lat);
     const found = [];
     const seen = new Set();
-    for (let cx = Math.floor((px - r) / CELL_M); cx <= Math.floor((px + r) / CELL_M); cx++) {
+    for (let cx = Math.floor((px - r / east) / CELL_M); cx <= Math.floor((px + r / east) / CELL_M); cx++) {
       for (let cy = Math.floor((py - r) / CELL_M); cy <= Math.floor((py + r) / CELL_M); cy++) {
         for (const e of this.grid.get(cx * 1e6 + cy) ?? []) {
           if (seen.has(e)) continue;
@@ -270,10 +460,10 @@ export class Network {
           const ay = this.y[this.a[e]];
           const dx = this.x[this.b[e]] - ax;
           const dy = this.y[this.b[e]] - ay;
-          const t = Math.min(1, Math.max(0, ((px - ax) * dx + (py - ay) * dy) / (dx * dx + dy * dy || 1)));
+          const t = Math.min(1, Math.max(0, ((px - ax) * dx * east * east + (py - ay) * dy) / (dx * dx * east * east + dy * dy || 1)));
           const x = ax + dx * t;
           const y = ay + dy * t;
-          const distance = Math.hypot(px - x, py - y);
+          const distance = Math.hypot((px - x) * east, py - y);
           if (distance <= r) found.push({ edge: e, t, x, y, penalty: distance * this.snapPenalty });
         }
       }
