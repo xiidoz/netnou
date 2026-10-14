@@ -218,6 +218,26 @@ export function datasetFrom(buffer, { lists = null } = {}) {
   });
 }
 
+/**
+ * What a dataset written by writeDataset has besides its columns, which are
+ * null in it: what is small is read without the rest of the file.
+ */
+export function readDatasetHead(file) {
+  const fd = fs.openSync(file, 'r');
+  try {
+    const length = Buffer.alloc(16);
+    fs.readSync(fd, length, 0, 16, 0);
+    const topLength = Number(length.toString('latin1'));
+    if (!(topLength > MAGIC.length)) throw new Error('not a dataset');
+    const top = Buffer.alloc(topLength);
+    if (fs.readSync(fd, top, 0, topLength, 16) !== topLength || top.toString('latin1', 0, MAGIC.length) !== MAGIC) throw new Error('not a dataset');
+    const text = top.toString('utf8', MAGIC.length);
+    return JSON.parse(text.slice(text.indexOf('\n') + 1), (key, value) => (value && typeof value === 'object' && ('$column' in value || '$lines' in value || '$texts' in value) ? null : value));
+  } finally {
+    fs.closeSync(fd);
+  }
+}
+
 /** Reads a dataset written by writeDataset, into memory of this thread alone. */
 export function readDataset(file) {
   return datasetFrom(bytesOf(file, false));

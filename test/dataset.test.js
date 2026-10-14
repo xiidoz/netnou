@@ -7,7 +7,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { after, test } from 'node:test';
 import { Worker } from 'node:worker_threads';
-import { SharedLists, Texts, byteOrder, datasetFrom, loadDataset, readDataset, writeDataset } from '../server/lib/dataset.js';
+import { SharedLists, Texts, byteOrder, datasetFrom, loadDataset, readDataset, readDatasetHead, writeDataset } from '../server/lib/dataset.js';
 import { packDataset } from '../server/lib/importer.js';
 import { Timetable } from '../server/lib/timetable.js';
 
@@ -63,6 +63,17 @@ test('a dataset is read as it was written: columns, texts, long lists and what i
   assert.throws(() => readDataset(path.join(dir, 'cut.bin')), /cut short/);
   fs.rmSync(path.join(dir, 'other.bin'));
   fs.rmSync(path.join(dir, 'cut.bin'));
+});
+
+test('what is small in a dataset is read without its columns', () => {
+  const file = path.join(dir, 'head.bin');
+  const names = Array.from({ length: 100 }, (_, i) => `Haltestelle ${i}`);
+  writeDataset(file, { version: 3, fetchedAt: '2026-10-14T00:00:00.000Z', sources: ['a', 'b'], nets: { road: { lat: Int32Array.of(1, 2), f: Uint16Array.of(100, 130) } }, ids: Texts.from(['T1']), names });
+  assert.deepEqual(readDatasetHead(file), { version: 3, fetchedAt: '2026-10-14T00:00:00.000Z', sources: ['a', 'b'], nets: { road: { lat: null, f: null } }, ids: null, names: null });
+  // and the whole of it with them, a column of 16 bits among them
+  assert.deepEqual(readDataset(file).nets.road.f, Uint16Array.of(100, 130));
+  fs.writeFileSync(file, 'no dataset');
+  assert.throws(() => readDatasetHead(file), /not a dataset/);
 });
 
 test('a dataset is loaded into memory that threads share, and each lays its own over it', async () => {

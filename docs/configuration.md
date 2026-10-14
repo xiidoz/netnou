@@ -180,11 +180,11 @@ The feed of all of Germany can be shown this way. For its route geometry
 take the extract of Germany,
 `https://download.geofabrik.de/europe/germany-latest.osm.pbf` (4.9 GB): its
 roads are routed in tiles ([architecture.md](architecture.md#route-geometry)).
-An import then takes the test machine about eight minutes and at most 3 GB
-of memory, and the data directory needs 6 GB while the extract is read,
-1.1 GB afterwards. For now every import routes all hops again; keeping the
-routes from one import to the next is the rest of
-[#106](https://github.com/xiidoz/netnou/issues/106).
+The first import then takes the test machine about eight minutes and at
+most 3.3 GB of memory, and so does one with new OpenStreetMap data; the data
+directory needs 6 GB while the extract is read, 1.3 GB afterwards. A new
+timetable on the same data keeps the routes it can and routes only the hops
+that are new: with nearly all of them kept it is imported in about a minute.
 
 Changing the area or the operators makes the server import the timetable
 again on the next start.

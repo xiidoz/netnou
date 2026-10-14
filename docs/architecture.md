@@ -94,6 +94,7 @@ Server (`server/`):
 | `lib/osmpbf.js` | reads an `.osm.pbf` extract, the ways first and then the places of their nodes: its roads and tracks (`readPbfWays`) and its administrative borders (`readPbfBoundaries`) |
 | `lib/network.js` | builds routable networks from the ways (`classifyWay`, `buildNetworks`), cuts the roads of a country into tiles (`tilesOf`, `windowOf`) and finds paths (`Network`) |
 | `lib/shapes.js` | route geometry for every hop (`loadNetworks`, `buildSegments`) |
+| `lib/kept-routes.js` | the routes of the hops, kept from one import to the next by the places of their stops (`KeptRoutes`) |
 | `lib/towns.js` | which town a station is in: the towns among the borders of the extracts (`townsAmong`), kept between imports, and the town around a place (`townsOf`) |
 | `lib/timetable.js` | the loaded dataset and the queries of the API (`Timetable`), and the part of it that realtime data is matched against (`Schedule`); finds the trains that run coupled (`findSharedWays`) |
 | `lib/realtime.js` | says when the realtime feed is fetched (`RealtimePoller`), matches it to the trips and gives the portions of a coupled train the same delays where they share their way |
@@ -321,7 +322,21 @@ the default area that is about 60,000 distinct hops, for all of Germany
 - **Time and memory.** For the default area the route step of an import
   takes the test machine about 40 seconds, the server at most 1 GB of
   memory. For all of Germany it takes 7 minutes, 3 to read the extract and 4
-  to route, and the server at most 3 GB. Every import routes all hops.
+  to route, when none of the routes are kept, and the server at most 3.3 GB:
+  it holds the timetable it serves meanwhile.
+- **Kept from one import to the next.** A route is found again by its
+  network and the places of its two stops (`KeptRoutes`), and only the hops
+  that are new are routed; a hop without a route is kept as such, so that it
+  is not tried again either. The routes belong to the networks they were
+  found on: with new OpenStreetMap data all of them are routed anew, while
+  the server goes on with the routes it has. They are added to
+  `osm-routes.bin` as they are found, so that a restart in the middle of
+  routing goes on from there, and when routing is done the routes of the
+  hops of the timetable are written anew. For all of Germany that file is
+  150 MB. An import whose hops are all kept takes seconds for its routes and
+  reads no networks, a minute in all and at most 2.7 GB. One in a hundred
+  hops new, spread over the whole country, takes 2 minutes: the network of a
+  tile is built for however few hops it has.
 
 If no OpenStreetMap data can be loaded at all, the map works with straight
 lines.
@@ -468,12 +483,13 @@ The data directory (`NETNOU_DATA_DIR`) holds:
 | --- | --- | --- |
 | `dataset.bin` | the dataset: timetable of the area with route geometry | until a new feed version is imported |
 | `osm-networks.bin` | the routable networks | `NETNOU_OSM_MAX_AGE_DAYS` |
+| `osm-routes.bin` | the routes of the hops, by the places of their stops | as the networks they were found on |
 | `osm-towns.json.gz` | the borders of the towns in the extracts | as the networks, with which they are read |
 | `feed.zip`, `osm-<n>.pbf` | downloads | only during an import |
 
 Everything can be deleted at any time and is rebuilt.
 
-Three constants guard the formats. Bump them when you change what is stored;
+Four constants guard the formats. Bump them when you change what is stored;
 otherwise a server would load a file written by older code:
 
 - `DATASET_VERSION` in `lib/dataset.js`: the layout or meaning of anything
@@ -481,6 +497,8 @@ otherwise a server would load a file written by older code:
 - `NETWORKS_VERSION` in `lib/shapes.js`: `classifyWay`, the cost factors or
   the output of `buildNetworks`.
 - `TOWNS_VERSION` in `lib/towns.js`: what is kept of the borders.
+- `KEPT_VERSION` in `lib/kept-routes.js`: the rules of routing, in
+  `lib/network.js` and `lib/shapes.js`, or how routes are kept.
 
 ## The page
 
