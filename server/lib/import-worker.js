@@ -13,6 +13,7 @@ import { parentPort, workerData } from 'node:worker_threads';
 import { Area } from './area.js';
 import { readDataset, writeDataset } from './dataset.js';
 import { buildDataset } from './importer.js';
+import { KeptRoutes } from './kept-routes.js';
 import { buildSegments, loadNetworks } from './shapes.js';
 import { townsOf } from './towns.js';
 
@@ -54,7 +55,10 @@ if (osm.urls.length) {
   });
   networks = await loadNetworks({ dataDir, urls: osm.urls, area: region, scope, maxAgeMs: osm.maxAgeMs, timeoutMs: downloadTimeoutMs, onProgress });
   if (networks) {
-    data.segments = buildSegments(data, networks.nets, region, onProgress);
+    // (with the routes of the imports before, as far as they were found on these networks)
+    const kept = new KeptRoutes(dataDir, { fetchedAt: networks.fetchedAt, scope });
+    data.segments = buildSegments(data, networks.nets, region, onProgress, { kept });
+    kept.save();
     // (the towns of the stations, by the borders in the same extracts)
     const { names, of } = townsOf(data.stops, networks.towns);
     Object.assign(data, { towns: names, stops: { ...data.stops, town: of } });

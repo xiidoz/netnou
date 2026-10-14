@@ -279,18 +279,62 @@ test('route geometry: straight lines first, OSM data retried with growing waits,
   assert.deepEqual(routed.trip('T1', '20261003', null).path.slice(2, 4), [49.45, 11.002]);
   assert.ok(!Number.isNaN(Date.parse(routed.source.osm)));
   assert.equal(updater.routesMissing, false);
-  assert.deepEqual(fs.readdirSync(dir).sort(), ['dataset.bin', 'osm-networks.bin', 'osm-towns.json.gz']);
+  assert.deepEqual(fs.readdirSync(dir).sort(), ['dataset.bin', 'osm-networks.bin', 'osm-routes.bin', 'osm-towns.json.gz']);
 
   // nothing more to do at the next check
   await updater.check();
   assert.deepEqual([requests.head, requests.get, requests.osm], [7, 2, 4]);
 
-  // The next feed version is routed on the cached networks, without a download.
+  // The next feed version is routed on the cached networks, without a download,
+  // and its one hop is not routed again: it has the route it had.
   feed.etag = '"v3"';
   await updater.check();
   assert.deepEqual([requests.head, requests.get, requests.osm], [8, 3, 4]);
   assert.equal(timetables.at(-1).source.etag, '"v3"');
   assert.equal(timetables.at(-1).segmentCount, 1);
+  assert.equal(routesLog().filter((line) => line.startsWith('Routes: routing')).at(-1), 'Routes: routing 0 hops, 1 kept from before');
+  assert.deepEqual(timetables.at(-1).trip('T1', '20261003', null).path.slice(2, 4), [49.45, 11.002]);
+});
+
+test('a hop is routed once for the networks it is on: the next import keeps its route, and with new OSM data it is routed again', async (t) => {
+  const { feed, url, requests, dir, make } = await setup(t, FEED);
+  feed.osm = makePbf([[1, 49.4, 11.0001], [2, 49.45, 11.002], [3, 49.5, 11.0001]], [[10, [1, 2, 3], { railway: 'subway' }]]);
+  const { updater, timetables, log } = make({ osmUrls: [`${url}/area.osm.pbf`] });
+  const routing = () => log.filter((line) => line.startsWith('Routes: routing')).map((line) => line.slice('Routes: '.length));
+  await updater.check();
+  assert.equal(updater.status.error, null);
+  assert.deepEqual(routing(), ['routing 1 hops']);
+
+  // A timetable with one more stop: the hop from A to B keeps its route, the one on to C is routed.
+  feed.zip = makeZip({ ...FEED, 'stops.txt': FEED['stops.txt'] + 'C,Gamma,49.52,11.00\n', 'stop_times.txt': FEED['stop_times.txt'] + 'T1,10:15:00,10:15:00,C,2\n' });
+  feed.etag = '"v2"';
+  await updater.check();
+  assert.equal(updater.status.error, null);
+  assert.deepEqual(routing().at(-1), 'routing 1 hops, 1 kept from before');
+  assert.deepEqual(timetables.at(-1).trip('T1', '20261003', null).path.slice(2, 4), [49.45, 11.002]);
+  // (a hop without a route is kept as such: the one from B to C is not on the track)
+  feed.etag = '"v3"';
+  await updater.check();
+  assert.deepEqual(routing().at(-1), 'routing 0 hops, 2 kept from before');
+  assert.deepEqual([requests.get, requests.osm], [3, 1]);
+
+  // A restart in the middle: what was routed before it is kept.
+  fs.rmSync(path.join(dir, 'dataset.bin'));
+  const again = make({ osmUrls: [`${url}/area.osm.pbf`] });
+  await again.updater.check();
+  assert.equal(again.updater.status.error, null);
+  assert.deepEqual(again.log.filter((line) => line.startsWith('Routes: routing')).at(-1), 'Routes: routing 0 hops, 2 kept from before');
+
+  // New OSM data: every hop is routed again, on the new networks.
+  const kept = fs.readFileSync(path.join(dir, 'osm-routes.bin'));
+  fs.rmSync(path.join(dir, 'osm-networks.bin'));
+  feed.osm = makePbf([[1, 49.4, 11.0001], [2, 49.45, 11.003], [3, 49.5, 11.0001]], [[10, [1, 2, 3], { railway: 'subway' }]]);
+  feed.etag = '"v4"';
+  await again.updater.check();
+  assert.equal(again.updater.status.error, null);
+  assert.deepEqual(again.log.filter((line) => line.startsWith('Routes: routing')).at(-1), 'Routes: routing 2 hops');
+  assert.deepEqual(again.timetables.at(-1).trip('T1', '20261003', null).path.slice(2, 4), [49.45, 11.003]);
+  assert.notDeepEqual(fs.readFileSync(path.join(dir, 'osm-routes.bin')), kept);
 });
 
 test('the stations get their towns from the borders in the OSM extract, with the route geometry', async (t) => {
@@ -313,7 +357,7 @@ test('the stations get their towns from the borders in the OSM extract, with the
   assert.deepEqual(timetables.map(towns), [['Alpha: -', 'Beta: -'], ['Alpha: Alphastadt', 'Beta: -']]);
   assert.ok(log.includes('Routes: 1 towns in the OSM extracts'));
   assert.equal(timetables.at(-1).segmentCount, 1);
-  assert.deepEqual(fs.readdirSync(dir).sort(), ['dataset.bin', 'osm-networks.bin', 'osm-towns.json.gz']);
+  assert.deepEqual(fs.readdirSync(dir).sort(), ['dataset.bin', 'osm-networks.bin', 'osm-routes.bin', 'osm-towns.json.gz']);
   assert.deepEqual([requests.get, requests.osm], [1, 1]);
 
   // The next timetable, with one more station in the town: placed by the borders that were kept.
@@ -331,7 +375,7 @@ test('the stations get their towns from the borders in the OSM extract, with the
   assert.equal(updater.status.error, null);
   assert.deepEqual(towns(timetables.at(-1)), ['Alpha: Alphastadt', 'Beta: -', 'Gamma: Alphastadt']);
   assert.deepEqual([requests.get, requests.osm], [3, 2]);
-  assert.deepEqual(fs.readdirSync(dir).sort(), ['dataset.bin', 'osm-networks.bin', 'osm-towns.json.gz']);
+  assert.deepEqual(fs.readdirSync(dir).sort(), ['dataset.bin', 'osm-networks.bin', 'osm-routes.bin', 'osm-towns.json.gz']);
 });
 
 test('without an area the OSM data is kept where the trips run, and read again when they reach beyond it', async (t) => {

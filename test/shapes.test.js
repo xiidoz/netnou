@@ -8,6 +8,7 @@ import { readDataset, writeDataset } from '../server/lib/dataset.js';
 import { packDataset } from '../server/lib/importer.js';
 import { Network, buildNetworks, classifyWay, pathLength, simplify, tilesOf, windowOf } from '../server/lib/network.js';
 import { readPbfWays } from '../server/lib/osmpbf.js';
+import { KeptRoutes } from '../server/lib/kept-routes.js';
 import { buildSegments } from '../server/lib/shapes.js';
 import { serviceDayStart } from '../server/lib/time.js';
 import { Timetable, positionAt } from '../server/lib/timetable.js';
@@ -262,6 +263,26 @@ test('vehicles and trip paths follow the routed geometry', () => {
   assert.deepEqual([...inTiles.points], [...dataset.segments.points]);
   assert.deepEqual(buildSegments(dataset, graphs, area, (line) => log.push(line), { roadsAtOnce: 0, tile: 0.001 }).net.length, 0);
   assert.deepEqual(log.slice(-3), ['routing 1 hops', '1 hops on roads are too long for the tiles', 'hops routed: road 0/1, rail 0/0, subway 0/0, tram 0/0']);
+
+  // A route that is kept is taken as it is, without routing: here a made-up one, straight from P to Q.
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'netnou-kept-'));
+  try {
+    const networks = { fetchedAt: 'then', scope: 'x' };
+    const keptRoute = [Math.round(STOP.mainWest[0] * 1e5), Math.round(STOP.mainWest[1] * 1e5), Math.round(STOP.north[0] * 1e5), Math.round(STOP.north[1] * 1e5)];
+    const made = new KeptRoutes(dir, networks);
+    made.add(0, STOP.mainWest, STOP.north, keptRoute);
+    made.flush();
+    const kept = new KeptRoutes(dir, networks);
+    const fromKept = buildSegments(dataset, graphs, area, (line) => log.push(line), { kept });
+    assert.deepEqual([...fromKept.points], keptRoute);
+    assert.equal(log.at(-2), 'routing 0 hops, 1 kept from before');
+    // and one that is routed is kept
+    const routedNow = new KeptRoutes(dir, { ...networks, fetchedAt: 'now' });
+    buildSegments(dataset, graphs, area, () => {}, { kept: routedNow });
+    assert.deepEqual([...new KeptRoutes(dir, { ...networks, fetchedAt: 'now' }).find(0, STOP.mainWest, STOP.north)], [...dataset.segments.points]);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
 
   // (as the server has it: written to a file and read again)
   const file = path.join(os.tmpdir(), `netnou-shapes-${process.pid}.dataset`);
