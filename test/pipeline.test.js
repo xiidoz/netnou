@@ -296,7 +296,7 @@ test('an instance may keep the trips of some operators, in its area or wherever 
   assert.deepEqual(await ids({ area: AREA, agencies: [operator('Testbetrieb')] }), ['T1', 'T2', 'T4']);
   assert.deepEqual(await ids({ area: AREA, agencies: [operator('Testbetrieb'), operator('Fernbus, Nord GmbH')] }), ['T1', 'T2', 'T4']);
   assert.deepEqual(await ids({ area: null, agencies: [operator('Testbetrieb'), operator('Fernbus, Nord GmbH')] }), ['T1', 'T2', 'T3', 'T4']);
-  await assert.rejects(buildDataset({ zipPath, area: AREA, agencies: [operator('Fernbus, Nord GmbH')] }), /^Error: no trip of the operators in NETNOU_AGENCIES serves a stop in the area; NETNOU_AREA=all takes their trips wherever they run$/);
+  await assert.rejects(buildDataset({ zipPath, area: AREA, agencies: [operator('Fernbus, Nord GmbH')] }), /^Error: no trip of the operators in NETNOU_AGENCIES serves a stop in the area; NETNOU_AREA=Germany takes their trips wherever they run$/);
 
   // a name the feed does not have is named, with what the feed has that is like it
   await assert.rejects(

@@ -4,10 +4,10 @@
 // under way. For judging what a machine has to have for an area, and for
 // seeing what a change to the import or the timetable does.
 //
-//   node tools/measure-feed.mjs <feed.zip> [all | south,west,north,east] [operators]
+//   node tools/measure-feed.mjs <feed.zip> [VGN | Germany | south,west,north,east] [operators]
 //
-// Without a second word the area is the built-in one; "all" is no area, which
-// is everything the feed has. The operators are names as agency.txt of the
+// The second word is the area as NETNOU_AREA or NETNOU_BBOX gives it, without
+// one it is the VGN; Germany is everything the feed has. The operators are names as agency.txt of the
 // feed has them, separated by commas. Route geometry is left out: it needs
 // OpenStreetMap data and is measured where that is routed.
 
@@ -21,14 +21,14 @@ import { addDays, serviceDayStart } from '../server/lib/time.js';
 import { Timetable } from '../server/lib/timetable.js';
 
 const [zipPath, where, operators] = process.argv.slice(2);
-const box = where === undefined || where === 'all' ? null : parseBox(where);
-if (!zipPath || (where !== undefined && where !== 'all' && !box)) {
-  console.error('usage: node tools/measure-feed.mjs <feed.zip> [all | south,west,north,east] [operators]');
+const box = where === undefined ? null : parseBox(where);
+if (!zipPath || (where !== undefined && !box && !['vgn', 'germany'].includes(where.toLowerCase()))) {
+  console.error('usage: node tools/measure-feed.mjs <feed.zip> [VGN | Germany | south,west,north,east] [operators]');
   process.exit(1);
 }
 // (as the server reads its settings: the built-in area unless something else is said)
 const { area, agencies } = loadConfig({
-  ...(where === 'all' ? { NETNOU_AREA: 'all' } : box ? { NETNOU_BBOX: where } : {}),
+  ...(box ? { NETNOU_BBOX: where } : where ? { NETNOU_AREA: where } : {}),
   ...(operators ? { NETNOU_AGENCIES: operators } : {}),
 });
 

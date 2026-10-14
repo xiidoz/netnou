@@ -12,16 +12,31 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 // The languages the page has texts in.
 const LANGUAGE_CODES = LANGUAGES.map(([code]) => code);
 
-// The built-in area: the VGN, the transit network around Nürnberg (see
-// tools/build-vgn-area.mjs).
-const VGN = {
-  file: path.join(root, 'server', 'areas', 'vgn.geojson'),
-  name: 'Großraum Nürnberg (VGN)',
-  // The cities of Nürnberg, Fürth and Erlangen.
-  view: [49.376, 10.916, 49.604, 11.204],
-  // The VGN spans five Bavarian administrative regions.
-  osmUrls: ['mittelfranken', 'oberfranken', 'oberpfalz', 'unterfranken', 'schwaben'].map((r) => `https://download.geofabrik.de/europe/germany/bayern/${r}-latest.osm.pbf`),
-};
+// The built-in areas, by their value of NETNOU_AREA in small letters. Each
+// brings its outline, its name, the map section of a first visit and the
+// OpenStreetMap extracts that cover it; a setting of its own takes the place
+// of each but the outline.
+const AREAS = new Map([
+  // The VGN, the transit network around Nürnberg (see tools/build-vgn-area.mjs),
+  // the area when nothing else is set.
+  ['vgn', {
+    file: path.join(root, 'server', 'areas', 'vgn.geojson'),
+    name: 'Großraum Nürnberg (VGN)',
+    // The cities of Nürnberg, Fürth and Erlangen.
+    view: [49.376, 10.916, 49.604, 11.204],
+    // The VGN spans five Bavarian administrative regions.
+    osmUrls: ['mittelfranken', 'oberfranken', 'oberpfalz', 'unterfranken', 'schwaben'].map((r) => `https://download.geofabrik.de/europe/germany/bayern/${r}-latest.osm.pbf`),
+  }],
+  // All of Germany. It has no outline: every trip of the feed is kept, which
+  // is the feed of Germany unless NETNOU_FEED_URL names another.
+  ['germany', {
+    file: null,
+    name: 'Deutschland',
+    // The country, from its southernmost point to its northernmost.
+    view: [47.27, 5.87, 55.06, 15.04],
+    osmUrls: ['https://download.geofabrik.de/europe/germany-latest.osm.pbf'],
+  }],
+]);
 
 const DECIMAL = /^[+-]?(\d+\.?\d*|\.\d+)$/;
 
@@ -219,20 +234,21 @@ export function loadConfig(env = process.env) {
   }
 
   // The area covered: trips serving at least one stop in it are imported, and
-  // inside it vehicles follow roads and tracks. Either a GeoJSON file with
-  // polygons (NETNOU_AREA_FILE), a rectangle (NETNOU_BBOX), or – by default – the VGN.
-  // Or no area at all (NETNOU_AREA=all): everything the feed has.
-  if (text('NETNOU_AREA') && text('NETNOU_AREA').toLowerCase() !== 'all') {
-    throw invalid('NETNOU_AREA', '"all", for an instance without an area; an area is given with NETNOU_AREA_FILE or NETNOU_BBOX');
-  }
+  // inside it vehicles follow roads and tracks. Either a built-in one
+  // (NETNOU_AREA, by default the VGN), a GeoJSON file with polygons
+  // (NETNOU_AREA_FILE) or a rectangle (NETNOU_BBOX). Germany is no area in this
+  // sense: it is everything the feed has.
+  const named = text('NETNOU_AREA').toLowerCase();
+  if (named && !AREAS.has(named)) throw invalid('NETNOU_AREA', '"VGN" or "Germany"; an area of your own is given with NETNOU_AREA_FILE or NETNOU_BBOX');
   const given = ['NETNOU_AREA', 'NETNOU_AREA_FILE', 'NETNOU_BBOX'].filter((name) => text(name));
   if (given.length > 1) throw new Error(`${given.slice(0, -1).join(', ')} and ${given.at(-1)} are ${given.length > 2 ? 'all' : 'both'} set; use only one of them`);
-  const custom = given.length > 0;
+  // (null for an area of your own)
+  const builtIn = named || !given.length ? AREAS.get(named || 'vgn') : null;
   let area = null;
   let outline;
   if (text('NETNOU_BBOX')) area = Area.fromBbox(box('NETNOU_BBOX'));
   else if (text('NETNOU_AREA_FILE')) ({ area, outline } = readArea(path.resolve(text('NETNOU_AREA_FILE')), 'NETNOU_AREA_FILE'));
-  else if (!custom) ({ area, outline } = readArea(VGN.file, 'built-in area'));
+  else if (builtIn.file) ({ area, outline } = readArea(builtIn.file, 'built-in area'));
 
   // The operators covered: all of them, or those named (NETNOU_AGENCIES) as
   // agency.txt of the feed names them. A trip has to pass both, the area and
@@ -262,9 +278,10 @@ export function loadConfig(env = process.env) {
   ];
 
   // OpenStreetMap extracts (.osm.pbf) that together cover the area; the route
-  // geometry between stops is computed from them. A custom area has to name
-  // its own; without any, vehicles move in straight lines between stops. An
-  // empty NETNOU_OSM_PBF_URLS turns the route geometry off for the VGN as well.
+  // geometry between stops and the towns of the stops come from them. An area
+  // of your own has to name its own; without any, vehicles move in straight
+  // lines between stops. An empty NETNOU_OSM_PBF_URLS turns them off for a
+  // built-in area as well.
   const language = text('NETNOU_LANGUAGE').toLowerCase() || 'de';
   if (!LANGUAGE_CODES.includes(language)) throw invalid('NETNOU_LANGUAGE', `one of the languages of the page: ${LANGUAGE_CODES.join(', ')}`);
   const publicUrl = text('NETNOU_PUBLIC_URL') ? pageAddress(text('NETNOU_PUBLIC_URL')) : null;
@@ -276,7 +293,7 @@ export function loadConfig(env = process.env) {
   }
 
   const osmUrls = env.NETNOU_OSM_PBF_URLS === undefined
-    ? (custom ? [] : VGN.osmUrls)
+    ? (builtIn?.osmUrls ?? [])
     : env.NETNOU_OSM_PBF_URLS.split(',').map((s) => s.trim()).filter(Boolean).map((url) => httpUrl('NETNOU_OSM_PBF_URLS', url));
 
   return {
@@ -286,8 +303,9 @@ export function loadConfig(env = process.env) {
     publicDir: path.join(root, 'public'),
     dataDir: path.resolve(text('NETNOU_DATA_DIR') || path.join(root, 'data')),
 
-    // The area, or null for an instance without one. What it covers then is
-    // known once a timetable is loaded: its extent (Area.covering).
+    // The area, or null for one without an outline (Germany). What the
+    // instance covers is then known once a timetable is loaded: its extent
+    // (Area.covering).
     area,
     // The operators whose trips are kept, [{ name, key }], or null for all.
     agencies,
@@ -296,7 +314,7 @@ export function loadConfig(env = process.env) {
     // What the map draws as the edge of the area: rings of [lon, lat]. A GeoJSON
     // file may bring its own as a top-level "outline" member (useful when its
     // polygons are adjacent parts whose inner borders should not show).
-    // Without an area there is no edge.
+    // Without an outline there is no edge.
     areaOutline: outline ?? area?.polygons.flat() ?? [],
     // What the instance calls itself, where the page names itself: its
     // heading, its title, the installed app. The credits name the software.
@@ -316,10 +334,10 @@ export function loadConfig(env = process.env) {
     // imprint and a privacy notice: [{ text, href }].
     links,
     // Shown next to the page title.
-    areaName: env.NETNOU_AREA_NAME === undefined ? (custom ? '' : VGN.name) : env.NETNOU_AREA_NAME.trim(),
-    // Map section on the first visit. Default: all of a custom area; null
-    // without an area, for all of the extent.
-    view: text('NETNOU_VIEW') ? box('NETNOU_VIEW') : custom ? (area?.bbox ?? null) : VGN.view,
+    areaName: env.NETNOU_AREA_NAME === undefined ? (builtIn?.name ?? '') : env.NETNOU_AREA_NAME.trim(),
+    // Map section on the first visit. Default: that of a built-in area, all of
+    // an area of your own.
+    view: text('NETNOU_VIEW') ? box('NETNOU_VIEW') : (builtIn?.view ?? area.bbox),
 
     // The zone the times of the feed are in (agency_timezone is not read).
     timeZone,

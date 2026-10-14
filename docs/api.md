@@ -58,10 +58,10 @@ shortened where marked with `…`.
 
 While the server has no timetable, right after the first start or when the
 feed cannot be loaded, every `/api/` path except `/api/status` and `/api/area`
-answers 503. An instance without an area
-([`NETNOU_AREA=all`](configuration.md#no-area-and-single-operators)) does
-not know what it covers until it has a timetable: there `/api/area` answers
-503 as well.
+answers 503. An instance of all of Germany
+([`NETNOU_AREA=Germany`](configuration.md#all-of-germany-and-single-operators))
+does not know what it covers until it has a timetable: there `/api/area`
+answers 503 as well.
 
 ```json
 { "state": "loading", "step": "download", "message": "downloading https://download.gtfs.de/germany/free/latest.zip" }
@@ -131,7 +131,7 @@ the fetching of the realtime feed.
 | `realtime.matchedTrips` | integer | trip updates that matched a trip of the timetable |
 | `realtime.error` | string or null | why the last fetch failed |
 | `realtime.fetches`, `realtime.failures` | integer | fetches begun and fetches failed since the server started |
-| `area.name`, `area.bbox`, `view` | | as in `/api/area`; `bbox` and `view` are `null` for an instance without an area until it has a timetable |
+| `area.name`, `area.bbox`, `view` | | as in `/api/area`; `bbox` is `null` for an instance of all of Germany until it has a timetable |
 | `area.agencies` | array of strings or null | the operators whose trips the instance keeps, as they are set (`NETNOU_AGENCIES`); `null` for all |
 
 ## `GET /api/area`
@@ -166,9 +166,9 @@ answer is there once a timetable is loaded and may be another with the next.
 | `name` | string | name of the area, `""` if it has none |
 | `siteTitle` | object | the operator's own title of the page (`NETNOU_SITE_TITLE`), by the languages of the page: for each a text to be shown as it is, or `null` where they have none and the page words its own |
 | `siteDescription` | object | the same for what the page says about itself (`NETNOU_SITE_DESCRIPTION`) |
-| `bbox` | box | rectangle around the area; without an area, around all stops of the instance |
+| `bbox` | box | rectangle around the area; for all of Germany, around all stops of the instance |
 | `view` | box | map section to show first |
-| `outline` | array of rings | the edge of the area, each ring an array of `[latitude, longitude]`. Note the order: the GeoJSON file the area comes from has longitude first. Empty without an area |
+| `outline` | array of rings | the edge of the area, each ring an array of `[latitude, longitude]`. Note the order: the GeoJSON file the area comes from has longitude first. Empty for all of Germany |
 | `timeZone` | string | IANA name of the zone all times of day are meant in |
 | `styleUrl` | string or `null` | URL of the [MapLibre style](https://maplibre.org/maplibre-style-spec/) of the map behind the vehicles; `null` if the instance uses raster tiles |
 | `tileUrl` | string or `null` | URL template of raster tiles, with `{z}`, `{x}`, `{y}` and possibly `{s}` and `{r}`; `null` if the instance uses a style |

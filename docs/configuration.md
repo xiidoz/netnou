@@ -2,11 +2,11 @@
 
 Netnou is configured with environment variables. All of them are optional:
 without any, it shows the VGN (the transit network around Nürnberg) from the
-gtfs.de feeds on port 8080.
+gtfs.de feeds on port 8080. `NETNOU_AREA=Germany` alone shows all of Germany.
 
 - [Settings](#settings)
 - [Choosing an area](#choosing-an-area)
-- [No area, and single operators](#no-area-and-single-operators)
+- [All of Germany, and single operators](#all-of-germany-and-single-operators)
 - [Example: another region in Germany](#example-another-region-in-germany)
 - [Realtime polling and traffic](#realtime-polling-and-traffic)
 - [The map](#the-map)
@@ -61,25 +61,25 @@ needs `NETNOU_PORT` set to the same number.
 | `NETNOU_DATA_DIR` | `data` in the project folder (`/data` in the image) | path | where the caches are kept; must be writable |
 | `NETNOU_AREA_FILE` | the built-in VGN outline | path | GeoJSON file with the polygons of the area, see [Choosing an area](#choosing-an-area) |
 | `NETNOU_BBOX` | – | `south,west,north,east` | a rectangle as the area, instead of `NETNOU_AREA_FILE` |
-| `NETNOU_AREA` | – | `all` | no area: everything the feed has, see [No area, and single operators](#no-area-and-single-operators) |
+| `NETNOU_AREA` | `VGN` | `VGN`, `Germany` | a built-in area, with its name, first view and OpenStreetMap extracts: the VGN, or all of Germany, which is everything the feed has, see [All of Germany, and single operators](#all-of-germany-and-single-operators) |
 | `NETNOU_AGENCIES` | all operators | names separated by commas, or a JSON array | only the trips of these operators, named as `agency.txt` of the feed names them |
 | `NETNOU_SITE_NAME` | `Netnou` | text | what the instance calls itself: in the heading and the title of the page, in previews of links and as the installed app. The credits on the map name Netnou and its version whatever is set here |
 | `NETNOU_SITE_TITLE` | the page's own, in each of its languages | text, or texts by language | the title of the page as the tab of a browser and a search result show it, in words of your own, see [Being found](#being-found) |
 | `NETNOU_SITE_DESCRIPTION` | the page's own, in each of its languages | text, or texts by language | what the page says about itself in a search result and in a preview of a link, in words of your own |
-| `NETNOU_AREA_NAME` | `Großraum Nürnberg (VGN)`; empty for a custom area | text | shown next to the title of the page, and what search engines find the instance by, see [Being found](#being-found) |
+| `NETNOU_AREA_NAME` | `Großraum Nürnberg (VGN)`, for Germany `Deutschland`; empty for a custom area | text | shown next to the title of the page, and what search engines find the instance by, see [Being found](#being-found) |
 | `NETNOU_BRAND_DIR` | – (`/brand` in the image) | path | a folder with icons and a preview picture of your own, see [Icons of your own](#icons-of-your-own) |
 | `NETNOU_LINKS` | – | `Text=address`, separated by commas | links of the operator at the foot of the header card, see [Links of your own](#links-of-your-own) |
 | `NETNOU_LANGUAGE` | `de` | a language of the page: `de`, `en` | the main language of the instance: the page is sent in it to whoever asks without naming a language, as search engines do. Visitors get the language of their browser, see [Being found](#being-found) |
 | `NETNOU_PUBLIC_URL` | – | http(s) URL | the address under which visitors reach the instance, e.g. `https://transit.example.org/`, see [Being found](#being-found) |
 | `NETNOU_SEARCH_ENGINES` | `on` if `NETNOU_PUBLIC_URL` is set, otherwise `off` | `on` or `off` | whether search engines may list the instance, see [Being found](#being-found) |
-| `NETNOU_VIEW` | Nürnberg, Fürth and Erlangen; the whole area for a custom one | `south,west,north,east` | map section on a visitor's first visit; afterwards the browser remembers the last one |
+| `NETNOU_VIEW` | Nürnberg, Fürth and Erlangen, for Germany the whole country; the whole area for a custom one | `south,west,north,east` | map section on a visitor's first visit; afterwards the browser remembers the last one |
 | `NETNOU_TIMEZONE` | `Europe/Berlin` | IANA time zone | the zone the times of the feed are in; times in the page are shown in it |
 | `NETNOU_FEED_URL` | `https://download.gtfs.de/germany/free/latest.zip` | http(s) URL | the GTFS timetable (zip) |
 | `NETNOU_FEED_CHECK_MINUTES` | `15` | 1–1440 | how often to look for a new version of the timetable |
 | `NETNOU_REALTIME_URL` | `https://realtime.gtfs.de/realtime-free.pb` | http(s) URL | the GTFS-Realtime feed |
 | `NETNOU_REALTIME_INTERVAL_SECONDS` | `60` | 10–3600 | how often the realtime feed is fetched while the map is in use |
 | `NETNOU_REALTIME_IDLE_SECONDS` | `120` | 30–86400 | fetching stops this long after the last request from a browser |
-| `NETNOU_OSM_PBF_URLS` | five Geofabrik extracts of Bavaria; none for a custom area | comma-separated http(s) URLs | OpenStreetMap extracts (`.osm.pbf`) that together cover the area: the roads and tracks for the route geometry, and the borders of the towns the search finds a stop by; empty means neither |
+| `NETNOU_OSM_PBF_URLS` | five Geofabrik extracts of Bavaria, for Germany the extract of Germany; none for a custom area | comma-separated http(s) URLs | OpenStreetMap extracts (`.osm.pbf`) that together cover the area: the roads and tracks for the route geometry, and the borders of the towns the search finds a stop by; empty means neither |
 | `NETNOU_OSM_MAX_AGE_DAYS` | `30` | 1–3650 | how long the OpenStreetMap data is used before it is downloaded again |
 | `NETNOU_DOWNLOAD_TIMEOUT_MINUTES` | `30` | 1–1440 | limit for one download of the timetable or of an extract |
 | `NETNOU_MAP_STYLE_URL` | `https://tiles.openfreemap.org/styles/bright` | http(s) URL | the style of the map behind the vehicles, see [The map](#the-map) |
@@ -93,7 +93,7 @@ Rules that apply to all of them:
 
 - An empty value counts as not set. The two exceptions are `NETNOU_AREA_NAME` (empty
   means "no name") and `NETNOU_OSM_PBF_URLS` (empty means "no route geometry and no
-  towns", also for the built-in area).
+  towns", also for a built-in area).
 - Numbers are plain decimals (`30`, `0.5`); only `NETNOU_PORT` has to be a whole
   number.
 - Relative paths in `NETNOU_DATA_DIR` and `NETNOU_AREA_FILE` are resolved against the
@@ -113,10 +113,13 @@ inside the area (or within about a kilometre of it), and only inside the area
 do vehicles follow roads and tracks. A trip that leaves the area is still
 shown along its whole run, in straight lines between its stops out there.
 
-There are three ways to define it:
+There are four ways to define it:
 
-- **Nothing set:** the VGN, from `server/areas/vgn.geojson` (the outlines of
-  its 11 cities and 23 districts).
+- **Nothing set,** or `NETNOU_AREA=VGN`: the VGN, from
+  `server/areas/vgn.geojson` (the outlines of its 11 cities and 23 districts).
+- **`NETNOU_AREA=Germany`:** all of Germany. It has no outline: every trip of
+  the feed is imported, see
+  [All of Germany, and single operators](#all-of-germany-and-single-operators).
 - **`NETNOU_BBOX`:** a rectangle, `south,west,north,east` in degrees, for example
   `49.30,10.82,49.68,11.30`. Note the order: latitude first.
 - **`NETNOU_AREA_FILE`:** a GeoJSON file. Any mix of `FeatureCollection`, `Feature`,
@@ -133,25 +136,28 @@ file has one; `tools/build-vgn-area.mjs` shows how it is derived.
 Changing the area makes the server import the timetable again and rebuild the
 route geometry on the next start.
 
-## No area, and single operators
+## All of Germany, and single operators
 
-An instance need not have an area, and it need not show every operator.
-There are two limits, each optional, and a trip has to pass both:
+Germany is an area without an outline, and an instance need not show every
+operator. There are two limits, each optional, and a trip has to pass both:
 
 | Instance | Area | Operators |
 | --- | --- | --- |
 | A transit network | its outline (the VGN is built in) | all |
 | A state | its outline, as `NETNOU_AREA_FILE` | all |
-| Everything the feed has | `NETNOU_AREA=all` | all |
-| One operator, wherever it runs | `NETNOU_AREA=all` | `NETNOU_AGENCIES` |
+| All of Germany | `NETNOU_AREA=Germany` | all |
+| One operator, wherever it runs | `NETNOU_AREA=Germany` | `NETNOU_AGENCIES` |
 | One operator in a network | the outline of the network | `NETNOU_AGENCIES` |
 
-- **`NETNOU_AREA=all`** takes every trip of the feed. There is then nothing
+- **`NETNOU_AREA=Germany`** takes every trip of the feed, which is the feed
+  of Germany unless `NETNOU_FEED_URL` names another. There is then nothing
   that would be outside: every stop is listed, has a departure board and is
-  found by the search, no edge is drawn on the map, and the first view is the
-  rectangle around all stops unless `NETNOU_VIEW` says otherwise. For the feed
-  of a whole country set `NETNOU_VIEW`: a few lines that run abroad make that
-  rectangle much larger than the country.
+  found by the search, and no edge is drawn on the map. It is called
+  `Deutschland`, shows the whole country on a first visit
+  (`47.27,5.87,55.06,15.04`) and takes its roads, tracks and towns from the
+  extract of Germany, `https://download.geofabrik.de/europe/germany-latest.osm.pbf`;
+  `NETNOU_AREA_NAME`, `NETNOU_VIEW` and `NETNOU_OSM_PBF_URLS` set each of
+  them otherwise.
 - **`NETNOU_AGENCIES`** keeps the trips of the operators named and drops all
   others. The names are those of `agency.txt` in the feed (`agency_name`),
   taken without regard to capitals and to spaces at their ends:
@@ -166,20 +172,18 @@ There are two limits, each optional, and a trip has to pass both:
   and what the feed has that is like it; `/api/status` shows the error.
 - **Both limits count.** With `NETNOU_AGENCIES` and nothing else, the area is
   still the built-in VGN: an operator from elsewhere then has no trips, and
-  the error says so. Give it its own area, or `NETNOU_AREA=all`.
+  the error says so. Give it its own area, or `NETNOU_AREA=Germany`.
 
-Without an area the instance still needs to know where its vehicles follow
-roads and tracks and which OpenStreetMap data to keep. It takes that from its
-trips: where their stops are, and the straight lines from each stop to the
-next. That is its extent. `NETNOU_OSM_PBF_URLS` works as for an area; the
-extracts have to cover the extent. The OpenStreetMap data kept for one
+Without an outline the instance still needs to know where its vehicles
+follow roads and tracks and which OpenStreetMap data to keep. It takes that
+from its trips: where their stops are, and the straight lines from each stop
+to the next. That is its extent. Extracts of your own in
+`NETNOU_OSM_PBF_URLS` have to cover it. The OpenStreetMap data kept for one
 timetable is used for the next as long as that one stays within it, so a new
 timetable alone does not fetch the extracts again.
 
-The feed of all of Germany can be shown this way. For its route geometry
-take the extract of Germany,
-`https://download.geofabrik.de/europe/germany-latest.osm.pbf` (4.9 GB): its
-roads are routed in tiles ([architecture.md](architecture.md#route-geometry)).
+The extract of Germany is 4.9 GB, and its roads are routed in tiles
+([architecture.md](architecture.md#route-geometry)).
 The first import then takes the test machine about eight minutes and at
 most 3.2 GB of memory, and so does one with new OpenStreetMap data; the data
 directory needs 6 GB while the extract is read, 1.1 GB afterwards. A new

@@ -337,16 +337,17 @@ function status() {
     // Route geometry from OpenStreetMap: number of routed hops and age of the OSM data.
     routes: { segments: timetable?.segmentCount ?? 0, osmFetchedAt: timetable?.source.osm ?? null },
     realtime: realtime.status,
-    // What the instance covers: its area, or without one the rectangle around
-    // its stops, null until a timetable is loaded; its operators, null for all.
+    // What the instance covers: its area, or without one (Germany) the
+    // rectangle around its stops, null until a timetable is loaded; its
+    // operators, null for all.
     area: { name: config.areaName, bbox: areaInfo?.bbox ?? null, agencies: config.agencies?.map(({ name }) => name) ?? null },
-    view: areaInfo?.view ?? config.view,
+    view: config.view,
   };
 }
 
 // What the page needs to know about the area and the map. With an area it
-// does not change while the server runs. Without one, what the instance
-// covers is its extent, the rectangle around its stops: known once a
+// does not change while the server runs. Without one (Germany), what the
+// instance covers is its extent, the rectangle around its stops: known once a
 // timetable is loaded, null until then, and new with every timetable.
 let areaInfo = null;
 let areaEtag = null;
@@ -362,8 +363,7 @@ function describeArea() {
     siteTitle: config.siteTitle,
     siteDescription: config.siteDescription,
     bbox,
-    // (all of the extent unless a section is set)
-    view: config.view ?? bbox,
+    view: config.view,
     // rings of [lat, lon]
     outline: config.areaOutline.map((ring) => ring.map(([lon, lat]) => [lat, lon])),
     // The zone all times are to be shown in.
@@ -540,7 +540,7 @@ server.listen(config.port, config.host, () => {
   // all interfaces, localhost is the address to try first.
   const { port } = server.address();
   const host = !config.host ? 'localhost' : config.host.includes(':') ? `[${config.host}]` : config.host;
-  log(`Netnou listening on http://${host}:${port}, ${config.area ? `area ${config.areaName || 'custom area'} (${config.area.bbox.join(',')})` : `no area${config.areaName ? ` (${config.areaName})` : ''}`}${config.agencies ? `, operators: ${config.agencies.map(({ name }) => name).join(', ')}` : ''}`);
+  log(`Netnou listening on http://${host}:${port}, ${config.area ? `area ${config.areaName || 'custom area'} (${config.area.bbox.join(',')})` : `the whole feed${config.areaName ? ` (${config.areaName})` : ''}`}${config.agencies ? `, operators: ${config.agencies.map(({ name }) => name).join(', ')}` : ''}`);
   feed.start().catch((err) => {
     log(`Timetable: cannot start: ${err.message}`);
     process.exit(1);
