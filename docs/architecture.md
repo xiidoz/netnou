@@ -277,7 +277,14 @@ the default area that is about 60,000 distinct hops, for all of Germany
   `road` for buses; `tram`, `subway` and `rail` for vehicles on tracks;
   `ferry` for ferries, on the ways of their routes (`route=ferry`); and
   `cable` for cable cars and monorails, on monorails, funiculars, narrow
-  gauge, tracks with a rack and aerial lifts that carry people. Roads carry a
+  gauge, tracks with a rack and aerial lifts that carry people. The U-Bahn
+  and trams also run on each other's tracks and on those of the light rail
+  (which `rail` has as well), at one and a half times the cost, so that a
+  line keeps to tracks of its own kind where it can. The Stadtbahn of
+  Stuttgart, Frankfurt, Düsseldorf and the Ruhr is U-Bahn in the feed, that of
+  Cologne, Bonn and Bielefeld is tram, and both run on tracks that
+  OpenStreetMap has as light rail, subway and tram
+  ([#128](https://github.com/xiidoz/netnou/issues/128)). Roads carry a
   cost factor so that buses prefer main roads, and respect one-way streets,
   access restrictions and the exemptions for buses. The networks are kept in
   `osm-networks.bin`, as columns that are read again in a second, and built
@@ -304,9 +311,11 @@ the default area that is about 60,000 distinct hops, for all of Germany
   nearby edges are considered, up to 70 m away for buses, up to 400 m for
   trains (whose stop is often the centre of the station) and up to 600 m for
   ferries (whose pier can be far from where the line of their route ends),
-  with a penalty per metre of offset. An edge is found by the cells of a grid
-  it lies in; a long one, as a ferry across the sea has, by the cells along
-  it rather than all those of its rectangle.
+  with a penalty per metre of offset. A stop keeps the six nearest on tracks
+  of the network's own kind and as many on tracks it shares, so that where
+  those are nearer they do not crowd out its own. An edge is found by the
+  cells of a grid it lies in; a long one, as a ferry across the sea has, by
+  the cells along it rather than all those of its rectangle.
 - **Search.** A search from the candidates of stop A finds the cheapest path
   to one of stop B (Dijkstra's).
 - **Plausibility.** A path much longer than the straight line (more than 2 to
@@ -318,14 +327,14 @@ the default area that is about 60,000 distinct hops, for all of Germany
   straight line. The OpenStreetMap data may end before that, as the extracts
   of a federal state do at its border: the straight line then begins where
   the network stops leading towards the stop. The limit on the length applies
-  here as well. Hops entirely outside mostly have no geometry.
+  here as well. Hops entirely outside mostly have no geometry. The same is
+  done for a stop inside the area that is not near the network, or only near
+  tracks of another kind, which need not lead there: a stop of trams above a
+  tunnel of the U-Bahn.
 - **Fallback.** A hop without a path is a straight line. In October 2026 that
   was the case for about 1 % of the hops inside the default area. For all of
-  Germany it was 1.3 % of the hops on roads, 15 % on rail, 10 % of trams and
-  half of those of the U-Bahn: the Stadtbahn of Stuttgart, Frankfurt,
-  Düsseldorf and the Ruhr, which the feed has as U-Bahn, runs on tracks that
-  OpenStreetMap has as light rail, which is a network of its own here
-  ([#128](https://github.com/xiidoz/netnou/issues/128)).
+  Germany it was 1.3 % of the hops on roads, 15 % on rail, 2 % of trams and
+  4 of the 2,496 hops of the U-Bahn.
 - **Storage.** Paths are simplified to 1.5 m accuracy and stored once per
   hop, shared by all trips that use it. A hop is gone through from its
   first point on, so that point is stored as it is and each of the others as
@@ -736,7 +745,7 @@ What these mean for other feeds and countries, and where to change them:
 | pattern | a sequence of stops, stored once for all the trips that run it |
 | profile | a set of running times, stored once: arrival and departure at every stop, counted from the first departure |
 | hop | two consecutive stops of a trip |
-| network, net | one of the four routable graphs: `road`, `rail`, `subway`, `tram` |
+| network, net | one of the six routable graphs: `road`, `rail`, `subway`, `tram`, `ferry`, `cable` |
 | segment | the routed path of a hop on one network |
 | knots | `[time, lat, lon, …]` along a vehicle's way ahead |
 | mode | kind of transport as the page shows it, see [Modes](api.md#modes) |

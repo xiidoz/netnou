@@ -208,13 +208,16 @@ export function buildSegments(data, graphs, area, onProgress = () => {}, { roads
       const [factor, slack] = SETTINGS[NETS[n]].detour;
       const maxLength = Math.hypot(bx - ax, by - ay) * factor + slack;
       if (a.length && b.length) route = network.route(a, b, maxLength);
-      // One end is not on the network, or it lies beyond the area on a part of
-      // the network that is not connected to the rest (the OSM data ends a few
-      // km outside): follow the network towards it until the route has left the
-      // area, or as far as the network goes that way.
+      // One end is not on the network, or only on tracks of another kind that
+      // need not lead there (a tunnel under a stop of trams), or it lies beyond
+      // the area on a part of the network that is not connected to the rest
+      // (the OSM data ends a few km outside): follow the network towards it
+      // until the route has left the area, or as far as the network goes that
+      // way.
       const inside = (x, y) => area.distance(...network.toLatLon(x, y)) <= NEAR.exit;
-      if (!route && a.length && (!b.length || far(to))) route = network.routeBeyond(a, bx, by, inside, false, maxLength);
-      if (!route && b.length && (!a.length || far(from))) route = network.routeBeyond(b, ax, ay, inside, true, maxLength);
+      const off = (candidates) => candidates.every((c) => c.shared);
+      if (!route && a.length && (off(b) || far(to))) route = network.routeBeyond(a, bx, by, inside, false, maxLength);
+      if (!route && b.length && (off(a) || far(from))) route = network.routeBeyond(b, ax, ay, inside, true, maxLength);
       if (!route) {
         kept?.add(n, placeOf(from), placeOf(to), null);
         continue;

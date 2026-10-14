@@ -46,7 +46,7 @@ test('the reader takes the ways that classify keeps, and then the places of just
   for (const options of [{}, { sorted: true }, { backwards: true }]) {
     const read = readMade(dir, EXTRACT.nodes, EXTRACT.ways, { keepNode: inside, ...options });
     const label = JSON.stringify(options);
-    assert.deepEqual(read.kinds, [{ net: 'road', factor: 1.3, dir: 3 }, { net: 'tram', factor: 1, dir: 1 }, { net: 'road', factor: 1.6, dir: 3 }], label);
+    assert.deepEqual(read.kinds, [{ net: 'road', factor: 1.3, dir: 3 }, { net: 'tram', factor: 1, dir: 1, shared: ['subway'] }, { net: 'road', factor: 1.6, dir: 3 }], label);
     assert.deepEqual(Array.from(read.ways.id), [100, 102, 104], label);
     assert.deepEqual(Array.from(read.ways.kind), [0, 1, 2], label);
     // the nodes of a way as places, by their ids: none for one that is not kept or not there
@@ -68,7 +68,9 @@ test('the networks of extracts: ways cut where a node is not kept, nodes numbere
   // the tram line is cut where its node lies outside
   assert.deepEqual([nets.tram.a, nets.tram.b, nets.tram.d].map((list) => Array.from(list)), [[0, 2], [1, 3], [1, 1]]);
   assert.deepEqual(Array.from(nets.tram.lat), [494200000, 494300000, 494400000, 494500000]);
-  assert.equal(nets.rail.a.length + nets.subway.a.length, 0);
+  // … and is on the network of the U-Bahn as well, at a higher cost, as a track of another kind (4)
+  assert.deepEqual([nets.subway.a, nets.subway.b, nets.subway.f, nets.subway.d].map((list) => Array.from(list)), [[0, 2], [1, 3], [150, 150], [5, 5]]);
+  assert.equal(nets.rail.a.length, 0);
 
   // A second extract has the residential street again, and a road that goes on from node 20.
   const second = readMade(dir, [[10, 49.4, 11.0], [11, 49.41, 11.0], [20, 49.42, 11.0], [5000000000, 49.43, 11.01], [40, 49.42, 10.99]], [
@@ -121,7 +123,11 @@ test('classifyWay: networks, access, one-way rules and bus exceptions', () => {
   assert.equal(classifyWay({ highway: 'service', service: 'parking_aisle' }), null);
   assert.equal(classifyWay({ highway: 'pedestrian' }), null);
   assert.equal(classifyWay({ highway: 'pedestrian', psv: 'yes' }).net, 'road');
-  assert.equal(classifyWay({ railway: 'subway' }).net, 'subway');
+  // the U-Bahn and trams share each other's tracks and those of the light rail (#128)
+  assert.deepEqual(classifyWay({ railway: 'subway' }), { net: 'subway', factor: 1, dir: 3, shared: ['tram'] });
+  assert.deepEqual(classifyWay({ railway: 'tram' }), { net: 'tram', factor: 1, dir: 3, shared: ['subway'] });
+  assert.deepEqual(classifyWay({ railway: 'light_rail' }), { net: 'rail', factor: 1, dir: 3, shared: ['subway', 'tram'] });
+  assert.deepEqual(classifyWay({ railway: 'rail' }), { net: 'rail', factor: 1, dir: 3 });
   assert.equal(classifyWay({ railway: 'rail', oneway: 'yes' }).dir, 3);
   assert.equal(classifyWay({ railway: 'tram', oneway: 'yes' }).dir, 1);
   assert.equal(classifyWay({ railway: 'rail', service: 'yard' }).factor, 3);
@@ -168,6 +174,52 @@ test('ferries follow their routes across the water, cable cars and monorails the
   const segments = buildSegments(dataset, graphs, area, (line) => log.push(line));
   assert.deepEqual(Array.from(segments.net, (n) => segments.nets[n]), ['ferry', 'ferry', 'cable']);
   assert.equal(log.at(-1), 'hops routed: road 0/0, rail 0/0, subway 0/0, tram 0/0, ferry 2/2, cable 1/1');
+});
+
+test('the U-Bahn and trams share their tracks and those of the light rail, and keep to their own where they can (#128)', (t) => {
+  const dir = tempDir(t);
+  // Light rail from P to Q, 723 m to the east, on which a Stadtbahn runs that
+  // the feed calls U-Bahn. From X to Y a track of the U-Bahn that bends 300 m
+  // to the north, 940 m long, and one of trams straight, 723 m. A track of
+  // trams that ends at K, 109 m before the stop Z, under which a tunnel of the
+  // U-Bahn runs from south to north. And a stop U of the U-Bahn 22 m beside
+  // its track, with ten edges of a stub of trams 6 to 29 m away.
+  const nodes = [[1, 49.5, 11.0], [2, 49.5, 11.01], [3, 49.52, 11.0], [4, 49.5227, 11.005], [5, 49.52, 11.01], [6, 49.54, 11.0], [7, 49.54, 11.008], [8, 49.535, 11.0095], [9, 49.545, 11.0095], [20, 49.56, 10.995], [21, 49.56, 11.005]];
+  const stub = Array.from({ length: 11 }, (_, i) => [30 + i, 49.56025, 10.9995 + i * 0.0001]);
+  const graphs = buildNetworks([readMade(dir, [...nodes, ...stub], [
+    [10, [1, 2], { railway: 'light_rail' }],
+    [11, [3, 4, 5], { railway: 'subway' }],
+    [12, [3, 5], { railway: 'tram' }],
+    [13, [6, 7], { railway: 'tram' }],
+    [14, [8, 9], { railway: 'subway', tunnel: 'yes' }],
+    [15, [20, 21], { railway: 'subway' }],
+    [16, stub.map(([id]) => id), { railway: 'tram' }],
+  ])]);
+
+  const candidates = new Network(graphs.subway, { originLat: 49.56, snapRadius: 250, snapPenalty: 2 }).candidates(49.5602, 11.0);
+  assert.deepEqual(candidates.map((c) => c.shared), [true, true, true, true, true, true, false]);
+  assert.ok(Math.abs(candidates.at(-1).penalty - 2 * 22.3) < 0.5, `${candidates.at(-1).penalty}`);
+
+  const area = Area.fromBbox([49.4, 10.9, 49.7, 11.2]);
+  const dataset = packDataset({
+    stops: { id: ['P', 'Q', 'X', 'Y', 'W', 'Z'], name: ['P', 'Q', 'X', 'Y', 'W', 'Z'], lat: [49.5001, 49.5001, 49.5199, 49.5199, 49.5401, 49.5401], lon: [11.0, 11.01, 11.0, 11.01, 11.0, 11.0095], parent: [-1, -1, -1, -1, -1, -1], platform: ['', '', '', '', '', ''], region: [1, 1, 1, 1, 1, 1] },
+    routes: { id: ['U1', 'U2', 'T1', 'T2'], short: ['U1', 'U2', '1', '2'], long: ['', '', '', ''], type: [1, 1, 0, 0], color: ['', '', '', ''], text: ['', '', '', ''], agency: ['', '', '', ''] },
+    headsigns: ['Q', 'Y', 'Y', 'Z'],
+    dates: ['20261003'],
+    services: [[0]],
+    trips: { id: ['A', 'B', 'C', 'D'], route: [0, 1, 2, 3], service: [0, 0, 0, 0], headsign: [0, 1, 2, 3], stops: [[0, 1], [2, 3], [2, 3], [4, 5]], arr: [[36000, 36120], [36000, 36120], [36000, 36120], [36000, 36120]], dep: [[36000, 36120], [36000, 36120], [36000, 36120], [36000, 36120]], seq: [null, null, null, null] },
+  });
+  const log = [];
+  const routes = routesOf(buildSegments(dataset, graphs, area, (line) => log.push(line)));
+  assert.equal(log.at(-1), 'hops routed: road 0/0, rail 0/0, subway 2/2, tram 2/2, ferry 0/0, cable 0/0');
+  assert.deepEqual(routes.map((route) => route.net), ['subway', 'subway', 'tram', 'tram']);
+  // P to Q on the light rail; from X to Y the U-Bahn on its own track round
+  // the bend (940 m, where the straight track of trams would cost as much as
+  // 1,085 m) and the trams on theirs; from W to Z the trams as far as their
+  // track goes, and on in a straight line: the tunnel does not lead there.
+  const lengths = routes.map((route) => metres(route.points));
+  [723, 940, 723, 687].forEach((expected, i) => assert.ok(Math.abs(lengths[i] - expected) < 3, `${lengths}`));
+  assert.deepEqual(routes[3].points.slice(-4), [4954000, 1100800, 4954010, 1100950]);
 });
 
 // A small road grid around (49.5, 11.0); 0.001° is ~111 m north and ~72 m east.
@@ -294,6 +346,21 @@ function pointsOf(segments) {
     }
   }
   return points;
+}
+
+/** Each segment of route geometry: its network and its points, as pointsOf has them. */
+function routesOf(segments) {
+  return Array.from(segments.key, (_, s) => ({
+    net: segments.nets[segments.net[s]],
+    points: pointsOf({ key: [0], origin: segments.origin.subarray(2 * s, 2 * s + 2), start: [0, segments.start[s + 1] - segments.start[s]], step: segments.step.subarray(2 * segments.start[s], 2 * segments.start[s + 1]) }),
+  }));
+}
+
+/** The length of points in 1e-5 degrees, in metres. */
+function metres(points) {
+  let length = 0;
+  for (let i = 2; i < points.length; i += 2) length += Math.hypot((points[i + 1] - points[i - 1]) * Math.cos((points[i] / 1e5) * (Math.PI / 180)), points[i] - points[i - 2]) * 1.1132;
+  return length;
 }
 
 test('vehicles and trip paths follow the routed geometry', () => {
