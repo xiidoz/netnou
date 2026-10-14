@@ -182,13 +182,15 @@ to the next. That is its extent. Extracts of your own in
 timetable is used for the next as long as that one stays within it, so a new
 timetable alone does not fetch the extracts again.
 
-The extract of Germany is 4.9 GB, and its roads are routed in tiles
-([architecture.md](architecture.md#route-geometry)).
-The first import then takes the test machine about eight minutes and at
-most 3.2 GB of memory, and so does one with new OpenStreetMap data; the data
-directory needs 6 GB while the extract is read, 1.1 GB afterwards. A new
-timetable on the same data keeps the routes it can and routes only the hops
-that are new: with nearly all of them kept it is imported in about a minute.
+The extract of Germany is 4.9 GB, about seven minutes to download at
+100 Mbit/s, and its roads are routed in tiles
+([architecture.md](architecture.md#route-geometry)). After the download the
+first import takes about ten minutes and at most 3.2 GB of memory, and so does
+one with new OpenStreetMap data, which is downloaded every 30 days
+(`NETNOU_OSM_MAX_AGE_DAYS`); the data directory needs 6 GB while the extract
+is read, 1.1 GB afterwards. A new timetable on the same data keeps the routes
+it can and routes only the hops that are new: with nearly all of them kept it
+is imported in about a minute.
 
 Changing the area or the operators makes the server import the timetable
 again on the next start.

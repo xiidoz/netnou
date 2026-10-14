@@ -17,17 +17,24 @@
   `download.gtfs.de`, `realtime.gtfs.de` and `download.geofabrik.de`. Once a
   day it also asks `api.github.com` for a newer release, unless that is
   switched off ([Version and updates](configuration.md#version-and-updates)).
-- Memory: about 1 GB for a minute while a timetable is imported, about
-  200 MB otherwise.
-- Disk: less than 1 GB in the data directory during an import, about 65 MB
+- Downloads: about 800 MB at the first start, the timetable (about 300 MB)
+  and the OpenStreetMap extracts (about 500 MB). After that the timetable
+  whenever gtfs.de publishes a new one, once a day, the extracts every 30
+  days, and the realtime feed, 10 to 15 MB a minute while somebody has the
+  map open ([Realtime polling and traffic](configuration.md#realtime-polling-and-traffic)).
+- Memory: about 1.1 GB for a minute while a timetable is imported, 150 to
+  600 MB otherwise.
+- Disk: about 400 MB in the data directory during an import, about 80 MB
   afterwards.
 
 The figures are approximate and were measured for the default area in October
-2026; a smaller area needs less. An instance for all of Germany
-(`NETNOU_AREA=Germany`) needs up to 3.2 GB of memory while it imports: eight
-minutes for the first import and for new OpenStreetMap data, about one for
-a new timetable. It needs 6 GB of disk while the extract is read, 1.1 GB
-afterwards.
+2026, where the first start takes about two minutes at 100 Mbit/s; a smaller
+area needs less. An instance for all of Germany (`NETNOU_AREA=Germany`)
+downloads the extract of Germany instead, 4.9 GB, about seven minutes at
+100 Mbit/s. Importing it then takes about ten minutes and up to 3.2 GB of
+memory, at the first start and with every new extract; a new timetable takes
+about a minute, and in between the server runs with about 1 GB. It needs
+6 GB of disk while the extract is read, 1.1 GB afterwards.
 
 Visitors' browsers load the map behind the vehicles themselves, by default
 from `tiles.openfreemap.org` (see [The map](configuration.md#the-map)), and

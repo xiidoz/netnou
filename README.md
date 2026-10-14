@@ -91,10 +91,18 @@ takes two to five minutes:
   and tracks.
 
 The import needs about 1.1 GB of memory for a minute. Afterwards the server
-runs with about 200 MB, keeps two cache files of about 65 MB together in
+runs with 150 to 600 MB, keeps four cache files of about 80 MB together in
 `./data` (the volume `data` in Docker) and starts from them in less than a
-second. The downloads are deleted
-when the import is done. (Figures: approximate, default area, October 2026.)
+second. The downloads are deleted when the import is done. A new timetable is
+downloaded and imported in the same way whenever gtfs.de publishes one, once
+a day, and the extracts again every 30 days. (Figures: approximate, default
+area, October 2026.)
+
+With `NETNOU_AREA=Germany` the extract is that of Germany, 4.9 GB, about
+seven minutes to download at 100 Mbit/s. Importing it takes about ten
+minutes more and up to 3.2 GB of memory, and the data directory needs 6 GB
+meanwhile and 1.1 GB afterwards. The server then runs with about 1 GB, and a
+new timetable takes about a minute.
 
 ## Configuration
 
