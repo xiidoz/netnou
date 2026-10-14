@@ -8,6 +8,21 @@ This file is written by
 messages when a release is made. Do not edit it by hand; see
 [Releases](CONTRIBUTING.md#releases).
 
+## [0.10.0](https://github.com/xiidoz/netnou/compare/v0.9.0...v0.10.0) (2026-10-14)
+
+
+### Features
+
+* **map:** fold chips of more than two rows to a row and a half on wide screens ([#140](https://github.com/xiidoz/netnou/issues/140)) ([61c4e26](https://github.com/xiidoz/netnou/commit/61c4e261b3a1fc3d749299278441a19018993963)), closes [#139](https://github.com/xiidoz/netnou/issues/139)
+* **map:** give ferries and cable cars & monorails kinds of their own, with chips and colours ([#137](https://github.com/xiidoz/netnou/issues/137)) ([ac43d4d](https://github.com/xiidoz/netnou/commit/ac43d4d01d635db2fb45789723dcefa226df90fd)), closes [#113](https://github.com/xiidoz/netnou/issues/113)
+* **routes:** route ferries and cable cars & monorails along ways of their own ([#141](https://github.com/xiidoz/netnou/issues/141)) ([4a1d565](https://github.com/xiidoz/netnou/commit/4a1d565b61d31daf4e36aaaf03636e12c90be8cb)), closes [#136](https://github.com/xiidoz/netnou/issues/136)
+
+
+### Bug Fixes
+
+* **map:** fade the half row of folded chips out down to where it is cut ([#142](https://github.com/xiidoz/netnou/issues/142)) ([a6d1808](https://github.com/xiidoz/netnou/commit/a6d1808f08012d284a5429a71749e6c4a68de742))
+* **routes:** let the U-Bahn and trams run on each other's tracks and on the light rail ([#143](https://github.com/xiidoz/netnou/issues/143)) ([f113b6b](https://github.com/xiidoz/netnou/commit/f113b6b8cb68da62f54f5bd98ab0c1ec37def4af)), closes [#128](https://github.com/xiidoz/netnou/issues/128)
+
 ## [0.9.0](https://github.com/xiidoz/netnou/compare/v0.8.0...v0.9.0) (2026-10-14)
 
 
