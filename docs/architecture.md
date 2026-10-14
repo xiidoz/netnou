@@ -148,7 +148,7 @@ Three distances, in cells, decide what counts (`NEAR` in `lib/area.js`):
 | `exit` | 4 | routes to stops far outside follow the network this far, then go straight |
 | `osm` | 7 | OpenStreetMap data is kept up to here |
 
-An instance may have no area (`NETNOU_AREA=all`) and may keep the trips of
+An instance may have no area (`NETNOU_AREA=Germany`) and may keep the trips of
 some operators only (`NETNOU_AGENCIES`). The import then decides by the
 operator of a trip, read from `agency.txt`, `routes.txt` and `trips.txt`
 before the stop times, and where there is no area every stop counts.

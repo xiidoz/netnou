@@ -659,16 +659,18 @@ test('an instance that is not to be listed says so with every answer', async () 
   }
 });
 
-test('an instance without an area says what it covers once it has a timetable', async () => {
+test('an instance of all of Germany says what it covers once it has a timetable', async () => {
   let go;
   const feed = { zip: makeZip(FEED), etag: '"v1"', realtime: REALTIME, hold: new Promise((resolve) => { go = resolve; }) };
   const other = await startUpstream(feed);
-  const proc = start({ NETNOU_PORT: '0', NETNOU_HOST: '127.0.0.1', NETNOU_DATA_DIR: path.join(dir, 'all'), NETNOU_AREA: 'all', NETNOU_AGENCIES: 'TESTBETRIEB', NETNOU_TIMEZONE: 'UTC', NETNOU_FEED_URL: `${other.url}/feed.zip`, NETNOU_REALTIME_URL: `${other.url}/realtime.pb` });
+  // (without the extract of Germany, which is not downloaded in a test)
+  const proc = start({ NETNOU_PORT: '0', NETNOU_HOST: '127.0.0.1', NETNOU_DATA_DIR: path.join(dir, 'all'), NETNOU_AREA: 'Germany', NETNOU_AGENCIES: 'TESTBETRIEB', NETNOU_OSM_PBF_URLS: '', NETNOU_TIMEZONE: 'UTC', NETNOU_FEED_URL: `${other.url}/feed.zip`, NETNOU_REALTIME_URL: `${other.url}/realtime.pb` });
+  const germany = [47.27, 5.87, 55.06, 15.04];
   let text = '';
   proc.stdout.on('data', (chunk) => { text += chunk; });
   proc.stderr.on('data', (chunk) => { text += chunk; });
   try {
-    port = Number((await until(() => /Netnou listening on http:\/\/127\.0\.0\.1:(\d+), no area, operators: TESTBETRIEB\n/.exec(text), 'the server without an area to listen'))[1]);
+    port = Number((await until(() => /Netnou listening on http:\/\/127\.0\.0\.1:(\d+), the whole feed \(Deutschland\), operators: TESTBETRIEB\n/.exec(text), 'the server of all of Germany to listen'))[1]);
     // While the timetable is on its way nobody knows where its stops are:
     // the area is asked for in vain, as everything is but the status.
     const loading = await until(async () => {
@@ -678,7 +680,7 @@ test('an instance without an area says what it covers once it has a timetable', 
     assert.equal(loading.status, 503);
     assert.deepEqual(Object.keys(loading.json).sort(), ['message', 'state', 'step']);
     const before = (await get('/api/status')).json;
-    assert.deepEqual([before.area, before.view], [{ name: '', bbox: null, agencies: ['TESTBETRIEB'] }, null]);
+    assert.deepEqual([before.area, before.view], [{ name: 'Deutschland', bbox: null, agencies: ['TESTBETRIEB'] }, germany]);
     assert.equal((await request('/')).status, 200);
 
     go();
@@ -688,9 +690,9 @@ test('an instance without an area says what it covers once it has a timetable', 
     }, 'the import to finish');
     // the rectangle around all its stops, also those far from the others; no edge to draw
     const around = [49.4, 11, 52, 13];
-    assert.deepEqual([area.json.bbox, area.json.view, area.json.outline, area.json.name], [around, around, [], '']);
+    assert.deepEqual([area.json.bbox, area.json.view, area.json.outline, area.json.name], [around, germany, [], 'Deutschland']);
     const after = (await get('/api/status')).json;
-    assert.deepEqual([after.area, after.view], [{ name: '', bbox: around, agencies: ['TESTBETRIEB'] }, around]);
+    assert.deepEqual([after.area, after.view], [{ name: 'Deutschland', bbox: around, agencies: ['TESTBETRIEB'] }, germany]);
     assert.equal(after.timetable.trips, 2);
     // every station is one of its own
     assert.deepEqual((await get('/api/stations')).json.map((station) => station.id).sort(), ['A', 'B', 'X', 'Y']);
@@ -734,12 +736,12 @@ test('a zoomed-out map of a large instance is thinned out', async () => {
     realtime: encodeFeed({ timestamp: Math.floor(Date.now() / 1000), tripUpdates: [], alerts: [] }),
   };
   const other = await startUpstream(feed);
-  const proc = start({ NETNOU_PORT: '0', NETNOU_HOST: '127.0.0.1', NETNOU_DATA_DIR: path.join(dir, 'large'), NETNOU_AREA: 'all', NETNOU_TIMEZONE: 'UTC', NETNOU_FEED_URL: `${other.url}/feed.zip`, NETNOU_REALTIME_URL: `${other.url}/realtime.pb` });
+  const proc = start({ NETNOU_PORT: '0', NETNOU_HOST: '127.0.0.1', NETNOU_DATA_DIR: path.join(dir, 'large'), NETNOU_AREA: 'Germany', NETNOU_AREA_NAME: '', NETNOU_OSM_PBF_URLS: '', NETNOU_TIMEZONE: 'UTC', NETNOU_FEED_URL: `${other.url}/feed.zip`, NETNOU_REALTIME_URL: `${other.url}/realtime.pb` });
   let text = '';
   proc.stdout.on('data', (chunk) => { text += chunk; });
   proc.stderr.on('data', (chunk) => { text += chunk; });
   try {
-    port = Number((await until(() => /Netnou listening on http:\/\/127\.0\.0\.1:(\d+), no area\n/.exec(text), 'the large server to listen'))[1]);
+    port = Number((await until(() => /Netnou listening on http:\/\/127\.0\.0\.1:(\d+), the whole feed\n/.exec(text), 'the large server to listen'))[1]);
     await until(async () => (await request('/api/area')).status === 200, 'the import to finish');
     const everywhere = 'bbox=45,5,55,15';
     const everything = 2 * (buses + 2);

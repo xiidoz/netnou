@@ -508,7 +508,7 @@ export async function buildDataset({ zipPath, area, agencies = null, onProgress 
     wantedTrips?.clear();
     if (agencies && !collector.index.size) {
       throw new Error(area
-        ? 'no trip of the operators in NETNOU_AGENCIES serves a stop in the area; NETNOU_AREA=all takes their trips wherever they run'
+        ? 'no trip of the operators in NETNOU_AGENCIES serves a stop in the area; NETNOU_AREA=Germany takes their trips wherever they run'
         : 'the operators in NETNOU_AGENCIES have no trips in the feed');
     }
 

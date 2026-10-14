@@ -23,8 +23,8 @@
   afterwards.
 
 The figures are approximate and were measured for the default area in October
-2026; a smaller area needs less. An instance for all of Germany, with the
-extract of Germany, needs up to 3.2 GB of memory while it imports: eight
+2026; a smaller area needs less. An instance for all of Germany
+(`NETNOU_AREA=Germany`) needs up to 3.2 GB of memory while it imports: eight
 minutes for the first import and for new OpenStreetMap data, about one for
 a new timetable. It needs 6 GB of disk while the extract is read, 1.1 GB
 afterwards.
@@ -340,7 +340,7 @@ The log lines below are quoted without their timestamp.
 | Page: "The timetable data could not be loaded." Log: `Timetable: update failed: fetch failed (…)` | The feed server cannot be reached. | Check outbound HTTPS and DNS. The next attempt follows after `NETNOU_FEED_CHECK_MINUTES`. |
 | `Timetable: update failed: the feed has no stops in the area; check NETNOU_BBOX or NETNOU_AREA_FILE …` | The area lies outside the feed, or latitude and longitude are swapped. | `NETNOU_BBOX` is `south,west,north,east`; GeoJSON positions are `[longitude, latitude]`. |
 | `Timetable: update failed: the feed has no operator "…" (it has "…") …` | A name in `NETNOU_AGENCIES` is not in `agency.txt` of the feed. | Write the name as the feed has it; the line names those that are like it. |
-| `Timetable: update failed: no trip of the operators in NETNOU_AGENCIES serves a stop in the area …` | The operators run elsewhere than in the area, which is the built-in one unless another is set. | Set the area they run in, or `NETNOU_AREA=all`. |
+| `Timetable: update failed: no trip of the operators in NETNOU_AGENCIES serves a stop in the area …` | The operators run elsewhere than in the area, which is the built-in one unless another is set. | Set the area they run in, or `NETNOU_AREA=Germany`. |
 | `… this feed version will be tried again in 60 min` | A download broke off or an import failed. That version of the feed is left alone for an hour, then two, doubling up to a day; a new version is tried at once. | Fix the cause named in the line and restart to try again immediately. |
 | `Timetable: update failed: import worker stopped (exit code …)` | The import ran out of memory or crashed. | Give the process more memory, see [Docker](#docker). |
 | `Timetable: stored dataset unusable (written by another version), importing again` | Normal after an update of Netnou that changed the cache format, or after changing the area (`made for another area`). | Nothing; the import runs again. |

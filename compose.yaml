@@ -34,6 +34,9 @@ services:
       NETNOU_PORT: "${NETNOU_PORT:-8080}"
       # Optional settings, all described in docs/configuration.md. To use one,
       # uncomment its line.
+      # All of Germany in place of the VGN, with the OpenStreetMap extract of
+      # Germany (4.9 GB). The import then needs up to 3.2 GB of memory.
+      # NETNOU_AREA: "Germany"
       # Another area than the default (the VGN around Nürnberg): a rectangle
       # "south,west,north,east", its name, and the OpenStreetMap extracts that
       # cover it. Without extracts the vehicles move in straight lines.
@@ -41,7 +44,7 @@ services:
       # NETNOU_AREA_NAME: "Nürnberg, Fürth, Erlangen"
       # NETNOU_OSM_PBF_URLS: "https://download.geofabrik.de/europe/germany/bayern/mittelfranken-latest.osm.pbf"
       # One operator and no others, by its name in the feed. With
-      # NETNOU_AREA: "all" in place of an area, wherever its lines run.
+      # NETNOU_AREA: "Germany" in place of the VGN, wherever its lines run.
       # NETNOU_AGENCIES: "VerkehrsAG Nürnberg"
       # Seconds between two fetches of the realtime feed (10 to 15 MB each)
       # while somebody is looking at the map: 60 unless set. With 30 a delay
