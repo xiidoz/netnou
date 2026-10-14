@@ -62,4 +62,6 @@ window.applyColorScheme();
   const hiddenModes = setting('hiddenModes');
   const asSent = language === root.lang && !address.has('display') && setting('colorBy') !== 'delay' && !(Array.isArray(hiddenModes) && hiddenModes.length);
   if (asSent) root.dataset.controls = 'shown';
+  // Chips that fold on a wide screen (style.css) are open where the visitor opened them.
+  if (setting('chipsOpen') === true) root.dataset.chipsOpen = '';
 }
