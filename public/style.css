@@ -18,6 +18,9 @@
   --mode-suburban: #1e8a3c;
   --mode-regional: #4d5a66;
   --mode-longdistance: #d97200;
+  /* (light, both: names on them are dark, see DARK_LETTERS in app.js) */
+  --mode-ferry: #4cb8ea;
+  --mode-cable: #c4a484;
   --mode-other: #7a7a7a;
 
   /* ahead of the timetable: a cool colour, apart from the scale of the delays and from every mode */
@@ -129,7 +132,8 @@ button { font: inherit; color: inherit; }
   z-index: 1001;
   top: calc(var(--gap) + var(--safe-top));
   left: calc(var(--gap) + var(--safe-left));
-  width: 336px;
+  /* (U-Bahn, tram and bus in one row of chips, also with four-digit numbers) */
+  width: 360px;
   padding: 12px 14px;
   display: grid;
   gap: 10px;
@@ -344,6 +348,9 @@ button { font: inherit; color: inherit; }
 .chip[data-mode="suburban"] { --chip-color: var(--mode-suburban); }
 .chip[data-mode="regional"] { --chip-color: var(--mode-regional); }
 .chip[data-mode="longdistance"] { --chip-color: var(--mode-longdistance); }
+.chip[data-mode="ferry"] { --chip-color: var(--mode-ferry); }
+.chip[data-mode="cable"] { --chip-color: var(--mode-cable); }
+.chip[data-mode="other"] { --chip-color: var(--mode-other); }
 .chip .swatch { background: var(--chip-color); }
 .chip .count { color: var(--text-muted); font-variant-numeric: tabular-nums; }
 .chip[aria-pressed="false"] { color: var(--text-muted); background: var(--bg-subtle); }
@@ -529,7 +536,7 @@ button:focus-visible, select:focus-visible, .row:focus-visible, .panel:focus-vis
   padding: 1px 7px;
   border-radius: 6px;
   background: var(--badge-color, var(--mode-other));
-  color: #fff;
+  color: var(--badge-text, #fff);
   font-weight: 700;
   font-size: 13px;
   text-align: center;
@@ -673,7 +680,7 @@ li:last-child > .row.stop .rail::before { bottom: 50%; }
    (display=fixed) nothing is to be touched: no buttons at all, on the card or
    in the corner of the map, and no details. The legend of the delays stays
    there, as nobody can look up what a colour means. */
-:root[data-display] .controls { width: auto; max-width: 336px; }
+:root[data-display] .controls { width: auto; max-width: 360px; }
 :root[data-display=""] .controls > :not(.title, .status),
 :root[data-display="fixed"] .controls > :not(.title, .status, .legend),
 :root[data-display] .status:not([data-state="outage"], [data-state="error"]),

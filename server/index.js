@@ -186,7 +186,8 @@ const pages = new Map();
 function servePage(req, res, url) {
   const file = path.join(config.publicDir, 'index.html');
   const stat = fs.statSync(file);
-  const stamp = `${stat.size}-${stat.mtimeMs}`;
+  // (the page has a chip for each kind of transport the timetable has: another timetable may need another page)
+  const stamp = `${stat.size}-${stat.mtimeMs}-${timetable?.kinds.join() ?? ''}`;
   const asked = LANGUAGE_CODES.includes(url.searchParams.get('lang')) ? url.searchParams.get('lang') : null;
   // (the header is read for this one answer and kept nowhere)
   const language = asked ?? languageFor(req.headers['accept-language'], config.language);
@@ -194,7 +195,7 @@ function servePage(req, res, url) {
   const key = asked ? `?lang=${asked}` : language;
   let page = pages.get(key);
   if (page?.stamp !== stamp) {
-    const body = Buffer.from(renderPage(fs.readFileSync(file, 'utf8'), { language, asked, texts: texts[language], siteName: config.siteName, areaName: config.areaName, siteTitle: config.siteTitle[language], siteDescription: config.siteDescription[language], links: config.links, preview: own.preview, previewSize, publicUrl: config.publicUrl, listed: config.searchEngines, styleUrl: config.styleUrl, mapOrigins: config.mapOrigins }));
+    const body = Buffer.from(renderPage(fs.readFileSync(file, 'utf8'), { language, asked, texts: texts[language], siteName: config.siteName, areaName: config.areaName, siteTitle: config.siteTitle[language], siteDescription: config.siteDescription[language], links: config.links, preview: own.preview, previewSize, publicUrl: config.publicUrl, listed: config.searchEngines, styleUrl: config.styleUrl, mapOrigins: config.mapOrigins, kinds: timetable?.kinds ?? null }));
     page = { stamp, body, etag: `"${crypto.createHash('sha1').update(body).digest('hex').slice(0, 16)}"`, packed: null };
     pages.set(key, page);
   }
@@ -430,7 +431,8 @@ function handleApi(req, res, url) {
         if (left && v.lineIndex !== line && !(pickedTrip !== undefined && v.is(pickedTrip, picked[2]))) continue;
         list.push(v);
       }
-      const head = { now: at, realtime: feedTime, counts, thinned: thin?.shares ?? {} };
+      // (kinds: those the timetable has, for which the page shows chips)
+      const head = { now: at, realtime: feedTime, counts, thinned: thin?.shares ?? {}, kinds: timetable.kinds };
       // The smallest form: a column for each property of all vehicles, and
       // where each is now and how far it gets in LITE_AHEAD_S, as whole
       // numbers of 1e-5 degrees. Not where it goes, which a dot does not say.

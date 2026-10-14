@@ -63,6 +63,8 @@ export default {
   'mode.suburban': 'S-Bahn',
   'mode.regional': 'Regionalzug',
   'mode.longdistance': 'Fernverkehr',
+  'mode.ferry': 'Fähre',
+  'mode.cable': 'Seil- & Schwebebahn',
   'mode.other': 'Sonstige',
 
   'colorBy.label': 'Einfärbung der Fahrzeuge',

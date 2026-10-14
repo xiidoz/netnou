@@ -235,7 +235,11 @@ test('/api/vehicles: all of them reduced, a map section in full', async () => {
     return res.json.realtime !== null && res;
   }, 'realtime data');
   assert.equal(status, 200);
-  assert.deepEqual(Object.keys(all).sort(), ['counts', 'now', 'realtime', 'thinned', 'vehicles']);
+  assert.deepEqual(Object.keys(all).sort(), ['counts', 'kinds', 'now', 'realtime', 'thinned', 'vehicles']);
+  // the kinds of transport the timetable has, and the page with a chip for each of them and for no other
+  assert.deepEqual(all.kinds, ['subway', 'longdistance']);
+  const page = (await request('/')).body.toString();
+  assert.deepEqual([...page.matchAll(/<button type="button" class="chip" data-mode="([a-z]+)" aria-pressed="true">/g)].map(([, mode]) => mode), ['subway', 'longdistance']);
   // (so few that nothing is left out, whatever the zoom)
   assert.deepEqual(all.thinned, {});
   assert.ok(Math.abs(all.now - Date.now() / 1000) < 5);
@@ -290,7 +294,7 @@ test('/api/search: all stations and lines as columns, sent again only when they 
   const { status, headers, json } = await get('/api/search');
   assert.equal(status, 200);
   assert.deepEqual(json, {
-    modes: ['subway', 'tram', 'bus', 'suburban', 'regional', 'longdistance', 'other'],
+    modes: ['subway', 'tram', 'bus', 'suburban', 'regional', 'longdistance', 'ferry', 'cable', 'other'],
     // The places in 1e-5 degrees, each as the difference from the one before
     // (B comes first in the order of the list); a bit for each mode that stops
     // there. T1 stops 51 times at each of the two, T2 once more at B.
@@ -798,7 +802,7 @@ test('a zoomed-out map of a large instance is thinned out', async () => {
     // now in 1e-5 degrees and how far it gets in `ahead` seconds, and not
     // where it goes. The same vehicles as in the other reduced form.
     const least = (await get(`/api/vehicles?${everywhere}&detail=minimal&zoom=5`)).json;
-    assert.deepEqual(Object.keys(least).sort(), ['ahead', 'counts', 'now', 'realtime', 'thinned', 'vehicles']);
+    assert.deepEqual(Object.keys(least).sort(), ['ahead', 'counts', 'kinds', 'now', 'realtime', 'thinned', 'vehicles']);
     assert.deepEqual([least.thinned, least.counts, least.ahead], [out.thinned, out.counts, 60]);
     assert.deepEqual(Object.keys(least.vehicles), ['id', 'line', 'mode', 'delay', 'unit', 'at']);
     assert.deepEqual(least.vehicles.id, out.vehicles.map((v) => v.id));

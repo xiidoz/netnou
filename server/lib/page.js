@@ -175,8 +175,11 @@ const versions = (publicUrl) => [...LANGUAGE_CODES.map((code) => [code, addressI
  * @param styleUrl the style of the map, null with raster tiles
  * @param mapOrigins the servers the map comes from, as the
  *   Content-Security-Policy names them
+ * @param kinds the kinds of transport the timetable has (MODES in
+ *   lib/timetable.js), which get a chip and no others; null while there is no
+ *   timetable: the chips are then those that index.html shows
  */
-export function renderPage(html, { language, asked, texts, siteName, areaName, siteTitle = null, siteDescription = null, links = [], preview = null, previewSize = null, publicUrl, listed, styleUrl = null, mapOrigins = [] }) {
+export function renderPage(html, { language, asked, texts, siteName, areaName, siteTitle = null, siteDescription = null, links = [], preview = null, previewSize = null, publicUrl, listed, styleUrl = null, mapOrigins = [], kinds = null }) {
   const worded = pageTexts(areaName, texts, siteName);
   const title = siteTitle ?? worded.title;
   const description = siteDescription ?? worded.description;
@@ -196,6 +199,9 @@ export function renderPage(html, { language, asked, texts, siteName, areaName, s
   put(/(<meta name="apple-mobile-web-app-title" content=")[^"]*"/, (_, start) => `${start}${escapeHtml(siteName)}"`);
   put(/(<h1>)[^<]*/, (_, start) => `${start}${escapeHtml(siteName)}`);
   put(/(<p id="area-name">)[^<]*/, (_, start) => `${start}${escapeHtml(areaName)}`);
+  // A chip for each kind of transport the timetable has, so that none comes
+  // or goes once the script has run (it follows the timetable from then on).
+  if (kinds) put(/(<button type="button" class="chip" data-mode="([a-z]+)"[^>]*?)( hidden)?>/g, (_, start, mode) => `${start}${kinds.includes(mode) ? '' : ' hidden'}>`);
   // A page elsewhere opens in a new tab, like the links of the credits: the
   // map stays where it is. A page next to the instance (a path on the same
   // host) takes the place of the map: it belongs to the same site, and its

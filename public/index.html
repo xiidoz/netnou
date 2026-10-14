@@ -79,7 +79,10 @@
     <!-- (the sign takes the place of the dot where the line is a warning: no realtime data at all) -->
     <p class="status" id="status"><span class="dot"></span><span class="warn" data-icon="mdiAlert"></span><span id="status-text" data-i18n="status.connecting">Connecting …</span></p>
     <!-- A chip for each mode of transport (MODES in app.js), with the number of
-         its vehicles once the server has told it. On a narrow screen the chips
+         its vehicles once the server has told it. Of those that only some
+         timetables have, the chips are hidden: the server shows the chips of the
+         kinds its timetable has (server/lib/page.js), and app.js follows the
+         timetable from then on. On a narrow screen the chips
          are one row that scrolls sideways. The two arrows show where it goes on
          and move it there. They are for eyes and fingers only: the keyboard and
          a screen reader reach every chip itself. The arrow at the end is there
@@ -94,6 +97,9 @@
         <button type="button" class="chip" data-mode="suburban" aria-pressed="true"><span class="swatch"></span><span class="name" data-i18n="mode.suburban">S-Bahn</span><span class="count">0</span></button>
         <button type="button" class="chip" data-mode="regional" aria-pressed="true"><span class="swatch"></span><span class="name" data-i18n="mode.regional">Regional train</span><span class="count">0</span></button>
         <button type="button" class="chip" data-mode="longdistance" aria-pressed="true"><span class="swatch"></span><span class="name" data-i18n="mode.longdistance">Long-distance</span><span class="count">0</span></button>
+        <button type="button" class="chip" data-mode="ferry" aria-pressed="true" hidden><span class="swatch"></span><span class="name" data-i18n="mode.ferry">Ferry</span><span class="count">0</span></button>
+        <button type="button" class="chip" data-mode="cable" aria-pressed="true" hidden><span class="swatch"></span><span class="name" data-i18n="mode.cable">Cable car &#38; monorail</span><span class="count">0</span></button>
+        <button type="button" class="chip" data-mode="other" aria-pressed="true" hidden><span class="swatch"></span><span class="name" data-i18n="mode.other">Other</span><span class="count">0</span></button>
       </div>
       <button type="button" class="chips-more" id="modes-on" tabindex="-1" aria-hidden="true"><span data-icon="mdiChevronRight"></span></button>
     </div>

@@ -87,6 +87,8 @@ export default {
   'mode.suburban': 'S-Bahn',
   'mode.regional': 'Regional train',
   'mode.longdistance': 'Long-distance',
+  'mode.ferry': 'Ferry',
+  'mode.cable': 'Cable car & monorail',
   'mode.other': 'Other',
 
   'colorBy.label': 'Colour of the vehicles',

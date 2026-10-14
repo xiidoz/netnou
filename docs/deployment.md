@@ -308,7 +308,7 @@ https://example.org/?display=fixed&view=49.4478,11.0765,13.4&theme=dark&lang=de
 | `theme=light` or `theme=dark` | the colour scheme | as the device has it |
 | `color=delay` | vehicles coloured by delay, with the legend | coloured by kind of transport |
 | `flags=off` | no delay flags on the vehicles | with flags |
-| `modes=tram,subway` | only these kinds of transport, of `subway`, `tram`, `bus`, `suburban`, `regional` and `longdistance` | all |
+| `modes=tram,subway` | only these kinds of transport, of `subway`, `tram`, `bus`, `suburban`, `regional`, `longdistance`, `ferry`, `cable` and `other` | all |
 | `lang=de` | the language | the language of the browser |
 
 The quick way to such an address: open the page, set it up as the screen
