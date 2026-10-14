@@ -360,7 +360,7 @@ async function readServices(zip, serviceIds) {
  * all trips in the order of their ids, in which a trip is found by its id.
  * @param route, service  for each trip of the collector the index of its route and service, or -1
  */
-function assemble({ area, stops, routes, headsigns, dates, services, collector, route, service }) {
+function assemble({ area, stops, towns = [], routes, headsigns, dates, services, collector, route, service }) {
   const kept = [];
   for (let t = 0; t < collector.ids.length; t++) {
     if (collector.pattern.array[t] >= 0 && route[t] >= 0 && routes.type[route[t]] !== undefined) kept.push(t);
@@ -392,7 +392,10 @@ function assemble({ area, stops, routes, headsigns, dates, services, collector, 
       lon: Float64Array.from(stops.lon),
       parent: Int32Array.from(stops.parent),
       region: Uint8Array.from(stops.region),
+      // (the feed knows no towns: they come with the OSM data, see towns.js)
+      town: Int32Array.from(stops.town ?? stops.id.map(() => -1)),
     },
+    towns,
     routes,
     headsigns,
     dates,
@@ -423,16 +426,16 @@ function assemble({ area, stops, routes, headsigns, dates, services, collector, 
 /**
  * A dataset from trips given one by one, each with the arrays of its own:
  * what a test or a tool has at hand.
- * @param plain { area, stops: { id, name, lat, lon, parent, platform, region }, routes, headsigns, dates, services,
+ * @param plain { area, stops: { id, name, lat, lon, parent, platform, region, town }, towns, routes, headsigns, dates, services,
  *   trips: { id, route, service, headsign, stops: [[stop index]], arr, dep: [[seconds]], seq: [[number] or null] } }
  * @param options for the TripCollector
  */
-export function packDataset({ area = null, stops, routes, headsigns, dates, services, trips }, options) {
+export function packDataset({ area = null, stops, towns = [], routes, headsigns, dates, services, trips }, options) {
   const collector = new TripCollector(options);
   trips.id.forEach((id, t) => {
     collector.add(id, { stops: trips.stops[t], arr: trips.arr[t], dep: trips.dep[t], seq: trips.seq[t] ?? trips.stops[t].map((_, i) => i) }, trips.headsign[t]);
   });
-  return assemble({ area, stops, routes, headsigns, dates, services, collector, route: trips.route, service: trips.service });
+  return assemble({ area, stops, towns, routes, headsigns, dates, services, collector, route: trips.route, service: trips.service });
 }
 
 // Dataset layout (stored as NETNOU_DATA_DIR/dataset.bin, see dataset.js for
@@ -446,7 +449,12 @@ export function packDataset({ area = null, stops, routes, headsigns, dates, serv
 //   stops      { id: texts, byId: the stops in the order of their ids,
 //                name, platform, lat, lon, parent: stop index or -1,
 //                region: 1 if in the area or within NEAR.region of it, else
-//                0; without an area every stop is 1 }
+//                0; without an area every stop is 1,
+//                town: index into towns, -1 for a platform and for a
+//                station in no town that is known }
+//   towns      [name] – the towns that have a station: both come from the
+//              borders in the OSM data and are added by import-worker.js,
+//              see towns.js
 //   routes     { id, short, long, type: GTFS route_type, color, text,
 //                agency: name }   (color and text are not used yet)
 //   headsigns  [text]

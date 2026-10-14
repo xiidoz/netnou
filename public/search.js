@@ -5,7 +5,9 @@
 //
 // A stop is found if every word typed is the beginning of a word of its name,
 // in any order, or stands inside one. Where no stop is found that way, the
-// words may be spelled a little differently.
+// words may be spelled a little differently. The town a stop is in counts as
+// part of its name, whether the name says it or not: "Marienplatz" in Munich
+// is found by "münchen marienplatz".
 //
 // The names of all stops are one text, and a word is looked for by reading
 // through that text. Nothing is made for each stop: a list of all the stops
@@ -197,6 +199,9 @@ export function buildIndex({ modes, stations, lines }, modeNames = {}) {
   const kinds = Uint8Array.from(stations.modes);
   const rail = RAIL_MODES.reduce((sum, mode) => sum | (1 << modes.indexOf(mode)), 0);
   const { plain, twoLetters } = wordsTexts(names, count);
+  // The towns are looked through as the stops are: their names as texts of
+  // words. A town has no signs.
+  const towns = stations.towns ?? [];
   return {
     count,
     modes,
@@ -204,6 +209,9 @@ export function buildIndex({ modes, stations, lines }, modeNames = {}) {
     nameStarts,
     plain,
     twoLetters,
+    towns: { count: towns.length, names: towns, ...wordsTexts(towns.join('\n'), towns.length), signs: new Uint8Array(towns.length) },
+    // (the number of its town for every stop, -1 where none is known)
+    townOf: stations.town ? Int32Array.from(stations.town) : new Int32Array(count).fill(-1),
     lat: degrees(stations.lat),
     lon: degrees(stations.lon),
     kinds,
@@ -273,7 +281,7 @@ function nearlyBegins(text, from, to, typed, slips, rows) {
 
 /**
  * What a word typed is looked for as.
- * @returns { word, ends, begins, inside, slips, rows, close, slip, also }.
+ * @returns { word, ends, begins, inside, slips, rows, close, slip, also, towns }.
  *   - A stop with one of the signs `begins` matches as if a word of its name
  *     began with the word typed, one with a sign of `inside` as if it had it
  *     inside, and one with a sign of `slip` as a close spelling.
@@ -283,6 +291,7 @@ function nearlyBegins(text, from, to, typed, slips, rows) {
  *   - `also` is the same for what the word typed stands for, if it is an
  *     abbreviation: "hbf" is looked for as "hauptbahnhof" as well. Not so
  *     "str", which is the beginning of "strasse" and finds it as it is.
+ *   - `towns` is for townMarks to keep what it finds.
  */
 function formsOf(word) {
   let [begins, inside, slip] = [0, 0, 0];
@@ -313,7 +322,7 @@ function formsOf(word) {
   // (the first letter has to be right)
   if (slips) ANSWERS.forEach((long, bit) => { if (long[0] === word[0] && close(long)) slip |= 1 << bit; });
   const long = SPELLED_OUT.find(([short, full]) => short === word && !full.startsWith(short))?.[1];
-  return { word, ends, begins, inside, slips, rows, close, slip, also: long ? formsOf(long) : null };
+  return { word, ends, begins, inside, slips, rows, close, slip, also: long ? formsOf(long) : null, towns: [] };
 }
 
 /**
@@ -353,10 +362,11 @@ function signsOf(plain, trains) {
 const bySigns = (signs, form, level) => (signs & form.begins ? BEGINNING : level >= INSIDE && signs & form.inside ? INSIDE : level >= SPELLING && signs & form.slip ? SPELLING : NOT);
 
 /**
- * Marks all stops by how closely they match a word typed (formsOf): with
- * BEGINNING where a word of the name begins with it, with INSIDE where one
- * has it elsewhere, if the search goes that far. A mark only ever gets better.
+ * Marks all stops by how closely their names match a word typed (formsOf):
+ * with BEGINNING where a word of the name begins with it, with INSIDE where
+ * one has it elsewhere, if the search goes that far. A mark only ever gets better.
  * @param marks for every stop how closely it matches so far
+ * @param index the stops, or the towns in their place: { count, plain, twoLetters, signs }
  */
 function markForm(marks, index, form, level) {
   const { word } = form;
@@ -429,6 +439,7 @@ function wordsWith(names, letter) {
 /**
  * Marks the stops that have a word the word typed may be a slip of, as far
  * as they are not marked yet. The first letter has to be right.
+ * @param index the stops, or the towns in their place
  */
 function markSlips(marks, index, form) {
   const { word: typed, slips, rows, close } = form;
@@ -457,10 +468,34 @@ function markSlips(marks, index, form) {
   for (let i = 0; i < index.count; i++) if (marks[i] === NOT && index.signs[i] & form.slip) marks[i] = SPELLING;
 }
 
-/** How closely one stop matches a word typed (formsOf), as far as the search goes: what markAll and markSlips mark it with. */
-function matchOf(index, i, form, level) {
+/**
+ * How closely each town matches a word typed (formsOf), as far as the search
+ * goes: the stops of a town match the word as closely as the town does, if
+ * their own names do not match it more closely.
+ * @returns for every town how closely it matches, or null if none does
+ */
+function townMarks(index, form, level) {
+  if (form.towns[level] === undefined) {
+    const marks = new Uint8Array(index.towns.count);
+    markAll(marks, index.towns, form, Math.min(level, INSIDE));
+    if (level === SPELLING) markSlips(marks, index.towns, form);
+    form.towns[level] = marks.some((mark) => mark !== NOT) ? marks : null;
+  }
+  return form.towns[level];
+}
+
+/** Marks every stop as its town is marked, where that is better than its own mark. */
+function markByTown(marks, index, form, level) {
+  const towns = townMarks(index, form, level);
+  if (!towns) return;
+  const { count, townOf } = index;
+  for (let i = 0; i < count; i++) if (townOf[i] >= 0 && towns[townOf[i]] < marks[i]) marks[i] = towns[townOf[i]];
+}
+
+/** How closely the name of one stop matches a word typed (formsOf), as far as the search goes: what markAll and markSlips mark it with. */
+function nameMatch(index, i, form, level) {
   // (what an abbreviation stands for is looked for as it is written, without slips)
-  const other = form.also ? matchOf(index, i, form.also, Math.min(level, INSIDE)) : NOT;
+  const other = form.also ? nameMatch(index, i, form.also, Math.min(level, INSIDE)) : NOT;
   return other === BEGINNING ? BEGINNING : Math.min(other, matchOfWord(index, i, form, level));
 }
 
@@ -480,12 +515,35 @@ function matchOfWord(index, i, form, level) {
   return name.split(' ').some((own) => slip(own, true)) || other.split(' ').some((own) => slip(own, false)) ? SPELLING : NOT;
 }
 
+/** How closely one stop matches a word typed, by its name or by its town. */
+function matchOf(index, i, form, level) {
+  const town = index.townOf[i] < 0 ? NOT : townMarks(index, form, level)?.[index.townOf[i]] ?? NOT;
+  return town === BEGINNING ? BEGINNING : Math.min(town, nameMatch(index, i, form, level));
+}
+
 const kilometres = (lat1, lon1, lat2, lon2) => Math.hypot(lat1 - lat2, (lon1 - lon2) * Math.cos((lat1 * Math.PI) / 180)) * 111.2;
 
 /** What the service of a stop or a line counts for: all of it, or less the further it is from `near`. */
 const weigh = (service, lat, lon, near) => (near ? service / (kilometres(near.lat, near.lon, lat, lon) + NEAR_KM) ** 2 : service);
 
 const nameOf = (index, i) => index.names.slice(index.nameStarts[i], index.nameStarts[i + 1] - 1);
+
+/**
+ * The town of a stop, for a result to show, if its name does not say it:
+ * "München" for "Marienplatz", nothing for "Nürnberg Plärrer" and for
+ * "Frankfurt (Main) Hauptwache" in Frankfurt am Main. A name says its town if
+ * one of its words is the first word of the town that has more than three
+ * letters, which leaves out "Bad"; of a town without such a word, the first
+ * one. A word that only begins like the town does not say it: there is a
+ * "Nürnberger Straße" in many towns.
+ */
+function townToShow(index, i) {
+  const town = index.towns.names[index.townOf[i]];
+  if (!town) return null;
+  const words = split(fold(town));
+  const main = words.find((word) => word.length > 3) ?? words[0];
+  return main && split(fold(nameOf(index, i))).includes(main) ? null : town;
+}
 
 /**
  * The stops that match all the words typed, as far as the search goes, the
@@ -511,15 +569,18 @@ function find(index, forms, level, near, limit) {
     if (k) {
       markAll(marks, index, form, plain);
       if (level === SPELLING) markSlips(marks, index, form);
+      markByTown(marks, index, form, level);
       for (let i = 0; i < count; i++) if (marks[i] > worst[i]) worst[i] = marks[i];
     } else {
       if (first.of !== `${plain} ${form.word}`) {
         markAll(first.marks, index, form, plain);
+        markByTown(first.marks, index, form, plain);
         first.of = `${plain} ${form.word}`;
       }
       if (level === SPELLING && slips.of !== form.word) {
         slips.marks.set(first.marks);
         markSlips(slips.marks, index, form);
+        markByTown(slips.marks, index, form, SPELLING);
         slips.of = form.word;
       }
       worst.set(level === SPELLING ? slips.marks : first.marks);
@@ -560,7 +621,8 @@ function find(index, forms, level, near, limit) {
  * service. Service counts for less the further a stop is from `near`.
  * @param index from buildIndex
  * @param near { lat, lon } of the visitor, if they have it shown
- * @returns up to `limit` of { name, lat, lon, modes }
+ * @returns up to `limit` of { name, lat, lon, modes, town }; `town` only
+ *   where one is known and the name does not say it
  */
 export function search(index, query, { near = null, limit = 8 } = {}) {
   const forms = wordsOf(query).sort((a, b) => b.length - a.length).map(formsOf);
@@ -572,7 +634,10 @@ export function search(index, query, { near = null, limit = 8 } = {}) {
   // Close spellings only where nothing is found without them: they bring in
   // what was not meant as well ("feuer" is nearly the beginning of "Fürth").
   if (!best.length) best = find(index, forms, SPELLING, near, limit);
-  return best.map(({ i }) => ({ name: nameOf(index, i), lat: index.lat[i], lon: index.lon[i], modes: index.modes.filter((_, bit) => index.kinds[i] & (1 << bit)) }));
+  return best.map(({ i }) => {
+    const town = townToShow(index, i);
+    return { name: nameOf(index, i), lat: index.lat[i], lon: index.lon[i], modes: index.modes.filter((_, bit) => index.kinds[i] & (1 << bit)), ...(town ? { town } : {}) };
+  });
 }
 
 /**

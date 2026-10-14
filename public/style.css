@@ -251,10 +251,11 @@ button { font: inherit; color: inherit; }
 .search-results .dots { display: grid; flex: none; grid-template-columns: repeat(3, 8px); gap: 2px; }
 .search-results .swatch { width: 8px; height: 8px; background: var(--chip-color); }
 .search-results .name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-/* a line: where it goes, and below that in small print who runs it */
-.search-results .line .name { display: grid; min-width: 0; line-height: 1.25; }
-.search-results .line .to, .search-results .line .agency { overflow: hidden; text-overflow: ellipsis; }
-.search-results .line .agency { color: var(--text-muted); font-size: 12px; }
+/* Two lines: a line has where it goes, and below that in small print who
+   runs it; a stop whose name does not say its town has the town there. */
+.search-results .line .name, .search-results .in-town .name { display: grid; min-width: 0; line-height: 1.25; }
+.search-results .line .to, .search-results .line .agency, .search-results .in-town .stop, .search-results .in-town .town { overflow: hidden; text-overflow: ellipsis; }
+.search-results .line .agency, .search-results .in-town .town { color: var(--text-muted); font-size: 12px; }
 .search-results .badge { flex: none; }
 /* the headings of lines and stops, where both were found */
 .search-heading {

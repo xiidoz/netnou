@@ -1253,10 +1253,11 @@ function listResults(lines, stops, note = '') {
       dot.style.setProperty('--chip-color', `var(--mode-${mode})`);
       return dot;
     });
-    return option(() => chooseStop(stop), { title: stop.modes.map((mode) => t(`mode.${mode}`)).join(', ') }, [
-      el('span', { class: 'dots' }, dots),
-      el('span', { class: 'name', text: stop.name }),
-    ]);
+    // Below its name the town it is in, where the name does not say that: in small print, as a line has who runs it.
+    const name = stop.town
+      ? el('span', { class: 'name' }, [el('span', { class: 'stop', text: stop.name }), el('span', { class: 'town', text: stop.town })])
+      : el('span', { class: 'name', text: stop.name });
+    return option(() => chooseStop(stop), { class: stop.town ? 'in-town' : '', title: stop.modes.map((mode) => t(`mode.${mode}`)).join(', ') }, [el('span', { class: 'dots' }, dots), name]);
   });
   // (each kind under its heading where there are both)
   const heading = (text) => (lines.length && stops.length ? [el('li', { class: 'search-heading', role: 'presentation', text })] : []);

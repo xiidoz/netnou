@@ -139,8 +139,14 @@ function pbfBlob(type, block) {
   return Buffer.concat([length, header, blob]);
 }
 
-/** nodes: [[id, lat, lon]], ways: [[id, [refs], {tags}]] */
-export function makePbf(nodes, ways) {
+/**
+ * nodes: [[id, lat, lon]], ways: [[id, [refs], {tags}]], relations: [[id,
+ * {tags}, [[kind of member: 'node', 'way' or 'relation', its id, its role]]]]
+ * @param {{sorted?: boolean, backwards?: boolean}} [options] sorted: the file
+ *   says of itself that it has nodes, then ways, then relations, as the
+ *   extracts of Geofabrik do; backwards: it has them the other way round
+ */
+export function makePbf(nodes, ways, relations = [], { sorted = false, backwards = false } = {}) {
   const strings = [''];
   const str = (s) => (strings.includes(s) ? strings.indexOf(s) : strings.push(s) - 1);
   const dense = pb.bytes(2,
@@ -152,11 +158,22 @@ export function makePbf(nodes, ways) {
     packed(2, Object.keys(tags).map(str)),
     packed(3, Object.values(tags).map(str)),
     packed(8, deltas(refs), true)));
+  const relationMessages = relations.map(([id, tags, members]) => pb.bytes(4,
+    pb.int(1, id),
+    packed(2, Object.keys(tags).map(str)),
+    packed(3, Object.values(tags).map(str)),
+    packed(8, members.map(([, , role]) => str(role))),
+    packed(9, deltas(members.map(([, ref]) => ref)), true),
+    packed(10, members.map(([kind]) => ['node', 'way', 'relation'].indexOf(kind)))));
   const table = () => pb.bytes(1, ...strings.map((s) => pb.bytes(1, s)));
-  return Buffer.concat([
-    pbfBlob('OSMHeader', pb.bytes(4, 'OsmSchema-V0.6')),
+  const blocks = [
     pbfBlob('OSMData', Buffer.concat([pb.bytes(1, pb.bytes(1, '')), pb.bytes(2, dense)])),
     pbfBlob('OSMData', Buffer.concat([table(), pb.bytes(2, ...wayMessages)])),
+    ...(relations.length ? [pbfBlob('OSMData', Buffer.concat([table(), pb.bytes(2, ...relationMessages)]))] : []),
+  ];
+  return Buffer.concat([
+    pbfBlob('OSMHeader', Buffer.concat([pb.bytes(4, 'OsmSchema-V0.6'), ...(sorted ? [pb.bytes(5, 'Sort.Type_then_ID')] : [])])),
+    ...(backwards ? blocks.reverse() : blocks),
   ]);
 }
 

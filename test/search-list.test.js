@@ -31,7 +31,29 @@ test('a station is its name, its place, what stops there and how much, each in a
   // a bit for each mode, in the order of their names
   assert.deepEqual([hbf, rathaus, buchdorf].map((i) => list.stations.modes[i]), [0b111111, 0b000101, 0b000100]);
   assert.deepEqual([hbf, rathaus, buchdorf].map((i) => list.stations.service[i]), [13695, 4714, 44]);
-  assert.deepEqual(Object.keys(list.stations), ['names', 'lat', 'lon', 'modes', 'service']);
+  // (no town is known of these)
+  assert.deepEqual([list.stations.town, list.stations.towns], [[-1, -1, -1], []]);
+  assert.deepEqual(Object.keys(list.stations), ['names', 'lat', 'lon', 'modes', 'service', 'town', 'towns']);
+});
+
+test('the towns are named once, and a station has the number of its own', () => {
+  const stations = [
+    { ...station('Marienplatz', 48.13725, 11.57542), town: 'München' },
+    { ...station('Sendlinger Tor', 48.1335, 11.5668), town: 'München' },
+    { ...station('Marienplatz', 48.7709, 9.1728), town: 'Stuttgart' },
+    { ...station('Amsterdam Centraal', 52.3791, 4.9003), town: null },
+    station('Salzburg Hbf', 47.8128, 13.0457),
+    { ...station('Pasing', 48.1499, 11.4613), town: 'München' },
+  ];
+  const { list } = searchList(stations, [], MODES);
+  const names = list.stations.names.split('\n');
+  const { town, towns } = list.stations;
+  assert.deepEqual(towns.toSorted(), ['München', 'Stuttgart']);
+  assert.deepEqual(names.map((name, i) => `${name}: ${towns[town[i]] ?? '-'}`).toSorted(), [
+    'Amsterdam Centraal: -', 'Marienplatz: München', 'Marienplatz: Stuttgart', 'Pasing: München', 'Salzburg Hbf: -', 'Sendlinger Tor: München',
+  ]);
+  // in the order in which the list comes to them: the first town it names has the number 0
+  assert.equal(town.find((number) => number >= 0), 0);
 });
 
 test('stations follow each other as they lie on the map, whatever order they come in', () => {
@@ -107,5 +129,5 @@ test('lines are in the order of their operators, each of which is named once', (
     lon: [1103156, 1110000 - 1103156, 1110032 - 1110000, 1105986 - 1110032],
     service: [296, 3, 1149, 1911],
   });
-  assert.deepEqual(searchList([], [], MODES).list, { modes: MODES, stations: { names: '', lat: [], lon: [], modes: [], service: [] }, lines: { name: [], mode: [], agencies: [], agency: [], to: [], lat: [], lon: [], service: [] } });
+  assert.deepEqual(searchList([], [], MODES).list, { modes: MODES, stations: { names: '', lat: [], lon: [], modes: [], service: [], town: [], towns: [] }, lines: { name: [], mode: [], agencies: [], agency: [], to: [], lat: [], lon: [], service: [] } });
 });

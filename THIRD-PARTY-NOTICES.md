@@ -60,7 +60,7 @@ terms before you run a public instance.
 | Data | Default source | Terms |
 | --- | --- | --- |
 | Timetable (GTFS) and realtime data (GTFS-Realtime) | [gtfs.de](https://gtfs.de), provided by DELFI e.V. | [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/) |
-| Roads and tracks for the route geometry | OpenStreetMap extracts from [Geofabrik](https://download.geofabrik.de/) | © OpenStreetMap contributors, [ODbL 1.0](https://opendatacommons.org/licenses/odbl/1-0/) |
+| Roads and tracks for the route geometry, and the borders of the towns for the search | OpenStreetMap extracts from [Geofabrik](https://download.geofabrik.de/) | © OpenStreetMap contributors, [ODbL 1.0](https://opendatacommons.org/licenses/odbl/1-0/) |
 | The map behind the vehicles (style, vector tiles, fonts and icons), loaded by the visitor's browser | [OpenFreeMap](https://openfreemap.org) | tiles in the [OpenMapTiles](https://www.openmaptiles.org/) scheme, © OpenMapTiles, data © OpenStreetMap contributors ([ODbL 1.0](https://opendatacommons.org/licenses/odbl/1-0/)); [terms of service](https://openfreemap.org/tos/) of OpenFreeMap |
 
 What follows for an operator:

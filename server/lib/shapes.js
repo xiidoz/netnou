@@ -9,8 +9,9 @@ import path from 'node:path';
 import { Area, NEAR } from './area.js';
 import { download, publicUrl, readGz, reason, writeGz } from './files.js';
 import { NETS, Network, NetworkBuilder, simplify } from './network.js';
-import { readPbfWays } from './osmpbf.js';
+import { readPbfBoundaries, readPbfWays } from './osmpbf.js';
 import { NET_OF_MODE, hopKey, routeMode } from './timetable.js';
+import { BORDER_LEVELS, readTowns, townsAmong, writeTowns } from './towns.js';
 
 // Bump when classifyWay, the cost factors or the output of NetworkBuilder
 // (all in network.js) change: the cached networks are then built again from a
@@ -34,6 +35,10 @@ const SIMPLIFY_M = 1.5;
  * extracts. Returns null if there is neither (the map then falls back to
  * straight lines between stops).
  *
+ * With the networks come the towns in the extracts (towns.js), as `towns`:
+ * they are read from the same download, kept beside the networks and used
+ * for as long as those are.
+ *
  * An area of polygons stays what it is. The extent of an instance without an
  * area follows the timetable: the networks read for an earlier one are used
  * for as long as the present one lies within what was kept of OpenStreetMap
@@ -45,6 +50,7 @@ const SIMPLIFY_M = 1.5;
 export async function loadNetworks({ dataDir, urls, area, scope = area.id, maxAgeMs, timeoutMs, onProgress }) {
   if (!urls.length) return null;
   const cachePath = path.join(dataDir, 'osm-networks.json.gz');
+  const townsPath = path.join(dataDir, 'osm-towns.json.gz');
   const extent = area.polygons.length ? null : area;
 
   let cached = null;
@@ -52,7 +58,9 @@ export async function loadNetworks({ dataDir, urls, area, scope = area.id, maxAg
   try {
     const data = readGz(cachePath);
     if (data.version === NETWORKS_VERSION && data.area === scope && data.sources.join() === urls.join()) {
-      cached = data;
+      // (networks without the towns of their reading are as good as none: both are read again)
+      const towns = readTowns(townsPath, { scope, sources: urls, fetchedAt: data.fetchedAt });
+      if (towns) cached = { ...data, towns };
       covered = !extent || (Boolean(data.extent) && extent.within(Area.fromJSON(data.extent), NEAR.exit));
     }
   } catch {
@@ -64,6 +72,7 @@ export async function loadNetworks({ dataDir, urls, area, scope = area.id, maxAg
   try {
     const builder = new NetworkBuilder();
     const keepNode = (lat, lon) => area.distance(lat, lon) <= NEAR.osm;
+    const borders = []; // what each extract has of them
     for (const [i, url] of urls.entries()) {
       const file = path.join(dataDir, `osm-${i}.pbf`);
       onProgress(`downloading OSM extract ${publicUrl(url)}`);
@@ -71,14 +80,19 @@ export async function loadNetworks({ dataDir, urls, area, scope = area.id, maxAg
         const { size } = await download(url, file, timeoutMs);
         onProgress(`reading OSM extract (${Math.round(size / 1e6)} MB)`);
         readPbfWays(file, keepNode, ['highway', 'railway'], (way) => builder.addWay(way));
+        borders.push(readPbfBoundaries(file, BORDER_LEVELS));
       } finally {
         fs.rmSync(file, { force: true });
       }
     }
     const fresh = { version: NETWORKS_VERSION, fetchedAt: new Date().toISOString(), area: scope, sources: urls, nets: builder.result(), ...(extent ? { extent: extent.toJSON() } : {}) };
     if (!NETS.some((net) => fresh.nets[net].a.length)) throw new Error('no roads or tracks found in the area; do the extracts in NETNOU_OSM_PBF_URLS cover it?');
+    const towns = townsAmong(borders);
+    onProgress(`${towns.length} towns in the OSM extracts`);
+    // (the towns first: networks that are kept have their towns beside them)
+    writeTowns(townsPath, { fetchedAt: fresh.fetchedAt, scope, sources: urls, towns });
     writeGz(cachePath, fresh);
-    return fresh;
+    return { ...fresh, towns: readTowns(townsPath, { scope, sources: urls, fetchedAt: fresh.fetchedAt }) };
   } catch (err) {
     onProgress(`OSM data could not be updated (${reason(err)}), ${cached ? `using the copy of ${cached.fetchedAt}` : 'keeping straight lines'}`);
     return cached;
