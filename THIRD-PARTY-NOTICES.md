@@ -70,8 +70,8 @@ What follows for an operator:
   the timetable data in the corner of the map, with links and the name of
   the licence, and says that the timetable data was processed. Keep that
   credit visible. If you change the sources, see to it that the credit
-  changes with them: a style brings its own, `TILE_ATTRIBUTION` and
-  `DATA_ATTRIBUTION` set the rest
+  changes with them: a style brings its own, `NETNOU_TILE_ATTRIBUTION`
+  and `NETNOU_DATA_ATTRIBUTION` set the rest
   (see [docs/configuration.md](docs/configuration.md#attribution)).
 - **Derived data.** What an instance publishes through its API (vehicle
   positions, trips, departures, route geometry) and keeps in its data
