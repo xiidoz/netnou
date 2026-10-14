@@ -552,7 +552,7 @@ to change:
 
 | Assumption | Where |
 | --- | --- |
-| Suburban, regional and long-distance trains are told apart by German line names (`S 1`, `ICE 123`, …); besides them only ferries (route type 4), cable cars and monorails (5, 6, 7 and 12) and trolleybuses (11, as buses) are known, with the extended route types of the same things; everything else is "other". Ferries, cable cars and monorails and "other" get no route geometry | `routeMode` in `server/lib/timetable.js` |
+| Suburban, regional and long-distance trains are told apart by German line names (`S 1`, `ICE 123`, …); besides them only ferries (route type 4), cable cars and monorails (5, 6, 7 and 12) and trolleybuses (11, as buses) are known, with the extended route types of the same things; everything else is "other". Ferries follow the ways of their routes in OpenStreetMap (`route=ferry`), cable cars and monorails those of monorails, funiculars, narrow gauge, tracks with a rack and aerial lifts; "other" gets no route geometry | `routeMode` in `server/lib/timetable.js` |
 | Of an alert in several languages the German text is shown | `server/lib/pb.js` |
 | The operator behind the realtime data is recognised from the note gtfs.de attaches to each trip | `SOURCE_NOTE` in `server/lib/realtime.js` |
 | The grid that describes the area has cells of about 1.1 km at 49–50° north; far from that latitude the cells and all "about a kilometre" distances are stretched or squeezed east–west | `CELL_LON` in `server/lib/area.js` |

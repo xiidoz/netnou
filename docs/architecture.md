@@ -273,13 +273,19 @@ the default area that is about 60,000 distinct hops, for all of Germany
   441 million nodes of the extract of Germany, 32 million. That takes the
   extract of Germany (4.9 GB) two minutes and at most 1.8 GB of memory, and
   one of 100 MB a second or two.
-- **Networks.** `classifyWay` sorts OpenStreetMap ways into four networks:
-  `road` for buses, and `tram`, `subway` and `rail` for vehicles on tracks.
-  Roads carry a cost factor so that buses prefer main roads, and respect
-  one-way streets, access restrictions and the exemptions for buses. The
-  networks are kept in `osm-networks.bin`, as columns that are read again
-  in a second, and built again when the OpenStreetMap data is older than
-  `NETNOU_OSM_MAX_AGE_DAYS`, when the area or the list of extracts changes.
+- **Networks.** `classifyWay` sorts OpenStreetMap ways into six networks:
+  `road` for buses; `tram`, `subway` and `rail` for vehicles on tracks;
+  `ferry` for ferries, on the ways of their routes (`route=ferry`); and
+  `cable` for cable cars and monorails, on monorails, funiculars, narrow
+  gauge, tracks with a rack and aerial lifts that carry people. Roads carry a
+  cost factor so that buses prefer main roads, and respect one-way streets,
+  access restrictions and the exemptions for buses. The networks are kept in
+  `osm-networks.bin`, as columns that are read again in a second, and built
+  again when the OpenStreetMap data is older than
+  `NETNOU_OSM_MAX_AGE_DAYS`, when the area or the list of extracts changes,
+  and when `NETWORKS_VERSION` does: a timetable whose routes were found on
+  networks of an older version is routed anew at the next start, and shows
+  its routes until then.
 - **Tiles.** The roads of a region are one network, as those of the default
   area are with 2 million nodes. Those of a country are too many for that:
   above 4 million nodes (`ROADS_AT_ONCE`) they are cut into tiles of a
@@ -295,9 +301,12 @@ the default area that is about 60,000 distinct hops, for all of Germany
   way at the latitude of the stop: from the middle of Germany to its north
   and to its south that differs by a tenth.
 - **Snapping.** A stop is rarely exactly on its road or track. Candidates on
-  nearby edges are considered, up to 70 m away for buses and up to 400 m for
-  trains (whose stop is often the centre of the station), with a penalty per
-  metre of offset.
+  nearby edges are considered, up to 70 m away for buses, up to 400 m for
+  trains (whose stop is often the centre of the station) and up to 600 m for
+  ferries (whose pier can be far from where the line of their route ends),
+  with a penalty per metre of offset. An edge is found by the cells of a grid
+  it lies in; a long one, as a ferry across the sea has, by the cells along
+  it rather than all those of its rectangle.
 - **Search.** A search from the candidates of stop A finds the cheapest path
   to one of stop B (Dijkstra's).
 - **Plausibility.** A path much longer than the straight line (more than 2 to
@@ -501,8 +510,9 @@ otherwise a server would load a file written by older code:
 
 - `DATASET_VERSION` in `lib/dataset.js`: the layout or meaning of anything
   in the dataset, including the route geometry.
-- `NETWORKS_VERSION` in `lib/shapes.js`: `classifyWay`, the cost factors or
-  the output of `buildNetworks`.
+- `NETWORKS_VERSION` in `lib/network.js`: `classifyWay`, the cost factors or
+  the output of `buildNetworks`. The dataset says which version its routes
+  were found on (`source.networks`).
 - `TOWNS_VERSION` in `lib/towns.js`: what is kept of the borders.
 - `KEPT_VERSION` in `lib/kept-routes.js`: the rules of routing, in
   `lib/network.js` and `lib/shapes.js`, or how routes are kept.

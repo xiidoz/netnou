@@ -14,6 +14,7 @@ import { Area } from './area.js';
 import { readDataset, writeDataset } from './dataset.js';
 import { buildDataset } from './importer.js';
 import { KeptRoutes } from './kept-routes.js';
+import { NETWORKS_VERSION } from './network.js';
 import { buildSegments, loadNetworks } from './shapes.js';
 import { townsOf } from './towns.js';
 
@@ -66,6 +67,8 @@ if (osm.urls.length) {
 }
 if (!networks) data.segments = null;
 data.source.osm = networks?.fetchedAt ?? null;
+// (and the kind of networks they were found on: routes found on older ones are found anew, see feed.js)
+data.source.networks = networks ? NETWORKS_VERSION : null;
 // In mode "routes" without networks nothing has changed: the stored dataset is
 // left alone, and the main thread is not made to load the same timetable again.
 if (networks || mode !== 'routes') save(data);
