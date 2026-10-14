@@ -165,6 +165,8 @@ test('what index.html hides from screen readers is no stop for the keyboard eith
 
 test('index.html carries the English texts and marks them for translation', () => {
   const html = read('index.html').replace(/<!--[\s\S]*?-->/g, '');
+  // (as the browser reads them: "&#38;" is "&", as the server writes it, see escapeHtml in server/lib/page.js)
+  const decoded = (value) => value.replace(/&#(\d+);/g, (_, code) => String.fromCodePoint(Number(code)));
   assert.match(html, /<html lang="en">/);
   let marked = 0;
   // a start tag, the text that follows it and whether the element ends there
@@ -174,12 +176,12 @@ test('index.html carries the English texts and marks them for translation', () =
       if (name === 'data-i18n') {
         // (translatePage replaces all the element contains)
         assert.equal(end, `</${tag}`, `<${tag} data-i18n="${key}"> may contain text only`);
-        assert.equal(text, en[key], `<${tag} data-i18n="${key}">`);
+        assert.equal(decoded(text), en[key], `<${tag} data-i18n="${key}">`);
         marked++;
       } else if (name.startsWith('data-i18n-')) {
         const attribute = name.slice('data-i18n-'.length);
         assert.ok(ATTRIBUTES.includes(attribute), `${name}: ${attribute} is not in ATTRIBUTES of i18n.js`);
-        assert.equal(attributes.get(attribute), en[key], `<${tag} ${attribute}> with ${name}="${key}"`);
+        assert.equal(decoded(attributes.get(attribute)), en[key], `<${tag} ${attribute}> with ${name}="${key}"`);
         marked++;
       }
     }
@@ -249,12 +251,15 @@ test('the header card comes as most visitors get it', () => {
   assert.match(read('first.js'), /root\.dataset\.controls = 'shown'/);
   assert.match(app, /document\.documentElement\.dataset\.controls = 'shown'/);
 
-  // a chip for every mode that has one, switched on, in its colour and with its name
+  // a chip for every mode, switched on, in its colour and with its name; those
+  // of the kinds that only some timetables have are hidden until the server
+  // shows them (test/page.test.js)
   const modes = arrayIn(app, 'MODES');
-  const chips = [...card.matchAll(/<button type="button" class="chip" data-mode="([a-z]+)" aria-pressed="true"><span class="swatch"><\/span><span class="name" data-i18n="mode\.([a-z]+)">[^<]+<\/span><span class="count">0<\/span><\/button>/g)];
+  const chips = [...card.matchAll(/<button type="button" class="chip" data-mode="([a-z]+)" aria-pressed="true"( hidden)?><span class="swatch"><\/span><span class="name" data-i18n="mode\.([a-z]+)">[^<]+<\/span><span class="count">0<\/span><\/button>/g)];
   assert.deepEqual(chips.map(([, mode]) => mode), modes);
+  assert.deepEqual(chips.filter(([, , hidden]) => hidden).map(([, mode]) => mode), ['ferry', 'cable', 'other']);
   assert.equal(card.match(/class="chip"/g).length, modes.length);
-  for (const [, mode, key] of chips) {
+  for (const [, mode, , key] of chips) {
     assert.equal(key, mode);
     assert.ok(css.includes(`.chip[data-mode="${mode}"] { --chip-color: var(--mode-${mode}); }`), `the colour of the chip of ${mode}`);
   }

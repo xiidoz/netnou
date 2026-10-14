@@ -279,6 +279,19 @@ test('the operator\'s links stand at the foot of the header card, and nothing do
   }
 });
 
+test('the header card has a chip for each kind of transport the timetable has, and none for the others', () => {
+  const chips = (page) => [...page.matchAll(/<button type="button" class="chip" data-mode="([a-z]+)"[^>]*?( hidden)?>/g)].map(([, mode, hidden]) => (hidden ? `(${mode})` : mode));
+  // as the file has them while there is no timetable: the six of most timetables
+  assert.deepEqual(chips(renderPage(html, german)), ['subway', 'tram', 'bus', 'suburban', 'regional', 'longdistance', '(ferry)', '(cable)', '(other)']);
+  // all of Germany, with its ferries and its cable cars and monorails
+  const germany = ['subway', 'tram', 'bus', 'suburban', 'regional', 'longdistance', 'ferry', 'cable'];
+  assert.deepEqual(chips(renderPage(html, { ...german, kinds: germany })), [...germany, '(other)']);
+  // a city with buses and trams alone
+  assert.deepEqual(chips(renderPage(html, { ...german, kinds: ['tram', 'bus'] })), ['(subway)', 'tram', 'bus', '(suburban)', '(regional)', '(longdistance)', '(ferry)', '(cable)', '(other)']);
+  // (with the name of the kind in the language of the page)
+  assert.match(renderPage(html, { ...german, kinds: germany }), /<span class="name" data-i18n="mode\.cable">Seil- &#38; Schwebebahn<\/span>/);
+});
+
 test('files of the operator\'s own are found by their names, and only those that are there', () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'netnou-brand-'));
   try {

@@ -198,6 +198,7 @@ form.
   "realtime": 1791148698,
   "counts": { "bus": 225, "tram": 17, "subway": 18, "regional": 75, "longdistance": 23, "suburban": 15 },
   "thinned": {},
+  "kinds": ["subway", "tram", "bus", "suburban", "regional", "longdistance"],
   "vehicles": [
     {
       "id": "671753_20261004",
@@ -218,6 +219,7 @@ form.
 | `realtime` | time or null | timestamp of the realtime feed in use; `null` means the answer is based on the timetable alone |
 | `counts` | object | vehicles per [mode](#modes) in the whole instance, whatever the `bbox` and the `zoom`; a mode without vehicles is absent |
 | `thinned` | object | for each [mode](#modes) of which the answer leaves vehicles out, the share of them it holds, see [Zoomed out](#zoomed-out); empty where nothing is left out |
+| `kinds` | array of strings | the [modes](#modes) the timetable has, in the order of that table: a mode of which at least one trip runs. The page shows a filter for each of them and for no other |
 | `vehicles[].id` | trip id | for `/api/trip` |
 | `vehicles[].line` | string | name of the line |
 | `vehicles[].mode` | string | see [Modes](#modes) |
@@ -292,6 +294,7 @@ it goes, and on any device while an answer holds thousands of vehicles.
   "realtime": 1791148698,
   "counts": { "bus": 29415, "regional": 1639, "longdistance": 201, "suburban": 781, "subway": 625, "tram": 1846 },
   "thinned": { "subway": 0.259, "tram": 0.088, "bus": 0.067, "suburban": 0.219, "regional": 0.102, "longdistance": 0.718 },
+  "kinds": ["subway", "tram", "bus", "suburban", "regional", "longdistance", "ferry", "cable"],
   "ahead": 60,
   "vehicles": {
     "id": ["2713340_20261013", "1503271_20261013", …],
@@ -339,7 +342,7 @@ realtime feed.
 
 ```json
 {
-  "modes": ["subway", "tram", "bus", "suburban", "regional", "longdistance", "other"],
+  "modes": ["subway", "tram", "bus", "suburban", "regional", "longdistance", "ferry", "cable", "other"],
   "stations": {
     "names": "Harra, Sportplatz\nProbstzella, Bahnhof\nProbstzella\n…",
     "lat": [5041383, 11499, -55, …],
@@ -591,12 +594,17 @@ vehicle is standing at a stop.
 | `suburban` | suburban train (S-Bahn) |
 | `regional` | regional train |
 | `longdistance` | long-distance train |
-| `other` | anything else, for example ferries and cable cars |
+| `ferry` | ferry |
+| `cable` | cable car and monorail: also funiculars, suspension railways such as the one of Wuppertal, and rack railways |
+| `other` | anything else |
 
 The mode comes from the GTFS `route_type` of the line. All trains share one
 route type, so the three kinds of train are told apart by the name of the
 line, see
 [Other feeds and other countries](configuration.md#other-feeds-and-other-countries).
+Ferries are route type 4, cable cars and monorails 5, 6, 7 and 12 (the feed of
+Germany gives all of them the type of a funicular, 7), trolleybuses (11) are
+buses, and the extended route types of the same things count likewise.
 
 ## Stability and licence
 

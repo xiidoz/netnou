@@ -330,7 +330,20 @@ test('routeMode tells S-Bahn, regional and long-distance trains apart', () => {
   assert.equal(routeMode(0, 'D'), 'tram');
   assert.equal(routeMode(1, 'U1'), 'subway');
   assert.equal(routeMode(3, 'N3'), 'bus');
-  assert.equal(routeMode(700, '36'), 'other'); // extended route types are not known
+  assert.equal(routeMode(700, '36'), 'other'); // the extended route types of buses, trams and trains are not known
+});
+
+test('routeMode makes ferries and cable cars and monorails kinds of their own, and trolleybuses buses', () => {
+  const kinds = (types) => types.map((type) => routeMode(type, ''));
+  // ferries; of the extended types water transport (1000s) and ferry service (1200)
+  assert.deepEqual(kinds([4, 1000, 1008, 1021, 1200]), Array(5).fill('ferry'));
+  // cable tram, aerial lift, funicular (in the feed of Germany: suspension railways, rack railways, cable cars), monorail;
+  // of the extended types monorail (405), aerial lifts (1300s) and funiculars (1400s)
+  assert.deepEqual(kinds([5, 6, 7, 12, 405, 1300, 1304, 1400, 1402]), Array(9).fill('cable'));
+  // trolleybuses; of the extended types trolleybus service (800)
+  assert.deepEqual(kinds([11, 800]), ['bus', 'bus']);
+  // everything else
+  assert.deepEqual(kinds([1100, 1500, 1700, 99]), Array(4).fill('other'));
 });
 
 test('vehicles are interpolated between stops along the schedule', () => {

@@ -13,12 +13,15 @@ import { displayQuery, readDisplay } from './display.js';
 import { mdiAlert, mdiChevronLeft, mdiChevronRight, mdiEye, mdiEyeOff, mdiFullscreen, mdiFullscreenExit } from './vendor/material-design-icons/icons.js';
 import { AttributionControl, MapLibreMap, NavigationControl } from './vendor/maplibre-gl/maplibre-gl.mjs';
 
-// The modes with a chip. Same ids as MODES in server/lib/timetable.js, the
-// --mode-* colors in style.css and the mode.* texts in locales/ – all of which
-// also have 'other'.
-const MODES = ['subway', 'tram', 'bus', 'suburban', 'regional', 'longdistance'];
+// The modes, each with a chip where the timetable has it. Same ids as MODES in
+// server/lib/timetable.js, the --mode-* colors in style.css and the mode.*
+// texts in locales/.
+const MODES = ['subway', 'tram', 'bus', 'suburban', 'regional', 'longdistance', 'ferry', 'cable', 'other'];
 // Later entries are drawn on top: trains over trams over buses.
-const DRAW_ORDER = ['other', 'bus', 'tram', 'subway', 'suburban', 'regional', 'longdistance'];
+const DRAW_ORDER = ['other', 'bus', 'ferry', 'cable', 'tram', 'subway', 'suburban', 'regional', 'longdistance'];
+// The modes whose colours are too light for white letters: names on them are dark.
+const DARK_LETTERS = new Set(['ferry', 'cable']);
+const LETTERS_DARK = '#1b1f24';
 const RAIL_MODES = ['subway', 'suburban', 'regional', 'longdistance'];
 
 // Display mode: the page without its controls, with what is shown in its
@@ -188,6 +191,7 @@ const state = {
   vehicles: new Map(),
   drawList: [],
   counts: {}, // vehicles per mode in the whole area, from the server
+  kinds: null, // the modes the timetable has, from the server: a chip for each of them
   loaded: null, // map section and detail the vehicles were last requested for
   stations: [],
   stationsLoaded: null, // map section the stations were requested for
@@ -203,7 +207,7 @@ const state = {
   bbox: null, // the rectangle around the area, or around all the instance covers: [south, west, north, east]
   thinned: false, // the last answer left vehicles out: zoomed out, where a screen cannot take them all
   many: true, // the last answer held thousands of vehicles (MANY); assumed until the first one is there
-  enabled: new Set([...MODES, 'other']),
+  enabled: new Set(MODES),
   display: OPENED_AS_DISPLAY, // the map without the controls, see "display mode"
   colorBy: loadSetting('colorBy', 'mode') === 'delay' ? 'delay' : 'mode',
   flags: loadSetting('flags', true) !== false, // the vehicles carry their delay as a flag
@@ -374,8 +378,8 @@ const zoomAsked = () => Math.floor(map.getZoom() * 4) / 4;
  * is thinned out, more of these fit.
  */
 function modesQuery() {
-  const on = [...MODES, 'other'].filter((mode) => state.enabled.has(mode));
-  return on.length > MODES.length ? '' : `&modes=${on.join(',')}`;
+  const on = MODES.filter((mode) => state.enabled.has(mode));
+  return on.length === MODES.length ? '' : `&modes=${on.join(',')}`;
 }
 
 /**
@@ -485,8 +489,8 @@ function vehicleColor(v) {
   return state.colorBy === 'delay' ? colors.delay[delayClass(v.delay)] : colors.mode[v.mode] ?? colors.mode.other;
 }
 
-/** The names in a marker are white – except on the yellow of a minor delay, which does not carry white text. */
-const labelColor = (v) => (state.colorBy === 'delay' && delayClass(v.delay) === 'minor' ? '#1b1f24' : '#fff');
+/** The names in a marker are white – except on light colours, which do not carry white text: the yellow of a minor delay, and those of DARK_LETTERS. */
+const labelColor = (v) => ((state.colorBy === 'delay' ? delayClass(v.delay) === 'minor' : DARK_LETTERS.has(v.mode)) ? LETTERS_DARK : '#fff');
 /** By name, numbers by their value: N2 before N10. For the order within a group, which must not change from frame to frame. */
 const byLabel = (a, b) => a.label.localeCompare(b.label, undefined, { numeric: true }) || (a.id < b.id ? -1 : 1);
 
@@ -1432,6 +1436,9 @@ function updateStatus() {
   let shown = 0;
   for (const [mode, count] of Object.entries(counts)) if (state.enabled.has(mode)) shown += count;
   for (const [mode, node] of chipCounts) node.textContent = formatNumber(counts[mode] ?? 0);
+  // A chip for each kind the timetable has, and for no other: the page came
+  // with those of the timetable the server had then (server/lib/page.js).
+  if (state.kinds) for (const [mode, node] of chipCounts) node.parentElement.hidden = !state.kinds.includes(mode);
 
   // Without realtime data all positions are by the timetable alone. While it
   // may still be on its way that is said calmly, after that as a warning.
@@ -1699,6 +1706,7 @@ const platformText = (platform) => (platform ? t('stop.platform', { platform }) 
 function badge(line, mode) {
   const node = el('span', { class: 'badge', text: line });
   node.style.setProperty('--badge-color', `var(--mode-${mode})`);
+  if (DARK_LETTERS.has(mode)) node.style.setProperty('--badge-text', LETTERS_DARK);
   return node;
 }
 
@@ -1933,6 +1941,7 @@ function renderTrip(trip, scrollToNext) {
 
   const list = el('ul', { class: 'rows' }, rows);
   list.style.setProperty('--badge-color', `var(--mode-${trip.mode})`);
+  if (DARK_LETTERS.has(trip.mode)) list.style.setProperty('--badge-text', LETTERS_DARK);
   const mode = t(`mode.${DRAW_ORDER.includes(trip.mode) ? trip.mode : 'other'}`);
   // Who provides the realtime data shown leads the notes, which are feed content and stay as they are.
   const source = trip.realtime && trip.source ? [t('trip.source', { source: trip.source })] : [];
@@ -2331,6 +2340,7 @@ async function poll() {
       if (!state.online) startAsking();
       if (realtimeState() === 'live') state.wasLive = true;
       state.counts = data.counts;
+      state.kinds = data.kinds ?? null;
       state.loaded = request;
       // (zoomed out, an instance with very many vehicles shows a share of them: "How it works" says so from then on)
       state.thinned = Object.keys(data.thinned).length > 0;

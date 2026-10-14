@@ -24,24 +24,33 @@ import { searchList } from './search-list.js';
 import { addDays, localDate, serviceDayStart } from './time.js';
 
 // The ids are part of the API; the page has a colour and a label for each.
-export const MODES = ['subway', 'tram', 'bus', 'suburban', 'regional', 'longdistance', 'other'];
+// 'cable' stands for cable cars and monorails, funiculars and rack railways
+// with them: all that the feed of Germany gives the route type of a funicular.
+export const MODES = ['subway', 'tram', 'bus', 'suburban', 'regional', 'longdistance', 'ferry', 'cable', 'other'];
 // The OSM network (see network.js) a mode travels on.
 export const NET_OF_MODE = { bus: 'road', tram: 'tram', subway: 'subway', suburban: 'rail', regional: 'rail', longdistance: 'rail' };
 
 const LONG_DISTANCE = /^(ICE|IC|ECE|EC|RJX|RJ|NJ|EN|TGV|FLX|D)\s?\d/;
 
 // GTFS has one route_type for all trains. The kinds of train are told apart by
-// the line name as used in Germany and its neighbours ("S1", "ICE 29"); only
-// the basic route types 0–3 are known, everything else is 'other'.
+// the line name as used in Germany and its neighbours ("S1", "ICE 29"). Of the
+// other route types, ferries are a kind of their own, and so are cable cars,
+// funiculars and monorails; trolleybuses are buses. Of the extended route
+// types (developers.google.com/transit/gtfs/reference/extended-route-types)
+// those of the same things count likewise; everything else is 'other'.
 export function routeMode(type, shortName) {
   if (type === 0) return 'tram';
   if (type === 1) return 'subway';
-  if (type === 3) return 'bus';
+  if (type === 3 || type === 11 || (type >= 800 && type < 900)) return 'bus';
   if (type === 2) {
     if (/^S\s?\d/.test(shortName)) return 'suburban';
     if (LONG_DISTANCE.test(shortName)) return 'longdistance';
     return 'regional';
   }
+  // (1000s: water transport; 1200: ferry service)
+  if (type === 4 || (type >= 1000 && type < 1100) || (type >= 1200 && type < 1300)) return 'ferry';
+  // (5 cable tram, 6 aerial lift, 7 funicular, 12 monorail; 405: monorail; 1300s: aerial lifts; 1400s: funiculars)
+  if (type === 5 || type === 6 || type === 7 || type === 12 || type === 405 || (type >= 1300 && type < 1500)) return 'cable';
   return 'other';
 }
 
@@ -467,6 +476,11 @@ export class Timetable extends Schedule {
     const { trips, patterns, profiles } = data;
     const { tripCount } = this;
     this.routeModes = this.routes.type.map((type, r) => routeMode(type, this.routes.short[r]));
+    // The kinds of transport the timetable has, in the order of MODES: those
+    // of which a trip runs. The page shows a chip for each of them, and for no other.
+    const run = new Uint8Array(this.routeModes.length);
+    for (const route of this.tripRoute) run[route] = 1;
+    this.kinds = MODES.filter((mode) => this.routeModes.some((kind, r) => run[r] && kind === mode));
     this.tripsOnDate = new Map();
 
     // How long a trip runs, from its first departure to its last arrival, and
