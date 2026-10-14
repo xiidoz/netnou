@@ -181,8 +181,8 @@ take the extract of Germany,
 `https://download.geofabrik.de/europe/germany-latest.osm.pbf` (4.9 GB): its
 roads are routed in tiles ([architecture.md](architecture.md#route-geometry)).
 The first import then takes the test machine about eight minutes and at
-most 3.3 GB of memory, and so does one with new OpenStreetMap data; the data
-directory needs 6 GB while the extract is read, 1.3 GB afterwards. A new
+most 3.2 GB of memory, and so does one with new OpenStreetMap data; the data
+directory needs 6 GB while the extract is read, 1.1 GB afterwards. A new
 timetable on the same data keeps the routes it can and routes only the hops
 that are new: with nearly all of them kept it is imported in about a minute.
 

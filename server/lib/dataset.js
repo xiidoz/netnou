@@ -11,7 +11,7 @@ import fs from 'node:fs';
 // including the route geometry (shapes.js) and what the importer puts into a
 // field: a stored dataset of another version is discarded and imported again
 // on start.
-export const DATASET_VERSION = 8;
+export const DATASET_VERSION = 9;
 
 const MAGIC = 'netnou dataset\n';
 // Columns begin at a multiple of this, so that a typed array can be laid over
@@ -23,7 +23,7 @@ const CHUNK = 1 << 30;
 // the head of the file.
 const LINES_FROM = 64;
 
-const TYPES = { Int32Array, Uint8Array, Uint16Array, Float64Array };
+const TYPES = { Int32Array, Int16Array, Uint8Array, Uint16Array, Float64Array };
 
 /**
  * Many short texts as one block of UTF-8 with the place each begins at: what
