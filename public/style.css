@@ -360,17 +360,19 @@ button { font: inherit; color: inherit; }
   .chips-fold .icon { transform: rotate(-90deg); }
   /* (clip, with a margin: the ring of a chip with the keyboard focus stays whole) */
   :root:not([data-chips-open]) .chips-row:not(.whole) .chips { max-height: calc(1.5 * var(--chip-height, 28px) + 6px); overflow: clip; overflow-clip-margin: 3px; }
+  /* (from just above the faded row to where it is cut, and on over the margin
+     of the clip: there the middle of its texts would show, not faded) */
   :root:not([data-chips-open]) .chips-row:not(.whole) .chips-fold {
     position: absolute;
     left: 0;
     right: 0;
-    bottom: 0;
-    height: calc(var(--chip-height, 28px) / 2);
+    bottom: -3px;
+    height: calc(var(--chip-height, 28px) / 2 + 5px);
     margin: 0;
-    background: linear-gradient(to bottom, transparent, var(--bg));
+    background: linear-gradient(to bottom, transparent, var(--bg) calc(100% - 3px));
   }
   /* (half below the faded row: in it, as high as a chip, it would cover the row above) */
-  :root:not([data-chips-open]) .chips-row:not(.whole) .chips-fold span { position: absolute; right: 0; bottom: -8px; }
+  :root:not([data-chips-open]) .chips-row:not(.whole) .chips-fold span { position: absolute; right: 0; bottom: -5px; }
   :root:not([data-chips-open]) .chips-fold .icon { transform: rotate(90deg); }
 }
 
