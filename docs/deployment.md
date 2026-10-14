@@ -24,9 +24,9 @@
 
 The figures are approximate and were measured for the default area in October
 2026; a smaller area needs less. An instance for all of Germany, with the
-extract of Germany, needs up to 3.3 GB of memory while it imports: eight
+extract of Germany, needs up to 3.2 GB of memory while it imports: eight
 minutes for the first import and for new OpenStreetMap data, about one for
-a new timetable. It needs 6 GB of disk while the extract is read, 1.3 GB
+a new timetable. It needs 6 GB of disk while the extract is read, 1.1 GB
 afterwards.
 
 Visitors' browsers load the map behind the vehicles themselves, by default

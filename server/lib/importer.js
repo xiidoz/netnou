@@ -474,8 +474,10 @@ export function packDataset({ area = null, stops, towns = [], routes, headsigns,
 //                headsign: index or -1 }
 //   sharedWays the ways from one stop to the next on which trains run
 //              coupled, see findSharedWays in timetable.js
-//   segments   route geometry per hop, or null; added by import-worker.js,
-//              see buildSegments in shapes.js
+//   segments   route geometry per hop, or null; added by import-worker.js:
+//              { nets, net, key, start, origin, step, share }, each point
+//              as its step from the one before, see buildSegments in
+//              shapes.js
 
 /**
  * @param options.area the area, or null for an instance without one: every stop of the feed counts

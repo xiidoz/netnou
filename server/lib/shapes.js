@@ -116,17 +116,28 @@ function whenAskedFor(file) {
   return nets;
 }
 
+// A point is kept as its step from the one before, in 16 bits each way: up to
+// a third of a degree. A longer step is cut into shorter ones, with points
+// on the straight line between. The share of a hop's length up to a point is
+// kept in 16 bits as well: a 65,535th, a tenth of a second of a hop of nearly
+// two hours.
+const STEP = 32_000;
+const SHARE = 65_535;
+
 /**
  * Routes every hop of every trip in `data` (an importer dataset) on the
  * network of its mode: on roads of more than roadsAtOnce nodes in the tiles of
  * `tile` degrees around it (routeInTiles). A hop whose route is kept from an
  * import before (kept-routes.js) is not routed again, and what is routed is
  * added to those kept.
- * @returns {{nets, net, key, start, points, share}} the segments as columns,
- *   in the order of their keys (hopKey), by which a hop finds its segment:
- *   segment i is on network nets[net[i]] and has the points start[i] to
- *   start[i + 1] - 1; `points` holds latitude and longitude of each in 1e-5
- *   degrees, `share` for each the share of the segment's length up to it.
+ * @returns {{nets, net, key, start, origin, step, share}} the segments as
+ *   columns, in the order of their keys (hopKey), by which a hop finds its
+ *   segment: segment i is on network nets[net[i]] and has the points start[i]
+ *   to start[i + 1] - 1. Its first point is origin[2i], origin[2i + 1]:
+ *   latitude and longitude in 1e-5 degrees. Each of the others is the one
+ *   before it and its `step`, a latitude and a longitude in 1e-5 degrees too;
+ *   `share` is for each point the share of the segment's length up to it, in
+ *   65,535ths.
  */
 export function buildSegments(data, graphs, area, onProgress = () => {}, { roadsAtOnce = ROADS_AT_ONCE, tile = TILE, kept = null } = {}) {
   const { stops, trips, routes, patterns } = data;
@@ -277,21 +288,43 @@ export function buildSegments(data, graphs, area, onProgress = () => {}, { roads
   const all = routed.points.array;
   routed.start.push(routed.points.length / 2);
   const order = Int32Array.from(routed.key.keys()).sort((p, q) => routed.key[p] - routed.key[q]);
+  /** Into how many steps the step to point k of pts is cut. */
+  const piecesTo = (pts, k) => Math.ceil(Math.max(Math.abs(pts[2 * k] - pts[2 * k - 2]), Math.abs(pts[2 * k + 1] - pts[2 * k - 1]), 1) / STEP);
+  const pointsOf = (h) => all.subarray(2 * routed.start[h], 2 * routed.start[h + 1]);
   const start = new Int32Array(order.length + 1);
-  order.forEach((h, i) => { start[i + 1] = start[i] + routed.start[h + 1] - routed.start[h]; });
-  const points = new Int32Array(2 * start[order.length]);
-  const share = new Float64Array(start[order.length]);
   order.forEach((h, i) => {
-    const pts = all.subarray(2 * routed.start[h], 2 * routed.start[h + 1]);
-    points.set(pts, 2 * start[i]);
+    const pts = pointsOf(h);
+    let count = 1;
+    for (let k = 1; k < pts.length / 2; k++) count += piecesTo(pts, k);
+    start[i + 1] = start[i] + count;
+  });
+  const origin = new Int32Array(2 * order.length);
+  const step = new Int16Array(2 * start[order.length]);
+  const share = new Uint16Array(start[order.length]);
+  let lengths = new Float64Array(1024); // of one segment, up to each of its points
+  order.forEach((h, i) => {
+    const pts = pointsOf(h);
+    origin[2 * i] = pts[0];
+    origin[2 * i + 1] = pts[1];
+    if (lengths.length < start[i + 1] - start[i]) lengths = new Float64Array(2 * (start[i + 1] - start[i]));
     // (a degree of longitude is shorter than one of latitude, the more so the further north: the latitude of the hop)
     const kx = Math.cos((pts[0] / 1e5) * (Math.PI / 180));
+    let at = 0;
     let length = 0;
-    for (let k = 2; k < pts.length; k += 2) {
-      length += Math.hypot(pts[k] - pts[k - 2], (pts[k + 1] - pts[k - 1]) * kx);
-      share[start[i] + k / 2] = length;
+    for (let k = 1; k < pts.length / 2; k++) {
+      const pieces = piecesTo(pts, k);
+      const [dLat, dLon] = [pts[2 * k] - pts[2 * k - 2], pts[2 * k + 1] - pts[2 * k - 1]];
+      const piece = Math.hypot(dLat, dLon * kx) / pieces;
+      for (let j = 1; j <= pieces; j++) {
+        at++;
+        step[2 * (start[i] + at)] = Math.round((dLat * j) / pieces) - Math.round((dLat * (j - 1)) / pieces);
+        step[2 * (start[i] + at) + 1] = Math.round((dLon * j) / pieces) - Math.round((dLon * (j - 1)) / pieces);
+        length += piece;
+        lengths[at] = length;
+      }
     }
-    for (let k = start[i]; k < start[i + 1]; k++) share[k] = length ? share[k] / length : 1;
+    lengths[0] = 0;
+    for (let k = 0; k <= at; k++) share[start[i] + k] = length ? Math.round((lengths[k] / length) * SHARE) : SHARE;
   });
-  return { nets: NETS, net: Uint8Array.from(order, (h) => routed.net[h]), key: Float64Array.from(order, (h) => routed.key[h]), start, points, share };
+  return { nets: NETS, net: Uint8Array.from(order, (h) => routed.net[h]), key: Float64Array.from(order, (h) => routed.key[h]), start, origin, step, share };
 }

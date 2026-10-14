@@ -241,6 +241,19 @@ test('simplify drops points on a straight line only', () => {
   assert.deepEqual(simplify([0, 0, 50, 20, 100, 0], 1.5), [0, 0, 50, 20, 100, 0]);
 });
 
+/** The points of route geometry as buildSegments gives it, latitude, longitude, … in 1e-5 degrees, from its first points and steps. */
+function pointsOf(segments) {
+  const points = [];
+  for (let s = 0; s < segments.key.length; s++) {
+    let [lat, lon] = [segments.origin[2 * s], segments.origin[2 * s + 1]];
+    for (let k = segments.start[s]; k < segments.start[s + 1]; k++) {
+      if (k > segments.start[s]) [lat, lon] = [lat + segments.step[2 * k], lon + segments.step[2 * k + 1]];
+      points.push(lat, lon);
+    }
+  }
+  return points;
+}
+
 test('vehicles and trip paths follow the routed geometry', () => {
   // Bus 1 from a stop on the main road to one on the northern street,
   // 10:00 → 10:10. The cheapest road route turns north at B over the link.
@@ -260,7 +273,7 @@ test('vehicles and trip paths follow the routed geometry', () => {
   // tiles of 0.001 degrees the stops are too far apart for one.
   const log = [];
   const inTiles = buildSegments(dataset, graphs, area, (line) => log.push(line), { roadsAtOnce: 0, tile: 0.003 });
-  assert.deepEqual([...inTiles.points], [...dataset.segments.points]);
+  assert.deepEqual(pointsOf(inTiles), pointsOf(dataset.segments));
   assert.deepEqual(buildSegments(dataset, graphs, area, (line) => log.push(line), { roadsAtOnce: 0, tile: 0.001 }).net.length, 0);
   assert.deepEqual(log.slice(-3), ['routing 1 hops', '1 hops on roads are too long for the tiles', 'hops routed: road 0/1, rail 0/0, subway 0/0, tram 0/0']);
 
@@ -274,12 +287,27 @@ test('vehicles and trip paths follow the routed geometry', () => {
     made.flush();
     const kept = new KeptRoutes(dir, networks);
     const fromKept = buildSegments(dataset, graphs, area, (line) => log.push(line), { kept });
-    assert.deepEqual([...fromKept.points], keptRoute);
+    assert.deepEqual(pointsOf(fromKept), keptRoute);
     assert.equal(log.at(-2), 'routing 0 hops, 1 kept from before');
+    // A step longer than 16 bits take is cut into shorter ones, with points on the
+    // straight line between: here a degree to the north and back, in 1e-5 degrees.
+    const [lat0, lon0] = keptRoute;
+    const roundabout = [lat0, lon0, lat0 + 100000, lon0, ...keptRoute.slice(2)];
+    const far = new KeptRoutes(dir, { ...networks, fetchedAt: 'far' });
+    far.add(0, STOP.mainWest, STOP.north, roundabout);
+    const long = buildSegments(dataset, graphs, area, () => {}, { kept: far });
+    const decoded = pointsOf(long);
+    assert.deepEqual([decoded.slice(0, 2), decoded.slice(8, 10), decoded.slice(-2)], [roundabout.slice(0, 2), roundabout.slice(2, 4), roundabout.slice(-2)]);
+    assert.deepEqual(decoded.filter((_, i) => i % 2 === 0).slice(0, 5), [0, 25000, 50000, 75000, 100000].map((d) => lat0 + d));
+    assert.ok(Array.from(long.step).every((value) => Math.abs(value) <= 32000));
+    // the shares go up with the length: a quarter of the way north at the first cut, then half of it …
+    const shares = Array.from(long.share);
+    assert.ok(shares.every((value, i) => !i || value >= shares[i - 1]) && shares[0] === 0 && shares.at(-1) === 65535);
+    assert.ok(Math.abs(shares[1] / 65535 - 25000 / (2 * 100000 - (keptRoute[2] - lat0))) < 0.002, `${shares}`);
     // and one that is routed is kept
     const routedNow = new KeptRoutes(dir, { ...networks, fetchedAt: 'now' });
     buildSegments(dataset, graphs, area, () => {}, { kept: routedNow });
-    assert.deepEqual([...new KeptRoutes(dir, { ...networks, fetchedAt: 'now' }).find(0, STOP.mainWest, STOP.north)], [...dataset.segments.points]);
+    assert.deepEqual([...new KeptRoutes(dir, { ...networks, fetchedAt: 'now' }).find(0, STOP.mainWest, STOP.north)], pointsOf(dataset.segments));
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
   }

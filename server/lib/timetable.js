@@ -45,6 +45,49 @@ export function routeMode(type, shortName) {
   return 'other';
 }
 
+/**
+ * Goes along the points of a segment of route geometry, from its first one
+ * on: each is the one before and its step. One for each timetable, used for
+ * one segment at a time.
+ */
+class Walk {
+  constructor(timetable) {
+    this.timetable = timetable;
+  }
+
+  /** Begins at the first point of segment s. @returns this */
+  along(s) {
+    const { segmentStart, segmentOrigin } = this.timetable;
+    this.k = segmentStart[s];
+    this.end = segmentStart[s + 1];
+    this.lat = segmentOrigin[2 * s];
+    this.lon = segmentOrigin[2 * s + 1];
+    return this;
+  }
+
+  /** Whether there is a point after this one. */
+  more() {
+    return this.k + 1 < this.end;
+  }
+
+  /** On to the next point. */
+  next() {
+    const { segmentStep } = this.timetable;
+    this.k++;
+    this.lat += segmentStep[2 * this.k];
+    this.lon += segmentStep[2 * this.k + 1];
+  }
+
+  /** The share of the segment's length up to this point, and up to the next one. */
+  share() {
+    return this.timetable.segmentShare[this.k] / 65_535;
+  }
+
+  shareAhead() {
+    return this.timetable.segmentShare[this.k + 1] / 65_535;
+  }
+}
+
 /** Key of the hop from stop index `from` to stop index `to` on network index `net` (see NETS). */
 export const hopKey = (net, from, to, stopCount) => (net * stopCount + from) * stopCount + to;
 
@@ -568,16 +611,20 @@ export class Timetable extends Schedule {
 
     // Route geometry per hop (see shapes.js); absent until OSM data was loaded.
     // A hop is found by its key among the keys in their order. The points of
-    // all hops are one column, in 1e-5 degrees, and so is for every point the
-    // share of the hop's length covered so far – a vehicle is assumed to move
-    // along the hop at constant speed.
+    // all hops are one column, in 1e-5 degrees: the first point of a hop as it
+    // is, each of the others as its step from the one before, so a hop is
+    // gone through from its first point on (Walk). For every point there is
+    // also the share of the hop's length covered so far – a vehicle is
+    // assumed to move along the hop at constant speed.
     this.routeNets = this.routeModes.map((mode) => NETS.indexOf(NET_OF_MODE[mode]));
     const segments = data.segments;
     this.segmentKey = segments?.key ?? new Float64Array(0);
     this.segmentStart = segments?.start ?? new Int32Array(1);
-    this.segmentPoints = segments?.points ?? new Int32Array(0);
-    this.segmentShare = segments?.share ?? new Float64Array(0);
+    this.segmentOrigin = segments?.origin ?? new Int32Array(0);
+    this.segmentStep = segments?.step ?? new Int16Array(0);
+    this.segmentShare = segments?.share ?? new Uint16Array(0);
     this.segmentCount = this.segmentKey.length;
+    this.walk = new Walk(this);
     // Where position() leaves its answer.
     this.at = new Float64Array(2);
   }
@@ -607,8 +654,6 @@ export class Timetable extends Schedule {
   knots(t, arr, dep, i, last, now) {
     const stops = this.stopsOf(t);
     const { lat, lon } = this.stops;
-    const points = this.segmentPoints;
-    const share = this.segmentShare;
     const horizon = now + HORIZON_S;
     const knots = [];
     let endLat = round5(lat[stops[i]]);
@@ -619,18 +664,18 @@ export class Timetable extends Schedule {
       const t1 = arr[j];
       const s = this.segment(t, j - 1);
       if (s >= 0) {
-        const from = this.segmentStart[s];
-        const n = this.segmentStart[s + 1] - from;
-        let k = 0;
+        const walk = this.walk.along(s);
         // Of the points already passed only the last one is needed.
-        if (!knots.length) while (k + 1 < n && t0 + (t1 - t0) * share[from + k + 1] <= now) k++;
-        for (; k < n; k++) {
-          const time = t0 + (t1 - t0) * share[from + k];
-          knots.push(round10(time), points[2 * (from + k)] / 1e5, points[2 * (from + k) + 1] / 1e5);
+        if (!knots.length) while (walk.more() && t0 + (t1 - t0) * walk.shareAhead() <= now) walk.next();
+        for (;;) {
+          const time = t0 + (t1 - t0) * walk.share();
+          knots.push(round10(time), walk.lat / 1e5, walk.lon / 1e5);
           if (time > horizon) return knots;
+          if (!walk.more()) break;
+          walk.next();
         }
-        endLat = points[2 * (from + n) - 2] / 1e5;
-        endLon = points[2 * (from + n) - 1] / 1e5;
+        endLat = walk.lat / 1e5;
+        endLon = walk.lon / 1e5;
       } else {
         if (!knots.length) knots.push(t0, endLat, endLon);
         endLat = round5(lat[stops[j]]);
@@ -668,22 +713,20 @@ export class Timetable extends Schedule {
       at[1] = f === 1 ? toLon : at[1] + (toLon - at[1]) * f;
       return;
     }
-    const from = this.segmentStart[s];
-    const n = this.segmentStart[s + 1] - from;
-    const share = this.segmentShare;
-    const points = this.segmentPoints;
-    let k = 0;
-    while (k + 1 < n && t0 + (t1 - t0) * share[from + k + 1] <= now) k++;
-    const passed = round10(t0 + (t1 - t0) * share[from + k]);
-    const ahead = k + 1 < n && now > passed ? round10(t0 + (t1 - t0) * share[from + k + 1]) : 0;
+    const walk = this.walk.along(s);
+    while (walk.more() && t0 + (t1 - t0) * walk.shareAhead() <= now) walk.next();
+    const passed = round10(t0 + (t1 - t0) * walk.share());
+    const ahead = walk.more() && now > passed ? round10(t0 + (t1 - t0) * walk.shareAhead()) : 0;
     // (at the point passed last, at the one ahead, or between the two)
-    if (k + 1 < n && now > passed && now >= ahead) k++;
-    at[0] = points[2 * (from + k)] / 1e5;
-    at[1] = points[2 * (from + k) + 1] / 1e5;
-    if (k + 1 < n && now > passed && now < ahead) {
+    const between = walk.more() && now > passed && now < ahead;
+    if (walk.more() && now > passed && now >= ahead) walk.next();
+    at[0] = walk.lat / 1e5;
+    at[1] = walk.lon / 1e5;
+    if (between) {
       const f = (now - passed) / (ahead - passed);
-      at[0] += (points[2 * (from + k + 1)] / 1e5 - at[0]) * f;
-      at[1] += (points[2 * (from + k + 1) + 1] / 1e5 - at[1]) * f;
+      walk.next();
+      at[0] += (walk.lat / 1e5 - at[0]) * f;
+      at[1] += (walk.lon / 1e5 - at[1]) * f;
     }
   }
 
@@ -987,7 +1030,12 @@ export class Timetable extends Schedule {
     for (let p = 0; p + 1 < stops.length; p++) {
       const s = this.segment(t, p);
       if (s >= 0) {
-        for (let k = 2 * this.segmentStart[s]; k < 2 * this.segmentStart[s + 1]; k++) path.push(this.segmentPoints[k] / 1e5);
+        const walk = this.walk.along(s);
+        path.push(walk.lat / 1e5, walk.lon / 1e5);
+        while (walk.more()) {
+          walk.next();
+          path.push(walk.lat / 1e5, walk.lon / 1e5);
+        }
       } else {
         path.push(this.stops.lat[stops[p]], this.stops.lon[stops[p]], this.stops.lat[stops[p + 1]], this.stops.lon[stops[p + 1]]);
       }

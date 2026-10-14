@@ -318,11 +318,18 @@ the default area that is about 60,000 distinct hops, for all of Germany
   OpenStreetMap has as light rail, which is a network of its own here
   ([#128](https://github.com/xiidoz/netnou/issues/128)).
 - **Storage.** Paths are simplified to 1.5 m accuracy and stored once per
-  hop, shared by all trips that use it.
+  hop, shared by all trips that use it. A hop is gone through from its
+  first point on, so that point is stored as it is and each of the others as
+  its step from the one before, in 16 bits each way; a step longer than a
+  third of a degree is cut into shorter ones. The share of the hop's length
+  up to a point is stored in 16 bits as well. That is 6 bytes a point, 117 MB
+  for all of Germany where it was 277. A 65,535th of the length of a long
+  hop is a few metres: a vehicle is drawn up to 6 m from where a share of 64
+  bits would have it.
 - **Time and memory.** For the default area the route step of an import
   takes the test machine about 40 seconds, the server at most 1 GB of
   memory. For all of Germany it takes 7 minutes, 3 to read the extract and 4
-  to route, when none of the routes are kept, and the server at most 3.3 GB:
+  to route, when none of the routes are kept, and the server at most 3.2 GB:
   it holds the timetable it serves meanwhile.
 - **Kept from one import to the next.** A route is found again by its
   network and the places of its two stops (`KeptRoutes`), and only the hops
@@ -334,7 +341,7 @@ the default area that is about 60,000 distinct hops, for all of Germany
   routing goes on from there, and when routing is done the routes of the
   hops of the timetable are written anew. For all of Germany that file is
   150 MB. An import whose hops are all kept takes seconds for its routes and
-  reads no networks, a minute in all and at most 2.7 GB. One in a hundred
+  reads no networks, a minute in all and at most 2.4 GB. One in a hundred
   hops new, spread over the whole country, takes 2 minutes: the network of a
   tile is built for however few hops it has.
 
