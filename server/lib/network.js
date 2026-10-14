@@ -10,7 +10,7 @@ export const NETS = ['road', 'rail', 'subway', 'tram', 'ferry', 'cable'];
 // change: the cached networks are then built again from a fresh OSM download
 // instead of being used for up to NETNOU_OSM_MAX_AGE_DAYS more, and routes
 // found on older ones are found anew (shapes.js, feed.js).
-export const NETWORKS_VERSION = 5;
+export const NETWORKS_VERSION = 6;
 
 const M_PER_DEG = 111_320;
 
@@ -41,6 +41,11 @@ const BACKWARD = 2;
 const BOTH = 3;
 // (with the directions of an edge: a track of another kind than the network's own, see SHARED_FACTOR)
 const SHARED = 4;
+// (and a main road, see MAIN_ROADS)
+export const MAIN = 8;
+// The roads that a long hop on the roads of a country is routed on between
+// the roads near its stops (shapes.js), with their links.
+const MAIN_ROADS = ['motorway', 'trunk', 'primary'];
 
 function onewayDirection(tags, implied) {
   const oneway = tags.oneway;
@@ -98,7 +103,7 @@ export function classifyWay(tags) {
     isYes(tags['bus:backward']) || isYes(tags['psv:backward']) ||
     [tags.busway, tags['busway:left'], tags['busway:right']].includes('opposite_lane');
   if (dir !== BOTH && contraflow) dir = BOTH;
-  return { net: 'road', factor, dir };
+  return MAIN_ROADS.includes(highway) ? { net: 'road', factor, dir, main: true } : { net: 'road', factor, dir };
 }
 
 /** Where a number is among numbers in order, or -1 if it is not. */
@@ -169,7 +174,7 @@ export function buildNetworks(readings) {
   return Object.fromEntries(NETS.map((net) => {
     // What each kind of way is on this network: its own, shared with it, or nothing.
     const asOf = readings.map(({ kinds }) => kinds.map((kind) => {
-      if (kind.net === net) return kind;
+      if (kind.net === net) return { factor: kind.factor, dir: kind.main ? kind.dir | MAIN : kind.dir };
       return kind.shared?.includes(net) ? { factor: kind.factor * SHARED_FACTOR, dir: kind.dir | SHARED } : null;
     }));
     // (as long as it can be at most: as many nodes and edges as the ways of the network have nodes)
@@ -329,6 +334,55 @@ export function windowOf(graph, tiles, keys, scratch) {
   return part;
 }
 
+/**
+ * The part of a network made of some of its edges, in the form Network
+ * reads: those edges and their nodes, in the order of their numbers in the
+ * whole network.
+ * @param keep (e) => whether edge e of the network is in the part
+ * @param scratch an Int32Array of -1 for every node of the network, which it
+ *   is again afterwards
+ * @returns the part, and `global`: the number of each of its nodes in the
+ *   whole network
+ */
+export function partOf(graph, keep, scratch) {
+  const kept = new Uint8Array(graph.a.length);
+  let count = 0;
+  for (let e = 0; e < graph.a.length; e++) {
+    if (!keep(e)) continue;
+    kept[e] = 1;
+    count++;
+    scratch[graph.a[e]] = scratch[graph.b[e]] = 0;
+  }
+  let nodeCount = 0;
+  for (let i = 0; i < scratch.length; i++) if (scratch[i] === 0) nodeCount++;
+  const part = {
+    lat: new Int32Array(nodeCount),
+    lon: new Int32Array(nodeCount),
+    a: new Int32Array(count),
+    b: new Int32Array(count),
+    f: new Uint16Array(count),
+    d: new Uint8Array(count),
+    global: new Int32Array(nodeCount),
+  };
+  for (let i = 0, n = 0; i < scratch.length; i++) {
+    if (scratch[i] < 0) continue;
+    part.lat[n] = graph.lat[i];
+    part.lon[n] = graph.lon[i];
+    part.global[n] = i;
+    scratch[i] = n++;
+  }
+  for (let e = 0, k = 0; e < graph.a.length; e++) {
+    if (!kept[e]) continue;
+    part.a[k] = scratch[graph.a[e]];
+    part.b[k] = scratch[graph.b[e]];
+    part.f[k] = graph.f[e];
+    part.d[k] = graph.d[e];
+    k++;
+  }
+  for (const i of part.global) scratch[i] = -1;
+  return part;
+}
+
 class MinHeap {
   constructor() {
     this.keys = new Float64Array(1 << 12);
@@ -397,8 +451,10 @@ export class Network {
    * @param options.originLat  latitude used for the local metre projection
    * @param options.snapRadius how far (m) a stop may be from the way it is on
    * @param options.snapPenalty cost per metre of that distance, to prefer the nearest way
+   * @param options.snapAt where stops will be snapped, if only at some places
+   *   ([[lat, lon], …]): the grid for snapping then has only the edges there
    */
-  constructor(graph, { originLat, snapRadius, snapPenalty, maxCandidates = 6 }) {
+  constructor(graph, { originLat, snapRadius, snapPenalty, maxCandidates = 6, snapAt = null }) {
     this.snapRadius = snapRadius;
     this.snapPenalty = snapPenalty;
     this.maxCandidates = maxCandidates;
@@ -441,7 +497,22 @@ export class Network {
     // the sea, is in the cells along it instead: its rectangle would be
     // hundreds of thousands of them.
     this.grid = new Map();
+    // (only the cells around the places of snapAt: of the 4.8 million edges of
+    // the network of the long hops of a country, some thousand are near their
+    // stops)
+    let wanted = null;
+    if (snapAt) {
+      wanted = new Set();
+      for (const [lat, lon] of snapAt) {
+        const [px, py] = this.toXY(lat, lon);
+        const east = this.eastAt(lat);
+        for (let cx = Math.floor((px - snapRadius / east) / CELL_M); cx <= Math.floor((px + snapRadius / east) / CELL_M); cx++) {
+          for (let cy = Math.floor((py - snapRadius) / CELL_M); cy <= Math.floor((py + snapRadius) / CELL_M); cy++) wanted.add(cx * 1e6 + cy);
+        }
+      }
+    }
     const put = (key, e) => {
+      if (wanted && !wanted.has(key)) return;
       const cell = this.grid.get(key);
       if (cell) cell.push(e);
       else this.grid.set(key, [e]);
@@ -597,11 +668,51 @@ export class Network {
   }
 
   /**
+   * The connected part of the network a node is in, as a number that all of
+   * its nodes share. (Found once, as if every edge could be used both ways.)
+   */
+  component(u) {
+    if (!this.components) {
+      const root = new Int32Array(this.nodeCount);
+      for (let i = 0; i < root.length; i++) root[i] = i;
+      const find = (i) => {
+        while (root[i] !== i) {
+          root[i] = root[root[i]];
+          i = root[i];
+        }
+        return i;
+      };
+      for (let e = 0; e < this.a.length; e++) {
+        const [p, q] = [find(this.a[e]), find(this.b[e])];
+        if (p !== q) root[p] = q;
+      }
+      for (let i = 0; i < root.length; i++) root[i] = find(i);
+      this.components = root;
+    }
+    return this.components[u];
+  }
+
+  /**
+   * What a way from a node to one of the candidates `to` of a stop at [x, y]
+   * costs at the least: the straight line to the stop, measured at the
+   * latitude of the more northern of the two, less how far the furthest of
+   * the candidates is from the stop.
+   */
+  leastTo([x, y], to) {
+    const lat = y / this.ky;
+    const off = Math.max(0, ...to.map((c) => Math.hypot((c.x - x) * this.eastAt(lat), c.y - y)));
+    return (u) => Math.max(0, Math.hypot((this.x[u] - x) * this.eastAt(Math.max(this.y[u] / this.ky, lat)), this.y[u] - y) - off);
+  }
+
+  /**
    * Cheapest way from one of the candidates of stop A to one of stop B.
+   * @param towards for a long hop: where stop B is, [x, y] in metres. The
+   *   search then heads for it (A*), and is not begun where B is on a part of
+   *   the network that A is not connected to.
    * @returns flat [x0, y0, x1, y1, …] in metres, or null if there is no route
    *   shorter than maxLength.
    */
-  route(from, to, maxLength) {
+  route(from, to, maxLength, towards = null) {
     let best = Infinity;
     let bestPath = null;
 
@@ -617,6 +728,8 @@ export class Network {
       }
     }
 
+    if (towards && !bestPath && !from.some((ca) => to.some((cb) => this.component(this.a[ca.edge]) === this.component(this.a[cb.edge])))) return null;
+
     // node -> ways to finish at a candidate of B from there
     const finish = new Map();
     for (const { node, cost, candidate } of this.seeds(to, true)) {
@@ -625,8 +738,11 @@ export class Network {
     }
     let bestNode = -1;
     let bestTarget = -1;
-    this.search(this.out, this.seeds(from, false), null, maxLength * 2, (u, g) => {
-      if (g >= best) return true;
+    const least = towards ? this.leastTo(towards, to) : null;
+    this.search(this.out, this.seeds(from, false), least, maxLength * 2, (u, g) => {
+      // (heading for B, nodes come in the order of what a route through them costs at the least)
+      const through = least ? g + least(u) : g;
+      if (through >= best || through > maxLength * 2) return true;
       for (const end of finish.get(u) ?? []) {
         if (g + end.cost < best) {
           best = g + end.cost;

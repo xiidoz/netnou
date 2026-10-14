@@ -9,7 +9,7 @@ import path from 'node:path';
 import { Area, NEAR } from './area.js';
 import { Numbers, readDataset, readDatasetHead, writeDataset } from './dataset.js';
 import { download, publicUrl, reason } from './files.js';
-import { NETS, NETWORKS_VERSION, Network, ROADS_AT_ONCE, TILE, buildNetworks, classifyWay, simplify, tilesOf, windowOf } from './network.js';
+import { MAIN, NETS, NETWORKS_VERSION, Network, ROADS_AT_ONCE, TILE, buildNetworks, classifyWay, partOf, simplify, tilesOf, windowOf } from './network.js';
 import { readPbfBoundaries, readPbfWays } from './osmpbf.js';
 import { NET_OF_MODE, hopKey, routeMode } from './timetable.js';
 import { BORDER_LEVELS, readTowns, townsAmong, writeTowns } from './towns.js';
@@ -29,6 +29,14 @@ const SETTINGS = {
   cable: { snapRadius: 300, snapPenalty: 2, detour: [2, 500] },
 };
 const SIMPLIFY_M = 1.5;
+// The roads near a stop of a hop that is too long for the tiles (routeLong):
+// those within LONG_REACH km of it, or as far as the nearest main road and
+// LONG_REACH km beyond, at most LONG_REACH_MAX km; found by cells of
+// LONG_CELL degrees. (Within 1 km of it, the central bus station of Munich
+// has no way to the main roads.)
+const LONG_REACH = 2;
+const LONG_REACH_MAX = 15;
+const LONG_CELL = 0.01;
 
 /**
  * Returns the routable networks for the area, from the cache in dataDir or –
@@ -187,8 +195,11 @@ export function buildSegments(data, graphs, area, onProgress = () => {}, { roads
   onProgress(`routing ${fresh.length} hops${fresh.length < hops.size ? `, ${hops.size - fresh.length} kept from before` : ''}`);
   let done = 0;
 
-  /** Routes hops on one network, or on the part of it that is around them. */
-  const routeHops = (network, keys) => {
+  /**
+   * Routes hops on one network, or on the part of it that is around them;
+   * long ones heading for their last stop (Network.route).
+   */
+  const routeHops = (network, keys, long = false) => {
     const candidates = new Map(); // by stop
     const candidatesOf = (stop) => {
       let list = candidates.get(stop);
@@ -207,7 +218,7 @@ export function buildSegments(data, graphs, area, onProgress = () => {}, { roads
       const far = (stop) => area.distance(stops.lat[stop], stops.lon[stop]) > NEAR.exit;
       const [factor, slack] = SETTINGS[NETS[n]].detour;
       const maxLength = Math.hypot(bx - ax, by - ay) * factor + slack;
-      if (a.length && b.length) route = network.route(a, b, maxLength);
+      if (a.length && b.length) route = network.route(a, b, maxLength, long ? [bx, by] : null);
       // One end is not on the network, or only on tracks of another kind that
       // need not lead there (a tunnel under a stop of trams), or it lies beyond
       // the area on a part of the network that is not connected to the rest
@@ -242,40 +253,76 @@ export function buildSegments(data, graphs, area, onProgress = () => {}, { roads
   /**
    * Routes the hops on the roads of a country, tile by tile: a hop on the
    * roads of the tile its middle is in and of the tiles around it, if both of
-   * its stops are within half a tile of that tile. A longer one has no route.
+   * its stops are within half a tile of that tile. The longer ones, nearly all
+   * of long-distance coaches, on the main roads (routeLong).
    */
   const routeInTiles = (graph, keys) => {
     const unit = tile * 1e7;
     const byTile = new Map();
-    let long = 0;
+    const long = [];
     for (const key of keys) {
-      const { from, to, n } = apart(key);
+      const { from, to } = apart(key);
       // (the row and the column of the tile that the middle of the hop is in, as tilesOf counts them)
       const [r, c] = [Math.floor(((stops.lat[from] + stops.lat[to]) / 2) * 1e7 / unit), Math.floor(((stops.lon[from] + stops.lon[to]) / 2) * 1e7 / unit)];
       // (where a stop is, from the south-west corner of the tile, in tiles)
       const within = (stop) => [(stops.lat[stop] * 1e7) / unit - r, (stops.lon[stop] * 1e7) / unit - c].every((at) => at >= -0.5 && at < 1.5);
       if (!within(from) || !within(to)) {
-        long++;
-        kept?.add(n, placeOf(from), placeOf(to), null);
+        long.push(key);
         continue;
       }
       const block = `${r} ${c}`;
       if (!byTile.has(block)) byTile.set(block, { r, c, keys: [] });
       byTile.get(block).keys.push(key);
     }
-    if (long) onProgress(`${long} hops on roads are too long for the tiles`);
-    done += long;
-    kept?.flush();
-    if (!byTile.size) return;
-    const tiles = tilesOf(graph, tile);
     const scratch = new Int32Array(graph.lat.length).fill(-1);
-    for (const { r, c, keys: inTile } of [...byTile.values()].sort((p, q) => p.r - q.r || p.c - q.c)) {
-      const around = [];
-      for (let dr = -1; dr <= 1; dr++) for (let dc = -1; dc <= 1; dc++) around.push(tiles.key(r + dr, c + dc));
-      const part = windowOf(graph, tiles, around, scratch);
-      // (the latitude of the middle of the tile, for lengths in metres)
-      routeHops(new Network(part, { originLat: (r + 0.5) * tiles.size, ...SETTINGS.road }), inTile);
+    if (byTile.size) {
+      const tiles = tilesOf(graph, tile);
+      for (const { r, c, keys: inTile } of [...byTile.values()].sort((p, q) => p.r - q.r || p.c - q.c)) {
+        const around = [];
+        for (let dr = -1; dr <= 1; dr++) for (let dc = -1; dc <= 1; dc++) around.push(tiles.key(r + dr, c + dc));
+        const part = windowOf(graph, tiles, around, scratch);
+        // (the latitude of the middle of the tile, for lengths in metres)
+        routeHops(new Network(part, { originLat: (r + 0.5) * tiles.size, ...SETTINGS.road }), inTile);
+      }
     }
+    if (long.length) routeLong(graph, long, scratch);
+  };
+
+  /**
+   * Routes the hops on the roads of a country that are too long for the
+   * tiles on one network (#131): the main roads of the whole instance, and
+   * all roads near the stops of these hops, as far as LONG_REACH km from
+   * each, or as far as the nearest main road and LONG_REACH km beyond it
+   * (at most LONG_REACH_MAX km). A route leaves its stop on the roads near
+   * it, takes the main roads where that is shorter, and arrives the same way.
+   */
+  const routeLong = (graph, keys, scratch) => {
+    onProgress(`${keys.length} hops on roads are too long for the tiles: routing them on the main roads`);
+    const unit = LONG_CELL * 1e7;
+    const cellOf = (lat, lon) => Math.floor(lat / unit) * 1e5 + Math.floor(lon / unit);
+    const withMain = new Set();
+    for (let e = 0; e < graph.a.length; e++) if (graph.d[e] & MAIN) withMain.add(cellOf(graph.lat[graph.a[e]], graph.lon[graph.a[e]]));
+    const near = new Set();
+    // (a cell is LONG_CELL × 111 km from north to south, and less from west to east)
+    const cellKm = LONG_CELL * 111.32;
+    const ends = [...new Set(keys.flatMap((key) => [apart(key).from, apart(key).to]))];
+    for (const stop of ends) {
+      const [r, c] = [Math.floor((stops.lat[stop] * 1e7) / unit), Math.floor((stops.lon[stop] * 1e7) / unit)];
+      const rings = Math.ceil(LONG_REACH_MAX / (cellKm * Math.cos((stops.lat[stop] * Math.PI) / 180)));
+      // (the first ring of cells around the stop with a main road in it; a stop
+      // with none within LONG_REACH_MAX, as one beyond the extract, gets LONG_REACH)
+      let ring = 0;
+      const hasMain = (k) => {
+        for (let i = -k; i <= k; i++) for (const [dr, dc] of [[i, -k], [i, k], [-k, i], [k, i]]) if (withMain.has((r + dr) * 1e5 + c + dc)) return true;
+        return false;
+      };
+      while (ring <= rings && !hasMain(ring)) ring++;
+      const reach = ring > rings ? LONG_REACH : Math.min(LONG_REACH_MAX, ring * cellKm + LONG_REACH);
+      const [rows, cols] = [Math.ceil(reach / cellKm), Math.ceil(reach / (cellKm * Math.cos((stops.lat[stop] * Math.PI) / 180)))];
+      for (let dr = -rows; dr <= rows; dr++) for (let dc = -cols; dc <= cols; dc++) near.add((r + dr) * 1e5 + c + dc);
+    }
+    const keep = (e) => (graph.d[e] & MAIN) > 0 || near.has(cellOf(graph.lat[graph.a[e]], graph.lon[graph.a[e]])) || near.has(cellOf(graph.lat[graph.b[e]], graph.lon[graph.b[e]]));
+    routeHops(new Network(partOf(graph, keep, scratch), { originLat, ...SETTINGS.road, snapAt: ends.map((stop) => [stops.lat[stop], stops.lon[stop]]) }), keys, true);
   };
 
   const byNet = NETS.map(() => []);
