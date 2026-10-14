@@ -8,6 +8,41 @@ This file is written by
 messages when a release is made. Do not edit it by hand; see
 [Releases](CONTRIBUTING.md#releases).
 
+## [0.9.0](https://github.com/xiidoz/netnou/compare/v0.8.0...v0.9.0) (2026-10-14)
+
+
+### ⚠ BREAKING CHANGES
+
+* **search:** /api/search sends the stations and lines in another form, described in docs/api.md: the names of the stations as one text, places as whole numbers of 1e-5 degrees that are differences from the entry before, modes and operators as numbers, the stations in another order and without ids. To get the departures of a station of that list, ask /api/departures for its place (at=latitude,longitude). station=<id> works as before for the stations of /api/stations and of a trip.
+* **page:** in the answers of `/api/trip` and `/api/departures` a note is an object `{ "title": …, "text": … }` where it was a text. `text` is what the note was before; `title` is the headline the feed gives the alert, or `null`.
+
+### Features
+
+* **map:** thin out a zoomed-out map where a screen cannot take every vehicle ([#115](https://github.com/xiidoz/netnou/issues/115)) ([e45b3f2](https://github.com/xiidoz/netnou/commit/e45b3f2823321f0707851178d1ae48e66f1b59c8))
+* **page:** put warnings first among the notices and give them a sign ([#119](https://github.com/xiidoz/netnou/issues/119)) ([91e49b4](https://github.com/xiidoz/netnou/commit/91e49b45fc8b741f39f7b783e08ce345b0563a44))
+* **page:** show the warning sign of a train in the lists of a station and of a line ([#120](https://github.com/xiidoz/netnou/issues/120)) ([5c0e69f](https://github.com/xiidoz/netnou/commit/5c0e69fd194d3fcf939ad9c4228e622817577dd4))
+* **routes:** keep a point of route geometry in 6 bytes, not 16 ([#132](https://github.com/xiidoz/netnou/issues/132)) ([48cd674](https://github.com/xiidoz/netnou/commit/48cd674484254779d46bfc2ce9dd86ef56eb5093))
+* **routes:** keep the routes from one import to the next ([#130](https://github.com/xiidoz/netnou/issues/130)) ([ba47284](https://github.com/xiidoz/netnou/commit/ba4728499f678913db9dbfc580b7832fb2a617f9))
+* **routes:** route the roads of a whole country in tiles ([#129](https://github.com/xiidoz/netnou/issues/129)) ([86eafa3](https://github.com/xiidoz/netnou/commit/86eafa3d496d6a61af8c36e1e8c5a0c98a593b7f))
+* **routes:** say at start when no OpenStreetMap extracts are set ([#133](https://github.com/xiidoz/netnou/issues/133)) ([704e132](https://github.com/xiidoz/netnou/commit/704e132f8827bd903ff5b6f37efbabb71c10a548))
+* **search:** find a stop by its town and show the town where the name does not say it ([#126](https://github.com/xiidoz/netnou/issues/126)) ([d0bc9ef](https://github.com/xiidoz/netnou/commit/d0bc9ef640a4d7a13d74e592c5d9477e958441f4)), closes [#121](https://github.com/xiidoz/netnou/issues/121)
+* **search:** let an abbreviation that is typed find the word it stands for ([#125](https://github.com/xiidoz/netnou/issues/125)) ([83b0903](https://github.com/xiidoz/netnou/commit/83b090386ba5cb1881ca40fa905239974bd3aa20))
+* **settings:** fetch the realtime feed once a minute unless set otherwise ([#117](https://github.com/xiidoz/netnou/issues/117)) ([de0e1df](https://github.com/xiidoz/netnou/commit/de0e1df853a91c740b5754e42cd695d389515b48))
+* **settings:** let an instance cover the whole feed or single operators ([#112](https://github.com/xiidoz/netnou/issues/112)) ([a524b91](https://github.com/xiidoz/netnou/commit/a524b9195db1cd42abd6f4359698ca7af7c64374)), closes [#102](https://github.com/xiidoz/netnou/issues/102)
+* **settings:** let NETNOU_AREA=Germany show all of Germany with its extract, name and view ([#134](https://github.com/xiidoz/netnou/issues/134)) ([b03d5d5](https://github.com/xiidoz/netnou/commit/b03d5d58c84aedefba97c270420254bbbba221a7))
+
+
+### Bug Fixes
+
+* **page:** keep long notices from pushing the timetable out of the details ([#118](https://github.com/xiidoz/netnou/issues/118)) ([35932bd](https://github.com/xiidoz/netnou/commit/35932bd8baa045ca58b9114d65d4d67976aa3993))
+
+
+### Performance Improvements
+
+* **realtime:** read the realtime feed in a thread of its own ([#116](https://github.com/xiidoz/netnou/issues/116)) ([c3e5521](https://github.com/xiidoz/netnou/commit/c3e552147b21c0ceab813ec5b628510591136fa7))
+* **search:** load a smaller list of stops and search it without holding up the page ([#122](https://github.com/xiidoz/netnou/issues/122)) ([27ffb1d](https://github.com/xiidoz/netnou/commit/27ffb1de07d29a40b961d9bbfd5ef25961694e55))
+* **timetable:** store each stop sequence and each set of running times once ([#110](https://github.com/xiidoz/netnou/issues/110)) ([9a48ebf](https://github.com/xiidoz/netnou/commit/9a48ebfe30c90fc74b3d5b98fe29e5cf3da34bac)), closes [#101](https://github.com/xiidoz/netnou/issues/101)
+
 ## [0.8.0](https://github.com/xiidoz/netnou/compare/v0.7.0...v0.8.0) (2026-10-12)
 
 
