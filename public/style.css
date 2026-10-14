@@ -328,6 +328,51 @@ button { font: inherit; color: inherit; }
 /* (min-width: or the card would grow as wide as the row instead of the row scrolling) */
 .chips-row { position: relative; min-width: 0; }
 .chips-more { display: none; }
+/* On a wide screen, chips that take more than two rows fold to a row and a
+   half (#139): the second row fades out under an arrow, and a click on the
+   faded row or on the arrow opens them downwards. Open, the arrow at the end
+   of the last row folds them again. What the visitor chose is on the root
+   (data-chips-open, set by first.js before the first paint); app.js marks a
+   row that is not to fold (.whole) and says how high a chip is
+   (--chip-height). The arrow is for eyes and fingers only, as on a phone. */
+.chips-fold { display: none; }
+@media (min-width: 721px) {
+  .chips-row:not(.whole) .chips-fold {
+    display: flex;
+    align-items: center;
+    margin-left: auto;
+    padding: 0;
+    border: 0;
+    background: none;
+    color: var(--text);
+    cursor: pointer;
+  }
+  .chips-fold span {
+    width: 28px;
+    height: 28px;
+    display: grid;
+    place-items: center;
+    border: 1px solid var(--border);
+    border-radius: 50%;
+    background: var(--bg);
+    box-shadow: 0 1px 4px rgb(0 0 0 / 0.2);
+  }
+  .chips-fold .icon { transform: rotate(-90deg); }
+  /* (clip, with a margin: the ring of a chip with the keyboard focus stays whole) */
+  :root:not([data-chips-open]) .chips-row:not(.whole) .chips { max-height: calc(1.5 * var(--chip-height, 28px) + 6px); overflow: clip; overflow-clip-margin: 3px; }
+  :root:not([data-chips-open]) .chips-row:not(.whole) .chips-fold {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: calc(var(--chip-height, 28px) / 2);
+    margin: 0;
+    background: linear-gradient(to bottom, transparent, var(--bg));
+  }
+  /* (half below the faded row: in it, as high as a chip, it would cover the row above) */
+  :root:not([data-chips-open]) .chips-row:not(.whole) .chips-fold span { position: absolute; right: 0; bottom: -8px; }
+  :root:not([data-chips-open]) .chips-fold .icon { transform: rotate(90deg); }
+}
 
 .chip {
   display: inline-flex;

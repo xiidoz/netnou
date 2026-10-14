@@ -1359,6 +1359,8 @@ $('search-close').addEventListener('click', closeSearch);
 // ---------- controls ----------
 
 const chipCounts = new Map();
+// (see watchChipFold: what to call once the chips have changed)
+let foldChips = () => {};
 
 /**
  * Shows where the row of chips goes on. On a narrow screen it is one row that
@@ -1382,6 +1384,46 @@ function watchChipRow(row, back, on) {
   const sizes = new ResizeObserver(update);
   for (const node of [row, ...row.children]) sizes.observe(node);
   update();
+}
+
+/**
+ * On a wide screen, chips that take more than two rows fold to a row and a
+ * half (#139, style.css). A click on the faded row or its arrow opens them,
+ * the arrow at the end of the last row folds them again, and the browser
+ * keeps which. They stay whole where they take two rows or fewer, and while a
+ * kind beyond the first row is switched off: what is off stays in sight.
+ * @returns what to call once the chips have changed: their kinds, numbers or what is switched on
+ */
+function watchChipFold(row, chips, fold) {
+  const root = document.documentElement;
+  const wide = matchMedia('(min-width: 721px)');
+  const open = (yes) => {
+    root.toggleAttribute('data-chips-open', yes);
+    saveSetting('chipsOpen', yes);
+  };
+  fold.addEventListener('click', () => open(!root.hasAttribute('data-chips-open')));
+  // The keyboard reaches every chip: one beyond the first row that gets the focus opens them.
+  chips.addEventListener('focusin', (event) => {
+    const first = chips.querySelector('.chip:not([hidden])');
+    if (event.target.classList.contains('chip') && event.target.offsetTop > first.offsetTop && !row.classList.contains('whole')) open(true);
+  });
+  const update = () => {
+    const shown = [...chips.querySelectorAll('.chip')].filter((chip) => !chip.hidden);
+    if (!wide.matches || !shown.length) return;
+    row.style.setProperty('--chip-height', `${shown[0].offsetHeight}px`);
+    // (how many rows they take is known once they carry their numbers: before, they are narrower)
+    if (!state.online) return;
+    const first = shown[0].offsetTop;
+    const rows = new Set(shown.map((chip) => chip.offsetTop)).size;
+    const offBelow = shown.some((chip) => chip.offsetTop > first && chip.getAttribute('aria-pressed') === 'false');
+    row.classList.toggle('whole', rows <= 2 || offBelow);
+  };
+  // (until then a kind switched off keeps them whole, so that they do not open under the eyes of who reads them)
+  if (MODES.some((mode) => !state.enabled.has(mode))) row.classList.add('whole');
+  const sizes = new ResizeObserver(update);
+  for (const node of chips.children) sizes.observe(node);
+  wide.addEventListener('change', update);
+  return update;
 }
 
 function buildControls() {
@@ -1408,6 +1450,7 @@ function buildControls() {
     });
   }
   watchChipRow(container, $('modes-back'), $('modes-on'));
+  foldChips = watchChipFold(container.parentElement, container, $('modes-fold'));
 
   const from = (seconds) => t('delay.from', { minutes: seconds / 60 });
   const legend = [['early', t('delay.early')], ['ok', t('delay.onTime')], ['minor', from(DELAY_MINOR_S)], ['major', from(DELAY_MAJOR_S)], ['severe', from(DELAY_SEVERE_S)], ['none', t('delay.none')]];
@@ -1439,6 +1482,7 @@ function updateStatus() {
   // A chip for each kind the timetable has, and for no other: the page came
   // with those of the timetable the server had then (server/lib/page.js).
   if (state.kinds) for (const [mode, node] of chipCounts) node.parentElement.hidden = !state.kinds.includes(mode);
+  foldChips();
 
   // Without realtime data all positions are by the timetable alone. While it
   // may still be on its way that is said calmly, after that as a warning.

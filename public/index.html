@@ -82,7 +82,9 @@
          its vehicles once the server has told it. Of those that only some
          timetables have, the chips are hidden: the server shows the chips of the
          kinds its timetable has (server/lib/page.js), and app.js follows the
-         timetable from then on. On a narrow screen the chips
+         timetable from then on. On a wide screen chips that take more than two
+         rows fold to a row and a half, under an arrow that opens them
+         (#modes-fold, see style.css). On a narrow screen the chips
          are one row that scrolls sideways. The two arrows show where it goes on
          and move it there. They are for eyes and fingers only: the keyboard and
          a screen reader reach every chip itself. The arrow at the end is there
@@ -100,6 +102,7 @@
         <button type="button" class="chip" data-mode="ferry" aria-pressed="true" hidden><span class="swatch"></span><span class="name" data-i18n="mode.ferry">Ferry</span><span class="count">0</span></button>
         <button type="button" class="chip" data-mode="cable" aria-pressed="true" hidden><span class="swatch"></span><span class="name" data-i18n="mode.cable">Cable car &#38; monorail</span><span class="count">0</span></button>
         <button type="button" class="chip" data-mode="other" aria-pressed="true" hidden><span class="swatch"></span><span class="name" data-i18n="mode.other">Other</span><span class="count">0</span></button>
+        <button type="button" class="chips-fold" id="modes-fold" tabindex="-1" aria-hidden="true"><span data-icon="mdiChevronRight"></span></button>
       </div>
       <button type="button" class="chips-more" id="modes-on" tabindex="-1" aria-hidden="true"><span data-icon="mdiChevronRight"></span></button>
     </div>

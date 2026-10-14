@@ -657,7 +657,7 @@ otherwise a server would load a file written by older code:
   library above all, and on a phone they take seconds to arrive. Until they
   have run, a visitor sees the page as the server sent it. So the server
   sends the header card whole: its texts in the language of the page, its
-  icons drawn, a chip for every mode (`renderPage`). Where the address
+  icons drawn, a chip for every mode its timetable has (`renderPage`). Where the address
   names no language, the page is sent in the one its own script would pick
   for the browser that asks, from the languages the browser names with its
   request (`languageFor`); the answer says that it depends on them
@@ -668,7 +668,9 @@ otherwise a server would load a file written by older code:
   colours by delay, a display – the card stays out of sight until `app.js`
   has made it so: it would change under the eyes of who reads it otherwise.
   What `app.js` adds to a card that shows already is what its buttons do,
-  the numbers on the chips and the state of the connection.
+  the numbers on the chips and the state of the connection. On a wide
+  screen the chips come folded (`style.css`), or open where the visitor
+  opened them (`first.js`): the card has its height from the first paint.
 - **What the page fetches at its start** it would learn of step by step: of
   `app.js` from the page, of the map library from `app.js`, of the area and
   the style of the map only once the script runs. The server names all of it
@@ -688,8 +690,11 @@ otherwise a server would load a file written by older code:
   search is the way to a station without a pointer. On the canvas, vehicles
   and stations can be selected with a pointer only.
   On a narrow screen the filters are one row that scrolls sideways; arrows at
-  its ends show that it goes on and move it. They are left out of the tab
-  order and hidden from screen readers, which reach every filter directly.
+  its ends show that it goes on and move it. On a wide screen filters that
+  take more than two rows fold to a row and a half, and the faded row or an
+  arrow opens them; a filter beyond the first row that gets the focus opens
+  them as well. The arrows are left out of the tab order and hidden from
+  screen readers, which reach every filter directly.
 
 ## Known limits
 

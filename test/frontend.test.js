@@ -155,8 +155,8 @@ test('every key in use has a text and every text is in use', () => {
 
 test('what index.html hides from screen readers is no stop for the keyboard either', () => {
   const hidden = read('index.html').match(/<[a-z][^>]*\saria-hidden="true"[^>]*>/g) ?? [];
-  // the arrows of the row of filters
-  assert.equal(hidden.length, 2);
+  // the arrows of the row of filters: the two of a phone and the one that folds them on a wide screen
+  assert.equal(hidden.length, 3);
   for (const tag of hidden) {
     assert.match(tag, /^<button /, tag);
     assert.match(tag, /\stabindex="-1"/, `${tag} could be reached with the Tab key`);
@@ -307,6 +307,11 @@ test('the header card shows at once where the page came as this visitor gets it'
   assert.ok(!shown({ stored: { 'netnou.colorBy': '"delay"' } }));
   assert.ok(shown({ stored: { 'netnou.colorBy': '"mode"' } }));
   assert.ok(!shown({ stored: { 'netnou.hiddenModes': '["bus"]' } }));
+  // chips that a visitor opened on a wide screen are open from the first paint, and the card shows all the same
+  assert.equal(firstScript({ stored: { 'netnou.chipsOpen': 'true' } }).chipsOpen, '');
+  assert.ok(shown({ stored: { 'netnou.chipsOpen': 'true' } }));
+  for (const stored of [{}, { 'netnou.chipsOpen': 'false' }, { 'netnou.chipsOpen': '"yes"' }]) assert.equal(firstScript({ stored }).chipsOpen, undefined);
+  assert.match(withoutComments(read('app.js')), /saveSetting\('chipsOpen', yes\)/);
   assert.ok(shown({ stored: { 'netnou.hiddenModes': '[]' } }));
   // (not what the page stored: app.js takes the card as it comes then, too)
   assert.ok(shown({ stored: { 'netnou.colorBy': 'delay', 'netnou.hiddenModes': '{"bus":1}' } }));
