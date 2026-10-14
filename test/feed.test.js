@@ -7,6 +7,7 @@ import { Area } from '../server/lib/area.js';
 import { FeedUpdater } from '../server/lib/feed.js';
 import { readDataset, writeDataset } from '../server/lib/dataset.js';
 import { download, publicUrl, reason } from '../server/lib/files.js';
+import { NETWORKS_VERSION } from '../server/lib/network.js';
 import { makePbf, makeZip, startUpstream } from './helpers.js';
 
 // One line from A to B inside the area.
@@ -272,7 +273,7 @@ test('route geometry: straight lines first, OSM data retried with growing waits,
   await updater.check();
   assert.deepEqual([requests.head, requests.get, requests.osm], [6, 2, 4]);
   assert.equal(updater.status.message, '1 trips, 2 stations, 1 routed hops');
-  assert.deepEqual(routesLog().slice(-5), ['Routes: downloading OSM extract URL', 'Routes: reading OSM extract (0 MB)', 'Routes: 0 towns in the OSM extracts', 'Routes: routing 1 hops', 'Routes: hops routed: road 0/0, rail 0/0, subway 1/1, tram 0/0']);
+  assert.deepEqual(routesLog().slice(-5), ['Routes: downloading OSM extract URL', 'Routes: reading OSM extract (0 MB)', 'Routes: 0 towns in the OSM extracts', 'Routes: routing 1 hops', 'Routes: hops routed: road 0/0, rail 0/0, subway 1/1, tram 0/0, ferry 0/0, cable 0/0']);
   const routed = timetables.at(-1);
   assert.equal(routed.segmentCount, 1);
   // the trip runs over the bend at node 2 instead of straight from A to B
@@ -294,6 +295,21 @@ test('route geometry: straight lines first, OSM data retried with growing waits,
   assert.equal(timetables.at(-1).segmentCount, 1);
   assert.equal(routesLog().filter((line) => line.startsWith('Routes: routing')).at(-1), 'Routes: routing 0 hops, 1 kept from before');
   assert.deepEqual(timetables.at(-1).trip('T1', '20261003', null).path.slice(2, 4), [49.45, 11.002]);
+  assert.equal(readDataset(path.join(dir, 'dataset.bin')).source.networks, NETWORKS_VERSION);
+
+  // Routes found on networks of an older kind, as before ferries had one of
+  // their own, are found anew at the next start, and shown until then.
+  const datasetPath = path.join(dir, 'dataset.bin');
+  const stored = readDataset(datasetPath);
+  writeDataset(datasetPath, { ...stored, source: { ...stored.source, networks: NETWORKS_VERSION - 1 } });
+  const restarted = make({ osmUrls: [`${url}/area.osm.pbf`] });
+  await restarted.updater.start();
+  assert.deepEqual(restarted.timetables.map((timetable) => timetable.segmentCount), [1, 1]);
+  assert.equal(restarted.updater.routesMissing, false);
+  assert.equal(readDataset(datasetPath).source.networks, NETWORKS_VERSION);
+  assert.ok(restarted.log.includes('Routes: routing 0 hops, 1 kept from before'));
+  // (the timetable is not fetched again, nor is the extract: the networks of the present kind are kept)
+  assert.deepEqual([requests.get, requests.osm], [3, 4]);
 });
 
 test('a hop is routed once for the networks it is on: the next import keeps its route, and with new OSM data it is routed again', async (t) => {

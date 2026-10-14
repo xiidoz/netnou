@@ -25,7 +25,7 @@ function tempDir(t) {
 function readMade(dir, nodes, ways, { keepNode, ...options } = {}) {
   const file = path.join(dir, `extract-${fs.readdirSync(dir).length}.osm.pbf`);
   fs.writeFileSync(file, makePbf(nodes, ways, [], options));
-  return readPbfWays(file, { keys: ['highway', 'railway'], classify: classifyWay, keepNode });
+  return readPbfWays(file, { keys: ['highway', 'railway', 'route', 'aerialway'], classify: classifyWay, keepNode });
 }
 
 const EXTRACT = {
@@ -126,6 +126,48 @@ test('classifyWay: networks, access, one-way rules and bus exceptions', () => {
   assert.equal(classifyWay({ railway: 'tram', oneway: 'yes' }).dir, 1);
   assert.equal(classifyWay({ railway: 'rail', service: 'yard' }).factor, 3);
   assert.equal(classifyWay({ railway: 'abandoned' }), null);
+  // ferries on their routes across the water, both ways
+  assert.deepEqual(classifyWay({ route: 'ferry' }), { net: 'ferry', factor: 1, dir: 3 });
+  // cable cars and monorails together with funiculars and rack railways, whole narrow gauge and the track of a tram with a rack among them
+  for (const tags of [{ railway: 'monorail' }, { railway: 'funicular', gauge: '1000' }, { railway: 'narrow_gauge', rack: 'no' }, { railway: 'tram', rack: 'riggenbach' }, { railway: 'rail', rack: 'abt' }, { aerialway: 'gondola' }, { aerialway: 'cable_car' }, { aerialway: 'chair_lift' }]) {
+    assert.deepEqual(classifyWay(tags), { net: 'cable', factor: 1, dir: 3 }, JSON.stringify(tags));
+  }
+  assert.equal(classifyWay({ railway: 'monorail', service: 'yard' }).factor, 3);
+  // a track that has no rack stays that of the trains, and not every lift carries people as a line does
+  assert.equal(classifyWay({ railway: 'rail', rack: 'no' }).net, 'rail');
+  assert.equal(classifyWay({ railway: 'tram' }).net, 'tram');
+  assert.equal(classifyWay({ aerialway: 'drag_lift' }), null);
+  assert.equal(classifyWay({ aerialway: 'station' }), null);
+});
+
+test('ferries follow their routes across the water, cable cars and monorails their own ways', (t) => {
+  const dir = tempDir(t);
+  // A ferry from a pier to an island 22 km to the north, its route one edge as
+  // across open sea; a monorail of 1 km; and a ferry 132 m across a river,
+  // whose route ends in a jetty of 20 m on the far bank.
+  const nodes = [[1, 49.5, 11.0], [2, 49.7, 11.05], [3, 49.5, 11.1], [4, 49.509, 11.1], [5, 49.6, 10.95], [6, 49.601186, 10.95], [7, 49.601366, 10.95]];
+  const graphs = buildNetworks([readMade(dir, nodes, [[10, [1, 2], { route: 'ferry' }], [11, [3, 4], { railway: 'monorail' }], [12, [5, 6, 7], { route: 'ferry' }]])]);
+  // (the long edge is in the cells of the grid along it, not in all 183 × 30 of its rectangle; halfway, 100 m beside it, it is found)
+  const ferry = new Network(graphs.ferry, { originLat: 49.6, snapRadius: 600, snapPenalty: 1 });
+  assert.ok(ferry.grid.size < 400, `${ferry.grid.size} cells`);
+  assert.equal(ferry.candidates(49.6, 11.0262).length, 1);
+
+  const area = Area.fromBbox([49.4, 10.9, 49.8, 11.2]);
+  // (the stop on the near bank is 33 m beside the start of the crossing, and 136 m from the jetty: were
+  // snapping as cheap as a metre of the way, it would be put on the jetty, with the stop over there, and
+  // the crossing would be a route of no length, which is none)
+  const dataset = packDataset({
+    stops: { id: ['P', 'Q', 'S', 'T', 'X', 'Y'], name: ['Pier', 'Island', 'Valley', 'Top', 'Near bank', 'Far bank'], lat: [49.5004, 49.6996, 49.5002, 49.5088, 49.6, 49.601276], lon: [11.0, 11.05, 11.1003, 11.1003, 10.949542, 10.950014], parent: [-1, -1, -1, -1, -1, -1], platform: ['', '', '', '', '', ''], region: [1, 1, 1, 1, 1, 1] },
+    routes: { id: ['F', 'C', 'R'], short: ['F1', '60', 'F2'], long: ['', '', ''], type: [4, 7, 4], color: ['', '', ''], text: ['', '', ''], agency: ['', '', ''] },
+    headsigns: ['Island', 'Top', 'Far bank'],
+    dates: ['20261003'],
+    services: [[0]],
+    trips: { id: ['TF', 'TC', 'TR'], route: [0, 1, 2], service: [0, 0, 0], headsign: [0, 1, 2], stops: [[0, 1], [2, 3], [4, 5]], arr: [[36000, 39600], [36000, 36300], [36000, 36300]], dep: [[36000, 39600], [36000, 36300], [36000, 36300]], seq: [null, null, null] },
+  });
+  const log = [];
+  const segments = buildSegments(dataset, graphs, area, (line) => log.push(line));
+  assert.deepEqual(Array.from(segments.net, (n) => segments.nets[n]), ['ferry', 'ferry', 'cable']);
+  assert.equal(log.at(-1), 'hops routed: road 0/0, rail 0/0, subway 0/0, tram 0/0, ferry 2/2, cable 1/1');
 });
 
 // A small road grid around (49.5, 11.0); 0.001° is ~111 m north and ~72 m east.
@@ -275,7 +317,7 @@ test('vehicles and trip paths follow the routed geometry', () => {
   const inTiles = buildSegments(dataset, graphs, area, (line) => log.push(line), { roadsAtOnce: 0, tile: 0.003 });
   assert.deepEqual(pointsOf(inTiles), pointsOf(dataset.segments));
   assert.deepEqual(buildSegments(dataset, graphs, area, (line) => log.push(line), { roadsAtOnce: 0, tile: 0.001 }).net.length, 0);
-  assert.deepEqual(log.slice(-3), ['routing 1 hops', '1 hops on roads are too long for the tiles', 'hops routed: road 0/1, rail 0/0, subway 0/0, tram 0/0']);
+  assert.deepEqual(log.slice(-3), ['routing 1 hops', '1 hops on roads are too long for the tiles', 'hops routed: road 0/1, rail 0/0, subway 0/0, tram 0/0, ferry 0/0, cable 0/0']);
 
   // A route that is kept is taken as it is, without routing: here a made-up one, straight from P to Q.
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'netnou-kept-'));

@@ -9,15 +9,10 @@ import path from 'node:path';
 import { Area, NEAR } from './area.js';
 import { Numbers, readDataset, readDatasetHead, writeDataset } from './dataset.js';
 import { download, publicUrl, reason } from './files.js';
-import { NETS, Network, ROADS_AT_ONCE, TILE, buildNetworks, classifyWay, simplify, tilesOf, windowOf } from './network.js';
+import { NETS, NETWORKS_VERSION, Network, ROADS_AT_ONCE, TILE, buildNetworks, classifyWay, simplify, tilesOf, windowOf } from './network.js';
 import { readPbfBoundaries, readPbfWays } from './osmpbf.js';
 import { NET_OF_MODE, hopKey, routeMode } from './timetable.js';
 import { BORDER_LEVELS, readTowns, townsAmong, writeTowns } from './towns.js';
-
-// Bump when classifyWay, the cost factors or the output of buildNetworks
-// (all in network.js) change: the cached networks are then built again from a
-// fresh OSM download instead of being used for up to NETNOU_OSM_MAX_AGE_DAYS more.
-const NETWORKS_VERSION = 3;
 
 // snapRadius: how far a stop may be from its road/track (rail stops are often
 // the station centre). snapPenalty: cost per metre of that offset.
@@ -27,6 +22,11 @@ const SETTINGS = {
   tram: { snapRadius: 60, snapPenalty: 3, detour: [2, 300] },
   subway: { snapRadius: 250, snapPenalty: 2, detour: [2, 500] },
   rail: { snapRadius: 400, snapPenalty: 1.5, detour: [2, 1000] },
+  // (a pier can be far from where the line of its ferry ends, and a fairway
+  // winds; snapping costs three times a metre of the way, or a short crossing
+  // would have both its stops on the far bank and no route)
+  ferry: { snapRadius: 600, snapPenalty: 3, detour: [3, 2000] },
+  cable: { snapRadius: 300, snapPenalty: 2, detour: [2, 500] },
 };
 const SIMPLIFY_M = 1.5;
 
@@ -82,7 +82,7 @@ export async function loadNetworks({ dataDir, urls, area, scope = area.id, maxAg
         onProgress(`reading OSM extract (${Math.round(size / 1e6)} MB)`);
         // (the borders first: what is read of the roads is the larger part, and it is kept until the networks are built)
         borders.push(readPbfBoundaries(file, BORDER_LEVELS));
-        readings.push(readPbfWays(file, { keys: ['highway', 'railway'], classify: classifyWay, keepNode }));
+        readings.push(readPbfWays(file, { keys: ['highway', 'railway', 'route', 'aerialway'], classify: classifyWay, keepNode }));
       } finally {
         fs.rmSync(file, { force: true });
       }

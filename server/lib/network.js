@@ -1,8 +1,15 @@
-// Routable networks built from OpenStreetMap ways – one for buses (roads) and
-// one each for trams, the U-Bahn and heavy rail – and the shortest-path search
-// that turns "stop A, then stop B" into the geometry in between.
+// Routable networks built from OpenStreetMap ways – one for buses (roads), one
+// each for trams, the U-Bahn and heavy rail, one for ferries and one for cable
+// cars and monorails – and the shortest-path search that turns "stop A, then
+// stop B" into the geometry in between.
 
-export const NETS = ['road', 'rail', 'subway', 'tram'];
+export const NETS = ['road', 'rail', 'subway', 'tram', 'ferry', 'cable'];
+
+// Bump when classifyWay, the cost factors or the output of buildNetworks
+// change: the cached networks are then built again from a fresh OSM download
+// instead of being used for up to NETNOU_OSM_MAX_AGE_DAYS more, and routes
+// found on older ones are found anew (shapes.js, feed.js).
+export const NETWORKS_VERSION = 4;
 
 const M_PER_DEG = 111_320;
 
@@ -15,6 +22,10 @@ const ROAD_FACTOR = {
 };
 const NO_ACCESS = ['no', 'private', 'agricultural', 'forestry', 'emergency', 'military'];
 const NOT_A_ROAD = ['parking_aisle', 'driveway', 'drive-through', 'emergency_access'];
+// The lifts that carry people as a line of a timetable does.
+const AERIALWAYS = ['cable_car', 'gondola', 'mixed_lift', 'chair_lift'];
+// Sidings and yards are legal but unlikely routes for passenger trains.
+const SERVICE_FACTOR = { yard: 3, spur: 3, siding: 1.5, crossover: 1.2 };
 const isYes = (value) => value === 'yes' || value === 'designated';
 
 const FORWARD = 1;
@@ -35,10 +46,22 @@ function onewayDirection(tags, implied) {
 export function classifyWay(tags) {
   if (tags.area === 'yes') return null;
 
+  // Ferries go where their routes are drawn across the water, both ways.
+  if (tags.route === 'ferry') return { net: 'ferry', factor: 1, dir: BOTH };
+
   const railway = tags.railway;
+  // Cable cars and monorails, funiculars and rack railways: in the feed of
+  // Germany all of them have the route type of a funicular. Narrow gauge is
+  // theirs whole, as the parts of a rack railway without a rack (rack=no)
+  // are; a rack on the track of a tram or a train makes that track theirs.
+  const rack = tags.rack !== undefined && tags.rack !== 'no';
+  if (railway === 'monorail' || railway === 'funicular' || railway === 'narrow_gauge' || AERIALWAYS.includes(tags.aerialway)
+    || (rack && (railway === 'rail' || railway === 'light_rail' || railway === 'tram'))) {
+    return { net: 'cable', factor: SERVICE_FACTOR[tags.service] ?? 1, dir: BOTH };
+  }
+
   if (railway === 'rail' || railway === 'light_rail' || railway === 'subway' || railway === 'tram') {
-    // Sidings and yards are legal but unlikely routes for passenger trains.
-    const factor = { yard: 3, spur: 3, siding: 1.5, crossover: 1.2 }[tags.service] ?? 1;
+    const factor = SERVICE_FACTOR[tags.service] ?? 1;
     if (railway === 'subway' || railway === 'tram') return { net: railway, factor, dir: onewayDirection(tags, false) };
     // Mainline tracks are signalled for a usual direction but can be used both ways.
     return { net: 'rail', factor, dir: BOTH };
@@ -340,6 +363,8 @@ class MinHeap {
 }
 
 const CELL_M = 120;
+// An edge whose rectangle has more cells than this is put into those along it.
+const LONG_EDGE_CELLS = 64;
 // routeBeyond stops searching once it is this close to the stop it heads for.
 const CLOSE_ENOUGH_M = 300;
 // It leaves the network where the way so far plus this many times the straight
@@ -392,20 +417,32 @@ export class Network {
     this.out = this.adjacency(FORWARD, BACKWARD);
     this.in = this.adjacency(BACKWARD, FORWARD);
 
-    // Spatial grid of edges for snapping stops.
+    // Spatial grid of edges for snapping stops: an edge is in each cell of
+    // the rectangle around it. A long one, such as an edge of a ferry across
+    // the sea, is in the cells along it instead: its rectangle would be
+    // hundreds of thousands of them.
     this.grid = new Map();
+    const put = (key, e) => {
+      const cell = this.grid.get(key);
+      if (cell) cell.push(e);
+      else this.grid.set(key, [e]);
+    };
     for (let e = 0; e < m; e++) {
-      const x0 = Math.floor(Math.min(this.x[this.a[e]], this.x[this.b[e]]) / CELL_M);
-      const x1 = Math.floor(Math.max(this.x[this.a[e]], this.x[this.b[e]]) / CELL_M);
-      const y0 = Math.floor(Math.min(this.y[this.a[e]], this.y[this.b[e]]) / CELL_M);
-      const y1 = Math.floor(Math.max(this.y[this.a[e]], this.y[this.b[e]]) / CELL_M);
-      for (let cx = x0; cx <= x1; cx++) {
-        for (let cy = y0; cy <= y1; cy++) {
-          const key = cx * 1e6 + cy;
-          const cell = this.grid.get(key);
-          if (cell) cell.push(e);
-          else this.grid.set(key, [e]);
-        }
+      const [ax, ay, bx, by] = [this.x[this.a[e]], this.y[this.a[e]], this.x[this.b[e]], this.y[this.b[e]]];
+      const x0 = Math.floor(Math.min(ax, bx) / CELL_M);
+      const x1 = Math.floor(Math.max(ax, bx) / CELL_M);
+      const y0 = Math.floor(Math.min(ay, by) / CELL_M);
+      const y1 = Math.floor(Math.max(ay, by) / CELL_M);
+      if ((x1 - x0 + 1) * (y1 - y0 + 1) <= LONG_EDGE_CELLS) {
+        for (let cx = x0; cx <= x1; cx++) for (let cy = y0; cy <= y1; cy++) put(cx * 1e6 + cy, e);
+        continue;
+      }
+      const steps = Math.ceil(Math.hypot(bx - ax, by - ay) / (CELL_M / 4));
+      let last = null;
+      for (let i = 0; i <= steps; i++) {
+        const key = Math.floor((ax + ((bx - ax) * i) / steps) / CELL_M) * 1e6 + Math.floor((ay + ((by - ay) * i) / steps) / CELL_M);
+        if (key !== last) put(key, e);
+        last = key;
       }
     }
 

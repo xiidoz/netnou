@@ -7,6 +7,7 @@ import { Worker } from 'node:worker_threads';
 import { scopeId } from './area.js';
 import { DATASET_VERSION, datasetFrom, loadDataset } from './dataset.js';
 import { download, publicUrl, reason } from './files.js';
+import { NETWORKS_VERSION } from './network.js';
 import { Timetable } from './timetable.js';
 
 const HEAD_TIMEOUT_MS = 30_000;
@@ -95,7 +96,9 @@ export class FeedUpdater {
     if (data.area !== this.scope) throw new Error('made for another area or other operators');
     const timetable = new Timetable(data, shared);
     this.current = data.source;
-    this.routesMissing = this.osm.urls.length > 0 && !data.segments;
+    // (as are routes found on networks of an older kind, such as before ferries had one: they are shown until the new ones are there)
+    this.routesMissing = this.osm.urls.length > 0 && (!data.segments || data.source.networks !== NETWORKS_VERSION);
+    this.routesOutdated = this.routesMissing && Boolean(data.segments);
     this.status.state = 'ready';
     this.status.message = `${timetable.tripCount} trips, ${timetable.stations.length} stations, ${timetable.segmentCount} routed hops`;
     this.log(`Timetable loaded: ${this.status.message}, feed of ${data.source.lastModified ?? 'unknown date'}`);
@@ -184,7 +187,7 @@ export class FeedUpdater {
       if (mode === 'routes' || this.current !== before) {
         this.routesWaitMs = this.routesMissing ? nextWait(this.routesWaitMs) : 0;
         this.routesRetryAt = Date.now() + this.routesWaitMs;
-        if (this.routesMissing) this.log(`Routes: no route geometry, next attempt in ${minutes(this.routesWaitMs)}`);
+        if (this.routesMissing) this.log(`Routes: ${this.routesOutdated ? 'the routes are of older networks' : 'no route geometry'}, next attempt in ${minutes(this.routesWaitMs)}`);
       }
     }
   }

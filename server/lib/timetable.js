@@ -28,7 +28,7 @@ import { addDays, localDate, serviceDayStart } from './time.js';
 // with them: all that the feed of Germany gives the route type of a funicular.
 export const MODES = ['subway', 'tram', 'bus', 'suburban', 'regional', 'longdistance', 'ferry', 'cable', 'other'];
 // The OSM network (see network.js) a mode travels on.
-export const NET_OF_MODE = { bus: 'road', tram: 'tram', subway: 'subway', suburban: 'rail', regional: 'rail', longdistance: 'rail' };
+export const NET_OF_MODE = { bus: 'road', tram: 'tram', subway: 'subway', suburban: 'rail', regional: 'rail', longdistance: 'rail', ferry: 'ferry', cable: 'cable' };
 
 const LONG_DISTANCE = /^(ICE|IC|ECE|EC|RJX|RJ|NJ|EN|TGV|FLX|D)\s?\d/;
 
