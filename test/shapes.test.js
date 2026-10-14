@@ -110,7 +110,10 @@ test('the part of a network in some tiles has their nodes and the edges between 
 });
 
 test('classifyWay: networks, access, one-way rules and bus exceptions', () => {
-  assert.deepEqual(classifyWay({ highway: 'primary' }), { net: 'road', factor: 1, dir: 3 });
+  // the main roads, on which the long hops of a country are routed, with their links (#131)
+  assert.deepEqual(classifyWay({ highway: 'primary' }), { net: 'road', factor: 1, dir: 3, main: true });
+  for (const highway of ['motorway', 'motorway_link', 'trunk', 'primary_link']) assert.equal(classifyWay({ highway }).main, true, highway);
+  for (const highway of ['secondary', 'tertiary', 'residential', 'busway']) assert.equal(classifyWay({ highway }).main, undefined, highway);
   assert.equal(classifyWay({ highway: 'residential', oneway: 'yes' }).dir, 1);
   assert.equal(classifyWay({ highway: 'residential', oneway: '-1' }).dir, 2);
   assert.equal(classifyWay({ highway: 'residential', oneway: 'yes', 'oneway:bus': 'no' }).dir, 3);
@@ -174,6 +177,48 @@ test('ferries follow their routes across the water, cable cars and monorails the
   const segments = buildSegments(dataset, graphs, area, (line) => log.push(line));
   assert.deepEqual(Array.from(segments.net, (n) => segments.nets[n]), ['ferry', 'ferry', 'cable']);
   assert.equal(log.at(-1), 'hops routed: road 0/0, rail 0/0, subway 0/0, tram 0/0, ferry 2/2, cable 1/1');
+});
+
+test('a hop too long for the tiles takes the main roads between the roads near its stops (#131)', (t) => {
+  const dir = tempDir(t);
+  // Stop A and stop B 36 km apart, each 11 m south of the end of a local road
+  // of 556 m that leads to a motorway, which runs on east to 11.8 degrees. A
+  // secondary road goes from A straight to B, 1.1 km shorter than the way on
+  // the motorway. Stop C lies to the north-east beyond the end of the
+  // motorway, stop D on a road of its own, 556 m north of the motorway.
+  const nodes = [[1, 49.5, 11.0], [2, 49.505, 11.0], [3, 49.505, 11.25], [4, 49.505, 11.5], [5, 49.5, 11.5], [6, 49.505, 11.8], [7, 49.51, 11.24], [8, 49.51, 11.26]];
+  const secondary = Array.from({ length: 9 }, (_, i) => [10 + i, 49.5, 11.05 + i * 0.05]);
+  const graphs = buildNetworks([readMade(dir, [...nodes, ...secondary], [
+    [20, [1, 2], { highway: 'residential' }],
+    [21, [2, 3, 4, 6], { highway: 'motorway', oneway: 'no' }],
+    [22, [4, 5], { highway: 'residential' }],
+    [23, [1, ...secondary.map(([id]) => id), 5], { highway: 'secondary' }],
+    [24, [7, 8], { highway: 'residential' }],
+  ])]);
+  const area = Area.fromBbox([49.4, 10.9, 49.7, 12.6]);
+  const dataset = packDataset({
+    stops: { id: ['A', 'B', 'C', 'D'], name: ['A', 'B', 'C', 'D'], lat: [49.4999, 49.4999, 49.55, 49.5101], lon: [11.0, 11.5, 12.5, 11.25], parent: [-1, -1, -1, -1], platform: ['', '', '', ''], region: [1, 1, 1, 1] },
+    routes: { id: ['X'], short: ['X1'], long: [''], type: [3], color: [''], text: [''], agency: [''] },
+    headsigns: ['B', 'C', 'D'],
+    dates: ['20261003'],
+    services: [[0]],
+    trips: { id: ['TB', 'TC', 'TD'], route: [0, 0, 0], service: [0, 0, 0], headsign: [0, 1, 2], stops: [[0, 1], [0, 2], [0, 3]], arr: [[36000, 38400], [36000, 40000], [36000, 38400]], dep: [[36000, 38400], [36000, 40000], [36000, 38400]], seq: [null, null, null] },
+  });
+  // On the roads of a region, one network, A to B on the secondary road
+  const region = routesOf(buildSegments(dataset, graphs, area));
+  assert.ok(region[0].points.filter((_, i) => i % 2 === 0).every((lat) => lat === 4950000), `${region[0].points}`);
+  // On those of a country, in tiles too small for these hops: A to B on the
+  // local roads and the motorway, as the middle of the secondary road is not
+  // near the stops; A to C on the motorway to its end and on in a straight
+  // line; A to D not at all.
+  const log = [];
+  const country = routesOf(buildSegments(dataset, graphs, area, (line) => log.push(line), { roadsAtOnce: 0, tile: 0.05 }));
+  assert.deepEqual(log.slice(-2), ['3 hops on roads are too long for the tiles: routing them on the main roads', 'hops routed: road 2/3, rail 0/0, subway 0/0, tram 0/0, ferry 0/0, cable 0/0']);
+  const lats = country[0].points.filter((_, i) => i % 2 === 0);
+  assert.ok(lats.length >= 4 && lats.slice(1, -1).every((lat) => lat === 4950500), `${country[0].points}`);
+  assert.ok(Math.abs(metres(country[0].points) - 37260) < 30, `${metres(country[0].points)}`);
+  const toC = country[1].points;
+  assert.ok(toC.some((v, i) => i % 2 === 0 && v === 4950500 && toC[i + 1] === 1180000) && toC.slice(-2).join() === '4955000,1250000', `${toC}`);
 });
 
 test('the U-Bahn and trams share their tracks and those of the light rail, and keep to their own where they can (#128)', (t) => {
@@ -379,12 +424,14 @@ test('vehicles and trip paths follow the routed geometry', () => {
   dataset.segments = buildSegments(dataset, graphs, area);
   assert.deepEqual(Array.from(dataset.segments.net, (n) => dataset.segments.nets[n]), ['road']);
   // The same on the roads of a country, cut into tiles of 0.003 degrees; on
-  // tiles of 0.001 degrees the stops are too far apart for one.
+  // tiles of 0.001 degrees the stops are too far apart for one, and the hop
+  // is routed on the main roads and the roads near its stops, which here are
+  // all of them.
   const log = [];
   const inTiles = buildSegments(dataset, graphs, area, (line) => log.push(line), { roadsAtOnce: 0, tile: 0.003 });
   assert.deepEqual(pointsOf(inTiles), pointsOf(dataset.segments));
-  assert.deepEqual(buildSegments(dataset, graphs, area, (line) => log.push(line), { roadsAtOnce: 0, tile: 0.001 }).net.length, 0);
-  assert.deepEqual(log.slice(-3), ['routing 1 hops', '1 hops on roads are too long for the tiles', 'hops routed: road 0/1, rail 0/0, subway 0/0, tram 0/0, ferry 0/0, cable 0/0']);
+  assert.deepEqual(pointsOf(buildSegments(dataset, graphs, area, (line) => log.push(line), { roadsAtOnce: 0, tile: 0.001 })), pointsOf(dataset.segments));
+  assert.deepEqual(log.slice(-3), ['routing 1 hops', '1 hops on roads are too long for the tiles: routing them on the main roads', 'hops routed: road 1/1, rail 0/0, subway 0/0, tram 0/0, ferry 0/0, cable 0/0']);
 
   // A route that is kept is taken as it is, without routing: here a made-up one, straight from P to Q.
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'netnou-kept-'));

@@ -100,7 +100,7 @@ area, October 2026.)
 
 With `NETNOU_AREA=Germany` the extract is that of Germany, 4.9 GB, about
 seven minutes to download at 100 Mbit/s. Importing it takes about ten
-minutes more and up to 3.2 GB of memory, and the data directory needs 6 GB
+minutes more and up to 3.3 GB of memory, and the data directory needs 6 GB
 meanwhile and 1.1 GB afterwards. The server then runs with about 1 GB, and a
 new timetable takes about a minute.
 

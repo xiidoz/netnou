@@ -299,9 +299,20 @@ the default area that is about 60,000 distinct hops, for all of Germany
   quarter of a degree (`tilesOf`), and a hop is routed on the roads of the
   tile its middle is in and of the eight tiles around it. A hop that has a
   stop more than half a tile beyond the tile of its middle is too long for
-  that and stays a straight line: in all of Germany 2,154 of the 756,709
-  hops on roads, most of them of long-distance coaches. The tracks of a
-  country are one network each.
+  that: in all of Germany 2,154 of the 756,709 hops on roads, nearly all of
+  them of long-distance coaches. These are routed on one network of the
+  main roads of the whole instance (motorways, trunk and primary roads with
+  their links, which `classifyWay` marks: 2 million of the 30 million nodes
+  of the roads of Germany) and of all roads near their stops, within 2 km of
+  each or as far as the nearest main road and 2 km beyond it, at most 15 km
+  (`routeLong`). Their search heads for the last stop (A*) and is not begun
+  between parts of the network that are not connected. A stop beyond the
+  extract is headed for as far as the roads lead, as from an area (see
+  below). In all of Germany that gives 843 of the 849 of these hops with
+  both stops on its roads a route, about 1.2 times as long as the straight
+  line, and 306 of the 311 with one stop abroad; the 994 with both abroad
+  stay straight. It takes a minute and 0.2 GB of memory more. The tracks of
+  a country are one network each.
 - **Lengths.** A network lies on a plane that is right at one latitude, that
   of the middle of the area or of the tile. A metre from west to east is
   measured at the latitude of each edge, and the distance of a stop from a
@@ -333,7 +344,7 @@ the default area that is about 60,000 distinct hops, for all of Germany
   tunnel of the U-Bahn.
 - **Fallback.** A hop without a path is a straight line. In October 2026 that
   was the case for about 1 % of the hops inside the default area. For all of
-  Germany it was 1.3 % of the hops on roads, 15 % on rail, 2 % of trams and
+  Germany it was 1.1 % of the hops on roads, 15 % on rail, 2 % of trams and
   4 of the 2,496 hops of the U-Bahn.
 - **Storage.** Paths are simplified to 1.5 m accuracy and stored once per
   hop, shared by all trips that use it. A hop is gone through from its
@@ -346,8 +357,8 @@ the default area that is about 60,000 distinct hops, for all of Germany
   bits would have it.
 - **Time and memory.** For the default area the route step of an import
   takes the test machine about 40 seconds, the server at most 1 GB of
-  memory. For all of Germany it takes 7 minutes, 3 to read the extract and 4
-  to route, when none of the routes are kept, and the server at most 3.2 GB:
+  memory. For all of Germany it takes 8 minutes, 3 to read the extract and 5
+  to route, when none of the routes are kept, and the server at most 3.3 GB:
   it holds the timetable it serves meanwhile.
 - **Kept from one import to the next.** A route is found again by its
   network and the places of its two stops (`KeptRoutes`), and only the hops

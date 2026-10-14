@@ -31,7 +31,7 @@ The figures are approximate and were measured for the default area in October
 2026, where the first start takes about two minutes at 100 Mbit/s; a smaller
 area needs less. An instance for all of Germany (`NETNOU_AREA=Germany`)
 downloads the extract of Germany instead, 4.9 GB, about seven minutes at
-100 Mbit/s. Importing it then takes about ten minutes and up to 3.2 GB of
+100 Mbit/s. Importing it then takes about ten minutes and up to 3.3 GB of
 memory, at the first start and with every new extract; a new timetable takes
 about a minute, and in between the server runs with about 1 GB. It needs
 6 GB of disk while the extract is read, 1.1 GB afterwards.
