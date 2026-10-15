@@ -660,27 +660,30 @@ function draw() {
     ctx.stroke();
   }
 
-  // route of the selected trip
-  if (selection?.type === 'trip' && selection.data) {
-    const color = colors.mode[selection.data.mode] ?? colors.mode.other;
-    const path = selection.data.path;
-    const points = selection.data.stops.map((stop) => project(stop.lat, stop.lon));
+  // The route of the selected trip, or that of the selected line: where its
+  // trips of the day run (#148). Lines in the colour of the mode, one stroke
+  // for all, so that where they lie on each other they are no darker; from
+  // zoom 11 a dot at each stop.
+  const drawRoute = (paths, stops, mode) => {
     ctx.beginPath();
-    for (let i = 0; i < path.length; i += 2) {
-      const [x, y] = project(path[i], path[i + 1]);
-      if (i) ctx.lineTo(x, y);
-      else ctx.moveTo(x, y);
+    for (const path of paths) {
+      for (let i = 0; i < path.length; i += 2) {
+        const [x, y] = project(path[i], path[i + 1]);
+        if (i) ctx.lineTo(x, y);
+        else ctx.moveTo(x, y);
+      }
     }
     ctx.lineJoin = 'round';
     ctx.lineCap = 'round';
-    ctx.strokeStyle = color;
+    ctx.strokeStyle = colors.mode[mode] ?? colors.mode.other;
     ctx.globalAlpha = 0.8;
     ctx.lineWidth = 4;
     ctx.stroke();
     ctx.globalAlpha = 1;
     if (zoom >= 11) {
       ctx.lineWidth = 2;
-      for (const [x, y] of points) {
+      for (let i = 0; i < stops.length; i += 2) {
+        const [x, y] = project(stops[i], stops[i + 1]);
         if (!onScreen(x, y)) continue;
         ctx.beginPath();
         ctx.arc(x, y, 3.5, 0, 2 * Math.PI);
@@ -689,7 +692,9 @@ function draw() {
         ctx.stroke();
       }
     }
-  }
+  };
+  if (selection?.type === 'trip' && selection.data) drawRoute([selection.data.path], selection.data.stops.flatMap((stop) => [stop.lat, stop.lon]), selection.data.mode);
+  if (selection?.type === 'line' && selection.route) drawRoute(selection.route.paths, selection.route.stations, selection.line.mode);
 
   // While a line is looked at, its vehicles are the only ones, whatever the filters say.
   const only = selection?.type === 'line' ? selection.ids : null;
@@ -1802,10 +1807,10 @@ function select(type, id, more = {}) {
   loadSelection(true);
 }
 
-function selectionUrl({ type, id, line, at }) {
+function selectionUrl({ type, id, line, at, route }) {
   if (type === 'trip') return `api/trip?id=${encodeURIComponent(id)}`;
-  // (a line is its name, its mode and its operator together)
-  if (type === 'line') return `api/line?${new URLSearchParams({ name: line.name, mode: line.mode, agency: line.agency })}`;
+  // (a line is its name, its mode and its operator together; where it runs is asked for until it is known, #148)
+  if (type === 'line') return `api/line?${new URLSearchParams({ name: line.name, mode: line.mode, agency: line.agency, ...(route ? {} : { route: '1' }) })}`;
   return at ? `api/departures?at=${at.lat.toFixed(5)},${at.lon.toFixed(5)}` : `api/departures?station=${encodeURIComponent(id)}`;
 }
 
@@ -1819,6 +1824,7 @@ async function loadSelection(first = false) {
     if (state.selection !== selection) return; // user moved on meanwhile
     if (data) {
       selection.data = data;
+      if (data.route) selection.route = data.route;
       if (first && selection.type === 'station') {
         showAddress(stopPath(data.name, data.lat, data.lon), stopTitle(data.name));
         shareable(true);
@@ -2188,8 +2194,11 @@ function renderLine(line, first) {
   );
   panelBody.scrollTop = scrollTop;
 
-  // Once, when the line is chosen: all its vehicles into view, between the cards.
-  if (first && line.vehicles.length) {
+  // Once, when the line is chosen: where it runs into view, between the
+  // cards, as far as it is in the area (#148); without that, its vehicles.
+  const bounds = selection.route?.bounds;
+  if (first && bounds) map.fitBounds([[bounds[1], bounds[0]], [bounds[3], bounds[2]]], { padding: clearOfCards(), maxZoom: LINE_ZOOM });
+  else if (first && line.vehicles.length) {
     const lats = line.vehicles.map((v) => v.lat);
     const lons = line.vehicles.map((v) => v.lon);
     map.fitBounds([[Math.min(...lons), Math.min(...lats)], [Math.max(...lons), Math.max(...lats)]], { padding: clearOfCards(), maxZoom: LINE_ZOOM });

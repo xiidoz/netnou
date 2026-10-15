@@ -425,6 +425,7 @@ The vehicles of one line that are under way.
 | Parameter | Meaning |
 | --- | --- |
 | `name`, `mode`, `agency` | the line, as [`/api/search`](#get-apisearch) lists it; all three are needed |
+| `route` | `1`: with `route`, where the line runs today (below) |
 
 ```json
 {
@@ -453,6 +454,27 @@ The vehicles are sorted by destination and, among those with the same one,
 by how many stops they have left. A line with no vehicle under way answers
 with an empty list; a line that does not exist with 404. Asking keeps the
 server fetching the realtime feed, like `/api/vehicles`.
+
+With `route=1` the answer also says where the line runs: the routes of its
+trips of the day, each stretch between two stops once. The page asks for it
+once, when it opens the line, and draws it under the vehicles.
+
+```json
+"route": {
+  "paths": [[49.48016, 10.98173, 49.47998, 10.98252, …], …],
+  "stations": [49.48029, 10.98143, 49.47765, 10.98859, …],
+  "bounds": [49.3985, 10.95678, 49.4824, 11.14132]
+}
+```
+
+| Field | Type | Meaning |
+| --- | --- | --- |
+| `paths` | array of arrays of numbers | lines `lat, lon, lat, lon, …`: one goes on as long as the stretches of a trip are new, so branches and the ways of some trips are lines of their own |
+| `stations` | array of numbers | the places of the stations the trips call at, `lat, lon, …` |
+| `bounds` | array of numbers or `null` | `[south, west, north, east]` around those of the stations in the area, or around all where none is in it: what to show of the line |
+
+For a line none of whose trips runs today, `paths` and `stations` are empty
+and `bounds` is `null`.
 
 ## `GET /api/trip`
 

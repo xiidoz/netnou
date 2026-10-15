@@ -564,7 +564,9 @@ function handleApi(req, res, url) {
       const found = timetable.lineVehicles(line, all);
       if (!found) return sendJson(req, res, 404, { error: 'line not found' });
       realtime.touch();
-      return sendJson(req, res, 200, { now: at, ...found });
+      // (where it runs, asked for once: when the page opens the line, #148)
+      const route = url.searchParams.get('route') === '1' ? { route: timetable.lineRoute(line, at) } : {};
+      return sendJson(req, res, 200, { now: at, ...found, ...route });
     }
 
     case '/api/trip': {
