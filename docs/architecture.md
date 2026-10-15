@@ -104,6 +104,7 @@ Server (`server/`):
 | `lib/http.js` | the GET the realtime feed is fetched with: patient with a busy server (`get`) |
 | `lib/pb.js` | decodes the GTFS-Realtime message (`decodeFeed`) |
 | `lib/update.js` | what the server calls itself (`describeBuild`) and the daily look-out for a newer release (`UpdateChecker`) |
+| `lib/visits.js` | the visits of the page, reported to the analytics service the operator names: what counts as one (`isVisit`), its facts (`factsOf`), the request the patterns make of them (`reportOf`), and sending it (`Visits`) |
 | `lib/time.js` | service days and the time zone of the feed |
 | `lib/addresses.js` | what the address of a stop or a line names in the timetable, found again by the name and the place of the stop, or the operator, kind and name of the line; what its page says of it (`Addresses`) |
 | `lib/page.js` | which language the page is sent in, and what the server writes into it before it sends it: for search engines and previews of links, the header card as a visitor first sees it, and what the page is to fetch right away; `robots.txt` and the sitemap; which files of the operator's own take the place of built-in icons |

@@ -9,11 +9,12 @@ import { loadConfig, parseBox, parsePlace } from './config.js';
 import { Addresses } from './lib/addresses.js';
 import { FeedUpdater } from './lib/feed.js';
 import { RealtimePoller } from './lib/realtime.js';
-import { LANGUAGE_CODES, languageFor, ownFiles, pictureSize, renderManifest, renderPage, robotsTxt, sitemapFiles } from './lib/page.js';
+import { LANGUAGE_CODES, languageFor, ownFiles, pictureSize, renderManifest, renderPage, robotsTxt, sitemapFiles, titleOf } from './lib/page.js';
 import { setTimeZone } from './lib/time.js';
 import { sharesFor, thinOut, ZOOM_ALL, ZOOM_MIN } from './lib/thinning.js';
 import { LITE_AHEAD_S, MODES, lite } from './lib/timetable.js';
 import { describeBuild, githubReleases, UpdateChecker } from './lib/update.js';
+import { Visits } from './lib/visits.js';
 
 const log = (message) => console.log(`${new Date().toISOString()} ${message}`);
 
@@ -49,6 +50,9 @@ const updates = new UpdateChecker({
   userAgent,
   log,
 });
+
+// Visits of the page, reported to the analytics service the operator names, if any (#114).
+const visits = config.visits ? new Visits(config.visits, { publicUrl: config.publicUrl, userAgent, log }) : null;
 
 const feed = new FeedUpdater({
   url: config.feedUrl,
@@ -219,6 +223,8 @@ function servePage(req, res, url) {
   // the address names no language, the same address has an answer for each:
   // whoever keeps answers is told to keep them apart by the browser's languages.
   const headers = { ETag: page.etag, 'Cache-Control': 'no-cache', ...(asked ? {} : { Vary: 'Accept-Language' }) };
+  // (a visit whether the page is sent or "not modified")
+  visits?.seen(req, res, { pathname: url.pathname, query: url.searchParams, title: (page.title ??= titleOf(page.body.toString())) });
   if (etagMatches(req, page.etag)) {
     res.writeHead(304, { ...headers, Vary: varies(headers) });
     return res.end();
@@ -274,6 +280,8 @@ function serveAddress(req, res, url) {
   const body = pageBody(language, askedLanguage, address);
   const etag = etagOf(body);
   const headers = { ETag: etag, 'Cache-Control': 'no-cache', ...(askedLanguage ? {} : { Vary: 'Accept-Language' }), ...(status === 200 ? {} : NOT_LISTED) };
+  // (the page of a stop, a line, or of one no longer in the timetable is a visit as the page is)
+  visits?.seen(req, res, { pathname: url.pathname, query: url.searchParams, title: titleOf(body.toString()) });
   if (status === 200 && etagMatches(req, etag)) {
     res.writeHead(304, { ...headers, Vary: varies(headers) });
     return res.end();

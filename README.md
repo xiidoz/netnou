@@ -47,6 +47,9 @@ changes as breaking.
   in its details shares it.
 - The visitor's own location on the map, if they ask for it; it stays in
   their browser.
+- Visits can be counted by an analytics service of the operator's choice,
+  which the server tells of each one: no script in the page, no cookie
+  ([Counting visits](docs/configuration.md#counting-visits)).
 - A button hides the controls for more map, another gives the page the whole
   screen. With `?display=fixed` in its address the page is a
   [display for a screen on a wall](docs/deployment.md#a-screen-on-a-wall).
