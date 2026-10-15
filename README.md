@@ -42,6 +42,9 @@ changes as breaking.
   its town as well as by its name, and the search forgives abbreviations,
   missing umlauts and typing slips; a line shows its vehicles under way,
   alone on the map.
+- Every stop and line has an address of its own, to share, keep and find
+  with a search engine, which finds it again in later timetables; a button
+  in its details shares it.
 - The visitor's own location on the map, if they ask for it; it stays in
   their browser.
 - A button hides the controls for more map, another gives the page the whole
@@ -171,6 +174,7 @@ The page uses a small JSON API, which is open to other clients too:
 | `GET /api/trip?id=…` | one trip: stops, delays, path |
 | `GET /api/stations` | stations, optionally within `?bbox=` |
 | `GET /api/departures?station=…` | departure board of a station |
+| `GET /api/address?path=…` | what the address of a stop or a line names |
 | `GET /api/area` | the configured area, map and attribution |
 | `GET /api/status` | state of the import and of the realtime feed |
 

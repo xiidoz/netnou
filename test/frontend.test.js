@@ -17,7 +17,7 @@ const read = (file) => fs.readFileSync(new URL(file, publicDir), 'utf8');
 
 // Keys that are put together while the page runs, by what they start with. The
 // rest of each is checked where it comes from (mode.<id>: see the mode ids below).
-const DYNAMIC_KEYS = ['mode.'];
+const DYNAMIC_KEYS = ['mode.', 'address.kind.'];
 
 // A comment or a string literal. Good enough for the code as it is written
 // here: no regular expression in it contains a quote or two slashes, and no
@@ -46,11 +46,27 @@ function firstScript({ lang = 'en', search = '', stored = {}, browser = [], dark
     if (blocked) throw new Error('blocked');
     return stored[key] ?? null;
   };
-  const context = { document: { documentElement: root }, location: { search }, navigator: { languages: browser }, localStorage: { getItem }, matchMedia: () => ({ matches: dark }), URLSearchParams };
+  const document = { documentElement: root, baseURI: 'https://karte.example.org/live/', head: { appendChild: (node) => node }, createElement: () => ({}), querySelector: () => null };
+  const context = { document, location: { search }, navigator: { languages: browser }, localStorage: { getItem }, matchMedia: () => ({ matches: dark }), URL, URLSearchParams };
   context.window = context;
   vm.runInNewContext(read('first.js'), context);
   return root.dataset;
 }
+
+// The page changes the address in the bar when a stop or a line is opened
+// (#37): its own files and data are found from where the instance is all the
+// same, which first.js makes the base of the page, as a whole address.
+test('first.js keeps where the instance is as the base of the page, also at the address of a stop', () => {
+  for (const sent of [null, { href: '../' }]) {
+    const made = [];
+    const document = { documentElement: { lang: 'de', dataset: { languages: codes.join(' ') } }, baseURI: 'https://karte.example.org/live/', head: { appendChild: (node) => made.push(node) && node }, createElement: () => ({}), querySelector: (selector) => (selector === 'base' ? sent : null) };
+    const context = { document, location: { search: '' }, navigator: { languages: [] }, localStorage: { getItem: () => null }, matchMedia: () => ({ matches: false }), URL, URLSearchParams };
+    context.window = context;
+    vm.runInNewContext(read('first.js'), context);
+    assert.equal((sent ?? made[0]).href, 'https://karte.example.org/live/');
+    assert.equal(made.length, sent ? 0 : 1);
+  }
+});
 
 test('the service worker precaches files that exist', () => {
   assert.ok(shell.length > 0);
@@ -144,6 +160,10 @@ test('every key in use has a text and every text is in use', () => {
     const code = withoutComments(read(name));
     for (const [, key] of code.matchAll(/\bt\(\s*'([^']+)'/g)) used.add(key);
     for (const [, prefix] of code.matchAll(/\bt\(\s*`([^`$]*)\$\{/g)) assert.ok(DYNAMIC_KEYS.includes(prefix), `${name}: keys starting with ${prefix} are not in DYNAMIC_KEYS of this test`);
+  }
+  // (and those the server writes into the page at the address of a stop or a line, #37)
+  for (const name of ['index.js', 'lib/addresses.js']) {
+    for (const [, key] of withoutComments(fs.readFileSync(new URL(`../server/${name}`, import.meta.url), 'utf8')).matchAll(/\bt\(\s*'([^']+)'/g)) used.add(key);
   }
   // In app.js the key of every text can be read off the call.
   for (const [call] of withoutComments(read('app.js')).matchAll(/\bt\([^)]{0,30}/g)) assert.match(call, /^t\(\s*['`]/, `app.js: ${call}… – a key this test cannot read`);
@@ -329,10 +349,10 @@ test('the header card shows at once where the page came as this visitor gets it'
 // which runs it, reads the page's own words after all.
 test('the script takes a title and a description of the operator\'s own for the visitor\'s language', () => {
   const app = withoutComments(read('app.js'));
-  assert.match(app, /document\.title = area\.siteTitle\[language\] \?\? page\.title;/);
+  assert.match(app, /pageTitle = area\.siteTitle\[language\] \?\? page\.title;/);
   assert.match(app, /querySelector\('meta\[name="description"\]'\)\.content = area\.siteDescription\[language\] \?\? page\.description;/);
-  // (and nowhere else does it set either)
-  assert.equal(app.match(/document\.title = /g).length, 1);
+  // (and nowhere else does it set either: the title is that, or the one of the stop or the line whose address the page is at, #37)
+  assert.deepEqual(app.match(/document\.title = [^;]+;/g), ['document.title = title ?? pageTitle;', 'document.title = pageTitle;']);
   assert.equal(app.match(/meta\[name="description"\]/g).length, 1);
 });
 

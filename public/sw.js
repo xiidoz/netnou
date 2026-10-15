@@ -13,6 +13,7 @@ const CACHE = `${CACHE_PREFIX}v3`;
 // exist and that every language of i18n.js is among them.
 const SHELL = [
   './',
+  'address.js',
   'app.js',
   'display.js',
   'i18n.js',
@@ -52,10 +53,23 @@ self.addEventListener('fetch', (event) => {
   const url = new URL(request.url);
   const scope = new URL(self.registration.scope);
   if (request.method !== 'GET' || url.origin !== scope.origin || !url.pathname.startsWith(scope.pathname)) return;
+  const path = url.pathname.slice(scope.pathname.length) || './';
+  // The address of a stop or a line (#37) is the page, with what the server
+  // writes into it. Without a connection it is the page that is kept, with
+  // the base the server would have given it there.
+  if (request.mode === 'navigate' && /^(stop|line)\//.test(path)) {
+    event.respondWith(fetch(request).catch(async () => {
+      const kept = await caches.match(new URL('./', scope).href, { ignoreSearch: true, ignoreVary: true });
+      if (!kept) return Response.error();
+      const base = `<base href="${'../'.repeat(path.split('/').length - 1)}">`;
+      return new Response((await kept.text()).replace('<meta charset="utf-8">', (charset) => `${charset}\n  ${base}`), { headers: { 'Content-Type': 'text/html; charset=utf-8' } });
+    }));
+    return;
+  }
   // Of this origin only the shell is kept. It may serve more than this app's
   // files: its live data (api/) and even the map (NETNOU_MAP_STYLE_URL or NETNOU_TILE_URL of
   // the server), of which there is no end.
-  if (!SHELL.includes(url.pathname.slice(scope.pathname.length) || './')) return;
+  if (!SHELL.includes(path)) return;
 
   event.respondWith(
     fetch(request)

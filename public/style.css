@@ -499,7 +499,8 @@ button:focus-visible, select:focus-visible, .row:focus-visible, .panel:focus-vis
 /* the bar that moves the details where they are a sheet, see the small screens below */
 .handle { display: none; }
 
-.close {
+/* The details of a stop or a line can be shared (#37): beside the close button. */
+.close, .share {
   position: absolute;
   z-index: 2;
   top: 8px;
@@ -514,8 +515,24 @@ button:focus-visible, select:focus-visible, .row:focus-visible, .panel:focus-vis
   background: var(--bg-subtle);
   cursor: pointer;
 }
+.share { right: 46px; }
+/* (what says that the address was copied, where there is nothing to share it with: under the button, for a moment) */
+.copied {
+  position: absolute;
+  z-index: 3;
+  top: 46px;
+  right: 46px;
+  margin: 0;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: var(--text);
+  color: var(--bg);
+  font-size: 12.5px;
+}
 
 .panel-head { padding: 14px 48px 10px 14px; border-bottom: 1px solid var(--border); }
+/* (the heading beside the two buttons; what is below it is clear of them) */
+.panel.shareable .panel-head h2 { padding-right: 38px; }
 .panel-head h2 {
   margin: 0;
   font-size: 16px;
@@ -914,6 +931,10 @@ li:last-child > .row.stop .rail::before { bottom: 50%; }
   }
   /* (so what is at their top has the whole width) */
   .panel .panel-head, .panel .back-row { padding-right: 14px; }
+  /* (the share button alone at the top of the sheet, where the close button is not shown) */
+  .panel .share { top: 14px; right: 12px; }
+  .panel .copied { top: 52px; right: 12px; }
+  .panel.shareable .panel-head h2 { padding-right: 36px; }
   .panel-head .notes { margin-right: 0; }
   /* A sheet has little room: every note is one line there, cut where it does
      not fit. app.js makes a button of what is cut, and keeps all notes to a

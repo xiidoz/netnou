@@ -83,7 +83,7 @@ Server (`server/`):
 
 | File | Responsibility |
 | --- | --- |
-| `index.js` | HTTP server: static files, the API, security headers, start and shutdown |
+| `index.js` | HTTP server: static files, the API, the page at the address of a stop or a line, security headers, start and shutdown |
 | `config.js` | reads and checks the settings (`loadConfig`) |
 | `lib/area.js` | the area as a grid of cells with their distance to it (`Area`, `NEAR`) |
 | `lib/feed.js` | keeps the timetable current: version check, download, worker, retries (`FeedUpdater`) |
@@ -105,6 +105,7 @@ Server (`server/`):
 | `lib/pb.js` | decodes the GTFS-Realtime message (`decodeFeed`) |
 | `lib/update.js` | what the server calls itself (`describeBuild`) and the daily look-out for a newer release (`UpdateChecker`) |
 | `lib/time.js` | service days and the time zone of the feed |
+| `lib/addresses.js` | what the address of a stop or a line names in the timetable, found again by the name and the place of the stop, or the operator, kind and name of the line; what its page says of it (`Addresses`) |
 | `lib/page.js` | which language the page is sent in, and what the server writes into it before it sends it: for search engines and previews of links, the header card as a visitor first sees it, and what the page is to fetch right away; `robots.txt` and the sitemap; which files of the operator's own take the place of built-in icons |
 | `lib/files.js` | downloads, gzipped JSON files (the networks from OpenStreetMap), error texts |
 | `areas/vgn.geojson` | outline of the default area, see [its README](../server/areas/README.md) |
@@ -116,10 +117,11 @@ Page (`public/`):
 | `index.html`, `style.css` | structure and appearance; colours for canvas and DOM live in the style sheet |
 | `app.js` | map, polling, animation, drawing on a canvas, detail panel |
 | `display.js` | display mode in the address of the page: what an address asks for, and the address for what is shown |
+| `address.js` | the addresses of stops and lines, for the page and the server: how a name is written in one, and what an address names (`stopPath`, `linePath`, `parseAddress`) |
 | `search.js` | finding stops and lines by name: matching and order, without the page around it |
 | `search-worker.js` | the thread that loads the list of stops and lines and searches it |
 | `i18n.js`, `locales/` | texts in the visitor's language, see [translating.md](translating.md) |
-| `first.js` | what is settled before the page is drawn: light or dark, by the visitor's choice or else the scheme of the device, and whether the header card shows at once |
+| `first.js` | what is settled before the page is drawn: light or dark, by the visitor's choice or else the scheme of the device, whether the header card shows at once, and where the instance is (the base of the page) |
 | `sw.js`, `manifest.webmanifest`, `icons/` | installable app and offline start |
 | `vendor/maplibre-gl/` | the map library, vendored, see [its README](../public/vendor/maplibre-gl/README.md) |
 | `vendor/material-design-icons/` | the shapes of the icons on the page's own buttons, see [its README](../public/vendor/material-design-icons/README.md) |
@@ -573,6 +575,45 @@ otherwise a server would load a file written by older code:
   vehicles alone, with their names at any zoom and whatever the filters say.
   A trip opened from the list of a line leads back to it. What the details
   are of, their head, stays at the top while what is listed scrolls below it.
+- **Addresses.** A stop and a line each have an address of their own
+  ([#37](https://github.com/xiidoz/netnou/issues/37)), to be passed on,
+  kept and found by a search: `stop/nuernberg-plaerrer@49.4481,11.0648`,
+  `line/verkehrsag-nuernberg/subway/u1` (`address.js`). The ids of a feed
+  change with every timetable, so a stop is named by its name and its place
+  to four decimals, about 10 m, and a line by its operator, its kind and
+  its name. The words of an address are English, the names in it as the
+  timetable has them, in small letters, ä as ae. Name and place tell every
+  stop of the default area apart, and all but 92 of the 245,439 of all of
+  Germany, which stand twice at the same place; operator, kind and name
+  every line.
+- **Found again.** The server takes the stop whose address it is, else the
+  stop of that name nearest the place, up to 1 km away, else a stop of any
+  name within 10 m of it, renamed (`lib/addresses.js`). The first matters
+  where two stops of a name stand either side of where their places round
+  apart: the place in the address of the one may be nearer the other.
+  Measured from January to October 2026, that finds
+  about 96 in 100 stops again after nine months. An address that names a
+  stop otherwise than its own address does now sends the browser on to that
+  (301); one that names nothing is the page saying so, with 404, and with
+  the search for the name in it.
+- **The address in the page.** Opening a stop or a line puts its address
+  into the address bar, back closes it again, and a reload keeps it; a trip
+  has none. The page finds its files and data from where the instance is,
+  which `first.js` makes the base of the page: the server sends the page at
+  an address with a `<base>` as many steps up as the address is deep. A
+  button beside the close button of the details passes the address on: on a
+  phone with the phone's own sheet, on a computer copied, which a note says
+  for two seconds. Installed as an app, the page has no address bar of its
+  own, so the button is the way to share there.
+- **What search engines get.** At an address the server writes the title
+  and the description of what it names into the page ("Abfahrten Nürnberg
+  Plärrer live", with up to six of its lines, the busiest first, and the
+  other kinds that call there), its address as the canonical one, and the
+  details opened with its name. The departures load as on any page: a
+  search engine's copy of them would be wrong within the hour. The sitemap
+  lists every stop and line, 14,228 addresses for the default area in one
+  file, and the 269,995 of all of Germany in six files under an index, as a
+  file may hold 50,000.
 - **Notes in the head.** Some operators write whole pages into one note and
   attach dozens to one trip, and the head does not scroll. So a note that
   does not fit shows its headline, or its first lines where it has none, on

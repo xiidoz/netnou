@@ -127,7 +127,10 @@
        and its head move, see "the details as a sheet" in app.js. -->
   <aside class="card panel" id="panel" hidden tabindex="-1" aria-label="Details" data-i18n-aria-label="panel.label">
     <button type="button" class="handle" id="panel-handle" aria-label="Make the details larger or smaller" data-i18n-aria-label="panel.resize"></button>
+    <!-- the address of a stop or a line, for others (#37) -->
+    <button type="button" class="share" id="panel-share" hidden aria-label="Share" data-i18n-aria-label="panel.share" data-icon="mdiShareVariant"></button>
     <button type="button" class="close" id="panel-close" aria-label="Close" data-i18n-aria-label="panel.close" data-icon="mdiClose"></button>
+    <p class="copied" id="panel-copied" role="status" hidden data-i18n="panel.copied">Address copied</p>
     <div id="panel-head"></div>
     <div id="panel-body"></div>
   </aside>

@@ -8,6 +8,7 @@
 // (see i18n.js). Of what the server sends only data is shown – the names of
 // lines, stops and operators, and the notes of the feed.
 
+import { linePath, parseAddress, stopPath, wordsOf } from './address.js';
 import { APP_NAME, formatNumber, formatTime, languagePicker, loadLanguage, pageTexts, setTimeZone, t, translatePage } from './i18n.js';
 import { displayQuery, readDisplay } from './display.js';
 import { mdiAlert, mdiChevronLeft, mdiChevronRight, mdiEye, mdiEyeOff, mdiFullscreen, mdiFullscreenExit } from './vendor/material-design-icons/icons.js';
@@ -203,6 +204,7 @@ const state = {
   wasLive: false,
   online: false, // last poll delivered vehicles
   areaKnown: false, // api/area has answered: the map shows the area
+  addressOpened: false, // what the address of the page names has been asked for (openAddress)
   outline: [], // the edge of the area: rings of [lat, lon]; none where the instance has no area
   bbox: null, // the rectangle around the area, or around all the instance covers: [south, west, north, east]
   thinned: false, // the last answer left vehicles out: zoomed out, where a screen cannot take them all
@@ -1033,7 +1035,10 @@ map.on('click', (event) => {
   if (FIXED) return;
   hideTooltip();
   const hit = hitTest(event.point);
-  if (hit?.vehicle) select('trip', hit.vehicle.id);
+  if (hit?.vehicle) {
+    showAddress('', null);
+    select('trip', hit.vehicle.id);
+  }
   else if (hit?.station) select('station', hit.station.id);
   else closePanel();
   // (what was tapped is not to end up under its own details)
@@ -1636,6 +1641,8 @@ let panelTimer = null;
 function closePanel() {
   const picked = pickedQuery();
   state.selection = null;
+  shareable(false);
+  showAddress('', null);
   pickedChanged(picked);
   clearTimeout(panelTimer);
   hideSaid();
@@ -1659,6 +1666,121 @@ document.addEventListener('keydown', (event) => {
   }
 });
 
+// ---------- addresses (#37) ----------
+
+// What is open, a stop or a line, has its address in the address bar of the
+// browser, to be passed on, kept and found by a search: back closes it
+// again, a reload keeps it. A trip has none. Addresses are from where the
+// instance is, which first.js has made the base of the page.
+
+/** The address the page is at, from where the instance is: 'stop/…', 'line/…', or '' for the map alone. */
+const here = () => decodeURIComponent(location.pathname).slice(new URL(document.baseURI).pathname.length);
+// The title of the page with nothing open, and the name of the instance (loadArea).
+let pageTitle = document.title;
+let siteName = APP_NAME;
+
+const stopTitle = (name) => `${t('address.stopTitle', { stop: name })} – ${siteName}`;
+
+function lineTitle({ name, mode }) {
+  const line = /^\d/.test(name) ? `${t(`address.kind.${mode}`)} ${name}` : name;
+  const words = t('address.lineTitle', { line, route: '' }).replace(/\s+/g, ' ').trim();
+  return `${words.charAt(0).toUpperCase()}${words.slice(1)} – ${siteName}`;
+}
+
+// (the address the page was sent for: the title the server gave it says more than this script knows, a line's ends, and is kept while the page is there)
+let servedAt = here();
+
+/** Puts the address of what is open into the address bar, as a new step back, and gives the page its title. */
+function showAddress(path, title) {
+  if (path !== servedAt) {
+    document.title = title ?? pageTitle;
+    servedAt = null;
+  }
+  if (path === here()) return;
+  // (the settings of the page in its address stay)
+  history.pushState(null, '', new URL(`${path}${location.search}`, document.baseURI));
+}
+
+/**
+ * Opens what the address of the page names (api/address): the stop, with
+ * the map on it, or the line. Where it names nothing, the page says so and
+ * looks for the name in it with the search. False while the server has no
+ * timetable to look in: asked again with its next answer.
+ */
+async function openAddress() {
+  const path = here();
+  if (!path) return true;
+  const res = await fetch(`api/address?path=${encodeURIComponent(path)}`);
+  if (res.status === 503) return false;
+  if (!res.ok) {
+    addressGone(path);
+    return true;
+  }
+  const found = await res.json();
+  // (a stop that has moved a little, or has another name: the address it has now)
+  if (found.path !== path) history.replaceState(null, '', new URL(`${found.path}${location.search}`, document.baseURI));
+  if (found.type === 'line') {
+    selectLine(found);
+    return true;
+  }
+  // (as from the search: on a narrow screen the details cover the lower half, so the stop goes above the middle)
+  map.easeTo({ center: [found.lon, found.lat], zoom: Math.max(map.getZoom(), SEARCH_ZOOM), offset: [0, narrowScreen.matches ? -0.12 * viewSize.y : 0], duration: 0 });
+  select('station', null, { at: found });
+  return true;
+}
+
+/** Says that the address names nothing now, and looks for the name in it. */
+function addressGone(path) {
+  state.selection = null;
+  shareable(false);
+  panel.hidden = false;
+  panelHead.replaceChildren();
+  panelBody.replaceChildren(el('p', { class: 'panel-empty', text: path.startsWith('line/') ? t('address.lineGone') : t('address.stopGone') }));
+  const named = parseAddress(path);
+  if (!named) return;
+  $('controls').classList.add('searching');
+  searchField.value = wordsOf(named.name);
+  runSearch();
+}
+
+// Back and forward: what the address names now is opened, or what is open closed.
+addEventListener('popstate', () => {
+  if (here()) openAddress();
+  else if (!panel.hidden) closePanel();
+});
+
+// The share button: on a phone, the phone's own sheet shares the address; on
+// a computer it is copied, and a note says so for a moment.
+const shareButton = $('panel-share');
+const copiedNote = $('panel-copied');
+let copiedTimer = null;
+
+/** Shows the share button where what is open has an address, a stop or a line. */
+function shareable(yes) {
+  shareButton.hidden = !yes;
+  if (!yes) copiedNote.hidden = true;
+  panel.classList.toggle('shareable', yes);
+}
+
+shareButton.addEventListener('click', async () => {
+  // (the address alone, without the settings of this page)
+  const url = new URL(here(), document.baseURI).href;
+  if (navigator.share && matchMedia('(pointer: coarse)').matches) {
+    navigator.share({ title: document.title, url }).catch(() => {});
+    return;
+  }
+  try {
+    await navigator.clipboard.writeText(url);
+  } catch {
+    return;
+  }
+  copiedNote.hidden = false;
+  clearTimeout(copiedTimer);
+  copiedTimer = setTimeout(() => {
+    copiedNote.hidden = true;
+  }, 2000);
+});
+
 /**
  * Opens the details of a trip, a station or a line.
  * @param id of a trip or a station; null for a line, and for a station of the search
@@ -1672,6 +1794,9 @@ function select(type, id, more = {}) {
   const picked = pickedQuery();
   state.selection = { type, id, data: null, ...more };
   pickedChanged(picked);
+  // (a line has its address at once, a stop once its name and place are known: loadSelection; a trip has none)
+  if (type === 'line') showAddress(linePath(more.line), lineTitle(more.line));
+  shareable(type === 'line');
   panel.hidden = false;
   panelHead.replaceChildren();
   panelBody.replaceChildren(el('p', { class: 'panel-empty', text: t('panel.loading') }));
@@ -1695,6 +1820,10 @@ async function loadSelection(first = false) {
     if (state.selection !== selection) return; // user moved on meanwhile
     if (data) {
       selection.data = data;
+      if (first && selection.type === 'station') {
+        showAddress(stopPath(data.name, data.lat, data.lon), stopTitle(data.name));
+        shareable(true);
+      }
       showSelection(first);
       draw();
     } else if (first) {
@@ -2295,8 +2424,13 @@ async function loadArea() {
   // now in the visitor's language: the operator's own title and description
   // where they have them for that language, else the page's.
   const page = pageTexts(area.name, undefined, area.siteName);
-  document.title = area.siteTitle[language] ?? page.title;
-  document.querySelector('meta[name="description"]').content = area.siteDescription[language] ?? page.description;
+  pageTitle = area.siteTitle[language] ?? page.title;
+  siteName = area.siteName;
+  // (at the address of a stop or a line, the page keeps the title and the description of what it names)
+  if (!here()) {
+    document.title = pageTitle;
+    document.querySelector('meta[name="description"]').content = area.siteDescription[language] ?? page.description;
+  }
 
   const [south, west, north, east] = area.bbox;
   // Lines are followed beyond the area, so the map reaches well beyond it too
@@ -2382,6 +2516,16 @@ async function poll() {
       state.realtimeAt = data.realtime;
       // (the first answer, or the first one again after the server or the connection was away)
       if (!state.online) startAsking();
+      // (once there is a timetable to look in)
+      if (!state.addressOpened) {
+        state.addressOpened = true;
+        openAddress().then((done) => {
+          if (!done) state.addressOpened = false;
+        }).catch((err) => {
+          console.warn('address not opened:', err);
+          state.addressOpened = false;
+        });
+      }
       if (realtimeState() === 'live') state.wasLive = true;
       state.counts = data.counts;
       state.kinds = data.kinds ?? null;

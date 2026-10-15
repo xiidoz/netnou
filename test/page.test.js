@@ -11,7 +11,7 @@ import { LANGUAGES, pageTexts, pickLanguage } from '../public/i18n.js';
 import de from '../public/locales/de.js';
 import en from '../public/locales/en.js';
 import * as shapes from '../public/vendor/material-design-icons/icons.js';
-import { LANGUAGE_CODES, PAGE_MODULES, languageFor, ownFiles, pictureSize, renderManifest, renderPage, robotsTxt, sitemapXml } from '../server/lib/page.js';
+import { LANGUAGE_CODES, PAGE_MODULES, languageFor, ownFiles, pictureSize, renderManifest, renderPage, robotsTxt, sitemapFiles } from '../server/lib/page.js';
 
 const html = fs.readFileSync(new URL('../public/index.html', import.meta.url), 'utf8');
 const URL_ = 'https://karte.example.org/live/';
@@ -392,7 +392,8 @@ test('robots.txt lets everything be read and names the sitemap where there is on
 });
 
 test('the sitemap lists the page once for the browser\'s language and once for each language', () => {
-  const xml = sitemapXml(URL_);
+  const [xml, ...more] = sitemapFiles(URL_);
+  assert.deepEqual(more, []);
   assert.ok(xml.startsWith('<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:xhtml="http://www.w3.org/1999/xhtml">\n'));
   assert.deepEqual([...xml.matchAll(/<loc>([^<]*)<\/loc>/g)].map(([, loc]) => loc), [URL_, `${URL_}?lang=de`, `${URL_}?lang=en`]);
   // each with all of them as its versions

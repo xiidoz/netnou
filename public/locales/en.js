@@ -134,6 +134,8 @@ export default {
   'panel.loading': 'Loading …',
   'panel.noData': 'There is no data on this right now.',
   'panel.loadFailed': 'The data could not be loaded.',
+  'panel.share': 'Share',
+  'panel.copied': 'Address copied',
 
   'trip.realtime': 'realtime data',
   'trip.scheduleOnly': 'timetable data only',
@@ -165,4 +167,24 @@ export default {
   'departures.title': 'Departures',
   'departures.none': 'No departures in the next two hours.',
   'departures.cancelled': 'cancelled',
+
+  // the page of an address of a stop or a line (#37), for search engines and previews
+  'address.stopTitle': '{stop} departures live',
+  'address.stopDescription': 'Departures at {stop} in real time: {lines}, live on the map.',
+  'address.stopDescriptionNone': 'Departures at {stop} in real time, live on the map.',
+  'address.more': '{lines}, plus {kinds}',
+  'address.lineTitle': '{line} {route} live',
+  'address.lineDescription': '{line} ({agency}) live on the map, every trip with its delay.',
+  'address.stopGone': 'This stop is not in the timetable.',
+  'address.lineGone': 'This line is not in the timetable.',
+  // (the kinds of transport within a sentence)
+  'address.kind.subway': 'U-Bahn',
+  'address.kind.tram': 'tram',
+  'address.kind.bus': 'bus',
+  'address.kind.suburban': 'S-Bahn',
+  'address.kind.regional': 'regional train',
+  'address.kind.longdistance': 'long-distance train',
+  'address.kind.ferry': 'ferry',
+  'address.kind.cable': 'cable car and monorail',
+  'address.kind.other': 'line',
 };

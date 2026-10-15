@@ -101,6 +101,8 @@ export default {
   'panel.loading': 'Lade …',
   'panel.noData': 'Dazu liegen gerade keine Daten vor.',
   'panel.loadFailed': 'Daten konnten nicht geladen werden.',
+  'panel.share': 'Teilen',
+  'panel.copied': 'Adresse kopiert',
 
   'trip.realtime': 'Echtzeitdaten',
   'trip.scheduleOnly': 'nur Fahrplandaten',
@@ -124,4 +126,24 @@ export default {
   'departures.title': 'Abfahrten',
   'departures.none': 'Keine Abfahrten in den nächsten zwei Stunden.',
   'departures.cancelled': 'fällt aus',
+
+  // the page of an address of a stop or a line (#37), for search engines and previews
+  'address.stopTitle': 'Abfahrten {stop} live',
+  'address.stopDescription': 'Abfahrten an der Haltestelle {stop} in Echtzeit: {lines}, live auf der Karte.',
+  'address.stopDescriptionNone': 'Abfahrten an der Haltestelle {stop} in Echtzeit, live auf der Karte.',
+  'address.more': '{lines}, dazu {kinds}',
+  'address.lineTitle': '{line} {route} live',
+  'address.lineDescription': '{line} ({agency}) live auf der Karte, jede Fahrt mit ihrer Verspätung.',
+  'address.stopGone': 'Diese Haltestelle ist nicht im Fahrplan.',
+  'address.lineGone': 'Diese Linie ist nicht im Fahrplan.',
+  // (the kinds of transport within a sentence)
+  'address.kind.subway': 'U-Bahn',
+  'address.kind.tram': 'Tram',
+  'address.kind.bus': 'Bus',
+  'address.kind.suburban': 'S-Bahn',
+  'address.kind.regional': 'Regionalzug',
+  'address.kind.longdistance': 'Fernverkehr',
+  'address.kind.ferry': 'Fähre',
+  'address.kind.cable': 'Seil- und Schwebebahn',
+  'address.kind.other': 'Linie',
 };

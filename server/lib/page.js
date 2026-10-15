@@ -49,6 +49,7 @@ export const PAGE_MODULES = [
   'i18n.js',
   'locales/en.js',
   'display.js',
+  'address.js',
   'vendor/material-design-icons/icons.js',
   'vendor/maplibre-gl/maplibre-gl.mjs',
   'vendor/maplibre-gl/maplibre-gl-shared.mjs',
@@ -178,11 +179,17 @@ const versions = (publicUrl) => [...LANGUAGE_CODES.map((code) => [code, addressI
  * @param kinds the kinds of transport the timetable has (MODES in
  *   lib/timetable.js), which get a chip and no others; null while there is no
  *   timetable: the chips are then those that index.html shows
+ * @param address the address of a stop or a line that the page is sent for
+ *   (#37), null for the page itself: { path, depth } of the address, with
+ *   { title, description, heading, sub } of what it names (lib/addresses.js),
+ *   or { gone } with the text that says it names nothing now, or neither
+ *   while that is not known yet (there is no timetable)
  */
-export function renderPage(html, { language, asked, texts, siteName, areaName, siteTitle = null, siteDescription = null, links = [], preview = null, previewSize = null, publicUrl, listed, styleUrl = null, mapOrigins = [], kinds = null }) {
+export function renderPage(html, { language, asked, texts, siteName, areaName, siteTitle = null, siteDescription = null, links = [], preview = null, previewSize = null, publicUrl, listed, styleUrl = null, mapOrigins = [], kinds = null, address = null }) {
   const worded = pageTexts(areaName, texts, siteName);
-  const title = siteTitle ?? worded.title;
-  const description = siteDescription ?? worded.description;
+  const named = Boolean(address?.title);
+  const title = named ? `${address.title} – ${siteName}` : siteTitle ?? worded.title;
+  const description = named ? address.description : siteDescription ?? worded.description;
   // The texts first: of what follows, some takes the place of one of them.
   // Then the icons, each into the empty element that asks for one.
   let page = translate(html, texts).replace(/(<[a-z]+\s(?:[^<>]*\s)?data-icon="([^"]*)"[^<>]*>)(?=<\/)/g, (_, start, name) => start + iconSvg(name));
@@ -193,9 +200,11 @@ export function renderPage(html, { language, asked, texts, siteName, areaName, s
   };
   // (which languages there are: first.js picks the visitor's among them, and sees whether it is that of the page)
   put(/<html lang="[^"]*">/, () => `<html lang="${language}" data-languages="${LANGUAGE_CODES.join(' ')}">`);
+  // (at an address, the page's own files are as many steps up as the address is deep)
+  if (address) put(/<meta charset="utf-8">\n/, (start) => `${start}  <base href="${'../'.repeat(address.depth)}">\n`);
   put(/<title>[^<]*<\/title>/, () => `<title>${escapeHtml(title)}</title>`);
-  // (a description of the operator's own stands as it is: without the mark by which the script would put the page's in its place)
-  put(/(<meta name="description" content=")[^"]*"( data-i18n-content="page\.description")/, (_, start, mark) => `${start}${escapeHtml(description)}"${siteDescription === null ? mark : ''}`);
+  // (a description of the operator's own, or of what an address names, stands as it is: without the mark by which the script would put the page's in its place)
+  put(/(<meta name="description" content=")[^"]*"( data-i18n-content="page\.description")/, (_, start, mark) => `${start}${escapeHtml(description)}"${siteDescription === null && !named ? mark : ''}`);
   put(/(<meta name="apple-mobile-web-app-title" content=")[^"]*"/, (_, start) => `${start}${escapeHtml(siteName)}"`);
   put(/(<h1>)[^<]*/, (_, start) => `${start}${escapeHtml(siteName)}`);
   put(/(<p id="area-name">)[^<]*/, (_, start) => `${start}${escapeHtml(areaName)}`);
@@ -209,6 +218,13 @@ export function renderPage(html, { language, asked, texts, siteName, areaName, s
   const elsewhere = (href) => (href.startsWith('/') ? '' : ' target="_blank" rel="noopener"');
   const anchors = links.map(({ text, href }) => `<a href="${escapeHtml(href)}"${elsewhere(href)}>${escapeHtml(text)}</a>`).join('');
   put(/(<nav class="links"[^>]*?) hidden><\/nav>/, (whole, start) => (links.length ? `${start}>${anchors}</nav>` : whole));
+  // At an address, its details are open from the start, with what a search
+  // engine is to read of them; the script fills in the rest.
+  if (named || address?.gone) {
+    put(/(<aside class="card panel" id="panel") hidden/, (_, start) => start);
+    if (named) put(/<div id="panel-head"><\/div>/, () => `<div id="panel-head"><div class="panel-head"><h2>${escapeHtml(address.heading)}</h2><p class="sub">${escapeHtml(address.sub)}</p></div></div>`);
+    put(/<div id="panel-body"><\/div>/, () => `<div id="panel-body"><p class="panel-empty">${escapeHtml(named ? address.description : address.gone)}</p></div>`);
+  }
 
   // For previews of a link (Open Graph, which the others read as well).
   const tags = [
@@ -219,17 +235,18 @@ export function renderPage(html, { language, asked, texts, siteName, areaName, s
     // (a picture of the operator's own is a wide one and shown large; the icon is not)
     `<meta name="twitter:card" content="${preview && publicUrl ? 'summary_large_image' : 'summary'}">`,
   ];
-  // (also said with every answer of the server, see NOT_LISTED in index.js)
-  if (!listed) tags.push('<meta name="robots" content="noindex">');
+  // (also said with every answer of the server, see NOT_LISTED in index.js; an address that names nothing, or nothing yet, is not to be listed either)
+  if (!listed || (address && !named)) tags.push('<meta name="robots" content="noindex">');
   if (publicUrl) {
-    const address = escapeHtml(addressIn(publicUrl, asked));
-    if (listed) {
+    const own = publicUrl + (named ? address.path : '');
+    const canonical = escapeHtml(addressIn(own, asked));
+    if (listed && (!address || named)) {
       tags.push(
-        `<link rel="canonical" href="${address}">`,
-        ...versions(publicUrl).map(([code, href]) => `<link rel="alternate" hreflang="${code}" href="${escapeHtml(href)}">`),
+        `<link rel="canonical" href="${canonical}">`,
+        ...versions(own).map(([code, href]) => `<link rel="alternate" hreflang="${code}" href="${escapeHtml(href)}">`),
       );
     }
-    tags.push(`<meta property="og:url" content="${address}">`);
+    tags.push(`<meta property="og:url" content="${canonical}">`);
     if (preview) {
       tags.push(`<meta property="og:image" content="${escapeHtml(publicUrl + preview)}">`);
       // (some chats show a picture large only if they know its size before they have fetched it)
@@ -285,12 +302,30 @@ export function robotsTxt(sitemapAt) {
   return `User-agent: *\nAllow: /\n${sitemapAt ? `\nSitemap: ${sitemapAt}sitemap.xml\n` : ''}`;
 }
 
-/** The addresses of the page, each with the others as its versions in other languages. */
-export function sitemapXml(publicUrl) {
+// A sitemap may list this many addresses at the most (sitemaps.org).
+export const SITEMAP_MAX = 50_000;
+
+/**
+ * The sitemap of an instance: the addresses of the page, each with the
+ * others as its versions in other languages, and those of its stops and
+ * lines (#37). Up to `max` addresses are one file, sitemap.xml. More are
+ * cut into files of that many, sitemap-1.xml on, which sitemap.xml then
+ * lists: those of the default area are one file, the 270,000 of all of
+ * Germany six.
+ * @param paths the addresses of the stops and lines, from where the instance is
+ * @returns the files: sitemap.xml, then sitemap-1.xml on if there are more
+ */
+export function sitemapFiles(publicUrl, paths = [], max = SITEMAP_MAX) {
   const escapeXml = (text) => text.replace(/[&<>"']/g, (char) => `&#${char.charCodeAt(0)};`);
   const all = versions(publicUrl);
   const links = all.map(([code, href]) => `    <xhtml:link rel="alternate" hreflang="${code}" href="${escapeXml(href)}"/>`).join('\n');
   // (the one that follows the browser first: it is the address people pass on)
-  const urls = [all.at(-1), ...all.slice(0, -1)].map(([, href]) => `  <url>\n    <loc>${escapeXml(href)}</loc>\n${links}\n  </url>`).join('\n');
-  return `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:xhtml="http://www.w3.org/1999/xhtml">\n${urls}\n</urlset>\n`;
+  const urls = [all.at(-1), ...all.slice(0, -1)].map(([, href]) => `  <url>\n    <loc>${escapeXml(href)}</loc>\n${links}\n  </url>`);
+  for (const path of paths) urls.push(`  <url><loc>${escapeXml(publicUrl + path)}</loc></url>`);
+  const head = '<?xml version="1.0" encoding="UTF-8"?>\n';
+  const urlset = (listed) => `${head}<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:xhtml="http://www.w3.org/1999/xhtml">\n${listed.join('\n')}\n</urlset>\n`;
+  if (urls.length <= max) return [urlset(urls)];
+  const parts = Array.from({ length: Math.ceil(urls.length / max) }, (_, i) => urlset(urls.slice(i * max, (i + 1) * max)));
+  const files = parts.map((_, i) => `  <sitemap><loc>${escapeXml(`${publicUrl}sitemap-${i + 1}.xml`)}</loc></sitemap>`);
+  return [`${head}<sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${files.join('\n')}\n</sitemapindex>\n`, ...parts];
 }
