@@ -561,13 +561,60 @@ test('the page says what and where the instance is before any script runs', asyn
   assert.equal(robots.body.toString(), `User-agent: *\nAllow: /\n\nSitemap: ${address}sitemap.xml\n`);
   const sitemap = await request('/sitemap.xml');
   assert.deepEqual([sitemap.status, sitemap.headers['content-type']], [200, 'application/xml; charset=utf-8']);
-  assert.deepEqual([...sitemap.body.toString().matchAll(/<loc>([^<]*)<\/loc>/g)].map(([, loc]) => loc), [address, `${address}?lang=de`, `${address}?lang=en`]);
+  assert.deepEqual([...sitemap.body.toString().matchAll(/<loc>([^<]*)<\/loc>/g)].map(([, loc]) => loc), [address, `${address}?lang=de`, `${address}?lang=en`, `${address}stop/alpha@49.4000,11.0000`, `${address}stop/beta@49.5000,11.0000`, `${address}line/testbetrieb/subway/u1`, `${address}line/testbetrieb/longdistance/ice-5`]);
 
   // data may be read by a search engine that runs the page, but is not for its results
   for (const pathname of ['/api/area', '/api/status', '/api/vehicles', '/api/search', '/api/stations', '/api/nothing']) {
     assert.equal((await request(pathname)).headers['x-robots-tag'], 'noindex', pathname);
   }
   for (const pathname of ['/', '/app.js', '/robots.txt']) assert.equal((await request(pathname)).headers['x-robots-tag'], undefined, pathname);
+});
+
+test('the address of a stop or a line is a page of its own, found again by its name and its place (#37)', async () => {
+  const address = 'https://karte.example.org/live/';
+  // the page of a stop: its title and description, its address as its own, its details open, the page's files one step up
+  const alpha = await request('/stop/alpha@49.4000,11.0000');
+  const page = alpha.body.toString();
+  assert.deepEqual([alpha.status, alpha.headers['x-robots-tag']], [200, undefined]);
+  assert.match(page, /<meta charset="utf-8">\n {2}<base href="\.\.\/">\n/);
+  assert.match(page, /<title>Abfahrten Alpha live – Netnou<\/title>/);
+  assert.match(page, /<meta name="description" content="Abfahrten an der Haltestelle Alpha in Echtzeit: U1, live auf der Karte\.">/);
+  assert.ok(page.includes(`<link rel="canonical" href="${address}stop/alpha@49.4000,11.0000">`));
+  assert.ok(page.includes(`<link rel="alternate" hreflang="en" href="${address}stop/alpha@49.4000,11.0000?lang=en">`));
+  assert.match(page, /<aside class="card panel" id="panel" tabindex/);
+  assert.ok(page.includes('<div id="panel-head"><div class="panel-head"><h2>Alpha</h2><p class="sub">Abfahrten</p></div></div>'));
+  assert.equal((await request('/stop/alpha@49.4000,11.0000', { headers: { 'If-None-Match': alpha.headers.etag } })).status, 304);
+  // the stop with two kinds of transport, in English
+  const beta = (await request('/stop/beta@49.5000,11.0000?lang=en')).body.toString();
+  assert.match(beta, /<title>Beta departures live – Netnou<\/title>/);
+  assert.match(beta, /content="Departures at Beta in real time: U1, ICE 5, live on the map\."/);
+
+  // moved a little, in capitals, or under another name at its place: sent on to the address it has, with the settings of the page
+  for (const asked of ['/stop/alpha@49.4010,11.0010', '/stop/ALPHA@49.4000,11.0000', '/stop/gamma@49.4000,11.0000?lang=en']) {
+    const moved = await request(asked);
+    assert.deepEqual([moved.status, moved.headers.location], [301, `../stop/alpha@49.4000,11.0000${asked.includes('?') ? '?lang=en' : ''}`], asked);
+  }
+  // nothing of that name nearby, and no stop at its place: the page says so, and is not to be listed
+  for (const asked of ['/stop/alpha@49.4200,11.0000', '/stop/nirgends@48.0000,10.0000', '/stop/kaputt']) {
+    const gone = await request(asked);
+    assert.deepEqual([gone.status, gone.headers['x-robots-tag']], [404, 'noindex'], asked);
+    assert.ok(gone.body.toString().includes('<div id="panel-body"><p class="panel-empty">Diese Haltestelle ist nicht im Fahrplan.</p></div>'), asked);
+    assert.match(gone.body.toString(), /<meta name="robots" content="noindex">/);
+  }
+
+  // the page of a line: by its operator, its kind and its name, three steps deep
+  const line = (await request('/line/testbetrieb/subway/u1')).body.toString();
+  assert.match(line, /<base href="\.\.\/\.\.\/\.\.\/">/);
+  assert.match(line, /<title>U1 Rundkurs live – Netnou<\/title>/);
+  assert.match(line, /content="U1 \(Testbetrieb\) live auf der Karte, jede Fahrt mit ihrer Verspätung\."/);
+  const otherKind = await request('/line/testbetrieb/bus/u1');
+  assert.equal(otherKind.status, 404);
+  assert.ok(otherKind.body.toString().includes('Diese Linie ist nicht im Fahrplan.'));
+
+  // what an address names, for the page that is at it
+  assert.deepEqual((await get('/api/address?path=stop/alpha@49.4010,11.0010')).json, { type: 'stop', name: 'Alpha', lat: 49.4, lon: 11, path: 'stop/alpha@49.4000,11.0000' });
+  assert.deepEqual((await get('/api/address?path=line/testbetrieb/longdistance/ice-5')).json, { type: 'line', name: 'ICE 5', mode: 'longdistance', agency: 'Testbetrieb', path: 'line/testbetrieb/longdistance/ice-5' });
+  for (const path of ['stop/nirgends@48.0000,10.0000', 'line/anders/subway/u1', 'nothing']) assert.equal((await get(`/api/address?path=${encodeURIComponent(path)}`)).status, 404, path);
 });
 
 test('what is not there, not allowed or not a URL', async () => {

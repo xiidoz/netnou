@@ -270,7 +270,8 @@ into it what the instance is:
   the path if it lives under one (`https://example.org/netnou/`). With it
   the page names its canonical address, its versions in the other languages
   and the picture for previews of links, and the server answers
-  `/sitemap.xml`. Without it all of that is left out, because each needs a
+  `/sitemap.xml`, with the addresses of all the stops and lines of the
+  timetable. Without it all of that is left out, because each needs a
   full address; the texts are there all the same.
 
 The page chooses its language in the browser, and the browser of a search

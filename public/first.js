@@ -26,6 +26,15 @@ window.applyColorScheme = () => {
 };
 window.applyColorScheme();
 
+// Where the instance is, which its own files and data are found from: where
+// the page is, or at the address of a stop or a line (#37) as many steps up
+// as the server has said (<base>). Made a whole address and kept, as the
+// page changes the address in the bar when a stop or a line is opened.
+{
+  const base = document.querySelector('base') ?? document.head.appendChild(document.createElement('base'));
+  base.href = new URL('.', document.baseURI).href;
+}
+
 // The header card. The server sends it as most visitors get it: in the
 // language their browser asks for, every mode of transport switched on, the
 // vehicles coloured by their mode (server/lib/page.js). Where that is what

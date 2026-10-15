@@ -1,6 +1,6 @@
 # HTTP API
 
-The page talks to the server through eight read-only JSON endpoints. They are
+The page talks to the server through nine read-only JSON endpoints. They are
 open to other clients as well.
 
 - [Conventions](#conventions)
@@ -13,6 +13,7 @@ open to other clients as well.
 - [`GET /api/line`](#get-apiline)
 - [`GET /api/trip`](#get-apitrip)
 - [`GET /api/departures`](#get-apidepartures)
+- [`GET /api/address`](#get-apiaddress)
 - [Knots](#knots)
 - [Modes](#modes)
 - [Stability and licence](#stability-and-licence)
@@ -558,6 +559,33 @@ with a `title`, a `text` and a `severity` as for [a trip](#get-apitrip).
 ones with the `severity` `"warning"` or `"severe"`: what is wrong with it
 right now, such as the reason for a delay. For most departures there are
 none.
+
+## `GET /api/address`
+
+What the address of a stop or a line names now. The page asks for it when
+it is opened at such an address ([Addresses](architecture.md#the-page)):
+the ids of a feed change with every timetable, so a stop is named by its
+name and its place, and a line by its operator, its kind and its name.
+
+| Parameter | Meaning |
+| --- | --- |
+| `path` | the address from where the instance is: `stop/<name>@<latitude>,<longitude>` or `line/<operator>/<kind>/<name>` |
+
+```json
+{ "type": "stop", "name": "Nürnberg Plärrer", "lat": 49.44809, "lon": 11.0648, "path": "stop/nuernberg-plaerrer@49.4481,11.0648" }
+```
+
+```json
+{ "type": "line", "name": "U1", "mode": "subway", "agency": "VerkehrsAG Nürnberg", "path": "line/verkehrsag-nuernberg/subway/u1" }
+```
+
+The stop is the one of that name nearest the place, up to 1 km away, else
+one of any name within 10 m of it; `lat` and `lon` are its place as
+`/api/departures` takes it with `at`. `path` is the address of what was
+found as it is now, which may differ from the one asked for. A name in an
+address is written in small letters, with ä as ae and the words joined by
+hyphens; the kind of a line is one of the [modes](#modes). 404
+`{ "error": "not found" }` for an address that names nothing.
 
 ## Knots
 

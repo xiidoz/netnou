@@ -3,10 +3,13 @@ import fs from 'node:fs';
 import http from 'node:http';
 import path from 'node:path';
 import zlib from 'node:zlib';
+import { parseAddress } from '../public/address.js';
+import { t } from '../public/i18n.js';
 import { loadConfig, parseBox, parsePlace } from './config.js';
+import { Addresses } from './lib/addresses.js';
 import { FeedUpdater } from './lib/feed.js';
 import { RealtimePoller } from './lib/realtime.js';
-import { LANGUAGE_CODES, languageFor, ownFiles, pictureSize, renderManifest, renderPage, robotsTxt, sitemapXml } from './lib/page.js';
+import { LANGUAGE_CODES, languageFor, ownFiles, pictureSize, renderManifest, renderPage, robotsTxt, sitemapFiles } from './lib/page.js';
 import { setTimeZone } from './lib/time.js';
 import { sharesFor, thinOut, ZOOM_ALL, ZOOM_MIN } from './lib/thinning.js';
 import { LITE_AHEAD_S, MODES, lite } from './lib/timetable.js';
@@ -183,20 +186,33 @@ if (own.files.size) log(`Own files from ${config.brandDir}: ${[...own.files.keys
 const texts = Object.fromEntries(await Promise.all(LANGUAGE_CODES.map(async (code) => [code, (await import(`../public/locales/${code}.js`)).default])));
 const pages = new Map();
 
+/** The language a page is sent in: the one its address asks for (`asked`), else the browser's, else the main one of the instance. */
+function pageLanguage(req, url) {
+  const asked = LANGUAGE_CODES.includes(url.searchParams.get('lang')) ? url.searchParams.get('lang') : null;
+  // (the header is read for this one answer and kept nowhere)
+  return { asked, language: asked ?? languageFor(req.headers['accept-language'], config.language) };
+}
+
+/** index.html as it is sent (renderPage), in a language: the page itself, or at the address of a stop or a line. */
+function pageBody(language, asked, address = null) {
+  const file = path.join(config.publicDir, 'index.html');
+  return Buffer.from(renderPage(fs.readFileSync(file, 'utf8'), { language, asked, texts: texts[language], siteName: config.siteName, areaName: config.areaName, siteTitle: config.siteTitle[language], siteDescription: config.siteDescription[language], links: config.links, preview: own.preview, previewSize, publicUrl: config.publicUrl, listed: config.searchEngines, styleUrl: config.styleUrl, mapOrigins: config.mapOrigins, kinds: timetable?.kinds ?? null, address }));
+}
+
+const etagOf = (body) => `"${crypto.createHash('sha1').update(body).digest('hex').slice(0, 16)}"`;
+
 function servePage(req, res, url) {
   const file = path.join(config.publicDir, 'index.html');
   const stat = fs.statSync(file);
   // (the page has a chip for each kind of transport the timetable has: another timetable may need another page)
   const stamp = `${stat.size}-${stat.mtimeMs}-${timetable?.kinds.join() ?? ''}`;
-  const asked = LANGUAGE_CODES.includes(url.searchParams.get('lang')) ? url.searchParams.get('lang') : null;
-  // (the header is read for this one answer and kept nowhere)
-  const language = asked ?? languageFor(req.headers['accept-language'], config.language);
+  const { asked, language } = pageLanguage(req, url);
   // (the page of an address with a language names that address as its own: not the same page)
   const key = asked ? `?lang=${asked}` : language;
   let page = pages.get(key);
   if (page?.stamp !== stamp) {
-    const body = Buffer.from(renderPage(fs.readFileSync(file, 'utf8'), { language, asked, texts: texts[language], siteName: config.siteName, areaName: config.areaName, siteTitle: config.siteTitle[language], siteDescription: config.siteDescription[language], links: config.links, preview: own.preview, previewSize, publicUrl: config.publicUrl, listed: config.searchEngines, styleUrl: config.styleUrl, mapOrigins: config.mapOrigins, kinds: timetable?.kinds ?? null }));
-    page = { stamp, body, etag: `"${crypto.createHash('sha1').update(body).digest('hex').slice(0, 16)}"`, packed: null };
+    const body = pageBody(language, asked);
+    page = { stamp, body, etag: etagOf(body), packed: null };
     pages.set(key, page);
   }
   // Always revalidate, as the files are: a deploy shows up immediately. Where
@@ -208,6 +224,74 @@ function servePage(req, res, url) {
     return res.end();
   }
   return send(req, res, 200, MIME['.html'], page.body, headers, (page.packed ??= keep(page.body)));
+}
+
+// What the addresses of stops and lines name (#37), in the timetable of the
+// moment: looked up again in each new one.
+let addresses = null;
+const addressesNow = () => (addresses?.timetable === timetable ? addresses : (addresses = new Addresses(timetable)));
+
+/**
+ * What an address of a stop or a line names in the timetable
+ * (lib/addresses.js), or null: { type, found, path }, with the number of the
+ * station or line and its address now.
+ */
+function addressed(asked) {
+  const named = parseAddress(asked.toLowerCase());
+  if (!named || !timetable) return null;
+  const found = named.type === 'stop' ? addressesNow().station(named) : addressesNow().line(named);
+  if (found < 0) return null;
+  return { type: named.type, found, path: named.type === 'stop' ? addressesNow().stationPath(found) : addressesNow().linePath(found) };
+}
+
+/**
+ * The page at the address of a stop or a line (#37), with what it names
+ * written into it for search engines and previews. An address that names
+ * it otherwise than its own does now (the stop has moved a little, or has
+ * another name) sends the browser on to that one; one that names nothing is
+ * the page saying so, with 404. Without a timetable that cannot be told
+ * yet: the page is sent as it is, and asks again when there is one.
+ */
+function serveAddress(req, res, url) {
+  const asked = decodeURIComponent(url.pathname.slice(1));
+  // (the page's own files are as many steps up as the address is deep)
+  const address = { path: asked, depth: asked.split('/').length - 1 };
+  const { asked: askedLanguage, language } = pageLanguage(req, url);
+  const words = texts[language];
+  let status = 200;
+  if (timetable) {
+    const named = addressed(asked);
+    if (!named) {
+      address.gone = t(asked.startsWith('line/') ? 'address.lineGone' : 'address.stopGone', {}, words);
+      status = 404;
+    } else if (named.path !== asked) {
+      res.writeHead(301, { ...SECURITY_HEADERS, Location: `${'../'.repeat(address.depth)}${named.path}${url.search}`, 'Cache-Control': 'no-cache' });
+      return res.end();
+    } else {
+      Object.assign(address, named.type === 'stop' ? addressesNow().stationWords(named.found, language, words) : addressesNow().lineWords(named.found, language, words));
+    }
+  }
+  const body = pageBody(language, askedLanguage, address);
+  const etag = etagOf(body);
+  const headers = { ETag: etag, 'Cache-Control': 'no-cache', ...(askedLanguage ? {} : { Vary: 'Accept-Language' }), ...(status === 200 ? {} : NOT_LISTED) };
+  if (status === 200 && etagMatches(req, etag)) {
+    res.writeHead(304, { ...headers, Vary: varies(headers) });
+    return res.end();
+  }
+  return send(req, res, status, MIME['.html'], body, headers);
+}
+
+// The sitemap with the addresses of the stops and lines of the timetable
+// (lib/page.js): all its files put together at once for each timetable, and
+// kept as they are sent, without the addresses (which would take 65 MB in
+// all of Germany, the files take 25 MB).
+let sitemaps = { of: undefined, files: [] };
+
+function serveSitemap(req, res, part) {
+  if (sitemaps.of !== timetable) sitemaps = { of: timetable, files: sitemapFiles(sitemapAt, timetable ? addressesNow().paths() : []).map((xml) => keep(Buffer.from(xml))) };
+  const kept = sitemaps.files[part];
+  if (!kept) return send(req, res, 404, MIME['.txt'], Buffer.from('not found\n'), { 'Cache-Control': 'no-cache' });
+  return send(req, res, 200, MIME['.xml'], kept.body, { 'Cache-Control': 'no-cache' }, kept);
 }
 
 // The manifest of the installed app says what the instance is called, in its
@@ -493,6 +577,18 @@ function handleApi(req, res, url) {
       return sendJson(req, res, 200, { now, ...trip });
     }
 
+    case '/api/address': {
+      // What the address of a stop or a line names now (#37), for the page at it.
+      const named = addressed(url.searchParams.get('path') ?? '');
+      if (!named) return sendJson(req, res, 404, { error: 'not found' });
+      if (named.type === 'stop') {
+        const { name, lat, lon } = timetable.stations[named.found];
+        return sendJson(req, res, 200, { type: 'stop', name, lat, lon, path: named.path });
+      }
+      const { name, mode, agency } = timetable.lines[named.found];
+      return sendJson(req, res, 200, { type: 'line', name, mode, agency, path: named.path });
+    }
+
     case '/api/departures': {
       // A station is named by its id, or by its place as /api/search lists it.
       const at = parsePlace(url.searchParams.get('at'));
@@ -519,7 +615,9 @@ const server = http.createServer((req, res) => {
     if (url.pathname === '/' || url.pathname === '/index.html') return servePage(req, res, url);
     if (url.pathname === '/manifest.webmanifest') return serveManifest(req, res);
     if (url.pathname === '/robots.txt') return send(req, res, 200, MIME['.txt'], Buffer.from(robotsTxt(sitemapAt)), { 'Cache-Control': 'no-cache' });
-    if (url.pathname === '/sitemap.xml' && sitemapAt) return send(req, res, 200, MIME['.xml'], Buffer.from(sitemapXml(sitemapAt)), { 'Cache-Control': 'no-cache' });
+    const sitemap = /^\/sitemap(?:-(\d{1,4}))?\.xml$/.exec(url.pathname);
+    if (sitemap && sitemapAt) return serveSitemap(req, res, Number(sitemap[1] ?? 0));
+    if (url.pathname.startsWith('/stop/') || url.pathname.startsWith('/line/')) return serveAddress(req, res, url);
     return serveStatic(req, res, decodeURIComponent(url.pathname));
   } catch (err) {
     // A URL that cannot be decoded is the client's mistake and not worth a log
