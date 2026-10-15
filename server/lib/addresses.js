@@ -2,7 +2,8 @@
 // public/address.js) as the timetable has them now. What an address names
 // is found again in a later timetable by what stays the same in it, which
 // the ids of the feed do not: a stop by its name and its place, a line by
-// its operator, its kind and its name.
+// its operator, its kind and its name, and by its place where lines of that
+// name are in places apart.
 
 import { linePath, slug, stopPath } from '../../public/address.js';
 import { t } from '../../public/i18n.js';
@@ -44,22 +45,40 @@ export class Addresses {
   /** @param timetable a Timetable: its stations, lines and trips */
   constructor(timetable) {
     this.timetable = timetable;
-    const { stations } = timetable;
-    // The stations in the order of the names in their addresses (named), and
-    // in that of their cells (placed, with the cells of them in that order):
-    // lists of numbers, 4 MB for the quarter of a million of all of Germany,
-    // where maps of their names and cells would take more than 100.
+    // The lines of each address without a place, the busiest first (as in the
+    // list of the search: a line without a stop in the area is not there).
+    // Those of a name in places apart (#152), or of names an address writes
+    // alike, have the middle of their stations in theirs, to two decimals
+    // (about 1 km), or to four where two would be the same.
+    this.lines = new Map();
+    timetable.lines.forEach((line, i) => {
+      if (line.stops > 0) this.lines.set(linePath(line), [...(this.lines.get(linePath(line)) ?? []), i]);
+    });
+    this.places = new Map(); // line number → the place in its address
+    for (const numbers of this.lines.values()) {
+      numbers.sort((a, b) => timetable.lines[b].trips - timetable.lines[a].trips || a - b);
+      if (numbers.length < 2) continue;
+      const written = (digits) => numbers.map((i) => timetable.lines[i].place.map((value) => value.toFixed(digits)).join(','));
+      const places = new Set(written(2)).size === numbers.length ? written(2) : written(4);
+      numbers.forEach((i, k) => this.places.set(i, places[k]));
+    }
+  }
+
+  /**
+   * The stations in the order of the names in their addresses (named), and
+   * in that of their cells (placed, with the cells of them in that order):
+   * lists of numbers, 4 MB for the quarter of a million of all of Germany,
+   * where maps of their names and cells would take more than 100. Made when
+   * a stop is first looked for: the lines need none of it.
+   */
+  indexStations() {
+    if (this.named) return;
+    const { stations } = this.timetable;
     const names = stations.map((station) => slug(station.name));
     this.named = Int32Array.from(names.keys()).sort((a, b) => (names[a] < names[b] ? -1 : names[a] > names[b] ? 1 : a - b));
     const cells = stations.map((station) => cellOf(station.lat, station.lon));
     this.placed = Int32Array.from(cells.keys()).sort((a, b) => cells[a] - cells[b] || a - b);
     this.cells = Float64Array.from(this.placed, (i) => cells[i]);
-    // (as in the list of the search: a line without a stop in the area is not there; of two with the same address the first)
-    this.lines = new Map();
-    timetable.lines.forEach((line, i) => {
-      const path = linePath(line);
-      if (line.stops > 0 && !this.lines.has(path)) this.lines.set(path, i);
-    });
   }
 
   /**
@@ -72,6 +91,7 @@ export class Addresses {
    * @param asked a stop as parseAddress (public/address.js) has it
    */
   station({ name, lat, lon }) {
+    this.indexStations();
     const { stations } = this.timetable;
     const nameOf = (i) => slug(stations[i].name);
     const path = stopPath(name, lat, lon);
@@ -98,9 +118,23 @@ export class Addresses {
     return found;
   }
 
-  /** The line that an address names, as its number in timetable.lines, or -1. */
-  line({ agency, mode, name }) {
-    return this.lines.get(`line/${agency}/${mode}/${name}`) ?? -1;
+  /**
+   * The line that an address names, as its number in timetable.lines, or -1:
+   * of those of its name in places apart, the one whose address it is, else
+   * the one nearest its place; without a place in it, the busiest.
+   * @param asked a line as parseAddress (public/address.js) has it
+   */
+  line({ agency, mode, name, lat, lon }) {
+    const numbers = this.lines.get(`line/${agency}/${mode}/${name}`);
+    if (!numbers) return -1;
+    if (lat === undefined || numbers.length === 1) return numbers[0];
+    const own = numbers.find((i) => {
+      const place = this.places.get(i);
+      const digits = place.split(',')[0].split('.')[1].length;
+      return place === `${lat.toFixed(digits)},${lon.toFixed(digits)}`;
+    });
+    const away = (i) => metres(lat, lon, ...this.timetable.lines[i].place);
+    return own ?? numbers.reduce((best, i) => (away(i) < away(best) ? i : best));
   }
 
   /** The address of station number i. */
@@ -111,13 +145,13 @@ export class Addresses {
 
   /** The address of line number i. */
   linePath(i) {
-    return linePath(this.timetable.lines[i]);
+    return linePath(this.timetable.lines[i], this.places.get(i));
   }
 
   /** The addresses of all stations that trips call at and of all lines, for the sitemap. */
   paths() {
     const { stations, stationService } = this.timetable;
-    return [...stations.flatMap((_, i) => (stationService[i] > 0 ? [this.stationPath(i)] : [])), ...this.lines.keys()];
+    return [...stations.flatMap((_, i) => (stationService[i] > 0 ? [this.stationPath(i)] : [])), ...[...this.lines.values()].flat().map((i) => this.linePath(i))];
   }
 
   /** The lines that call at station number i, the busiest first: [{ name, mode, agency, trips }]. */
@@ -128,7 +162,7 @@ export class Addresses {
     for (let visit = tt.visitStart[station]; visit < tt.visitStart[station + 1]; visit++) {
       const pattern = tt.visitPattern[visit];
       for (let k = tt.patternFirst[pattern]; k < tt.patternFirst[pattern + 1]; k++) {
-        const line = tt.lineOf[tt.tripRoute[tt.tripsOfPattern[k]]];
+        const line = tt.tripLine[tt.tripsOfPattern[k]];
         trips.set(line, (trips.get(line) ?? 0) + 1);
       }
     }

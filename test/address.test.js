@@ -25,18 +25,21 @@ test('the address of a stop has its place to four decimals, that of a line its o
   assert.equal(linePath({ agency: 'DB Fernverkehr AG', mode: 'longdistance', name: 'ICE 41' }), 'line/db-fernverkehr-ag/longdistance/ice-41');
   // (a kind the address does not know is "other")
   assert.equal(linePath({ agency: 'X', mode: 'airship', name: '1' }), 'line/x/other/1');
+  // where lines of the name are in places apart, with the place of the line (#152)
+  assert.equal(linePath({ agency: 'DB Regio AG Bayern', mode: 'suburban', name: 'S1' }, '49.56,11.14'), 'line/db-regio-ag-bayern/suburban/s1@49.56,11.14');
 });
 
 test('what an address names, and what is not an address', () => {
   assert.deepEqual(parseAddress('stop/nuernberg-plaerrer@49.4481,11.0648'), { type: 'stop', name: 'nuernberg-plaerrer', lat: 49.4481, lon: 11.0648 });
   assert.deepEqual(parseAddress('stop/rio@-22.9,-43.21'), { type: 'stop', name: 'rio', lat: -22.9, lon: -43.21 });
   assert.deepEqual(parseAddress('line/verkehrsag-nuernberg/subway/u1'), { type: 'line', agency: 'verkehrsag-nuernberg', mode: 'subway', name: 'u1' });
+  assert.deepEqual(parseAddress('line/db-regio-ag-bayern/suburban/s1@49.56,11.14'), { type: 'line', agency: 'db-regio-ag-bayern', mode: 'suburban', name: 's1', lat: 49.56, lon: 11.14 });
   // read back as written
   for (const path of [stopPath('Fürth Hbf', 49.4697, 10.9897), linePath({ agency: 'OVF', mode: 'bus', name: '113' })]) {
     const named = parseAddress(path);
     assert.equal(named.type === 'stop' ? stopPath(named.name, named.lat, named.lon) : linePath(named), path);
   }
-  for (const path of ['', 'stop/', 'stop/plaerrer', 'stop/plaerrer@49.4,', 'stop/plaerrer@91.0,11.0', 'stop/Plaerrer@49.4,11.0', 'stop/a@49.4,11.0/more', 'line/vag/u1', 'line/vag/airship/u1', 'line/vag/subway/', 'trip/1', 'api/area']) {
+  for (const path of ['', 'stop/', 'stop/plaerrer', 'stop/plaerrer@49.4,', 'stop/plaerrer@91.0,11.0', 'stop/Plaerrer@49.4,11.0', 'stop/a@49.4,11.0/more', 'line/vag/u1', 'line/vag/airship/u1', 'line/vag/subway/', 'line/vag/subway/u1@49.4', 'line/vag/subway/u1@91,11', 'trip/1', 'api/area']) {
     assert.equal(parseAddress(path), null, path);
   }
   // its name, as the search takes it
@@ -53,8 +56,7 @@ test('an address finds the stop of its name nearest its place, else one of any n
     { name: 'Zwickau', lat: 50.7, lon: 12.5 },
     { name: 'Nullpunkt', lat: -0.00001, lon: -0.00001 },
   ];
-  const lines = [{ name: 'U1', mode: 'subway', agency: 'VAG', stops: 3 }, { name: 'U1', mode: 'subway', agency: 'VAG', stops: 2 }, { name: '7', mode: 'bus', agency: 'VAG', stops: 0 }];
-  const addresses = new Addresses({ stations, lines, stationService: [1, 1, 1, 1, 1, 1, 0] });
+  const addresses = new Addresses({ stations, lines: [], stationService: [1, 1, 1, 1, 1, 1, 0] });
   // of three of a name the nearest, up to 1 km away
   assert.equal(addresses.station({ name: 'ried', lat: 48.104, lon: 11.5 }), 2);
   assert.equal(addresses.station({ name: 'ried', lat: 48.2001, lon: 11.6 }), 1);
@@ -71,13 +73,45 @@ test('an address finds the stop of its name nearest its place, else one of any n
   assert.equal(addresses.station({ name: 'kapstadt', lat: -33.90005, lon: 18.40005 }), 3);
   assert.equal(addresses.station({ name: 'kapstadt', lat: -33.9002, lon: 18.4 }), -1);
   assert.equal(addresses.station({ name: 'irgendwo', lat: 0.00002, lon: 0.00002 }), 6);
-  // a line by its address, the first of two with the same; one without a stop in the area has none
-  assert.equal(addresses.line({ agency: 'vag', mode: 'subway', name: 'u1' }), 0);
-  assert.equal(addresses.line({ agency: 'vag', mode: 'bus', name: '7' }), -1);
   // all with their addresses, but for the stop no trip calls at
   assert.deepEqual(addresses.paths(), [
     'stop/ried@48.1000,11.5000', 'stop/ried@48.2000,11.6000', 'stop/ried@48.1050,11.5000', 'stop/hausen@-33.9000,18.4000',
-    'stop/aachen-bushof@50.7770,6.0870', 'stop/zwickau@50.7000,12.5000', 'line/vag/subway/u1',
+    'stop/aachen-bushof@50.7770,6.0870', 'stop/zwickau@50.7000,12.5000',
+  ]);
+});
+
+test('lines of a name in places apart have the middle of their stations in their addresses (#152)', () => {
+  const lines = [
+    { name: 'S1', mode: 'suburban', agency: 'DB Regio AG Bayern', stops: 37, trips: 264, place: [49.56472, 11.13972] },
+    { name: 'S1', mode: 'suburban', agency: 'DB Regio AG Bayern', stops: 24, trips: 1051, place: [48.21483, 11.59682] },
+    { name: 'U1', mode: 'subway', agency: 'VAG', stops: 27, trips: 900, place: [49.44, 11.06] },
+    // (two whose places are alike to two decimals: to four)
+    { name: 'SEV', mode: 'bus', agency: 'VAG', stops: 4, trips: 50, place: [49.45201, 11.07702] },
+    { name: 'SEV', mode: 'bus', agency: 'VAG', stops: 3, trips: 40, place: [49.45449, 11.07998] },
+    // (without a stop in the area: as in the search, not there)
+    { name: 'S1', mode: 'suburban', agency: 'DB Regio AG Bayern', stops: 0, trips: 5, place: [50, 10] },
+    { name: '7', mode: 'bus', agency: 'VAG', stops: 0, trips: 5, place: [49.4, 11] },
+  ];
+  const addresses = new Addresses({ stations: [], lines, stationService: [] });
+  assert.deepEqual([0, 1, 2, 3, 4].map((i) => addresses.linePath(i)), [
+    'line/db-regio-ag-bayern/suburban/s1@49.56,11.14',
+    'line/db-regio-ag-bayern/suburban/s1@48.21,11.60',
+    'line/vag/subway/u1',
+    'line/vag/bus/sev@49.4520,11.0770',
+    'line/vag/bus/sev@49.4545,11.0800',
+  ]);
+  // each address names its own line
+  for (const i of [0, 1, 2, 3, 4]) assert.equal(addresses.line(parseAddress(addresses.linePath(i))), i);
+  // without a place the busiest of the name, Munich's S1, whose address it then is sent on to; with one the nearest
+  assert.equal(addresses.line(parseAddress('line/db-regio-ag-bayern/suburban/s1')), 1);
+  assert.equal(addresses.line(parseAddress('line/db-regio-ag-bayern/suburban/s1@49.45,11.08')), 0);
+  // a place of a line alone of its name changes nothing; a line not in the area has no address
+  assert.equal(addresses.line(parseAddress('line/vag/subway/u1@48.1,11.5')), 2);
+  assert.equal(addresses.line(parseAddress('line/vag/bus/7')), -1);
+  // the sitemap lists each, the busiest of a name first
+  assert.deepEqual(addresses.paths(), [
+    'line/db-regio-ag-bayern/suburban/s1@48.21,11.60', 'line/db-regio-ag-bayern/suburban/s1@49.56,11.14', 'line/vag/subway/u1',
+    'line/vag/bus/sev@49.4520,11.0770', 'line/vag/bus/sev@49.4545,11.0800',
   ]);
 });
 

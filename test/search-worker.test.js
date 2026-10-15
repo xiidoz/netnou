@@ -67,7 +67,7 @@ test('the first question fetches the list, and every question is answered from i
 
   // a line by the name the visitor reads its mode called; as many as are asked for
   ask(2, 'u-bahn 1');
-  assert.deepEqual(await answered(), { turn: 2, lines: [{ name: 'U1', mode: 'subway', agency: 'VerkehrsAG Nürnberg', to: ['Fürth Hardhöhe', 'Langwasser Süd'] }], stops: [] });
+  assert.deepEqual(await answered(), { turn: 2, lines: [{ name: 'U1', mode: 'subway', agency: 'VerkehrsAG Nürnberg', to: ['Fürth Hardhöhe', 'Langwasser Süd'], at: [49.44428, 11.05986] }], stops: [] });
   ask(3, 'nürnberg', { limits: { lines: 3, stops: 1 } });
   assert.deepEqual((await answered()).stops.map((stop) => stop.name), ['Nürnberg Hbf']);
   // the nearer one first, for whoever has their position shown

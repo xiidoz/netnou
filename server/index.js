@@ -504,7 +504,7 @@ function handleApi(req, res, url) {
       const counted = MODES.map((mode) => !only || only.includes(mode));
       const wanted = new Set(MODES.filter((mode, k) => counted[k]));
       const thin = /^\d+(\.\d+)?$/.test(zoom) ? thinned(Number(zoom), counted) : null;
-      const line = url.searchParams.has('line') ? timetable.lineNumber({ name: url.searchParams.get('line'), mode: url.searchParams.get('mode') ?? '', agency: url.searchParams.get('agency') ?? '' }) : undefined;
+      const line = url.searchParams.has('line') ? timetable.lineNumber({ name: url.searchParams.get('line'), mode: url.searchParams.get('mode') ?? '', agency: url.searchParams.get('agency') ?? '' }, parsePlace(url.searchParams.get('at'))) : undefined;
       const picked = /^(.+)_(\d{8})$/.exec(url.searchParams.get('vehicle') ?? '');
       const pickedTrip = picked ? timetable.tripIndex.get(picked[1]) : undefined;
       const list = [];
@@ -559,14 +559,15 @@ function handleApi(req, res, url) {
     // The vehicles of one line that are under way. A line is named as
     // /api/search lists it: by name, mode and agency together.
     case '/api/line': {
+      // (of the lines of a name in places apart, the one at the place asked for, #152)
       const line = { name: url.searchParams.get('name') ?? '', mode: url.searchParams.get('mode') ?? '', agency: url.searchParams.get('agency') ?? '' };
+      const index = timetable.lineNumber(line, parsePlace(url.searchParams.get('at')));
+      if (index === undefined) return sendJson(req, res, 404, { error: 'line not found' });
       const { now: at, all } = vehicles();
-      const found = timetable.lineVehicles(line, all);
-      if (!found) return sendJson(req, res, 404, { error: 'line not found' });
       realtime.touch();
       // (where it runs, asked for once: when the page opens the line, #148)
-      const route = url.searchParams.get('route') === '1' ? { route: timetable.lineRoute(line, at) } : {};
-      return sendJson(req, res, 200, { now: at, ...found, ...route });
+      const route = url.searchParams.get('route') === '1' ? { route: timetable.lineRoute(index, at) } : {};
+      return sendJson(req, res, 200, { now: at, ...timetable.lineVehicles(index, all), path: addressesNow().linePath(index), ...route });
     }
 
     case '/api/trip': {
@@ -587,8 +588,8 @@ function handleApi(req, res, url) {
         const { name, lat, lon } = timetable.stations[named.found];
         return sendJson(req, res, 200, { type: 'stop', name, lat, lon, path: named.path });
       }
-      const { name, mode, agency } = timetable.lines[named.found];
-      return sendJson(req, res, 200, { type: 'line', name, mode, agency, path: named.path });
+      const { name, mode, agency, place } = timetable.lines[named.found];
+      return sendJson(req, res, 200, { type: 'line', name, mode, agency, at: place, path: named.path });
     }
 
     case '/api/departures': {

@@ -8,7 +8,7 @@
 // (see i18n.js). Of what the server sends only data is shown – the names of
 // lines, stops and operators, and the notes of the feed.
 
-import { linePath, parseAddress, stopPath, wordsOf } from './address.js';
+import { parseAddress, stopPath, wordsOf } from './address.js';
 import { APP_NAME, formatNumber, formatTime, languagePicker, loadLanguage, pageTexts, setTimeZone, t, translatePage } from './i18n.js';
 import { displayQuery, readDisplay } from './display.js';
 import { mdiAlert, mdiChevronRight, mdiEye, mdiEyeOff, mdiFullscreen, mdiFullscreenExit } from './vendor/material-design-icons/icons.js';
@@ -392,7 +392,7 @@ function modesQuery() {
 function pickedQuery() {
   const selection = state.selection;
   if (selection?.type === 'trip') return `&vehicle=${encodeURIComponent(selection.id)}`;
-  if (selection?.type === 'line') return `&${new URLSearchParams({ line: selection.line.name, mode: selection.line.mode, agency: selection.line.agency })}`;
+  if (selection?.type === 'line') return `&${new URLSearchParams({ line: selection.line.name, mode: selection.line.mode, agency: selection.line.agency, ...(selection.line.at ? { at: selection.line.at.join(',') } : {}) })}`;
   return '';
 }
 
@@ -1798,9 +1798,8 @@ function select(type, id, more = {}) {
   const picked = pickedQuery();
   state.selection = { type, id, data: null, ...more };
   pickedChanged(picked);
-  // (a line has its address at once, a stop once its name and place are known: loadSelection; a trip has none)
-  if (type === 'line') showAddress(linePath(more.line), lineTitle(more.line));
-  shareable(type === 'line');
+  // (a stop and a line have their addresses once the server has said what they are: loadSelection; a trip has none)
+  shareable(false);
   panel.hidden = false;
   panelHead.replaceChildren();
   panelBody.replaceChildren(el('p', { class: 'panel-empty', text: t('panel.loading') }));
@@ -1809,8 +1808,9 @@ function select(type, id, more = {}) {
 
 function selectionUrl({ type, id, line, at, route }) {
   if (type === 'trip') return `api/trip?id=${encodeURIComponent(id)}`;
-  // (a line is its name, its mode and its operator together; where it runs is asked for until it is known, #148)
-  if (type === 'line') return `api/line?${new URLSearchParams({ name: line.name, mode: line.mode, agency: line.agency, ...(route ? {} : { route: '1' }) })}`;
+  // (a line is its name, its mode and its operator together, and its place where lines of the name are in places
+  // apart, #152; where it runs is asked for until it is known, #148)
+  if (type === 'line') return `api/line?${new URLSearchParams({ name: line.name, mode: line.mode, agency: line.agency, ...(line.at ? { at: line.at.join(',') } : {}), ...(route ? {} : { route: '1' }) })}`;
   return at ? `api/departures?at=${at.lat.toFixed(5)},${at.lon.toFixed(5)}` : `api/departures?station=${encodeURIComponent(id)}`;
 }
 
@@ -1827,6 +1827,12 @@ async function loadSelection(first = false) {
       if (data.route) selection.route = data.route;
       if (first && selection.type === 'station') {
         showAddress(stopPath(data.name, data.lat, data.lon), stopTitle(data.name));
+        shareable(true);
+      }
+      if (first && selection.type === 'line') {
+        // (from now on asked for by the place the server has for it)
+        selection.line = { ...selection.line, at: data.at };
+        showAddress(data.path, lineTitle(data));
         shareable(true);
       }
       showSelection(first);
@@ -2125,7 +2131,7 @@ function renderTrip(trip, scrollToNext) {
   const source = trip.realtime && trip.source ? [t('trip.source', { source: trip.source })] : [];
   // The badge leads to the line, whichever way the trip was chosen (#147),
   // with a sign in it: a finger cannot rest on it to find out.
-  const line = { name: trip.line, mode: trip.mode, agency: trip.agency };
+  const line = { name: trip.line, mode: trip.mode, agency: trip.agency, at: trip.lineAt };
   const toLine = el('button', { type: 'button', class: 'to-line', 'aria-label': t('line.open', { line: trip.line }), title: t('line.open', { line: trip.line }), onclick: () => selectLine(line) }, [
     badge(trip.line, trip.mode, icon(mdiChevronRight)),
   ]);
@@ -2145,7 +2151,7 @@ function renderTrip(trip, scrollToNext) {
 
 /** Opens the view of a line: its vehicles under way in the panel and, alone, on the map. */
 function selectLine(line) {
-  select('line', JSON.stringify([line.name, line.mode, line.agency]), { line });
+  select('line', JSON.stringify([line.name, line.mode, line.agency, line.at ?? null]), { line });
 }
 
 /** What of each edge of the map is to stay free, so that the cards do not cover what is shown in between. */
