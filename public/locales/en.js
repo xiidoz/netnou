@@ -158,8 +158,8 @@ export default {
   'line.none': 'No vehicle of this line is under way right now.',
   'line.to': 'to {destination}',
   'line.next': 'next: {stop}',
-  // on the button that leads from a trip back to the line it was chosen from
-  'line.back': 'Back to line {line}',
+  // the name of the badge at the top of a trip, which leads to its line
+  'line.open': 'To line {line}',
 
   'stop.platform': 'Plat. {platform}',
   'stop.skipped': 'skipped',

@@ -577,8 +577,9 @@ otherwise a server would load a file written by older code:
   its departures, a line chosen in the search its vehicles under way; all
   refresh every 15 seconds. While a line is shown, the map draws its
   vehicles alone, with their names at any zoom and whatever the filters say.
-  A trip opened from the list of a line leads back to it. What the details
-  are of, their head, stays at the top while what is listed scrolls below it.
+  The badge at the top of a trip leads to its line, however the trip was
+  opened. What the details are of, their head, stays at the top while what
+  is listed scrolls below it.
 - **Addresses.** A stop and a line each have an address of their own
   ([#37](https://github.com/xiidoz/netnou/issues/37)), to be passed on,
   kept and found by a search: `stop/nuernberg-plaerrer@49.4481,11.0648`,
