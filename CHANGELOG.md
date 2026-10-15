@@ -8,6 +8,23 @@ This file is written by
 messages when a release is made. Do not edit it by hand; see
 [Releases](CONTRIBUTING.md#releases).
 
+## [0.11.0](https://github.com/xiidoz/netnou/compare/v0.10.0...v0.11.0) (2026-10-15)
+
+
+### Features
+
+* **page:** draw where a line runs, under its vehicles ([#151](https://github.com/xiidoz/netnou/issues/151)) ([f056c3e](https://github.com/xiidoz/netnou/commit/f056c3ed378bb7c30d0d7afad468a1aafefca440)), closes [#148](https://github.com/xiidoz/netnou/issues/148)
+* **page:** give every stop and line an address of its own ([#146](https://github.com/xiidoz/netnou/issues/146)) ([629fe8a](https://github.com/xiidoz/netnou/commit/629fe8aec7a30f8ed0e298e0775766c7b7fa6090)), closes [#37](https://github.com/xiidoz/netnou/issues/37)
+* **page:** let the badge of a trip lead to its line ([#149](https://github.com/xiidoz/netnou/issues/149)) ([6bae293](https://github.com/xiidoz/netnou/commit/6bae293811700ea47e2298915ae989cdc31a2874)), closes [#147](https://github.com/xiidoz/netnou/issues/147)
+* **routes:** route long hops on roads, as coaches have them, along the main roads ([#144](https://github.com/xiidoz/netnou/issues/144)) ([c4c2861](https://github.com/xiidoz/netnou/commit/c4c286130e77f18713c783ee4d005a35500b94c9)), closes [#131](https://github.com/xiidoz/netnou/issues/131)
+* **search:** without the visitor's position, put what the map shows first ([#155](https://github.com/xiidoz/netnou/issues/155)) ([cc48ec5](https://github.com/xiidoz/netnou/commit/cc48ec5b443f96822933f203e6a7d8fbbc8a8c76)), closes [#154](https://github.com/xiidoz/netnou/issues/154)
+
+
+### Bug Fixes
+
+* **page:** fit a line opened on a phone between the card and the details ([#150](https://github.com/xiidoz/netnou/issues/150)) ([fb05523](https://github.com/xiidoz/netnou/commit/fb055235f56344c9f622fc8e913e866d33505423))
+* **timetable:** make lines of one name in places apart lines of their own ([#153](https://github.com/xiidoz/netnou/issues/153)) ([0d5049f](https://github.com/xiidoz/netnou/commit/0d5049fef9690f6f25d320eb43b050d61198d493)), closes [#152](https://github.com/xiidoz/netnou/issues/152)
+
 ## [0.10.0](https://github.com/xiidoz/netnou/compare/v0.9.0...v0.10.0) (2026-10-14)
 
 
