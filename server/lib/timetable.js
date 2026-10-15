@@ -647,7 +647,11 @@ export class Timetable extends Schedule {
   segment(t, p) {
     const stops = this.patternStart[this.tripPattern[t]] + p;
     const net = this.routeNets[this.tripRoute[t]];
-    const wanted = hopKey(net, this.patternStops[stops], this.patternStops[stops + 1], this.stops.id.length);
+    return this.segmentOf(hopKey(net, this.patternStops[stops], this.patternStops[stops + 1], this.stops.id.length));
+  }
+
+  /** Index of the route geometry of a hop by its key (hopKey), or -1. */
+  segmentOf(wanted) {
     const keys = this.segmentKey;
     let low = 0;
     let high = keys.length - 1;
@@ -1028,6 +1032,69 @@ export class Timetable extends Schedule {
       .sort((a, b) => a.to.localeCompare(b.to) || a.stopsLeft - b.stopsLeft)
       .map((v) => ({ id: v.id, to: v.to, next: v.next, delay: v.delay, lat: round5(v.lat), lon: round5(v.lon), warnings: v.warnings }));
     return { name, mode, agency, vehicles: list };
+  }
+
+  /**
+   * Where a line runs on the day of `now`, as its view draws it (#148): the
+   * routes of its trips of that day, each stretch between two stops once, as
+   * lines [lat, lon, …]; the places of the stations they call at, [lat, lon,
+   * …]; and the rectangle around those of them in the area, [south, west,
+   * north, east], or around all where none is. Null if there is no such line.
+   */
+  lineRoute(line, now) {
+    const index = this.lineNumber(line);
+    if (index === undefined) return null;
+    // the ways its trips of the day take: a pattern on the network of its route
+    const ways = new Map();
+    for (const t of this.activeTrips(localDate(now))) {
+      const route = this.tripRoute[t];
+      if (this.lineOf[route] === index) ways.set(`${this.tripPattern[t]} ${this.routeNets[route]}`, [this.tripPattern[t], this.routeNets[route]]);
+    }
+    const { lat, lon, region } = this.stops;
+    const stopCount = this.stops.id.length;
+    const widen = (box, y, x) => (box ? [Math.min(box[0], y), Math.min(box[1], x), Math.max(box[2], y), Math.max(box[3], x)] : [y, x, y, x]);
+    const drawn = new Set(); // the stretches, by their keys (hopKey)
+    const stations = new Set();
+    const paths = [];
+    let inArea = null;
+    let all = null;
+    for (const [pattern, net] of ways.values()) {
+      // (one line goes on as long as the stretches are new)
+      let path = null;
+      const end = this.patternStart[pattern + 1];
+      for (let k = this.patternStart[pattern]; k < end; k++) {
+        const stop = this.patternStops[k];
+        const station = this.stationOf[stop];
+        stations.add(station);
+        all = widen(all, lat[station], lon[station]);
+        if (region[stop]) inArea = widen(inArea, lat[station], lon[station]);
+        if (k + 1 === end) break;
+        const next = this.patternStops[k + 1];
+        const key = hopKey(net, stop, next, stopCount);
+        if (drawn.has(key)) {
+          path = null;
+          continue;
+        }
+        drawn.add(key);
+        if (!path) paths.push((path = []));
+        const s = this.segmentOf(key);
+        if (s < 0) {
+          path.push(round5(lat[stop]), round5(lon[stop]), round5(lat[next]), round5(lon[next]));
+          continue;
+        }
+        const walk = this.walk.along(s);
+        path.push(walk.lat / 1e5, walk.lon / 1e5);
+        while (walk.more()) {
+          walk.next();
+          path.push(walk.lat / 1e5, walk.lon / 1e5);
+        }
+      }
+    }
+    return {
+      paths,
+      stations: [...stations].flatMap((s) => [round5(lat[s]), round5(lon[s])]),
+      bounds: (inArea ?? all)?.map(round5) ?? null,
+    };
   }
 
   trip(tripId, date, realtime) {

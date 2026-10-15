@@ -332,6 +332,16 @@ test('/api/line: the vehicles of one line that are under way', async () => {
   // the ICE is under way too, far outside the area
   const { json: ice } = await get('/api/line?name=ICE%205&mode=longdistance&agency=Testbetrieb');
   assert.deepEqual(ice.vehicles.map((v) => [v.to, v.next, v.warnings]), [['Beta', 'Fern Mitte', []], ['Beta', 'Fern Mitte', []]]);
+
+  // where a line runs, asked for when it is opened (#148): the routes of its trips of the day, each stretch once
+  // (straight lines: the test has no route geometry), its stations, and what of it is in the area
+  const { json: withRoute } = await get('/api/line?name=U1&mode=subway&agency=Testbetrieb&route=1');
+  assert.deepEqual(withRoute.vehicles.map((v) => v.id), json.vehicles.map((v) => v.id));
+  // the shuttle there and back again, a hundred times, is one line from A to B and back
+  assert.deepEqual(withRoute.route, { paths: [[49.4, 11, 49.5, 11, 49.5, 11, 49.4, 11]], stations: [49.4, 11, 49.5, 11], bounds: [49.4, 11, 49.5, 11] });
+  // the ICE all of the way, and to show of it the one station in the area
+  const { json: iceRoute } = await get('/api/line?name=ICE%205&mode=longdistance&agency=Testbetrieb&route=1');
+  assert.deepEqual(iceRoute.route, { paths: [[52, 13, 51.9, 13, 51.9, 13, 49.5, 11]], stations: [52, 13, 51.9, 13, 49.5, 11], bounds: [49.5, 11, 49.5, 11] });
   // name, mode and agency together are the line
   for (const query of ['name=U1&mode=bus&agency=Testbetrieb', 'name=U1&mode=subway&agency=Anderer', 'name=U2&mode=subway&agency=Testbetrieb', 'name=U1', '']) {
     const res = await get(`/api/line?${query}`);

@@ -544,8 +544,12 @@ otherwise a server would load a file written by older code:
 - **Map.** MapLibre GL JS draws the map with WebGL, from the vector tiles of
   the configured style or from raster tiles. Everything else is drawn by
   `app.js` on one canvas lying on top: the veil outside the area, stations,
-  the route of the selected trip, the visitor's own position, vehicles. The
-  map is never rotated or tilted.
+  the route of the selected trip or line, the visitor's own position,
+  vehicles. The route of a line is where its trips of the day run, each
+  stretch between two stops once
+  ([#148](https://github.com/xiidoz/netnou/issues/148)): the page asks for it
+  once, when it opens the line, and shows it as far as it lies in the area.
+  The map is never rotated or tilted.
 - **Polling.** Every 10 seconds the page asks for the vehicles in the visible
   section plus a margin, in full detail from zoom level 12 and in a reduced
   form below: with where each vehicle goes where a pointer can rest on it
