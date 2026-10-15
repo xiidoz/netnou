@@ -2146,12 +2146,16 @@ function selectLine(line) {
 
 /** What of each edge of the map is to stay free, so that the cards do not cover what is shown in between. */
 function clearOfCards() {
-  const margin = 40;
+  // (on a phone between the card and the sheet there is room for little more than a vehicle's label as margin)
+  const margin = narrowScreen.matches ? 24 : 40;
   const card = $('controls').getBoundingClientRect();
   const details = panel.getBoundingClientRect();
-  // on a narrow screen the cards are above and below, else to the left and the right
+  // On a narrow screen the cards are above and below, else to the left and
+  // the right. A sheet just opened is still gliding up as it fills: as high
+  // as it may get by itself, as in clearOfSheet.
+  const sheetTop = panel.classList.contains('sized') ? details.top : Math.min(details.top, viewSize.y * (1 - SHEET_MIDDLE));
   const padding = narrowScreen.matches
-    ? { top: card.bottom + margin, bottom: viewSize.y - details.top + margin, left: margin, right: margin }
+    ? { top: card.bottom + margin, bottom: viewSize.y - sheetTop + margin, left: margin, right: margin }
     : { top: margin, bottom: margin, left: card.right + margin, right: viewSize.x - details.left + margin };
   // (in a window too small for that, better covered in part than not shown)
   const fits = padding.left + padding.right < 0.8 * viewSize.x && padding.top + padding.bottom < 0.8 * viewSize.y;
