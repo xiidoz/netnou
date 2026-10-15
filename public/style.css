@@ -641,19 +641,26 @@ button:focus-visible, select:focus-visible, .row:focus-visible, .panel:focus-vis
 .rows.signed .row.vehicle { grid-template-columns: 1fr 48px; }
 .row.vehicle .late .delay { margin-right: 3px; text-align: right; }
 .rows-head { margin: 0; padding: 10px 14px 0; color: var(--text-muted); font-size: 13px; font-weight: 650; }
-/* From a trip back to the line it was chosen from: a row above the head, left of the button that closes. */
-.back-row { padding: 10px 48px 0 12px; }
-.back-row + .panel-head { padding-top: 8px; }
-.back {
+/* The badge at the top of a trip leads to its line (#147): the sign in it
+   says so, and under a mouse a ring. A finger has 40 px of height to hit it,
+   which the margins take back from the line of the head; above the line
+   below, and on a phone above the end of the bar on top of the sheet. */
+.to-line {
+  position: relative;
   display: inline-flex;
-  align-items: center;
-  gap: 3px;
-  margin: 0;
-  padding: 0;
+  margin: -10px -4px;
+  padding: 10px 4px;
   border: 0;
   background: none;
-  color: var(--text-muted);
   cursor: pointer;
+}
+.to-line .badge { display: inline-flex; align-items: center; padding-right: 2px; }
+/* (the shape has room on both sides in its box: closer to the name, as far from the edge as the name is) */
+.to-line .icon { width: 16px; height: 16px; margin: 0 -1px 0 -2px; }
+.to-line:focus-visible { outline: none; }
+.to-line:focus-visible .badge { outline: 2px solid var(--accent); outline-offset: 2px; }
+@media (hover: hover) {
+  .to-line:hover .badge { outline: 2px solid var(--accent); outline-offset: 2px; }
 }
 
 /* --time-chars: how many characters a clock time has at most in the visitor's language (app.js sets it) */
@@ -930,7 +937,7 @@ li:last-child > .row.stop .rail::before { bottom: 50%; }
     clip-path: none;
   }
   /* (so what is at their top has the whole width) */
-  .panel .panel-head, .panel .back-row { padding-right: 14px; }
+  .panel .panel-head { padding-right: 14px; }
   /* (the share button alone at the top of the sheet, where the close button is not shown) */
   .panel .share { top: 14px; right: 12px; }
   .panel .copied { top: 52px; right: 12px; }
@@ -942,8 +949,6 @@ li:last-child > .row.stop .rail::before { bottom: 50%; }
   .panel-head .notes span { display: block; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
   .dialog h2 { margin-right: 0; }
   .panel .panel-head { padding-top: 2px; }
-  .panel .back-row { padding-top: 0; }
-  .panel .back-row + .panel-head { padding-top: 6px; }
   /* "How it works" is a sheet from the bottom too, over the details if they
      are open. Its bar and its heading drag it down to close it. */
   .dialog {

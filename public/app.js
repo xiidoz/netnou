@@ -11,7 +11,7 @@
 import { linePath, parseAddress, stopPath, wordsOf } from './address.js';
 import { APP_NAME, formatNumber, formatTime, languagePicker, loadLanguage, pageTexts, setTimeZone, t, translatePage } from './i18n.js';
 import { displayQuery, readDisplay } from './display.js';
-import { mdiAlert, mdiChevronLeft, mdiChevronRight, mdiEye, mdiEyeOff, mdiFullscreen, mdiFullscreenExit } from './vendor/material-design-icons/icons.js';
+import { mdiAlert, mdiChevronRight, mdiEye, mdiEyeOff, mdiFullscreen, mdiFullscreenExit } from './vendor/material-design-icons/icons.js';
 import { AttributionControl, MapLibreMap, NavigationControl } from './vendor/maplibre-gl/maplibre-gl.mjs';
 
 // The modes, each with a chip where the timetable has it. Same ids as MODES in
@@ -1785,8 +1785,7 @@ shareButton.addEventListener('click', async () => {
  * Opens the details of a trip, a station or a line.
  * @param id of a trip or a station; null for a line, and for a station of the search
  * @param more what else there is to know: of a line what it is ({ line }),
- *   of a trip the line it was chosen from ({ from }), to which the way leads
- *   back, of a station of the search where it is ({ at })
+ *   of a station of the search where it is ({ at })
  */
 function select(type, id, more = {}) {
   // The row that was activated is about to go: keep the keyboard focus in the panel.
@@ -1876,8 +1875,8 @@ function fillPanel(head, ...nodes) {
 
 const platformText = (platform) => (platform ? t('stop.platform', { platform }) : '');
 
-function badge(line, mode) {
-  const node = el('span', { class: 'badge', text: line });
+function badge(line, mode, ...more) {
+  const node = el('span', { class: 'badge', text: line }, more);
   node.style.setProperty('--badge-color', `var(--mode-${mode})`);
   if (DARK_LETTERS.has(mode)) node.style.setProperty('--badge-text', LETTERS_DARK);
   return node;
@@ -2118,17 +2117,16 @@ function renderTrip(trip, scrollToNext) {
   const mode = t(`mode.${DRAW_ORDER.includes(trip.mode) ? trip.mode : 'other'}`);
   // Who provides the realtime data shown leads the notes, which are feed content and stay as they are.
   const source = trip.realtime && trip.source ? [t('trip.source', { source: trip.source })] : [];
-  // A trip chosen from the vehicles of a line leads back to them, with a
-  // button in a row of its own above the head.
-  const from = state.selection.from;
-  const back = from ? el('div', { class: 'back-row' }, [
-    el('button', { type: 'button', class: 'back', 'aria-label': t('line.back', { line: from.name }), onclick: () => selectLine(from) }, [icon(mdiChevronLeft), badge(from.name, from.mode)]),
-  ]) : '';
+  // The badge leads to the line, whichever way the trip was chosen (#147),
+  // with a sign in it: a finger cannot rest on it to find out.
+  const line = { name: trip.line, mode: trip.mode, agency: trip.agency };
+  const toLine = el('button', { type: 'button', class: 'to-line', 'aria-label': t('line.open', { line: trip.line }), title: t('line.open', { line: trip.line }), onclick: () => selectLine(line) }, [
+    badge(trip.line, trip.mode, icon(mdiChevronRight)),
+  ]);
   fillPanel(
     [
-      back,
       el('div', { class: 'panel-head' }, [
-        el('h2', {}, [badge(trip.line, trip.mode), el('span', { text: `→ ${trip.to}` })]),
+        el('h2', {}, [toLine, el('span', { text: `→ ${trip.to}` })]),
         el('p', { class: 'sub', text: [mode, trip.agency, trip.realtime ? t('trip.realtime') : t('trip.scheduleOnly')].filter(Boolean).join(' · ') }),
         notesList(trip.notes, source, trip.cancelled ? t('trip.cancelled') : null),
       ]),
@@ -2170,7 +2168,7 @@ function renderLine(line, first) {
   const lists = [...byDestination].flatMap(([destination, vehicles]) => [
     el('h3', { class: 'rows-head', text: t('line.to', { destination }) }),
     el('ul', { class: `rows${signed ? ' signed' : ''}` }, vehicles.map((v) => el('li', {}, [
-      el('button', { type: 'button', class: 'row vehicle', onclick: () => select('trip', v.id, { from: selection.line }) }, [
+      el('button', { type: 'button', class: 'row vehicle', onclick: () => select('trip', v.id) }, [
         el('span', { class: 'name', text: t('line.next', { stop: v.next }), title: v.next }),
         delayCell(delayNode(v.delay), v.warnings, signed),
       ]),
