@@ -523,8 +523,20 @@ function matchOf(index, i, form, level) {
 
 const kilometres = (lat1, lon1, lat2, lon2) => Math.hypot(lat1 - lat2, (lon1 - lon2) * Math.cos((lat1 * Math.PI) / 180)) * 111.2;
 
-/** What the service of a stop or a line counts for: all of it, or less the further it is from `near`. */
-const weigh = (service, lat, lon, near) => (near ? service / (kilometres(near.lat, near.lon, lat, lon) + NEAR_KM) ** 2 : service);
+/**
+ * What the service of a stop or a line counts for: all of it, or less the
+ * further it is from `near`. Near what the map shows (#154), what is in view
+ * counts in full and what is outside the less the further it is, at the
+ * scale of the view: as far again out as the view reaches from its middle,
+ * a sixteenth. With all of the country in view, service decides.
+ */
+const weigh = (service, lat, lon, near) => {
+  if (!near) return service;
+  const km = kilometres(near.lat, near.lon, lat, lon);
+  if (near.km === undefined) return service / (km + NEAR_KM) ** 2;
+  const reach = Math.max(near.km, NEAR_KM);
+  return service / (1 + Math.max(0, km - reach) / reach) ** 4;
+};
 
 const nameOf = (index, i) => index.names.slice(index.nameStarts[i], index.nameStarts[i + 1] - 1);
 
@@ -620,7 +632,8 @@ function find(index, forms, level, near, limit) {
  * matches before the others, and among equally close ones those with more
  * service. Service counts for less the further a stop is from `near`.
  * @param index from buildIndex
- * @param near { lat, lon } of the visitor, if they have it shown
+ * @param near { lat, lon } of the visitor, if they have it shown; else of
+ *   the middle of what the map shows, with `km`, how far it reaches from there
  * @returns up to `limit` of { name, lat, lon, modes, town }; `town` only
  *   where one is known and the name does not say it
  */
@@ -648,7 +661,7 @@ export function search(index, query, { near = null, limit = 8 } = {}) {
  * first, one of that number after it, then the one with more trips, which
  * count for less the further from `near` the line runs.
  * @param index from buildIndex
- * @param near { lat, lon } of the visitor, if they have it shown
+ * @param near as for search()
  * @returns up to `limit` of { name, mode, agency, to }
  */
 export function searchLines(index, query, { near = null, limit = 3 } = {}) {

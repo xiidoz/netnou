@@ -159,6 +159,20 @@ test('with a position, service counts for less the further away a stop is', () =
   assert.deepEqual(names('markt', { near: atHauptmarkt }), ['Erlangen Neuer Markt / Rathaus', 'Nürnberg Hauptmarkt']);
 });
 
+test('without a position, what the map shows is near: what is in view first, then the nearer, at its scale (#154)', () => {
+  // the map on Hersbruck or on Erlangen, a few kilometres across: the stop in view before the busier one of Nürnberg
+  const onHersbruck = { lat: 49.508, lon: 11.432, km: 3 };
+  const onErlangen = { lat: 49.595, lon: 11.003, km: 3 };
+  assert.deepEqual(names('plärrer', { near: onHersbruck }), ['Hersbruck Plärrer', 'Nürnberg Plärrer']);
+  assert.equal(names('rathaus', { near: onErlangen })[0], 'Erlangen Neuer Markt / Rathaus');
+  // a line too: the 490 of the Oberpfalz with the map there
+  assert.equal(searchLines(index, '490', { near: { lat: 49.52, lon: 12.5, km: 10 } })[0].agency, 'Gesellschaft zur Förderung des ÖPNV Landkreis');
+  // all of Germany in view: the order of service, as without anything near
+  const germany = { lat: 51.16, lon: 10.45, km: 450 };
+  for (const query of ['plärrer', 'rathaus', 'haupt']) assert.deepEqual(names(query, { near: germany }), names(query), query);
+  assert.deepEqual(searchLines(index, '490', { near: germany }), searchLines(index, '490'));
+});
+
 test('a line is found by the beginning of its name, spaces left out', () => {
   assert.deepEqual(lines('u1'), ['U1 subway']);
   assert.deepEqual(lines('U 1'), ['U1 subway']);
