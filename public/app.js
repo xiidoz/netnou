@@ -1222,7 +1222,13 @@ function ask(query) {
       answered({ turn, failed: true });
     });
   }
-  const near = state.position && { lat: state.position.lat, lon: state.position.lon };
+  // Near is where the visitor is, if they have it shown; else what the map
+  // shows: its middle, and how far it reaches from there, half its diagonal
+  // (#154). Neither leaves the browser: the search is here.
+  const view = map.getBounds();
+  const near = state.position
+    ? { lat: state.position.lat, lon: state.position.lon }
+    : { lat: view.getCenter().lat, lon: view.getCenter().lng, km: view.getSouthWest().distanceTo(view.getNorthEast()) / 2000 };
   // (with the names of the modes as the visitor reads them: "bus 33" is a line of the buses)
   const modeNames = Object.fromEntries(DRAW_ORDER.map((mode) => [mode, t(`mode.${mode}`)]));
   finder.postMessage({ turn: ++turn, query, near, limits: { lines: LINE_LIMIT, stops: SEARCH_LIMIT }, modeNames });

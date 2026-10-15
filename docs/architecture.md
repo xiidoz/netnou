@@ -654,13 +654,20 @@ otherwise a server would load a file written by older code:
   this is plain pointer events in `app.js`.
 - **Search.** The field in the header card finds stops and lines by name.
   The list of all of them is fetched when the field is first used, and
-  searched in the browser: what is typed stays there, and so does the
-  visitor's position, which the order of the results makes use of. A stop matches if every word
+  searched in the browser: what is typed stays there, and so do the
+  visitor's position and what the map shows, which the order of the
+  results makes use of. A stop matches if every word
   typed begins one of the words of its name, in any order; matches inside a
   word come after those, and close spellings are tried where nothing else is
   found. Among equally close matches the stop with more service comes
   first, and with the visitor's position known, service counts for less the
-  further away a stop is. `search.js` holds all of that and knows nothing of
+  further away a stop is. Without it, what the map shows is near
+  ([#154](https://github.com/xiidoz/netnou/issues/154)): what is in view
+  counts in full, and what is outside the less the further it is, at the
+  scale of the view: as far outside it again as it reaches from its middle,
+  a sixteenth. With the map on Hersbruck its Plärrer comes before the busier
+  one of Nuremberg; with all of the country in view, service decides. The
+  same holds for lines. `search.js` holds all of that and knows nothing of
   the page, so the tests run it as it is. Choosing a stop moves the map
   there and opens its departure board. A line is found by the beginning of
   its name, with its mode in front if somebody types one ("bus 33"), and is
