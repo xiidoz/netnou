@@ -118,7 +118,7 @@ export default {
   'line.none': 'Von dieser Linie ist gerade kein Fahrzeug unterwegs.',
   'line.to': 'nach {destination}',
   'line.next': 'nächster Halt: {stop}',
-  'line.back': 'Zurück zur Linie {line}',
+  'line.open': 'Zur Linie {line}',
 
   'stop.platform': 'Gl. {platform}',
   'stop.skipped': 'entfällt',
