@@ -586,21 +586,26 @@ otherwise a server would load a file written by older code:
   `line/verkehrsag-nuernberg/subway/u1` (`address.js`). The ids of a feed
   change with every timetable, so a stop is named by its name and its place
   to four decimals, about 10 m, and a line by its operator, its kind and
-  its name. The words of an address are English, the names in it as the
-  timetable has them, in small letters, ä as ae. Name and place tell every
-  stop of the default area apart, and all but 92 of the 245,439 of all of
-  Germany, which stand twice at the same place; operator, kind and name
-  every line.
+  its name. Where lines of that name are in places apart, the address of
+  each has its place as well, to two decimals, about 1 km:
+  `line/db-regio-ag-bayern/suburban/s1@49.56,11.14`. The words of an
+  address are English, the names in it as the timetable has them, in small
+  letters, ä as ae. Name and place tell every stop of the default area
+  apart, and all but 92 of the 245,439 of all of Germany, which stand twice
+  at the same place.
 - **Found again.** The server takes the stop whose address it is, else the
   stop of that name nearest the place, up to 1 km away, else a stop of any
   name within 10 m of it, renamed (`lib/addresses.js`). The first matters
   where two stops of a name stand either side of where their places round
   apart: the place in the address of the one may be nearer the other.
   Measured from January to October 2026, that finds
-  about 96 in 100 stops again after nine months. An address that names a
-  stop otherwise than its own address does now sends the browser on to that
-  (301); one that names nothing is the page saying so, with 404, and with
-  the search for the name in it.
+  about 96 in 100 stops again after nine months. A line is found by its
+  operator, kind and name; of lines of a name in places apart, the one
+  whose address it is, else the one nearest its place, and without a place
+  the busiest. An address that names a stop or a line otherwise than its
+  own address does now sends the browser on to that (301); one that names
+  nothing is the page saying so, with 404, and with the search for the name
+  in it.
 - **The address in the page.** Opening a stop or a line puts its address
   into the address bar, back closes it again, and a reload keeps it; a trip
   has none. The page finds its files and data from where the instance is,
@@ -660,6 +665,17 @@ otherwise a server would load a file written by older code:
   there and opens its departure board. A line is found by the beginning of
   its name, with its mode in front if somebody types one ("bus 33"), and is
   told from others of the same name by where it goes and who runs it.
+- **What a line is.** The trips of a name, mode and operator that share
+  stations, also through others
+  ([#152](https://github.com/xiidoz/netnou/issues/152)): DB Regio runs an
+  S1 in Nuremberg and one in Munich, and one operator runs the trams of
+  Chemnitz and of Zwickau. In all of Germany (feed of 14 October 2026) 1,020
+  of the 24,558 names of lines are lines in more than one place, in the
+  default area 11. A line that runs in pieces, such as around works, is its
+  pieces, each with its own destinations. A line has
+  the middle of its stations as its place, and among those of its name it
+  is asked for by that (`/api/line?at=`); a trip names the place of its
+  line (`lineAt`), so that its badge opens the one it is on.
 - **The town of a stop.** A word typed may also be a word of the [town](#towns)
   a stop is in, whether its name says the town or not, and it may be typed
   as a word of a name may: in part, without its umlauts, with a slip. A

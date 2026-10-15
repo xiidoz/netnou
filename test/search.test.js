@@ -189,7 +189,8 @@ test('a line of exactly the name typed comes before those that only begin with i
 });
 
 test('a line is what the page needs to show it and to ask for its vehicles', () => {
-  assert.deepEqual(searchLines(index, 'u1'), [{ name: 'U1', mode: 'subway', agency: 'VerkehrsAG Nürnberg', to: ['Fürth Hardhöhe', 'Langwasser Süd'] }]);
+  // (with the place of the line: an operator may run lines of a name in places apart, #152)
+  assert.deepEqual(searchLines(index, 'u1'), [{ name: 'U1', mode: 'subway', agency: 'VerkehrsAG Nürnberg', to: ['Fürth Hardhöhe', 'Langwasser Süd'], at: [49.44428, 11.05986] }]);
 });
 
 test('the name of a mode in front narrows the lines down', () => {

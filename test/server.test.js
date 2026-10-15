@@ -314,8 +314,10 @@ test('/api/search: all stations and lines as columns, sent again only when they 
 test('/api/line: the vehicles of one line that are under way', async () => {
   const { status, json } = await get('/api/line?name=U1&mode=subway&agency=Testbetrieb');
   assert.equal(status, 200);
-  assert.deepEqual(Object.keys(json).sort(), ['agency', 'mode', 'name', 'now', 'vehicles']);
+  assert.deepEqual(Object.keys(json).sort(), ['agency', 'at', 'mode', 'name', 'now', 'path', 'vehicles']);
   assert.deepEqual([json.name, json.mode, json.agency], ['U1', 'subway', 'Testbetrieb']);
+  // its place, the middle of its stations, and its address: the only line of its name has none in it (#152)
+  assert.deepEqual([json.at, json.path], [[49.45, 11], 'line/testbetrieb/subway/u1']);
   assert.ok(Math.abs(json.now - Date.now() / 1000) < 5);
   // yesterday's run and today's, both somewhere between A and B
   assert.deepEqual(json.vehicles.map((v) => v.id).sort(), [`T1_${addDays(today, -1)}`, `T1_${today}`]);
@@ -360,6 +362,7 @@ test('/api/trip', async () => {
     mode: 'subway',
     to: 'Rundkurs',
     agency: 'Testbetrieb',
+    lineAt: [49.45, 11],
     realtime: true,
     source: 'Testbetrieb', // from the gtfs.de note, which is not one of the notes
     cancelled: false,
@@ -623,7 +626,8 @@ test('the address of a stop or a line is a page of its own, found again by its n
 
   // what an address names, for the page that is at it
   assert.deepEqual((await get('/api/address?path=stop/alpha@49.4010,11.0010')).json, { type: 'stop', name: 'Alpha', lat: 49.4, lon: 11, path: 'stop/alpha@49.4000,11.0000' });
-  assert.deepEqual((await get('/api/address?path=line/testbetrieb/longdistance/ice-5')).json, { type: 'line', name: 'ICE 5', mode: 'longdistance', agency: 'Testbetrieb', path: 'line/testbetrieb/longdistance/ice-5' });
+  // (with the place of the line: the middle of the three stations of the ICE, for the page to ask for it by)
+  assert.deepEqual((await get('/api/address?path=line/testbetrieb/longdistance/ice-5')).json, { type: 'line', name: 'ICE 5', mode: 'longdistance', agency: 'Testbetrieb', at: [51.13333, 12.33333], path: 'line/testbetrieb/longdistance/ice-5' });
   for (const path of ['stop/nirgends@48.0000,10.0000', 'line/anders/subway/u1', 'nothing']) assert.equal((await get(`/api/address?path=${encodeURIComponent(path)}`)).status, 404, path);
 });
 
@@ -782,7 +786,8 @@ test('a zoomed-out map of a large instance is thinned out', async () => {
     const lon = (9 + (2 * i) / buses).toFixed(5);
     lines.stops.push(`A${i},Anfang ${i},49.40,${lon}`, `B${i},Ende ${i},49.41,${lon}`);
     lines.trips.push(`${i < 5 ? 'B2' : 'B1'},DAILY,BUS${i}`);
-    lines.times.push(`BUS${i},0:00:00,0:00:00,A${i},0`, `BUS${i},72:00:00,72:00:00,B${i},1`);
+    // (the buses of line 2 all end at the same stop: trips that share no stop are lines of their own, #152)
+    lines.times.push(`BUS${i},0:00:00,0:00:00,A${i},0`, `BUS${i},72:00:00,72:00:00,B${i < 5 ? 0 : i},1`);
   }
   const feed = {
     zip: makeZip({

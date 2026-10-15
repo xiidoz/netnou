@@ -132,8 +132,116 @@ export const mix = (h) => {
 // The time of a knot along route geometry, in tenths of a second.
 const round10 = (x) => Math.round(x * 10) / 10;
 
-/** What tells one line from another: its name, its mode and its operator together. */
+/** What a line is called by: its name, its mode and its operator together; lines in places apart may share it (findLines). */
 const lineKey = ({ name, mode, agency }) => JSON.stringify([name, mode, agency]);
+
+/**
+ * The lines of a timetable (Timetable): the trips of a name, mode and
+ * operator, as many lines as they make in places apart, where trips that
+ * share a station, also through others, are of one. Each line with the
+ * middle of its stations, `place`, which tells it from others of its name;
+ * its trips and the rest are counted by the Timetable.
+ * @returns { lines, tripLine }: the lines, and the number of the line of each trip
+ */
+function findLines(tt) {
+  const { patternStart, patternStops, stationOf, tripCount } = tt;
+  const { lat, lon } = tt.stops;
+  const routeCount = tt.routes.type.length;
+  const patternCount = patternStart.length - 1;
+  const stopCount = tt.stops.id.length;
+  // the routes of a name, mode and operator
+  const named = new Map();
+  const names = [];
+  const nameOf = new Int32Array(routeCount);
+  for (let route = 0; route < routeCount; route++) {
+    const line = { name: tt.lineName(route), mode: tt.routeModes[route], agency: tt.routes.agency[route] };
+    if (!named.has(lineKey(line))) named.set(lineKey(line), names.push(line) - 1);
+    nameOf[route] = named.get(lineKey(line));
+  }
+  // The patterns run under each name, as pairs of a name and a pattern, and
+  // the pair of every trip. A pattern is run under one name nearly always.
+  const firstName = new Int32Array(patternCount).fill(-1);
+  const firstPair = new Int32Array(patternCount);
+  const morePairs = new Map();
+  const pairName = [];
+  const pairPattern = [];
+  const tripLine = new Int32Array(tripCount);
+  for (let t = 0; t < tripCount; t++) {
+    const name = nameOf[tt.tripRoute[t]];
+    const pattern = tt.tripPattern[t];
+    let pair;
+    if (firstName[pattern] === name) pair = firstPair[pattern];
+    else if (firstName[pattern] === -1) {
+      pair = firstPair[pattern] = pairName.push(name) - 1;
+      firstName[pattern] = name;
+      pairPattern.push(pattern);
+    } else {
+      pair = morePairs.get(`${name} ${pattern}`);
+      if (pair === undefined) {
+        pair = pairName.push(name) - 1;
+        pairPattern.push(pattern);
+        morePairs.set(`${name} ${pattern}`, pair);
+      }
+    }
+    tripLine[t] = pair;
+  }
+  // the pairs in the order of their names, and in their own under one name
+  const pairCount = pairName.length;
+  const byName = new Int32Array(pairCount);
+  {
+    const next = new Int32Array(names.length + 1);
+    for (const name of pairName) next[name + 1]++;
+    for (let i = 0; i < names.length; i++) next[i + 1] += next[i];
+    for (let pair = 0; pair < pairCount; pair++) byName[next[pairName[pair]]++] = pair;
+  }
+  // The pairs of a name that come to the same station are of one line: a
+  // station keeps the pair that came to it first, under the name of the moment.
+  const up = new Int32Array(pairCount);
+  for (let pair = 0; pair < pairCount; pair++) up[pair] = pair;
+  const root = (i) => {
+    while (up[i] !== i) i = up[i] = up[up[i]];
+    return i;
+  };
+  const keeper = new Int32Array(stopCount);
+  const keptFor = new Int32Array(stopCount).fill(-1);
+  for (const pair of byName) {
+    const name = pairName[pair];
+    for (let k = patternStart[pairPattern[pair]]; k < patternStart[pairPattern[pair] + 1]; k++) {
+      const station = stationOf[patternStops[k]];
+      if (keptFor[station] === name) up[root(pair)] = root(keeper[station]);
+      else {
+        keptFor[station] = name;
+        keeper[station] = pair;
+      }
+    }
+  }
+  // a line for each set of pairs, with the middle of its stations, each counted once
+  const lines = [];
+  const lineOfRoot = new Int32Array(pairCount).fill(-1);
+  const pairLine = new Int32Array(pairCount);
+  const counted = new Int32Array(stopCount).fill(-1);
+  const sums = []; // of each line: latitudes, longitudes, stations
+  for (const pair of byName) {
+    const set = root(pair);
+    if (lineOfRoot[set] === -1) {
+      lineOfRoot[set] = lines.push({ ...names[pairName[pair]], trips: 0, headsigns: new Map(), lat: 0, lon: 0, stops: 0, place: null }) - 1;
+      sums.push([0, 0, 0]);
+    }
+    const line = (pairLine[pair] = lineOfRoot[set]);
+    const sum = sums[line];
+    for (let k = patternStart[pairPattern[pair]]; k < patternStart[pairPattern[pair] + 1]; k++) {
+      const station = stationOf[patternStops[k]];
+      if (counted[station] === line) continue;
+      counted[station] = line;
+      sum[0] += lat[station];
+      sum[1] += lon[station];
+      sum[2]++;
+    }
+  }
+  lines.forEach((line, i) => (line.place = [round5(sums[i][0] / sums[i][2]), round5(sums[i][1] / sums[i][2])]));
+  for (let t = 0; t < tripCount; t++) tripLine[t] = pairLine[tripLine[t]];
+  return { lines, tripLine };
+}
 
 /**
  * Trains that run coupled are a trip each, and nothing in the feed says that
@@ -297,7 +405,7 @@ class Vehicle {
     this.lat = lat;
     this.lon = lon;
     // for the vehicles of one line: which it is, the stop ahead and how many are left
-    this.lineIndex = timetable.lineOf[route];
+    this.lineIndex = timetable.tripLine[t];
     this.next = timetable.stops.name[timetable.patternStops[timetable.patternStart[timetable.tripPattern[t]] + next]];
     this.stopsLeft = last - next;
   }
@@ -511,22 +619,19 @@ export class Timetable extends Schedule {
       this.bbox = this.bbox ? [Math.min(this.bbox[0], lat), Math.min(this.bbox[1], lon), Math.max(this.bbox[2], lat), Math.max(this.bbox[3], lon)] : [lat, lon, lat, lon];
     }
 
-    // A line is what its passengers take for one: the routes of the feed with
-    // the same name, mode and operator. The name alone does not say which line
-    // it is – several operators number their lines from 1, and a replacement
-    // bus runs under the name of its train.
-    this.lines = [];
+    // A line is what its passengers take for one: the trips of the feed with
+    // the same name, mode and operator that share stations, also through
+    // others. The name alone does not say which line it is – several
+    // operators number their lines from 1, and a replacement bus runs under
+    // the name of its train – and with the operator not always either: DB
+    // Regio runs an S1 in Nuremberg and one in Munich (#152).
+    // (trips, where they go, and where in the area they stop: filled in below)
+    const { lines, tripLine } = findLines(this);
+    this.lines = lines;
+    this.tripLine = tripLine;
+    // the lines of a name, mode and operator, by those: their numbers
     this.lineIndex = new Map();
-    this.lineOf = this.routes.type.map((_, route) => {
-      const line = { name: this.lineName(route), mode: this.routeModes[route], agency: this.routes.agency[route] };
-      const key = lineKey(line);
-      if (!this.lineIndex.has(key)) {
-        this.lineIndex.set(key, this.lines.length);
-        // (trips, where they go, and where in the area they stop: filled in below)
-        this.lines.push({ ...line, trips: 0, headsigns: new Map(), lat: 0, lon: 0, stops: 0 });
-      }
-      return this.lineIndex.get(key);
-    });
+    lines.forEach((line, i) => this.lineIndex.set(lineKey(line), [...(this.lineIndex.get(lineKey(line)) ?? []), i]));
 
     // What a pattern has of all the trips that run it: how many they are, of
     // which modes, how early and late a stop of it is left, and the trips
@@ -601,7 +706,7 @@ export class Timetable extends Schedule {
       }
     }
     for (let t = 0; t < tripCount; t++) {
-      const line = this.lines[this.lineOf[trips.route[t]]];
+      const line = this.lines[this.tripLine[t]];
       const headsign = this.headsign(t);
       line.trips++;
       line.headsigns.set(headsign, (line.headsigns.get(headsign) ?? 0) + 1);
@@ -609,6 +714,8 @@ export class Timetable extends Schedule {
       line.lon += lonSum[trips.pattern[t]];
       line.stops += inArea[trips.pattern[t]];
     }
+    // (of the lines of a name the busiest first: the one meant where nothing says which)
+    for (const numbers of this.lineIndex.values()) numbers.sort((a, b) => this.lines[b].trips - this.lines[a].trips || a - b);
 
     this.stations = order.map((s) => ({
       id: this.stops.id.get(s),
@@ -1013,42 +1120,50 @@ export class Timetable extends Schedule {
     return { list, stationAt: (lat, lon) => this.stations[at(lat, lon)]?.id };
   }
 
-  /** The number of a line as vehicles carry it (lineIndex), or undefined if there is no such line. */
-  lineNumber(line) {
-    return this.lineIndex.get(lineKey(line));
+  /**
+   * The number of a line as vehicles carry it (lineIndex), or undefined if
+   * there is no such line. Of the lines of a name, mode and operator in
+   * places apart (findLines) the one whose place is nearest `at`, [lat, lon];
+   * without one the busiest.
+   */
+  lineNumber(line, at = null) {
+    const numbers = this.lineIndex.get(lineKey(line));
+    if (!numbers || !at) return numbers?.[0];
+    const away = (i) => {
+      const [lat, lon] = this.lines[i].place;
+      return Math.hypot((lon - at[1]) * Math.cos((lat * Math.PI) / 180), lat - at[0]);
+    };
+    return numbers.reduce((best, i) => (away(i) < away(best) ? i : best));
   }
 
   /**
-   * The vehicles of one line among those under way, by where they go and how
-   * far they have got, or null if there is no such line.
+   * The vehicles of line number `index` among those under way, by where they
+   * go and how far they have got; with the place of the line, which asks for
+   * it again among those of its name.
    * @param vehicles from vehicles()
    */
-  lineVehicles(line, vehicles) {
-    const index = this.lineNumber(line);
-    if (index === undefined) return null;
-    const { name, mode, agency } = this.lines[index];
+  lineVehicles(index, vehicles) {
+    const { name, mode, agency, place } = this.lines[index];
     const list = vehicles
       .filter((v) => v.lineIndex === index)
       .sort((a, b) => a.to.localeCompare(b.to) || a.stopsLeft - b.stopsLeft)
       .map((v) => ({ id: v.id, to: v.to, next: v.next, delay: v.delay, lat: round5(v.lat), lon: round5(v.lon), warnings: v.warnings }));
-    return { name, mode, agency, vehicles: list };
+    return { name, mode, agency, at: place, vehicles: list };
   }
 
   /**
-   * Where a line runs on the day of `now`, as its view draws it (#148): the
-   * routes of its trips of that day, each stretch between two stops once, as
-   * lines [lat, lon, …]; the places of the stations they call at, [lat, lon,
-   * …]; and the rectangle around those of them in the area, [south, west,
-   * north, east], or around all where none is. Null if there is no such line.
+   * Where line number `index` runs on the day of `now`, as its view draws it
+   * (#148): the routes of its trips of that day, each stretch between two
+   * stops once, as lines [lat, lon, …]; the places of the stations they call
+   * at, [lat, lon, …]; and the rectangle around those of them in the area,
+   * [south, west, north, east], or around all where none is.
    */
-  lineRoute(line, now) {
-    const index = this.lineNumber(line);
-    if (index === undefined) return null;
+  lineRoute(index, now) {
     // the ways its trips of the day take: a pattern on the network of its route
     const ways = new Map();
     for (const t of this.activeTrips(localDate(now))) {
       const route = this.tripRoute[t];
-      if (this.lineOf[route] === index) ways.set(`${this.tripPattern[t]} ${this.routeNets[route]}`, [this.tripPattern[t], this.routeNets[route]]);
+      if (this.tripLine[t] === index) ways.set(`${this.tripPattern[t]} ${this.routeNets[route]}`, [this.tripPattern[t], this.routeNets[route]]);
     }
     const { lat, lon, region } = this.stops;
     const stopCount = this.stops.id.length;
@@ -1128,6 +1243,8 @@ export class Timetable extends Schedule {
       mode: this.routeModes[route],
       to: this.headsign(t),
       agency: this.routes.agency[route],
+      // (the place of its line, which asks for that among those of its name, #152)
+      lineAt: this.lines[this.tripLine[t]].place,
       realtime: row >= 0,
       // Who provides the realtime data of this trip, if the feed says so.
       source: realtime?.sourceOf(t) ?? null,

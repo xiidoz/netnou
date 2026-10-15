@@ -187,7 +187,7 @@ keeps it going.
 | `detail=minimal` | [the smallest form](#the-smallest-form): what a map needs to draw a dot for each vehicle |
 | `zoom` | the zoom of the map the answer is for, as MapLibre counts it (the world is 512 px wide at zoom 0): where a screen cannot take every vehicle, the answer is [thinned out](#zoomed-out) |
 | `modes` | the [modes](#modes) a map shows, separated by commas: the answer has no others, and where it is thinned out they take no room |
-| `line`, `mode`, `agency` | a line as `/api/line` takes it: its vehicles are in the answer whatever is left out |
+| `line`, `mode`, `agency`, `at` | a line as `/api/line` takes it (`line` for its `name`): its vehicles are in the answer whatever is left out |
 | `vehicle` | the id of a vehicle: it is in the answer whatever is left out |
 
 Without a valid `bbox`, all vehicles are returned, always in a reduced
@@ -425,6 +425,7 @@ The vehicles of one line that are under way.
 | Parameter | Meaning |
 | --- | --- |
 | `name`, `mode`, `agency` | the line, as [`/api/search`](#get-apisearch) lists it; all three are needed |
+| `at` | `lat,lon`: of the lines of that name, mode and operator in places apart, the one whose place (`at` of the answer) is nearest; without it the busiest |
 | `route` | `1`: with `route`, where the line runs today (below) |
 
 ```json
@@ -433,6 +434,8 @@ The vehicles of one line that are under way.
   "name": "U1",
   "mode": "subway",
   "agency": "VerkehrsAG Nürnberg",
+  "at": [49.44391, 11.0599],
+  "path": "line/verkehrsag-nuernberg/subway/u1",
   "vehicles": [
     { "id": "1441544_20261006", "to": "Eberhardshof", "next": "Nürnberg Plärrer", "delay": null, "lat": 49.44936, "lon": 11.06877, "warnings": [] },
     { "id": "1362834_20261006", "to": "Eberhardshof", "next": "Nürnberg Hasenbuck", "delay": null, "lat": 49.42065, "lon": 11.09807, "warnings": [] },
@@ -443,12 +446,14 @@ The vehicles of one line that are under way.
 
 | Field | Type | Meaning |
 | --- | --- | --- |
-| `id` | string | for `/api/trip` |
-| `to` | string | where the vehicle goes |
-| `next` | string | the name of the stop ahead of it |
-| `delay` | integer or `null` | seconds at that stop; `null` without realtime data |
-| `lat`, `lon` | numbers | where it is at `now` |
-| `warnings` | array of notes | those of the notes of its trip that warn, as [`/api/departures`](#get-apidepartures) has them; empty for most |
+| `at` | `[lat, lon]` | the place of the line, the middle of its stations: what asks for it among those of its name |
+| `path` | string | its address, see [`/api/address`](#get-apiaddress) |
+| `vehicles[].id` | string | for `/api/trip` |
+| `vehicles[].to` | string | where the vehicle goes |
+| `vehicles[].next` | string | the name of the stop ahead of it |
+| `vehicles[].delay` | integer or `null` | seconds at that stop; `null` without realtime data |
+| `vehicles[].lat`, `lon` | numbers | where it is at `now` |
+| `vehicles[].warnings` | array of notes | those of the notes of its trip that warn, as [`/api/departures`](#get-apidepartures) has them; empty for most |
 
 The vehicles are sorted by destination and, among those with the same one,
 by how many stops they have left. A line with no vehicle under way answers
@@ -490,6 +495,7 @@ trip or a day on which the trip does not run.
   "mode": "tram",
   "to": "Dutzendteich",
   "agency": "VerkehrsAG Nürnberg",
+  "lineAt": [49.45347, 11.07805],
   "realtime": true,
   "source": "VAG Nürnberg",
   "cancelled": false,
@@ -509,6 +515,7 @@ trip or a day on which the trip does not run.
 | --- | --- | --- |
 | `line`, `mode`, `to` | | as for a vehicle |
 | `agency` | string | operator, from the timetable |
+| `lineAt` | `[lat, lon]` | the place of its line: `at` for [`/api/line`](#get-apiline), which tells it from lines of its name in places apart |
 | `realtime` | boolean | whether there is realtime data for this run |
 | `source` | string or null | who provides the realtime data of the trip, where the feed says so |
 | `cancelled` | boolean | the whole run is cancelled |
@@ -587,23 +594,27 @@ none.
 What the address of a stop or a line names now. The page asks for it when
 it is opened at such an address ([Addresses](architecture.md#the-page)):
 the ids of a feed change with every timetable, so a stop is named by its
-name and its place, and a line by its operator, its kind and its name.
+name and its place, and a line by its operator, its kind and its name, and
+by its place where lines of that name are in places apart.
 
 | Parameter | Meaning |
 | --- | --- |
-| `path` | the address from where the instance is: `stop/<name>@<latitude>,<longitude>` or `line/<operator>/<kind>/<name>` |
+| `path` | the address from where the instance is: `stop/<name>@<latitude>,<longitude>` or `line/<operator>/<kind>/<name>`, with `@<latitude>,<longitude>` after it where lines of the name are in places apart |
 
 ```json
 { "type": "stop", "name": "Nürnberg Plärrer", "lat": 49.44809, "lon": 11.0648, "path": "stop/nuernberg-plaerrer@49.4481,11.0648" }
 ```
 
 ```json
-{ "type": "line", "name": "U1", "mode": "subway", "agency": "VerkehrsAG Nürnberg", "path": "line/verkehrsag-nuernberg/subway/u1" }
+{ "type": "line", "name": "U1", "mode": "subway", "agency": "VerkehrsAG Nürnberg", "at": [49.44391, 11.0599], "path": "line/verkehrsag-nuernberg/subway/u1" }
 ```
 
 The stop is the one of that name nearest the place, up to 1 km away, else
 one of any name within 10 m of it; `lat` and `lon` are its place as
-`/api/departures` takes it with `at`. `path` is the address of what was
+`/api/departures` takes it with `at`. Of lines of a name in places apart
+the line is the one whose address it is, else the one nearest the place in
+it, and without a place the busiest; `at` is its place as `/api/line`
+takes it. `path` is the address of what was
 found as it is now, which may differ from the one asked for. A name in an
 address is written in small letters, with ä as ae and the words joined by
 hyphens; the kind of a line is one of the [modes](#modes). 404

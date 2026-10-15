@@ -312,6 +312,33 @@ test('an instance may keep the trips of some operators, in its area or wherever 
   assert.equal(await made({ area: AREA, agencies: [operator('Testbetrieb')] }), scopeId(AREA, ['testbetrieb']));
 });
 
+test('a line is the trips of a name, mode and operator that share stations: of one name in places apart each is a line (#152)', async () => {
+  // a second U1 of the operator, between two stops of its own in the area
+  const apart = await importFeed({
+    'stops.txt': `${FEED['stops.txt']}Delta,,D,49.35,10.90,,\r\nEpsilon,,E,49.36,10.90,,\r\n`,
+    'routes.txt': `${FEED['routes.txt']},U1,1,1,R5,,\n`,
+    'trips.txt': `${FEED['trips.txt']}R5,DAILY,T5\n`,
+    'stop_times.txt': `${FEED['stop_times.txt']}T5,10:00:00,10:00:00,D,0,,,\nT5,10:10:00,10:10:00,E,1,,,\n`,
+  }, 'apart.zip');
+  const [first, second] = apart.lines.flatMap((line, i) => (line.name === 'U1' ? [i] : []));
+  // the U1 from Alpha by way of Beta to Gamma and back on Fridays, and the one from Delta to Epsilon, each with the
+  // middle of its stations
+  assert.deepEqual([first, second].map((i) => [apart.lines[i].trips, apart.lines[i].place]), [[2, [49.5, 11.03333]], [1, [49.355, 10.9]]]);
+  assert.deepEqual(timetable.lines.filter((line) => line.name === 'U1').length, 1);
+  // asked for by its name, the busiest; by its place too, the nearest
+  const u1 = { name: 'U1', mode: 'subway', agency: 'Testbetrieb' };
+  assert.equal(apart.lineNumber(u1), first);
+  assert.equal(apart.lineNumber(u1, [49.36, 10.91]), second);
+  assert.equal(apart.lineNumber(u1, [49.6, 11.1]), first);
+  // a trip knows the place of its line, and its vehicle the line
+  assert.deepEqual(apart.trip('T5', DAY, null).lineAt, [49.355, 10.9]);
+  const lineOf = Object.fromEntries(apart.vehicles(at('10:05'), null).map((v) => [v.id.split('_')[0], v.lineIndex]));
+  assert.deepEqual([lineOf.T1, lineOf.T5], [first, second]);
+  // where each runs, and the search lists both
+  assert.deepEqual(apart.lineRoute(second, at('10:05')), { paths: [[49.35, 10.9, 49.36, 10.9]], stations: [49.35, 10.9, 49.36, 10.9], bounds: [49.35, 10.9, 49.36, 10.9] });
+  assert.equal(apart.searchList().list.lines.name.filter((name) => name === 'U1').length, 2);
+});
+
 test('calendar and calendar_dates decide which days a trip runs', () => {
   const t1 = timetable.tripIndex.get('T1');
   assert.ok(timetable.runsOn(t1, '20261003'));

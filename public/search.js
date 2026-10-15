@@ -678,5 +678,6 @@ export function searchLines(index, query, { near = null, limit = 3 } = {}) {
   return found
     .sort((a, b) => b.exact - a.exact || b.weight - a.weight || lines.name[a.i].localeCompare(lines.name[b.i], undefined, { numeric: true }))
     .slice(0, limit)
-    .map(({ i }) => ({ name: lines.name[i], mode: lines.mode[i], agency: lines.agency[i], to: lines.to[i] }));
+    // (with where it runs: lines of a name may be in places apart, #152)
+    .map(({ i }) => ({ name: lines.name[i], mode: lines.mode[i], agency: lines.agency[i], to: lines.to[i], at: [lines.lat[i], lines.lon[i]] }));
 }
