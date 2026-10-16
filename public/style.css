@@ -503,8 +503,10 @@ button:focus-visible, select:focus-visible, .row:focus-visible, .panel:focus-vis
 /* the bar that moves the details where they are a sheet, see the small screens below */
 .handle { display: none; }
 
-/* The details of a stop or a line can be shared (#37): beside the close button. */
-.close, .share {
+/* The details of a stop or a line can be shared (#37): beside the close
+   button, and for a stop beside the button that enlarges them into a board
+   (#81) between the two. */
+.close, .share, .enlarge {
   position: absolute;
   z-index: 2;
   top: 8px;
@@ -519,7 +521,8 @@ button:focus-visible, select:focus-visible, .row:focus-visible, .panel:focus-vis
   background: var(--bg-subtle);
   cursor: pointer;
 }
-.share { right: 46px; }
+.share, .enlarge { right: 46px; }
+.panel.boardable .share { right: 84px; }
 /* (what says that the address was copied, where there is nothing to share it with: under the button, for a moment) */
 .copied {
   position: absolute;
@@ -533,10 +536,12 @@ button:focus-visible, select:focus-visible, .row:focus-visible, .panel:focus-vis
   color: var(--bg);
   font-size: 12.5px;
 }
+.panel.boardable .copied { right: 84px; }
 
 .panel-head { padding: 14px 48px 10px 14px; border-bottom: 1px solid var(--border); }
 /* (the heading beside the two buttons; what is below it is clear of them) */
 .panel.shareable .panel-head h2 { padding-right: 38px; }
+.panel.boardable .panel-head h2 { padding-right: 76px; }
 .panel-head h2 {
   margin: 0;
   font-size: 16px;
@@ -638,6 +643,14 @@ button:focus-visible, select:focus-visible, .row:focus-visible, .panel:focus-vis
 .row .late { white-space: nowrap; }
 .row .late .delay { display: inline-block; width: 32px; }
 .rows.signed .row.departure { grid-template-columns: var(--time-width) 45px auto 1fr auto; }
+/* Departure times as minutes (#81): in place of the time of day, or with both at the end of the row, after a platform. */
+.row .minutes { font-variant-numeric: tabular-nums; font-weight: 650; white-space: nowrap; }
+.row.departure.times-minutes { grid-template-columns: var(--minutes-width) 30px auto 1fr auto; }
+.rows.signed .row.departure.times-minutes { grid-template-columns: var(--minutes-width) 45px auto 1fr auto; }
+.row.departure.times-both { grid-template-columns: var(--time-width) 30px auto 1fr auto auto; }
+.rows.signed .row.departure.times-both { grid-template-columns: var(--time-width) 45px auto 1fr auto auto; }
+.row.departure.times-both .minutes { text-align: right; }
+.row.cancelled .minutes { text-decoration: line-through; color: var(--text-muted); font-weight: 400; }
 
 /* the vehicles of a line: the stop ahead and the delay, under a heading that says where they go */
 .row.vehicle { grid-template-columns: 1fr auto; }
@@ -668,7 +681,7 @@ button:focus-visible, select:focus-visible, .row:focus-visible, .panel:focus-vis
 }
 
 /* --time-chars: how many characters a clock time has at most in the visitor's language (app.js sets it) */
-.row { --time-width: calc(var(--time-chars, 5) * 1ch + 4px); }
+.row { --time-width: calc(var(--time-chars, 5) * 1ch + 4px); --minutes-width: calc(var(--minutes-chars, 7) * 1ch + 4px); }
 .row.departure { grid-template-columns: var(--time-width) 30px auto 1fr auto; }
 .row.stop { grid-template-columns: 14px var(--time-width) 30px 1fr auto; }
 .row.stop.past { color: var(--text-muted); }
@@ -753,8 +766,9 @@ li:last-child > .row.stop .rail::before { bottom: 50%; }
    row stays, with what the page is and the button that brings the rest back –
    and the status line where it is a warning. On a screen on a wall
    (display=fixed) nothing is to be touched: no buttons at all, on the card or
-   in the corner of the map, and no details. The legend of the delays stays
-   there, as nobody can look up what a colour means. */
+   in the corner of the map, and no details but the board of a stop (#81).
+   The legend of the delays stays there, as nobody can look up what a colour
+   means. */
 :root[data-display] .controls { width: auto; max-width: 360px; }
 :root[data-display=""] .controls > :not(.title, .status),
 :root[data-display="fixed"] .controls > :not(.title, .status, .legend),
@@ -763,7 +777,8 @@ li:last-child > .row.stop .rail::before { bottom: 50%; }
 :root[data-display] .title .search-open,
 :root[data-display="fixed"] .title button,
 :root[data-display="fixed"] .maplibregl-ctrl-group,
-:root[data-display="fixed"] .panel { display: none; }
+:root[data-display="fixed"]:not([data-board]) .panel,
+:root[data-display="fixed"] .panel > button { display: none; }
 /* the way out of a screen on a wall: it shows for a moment when the screen is touched */
 .display-leave {
   position: absolute;
@@ -946,6 +961,10 @@ li:last-child > .row.stop .rail::before { bottom: 50%; }
   .panel .share { top: 14px; right: 12px; }
   .panel .copied { top: 52px; right: 12px; }
   .panel.shareable .panel-head h2 { padding-right: 36px; }
+  /* (for a stop the button that enlarges it is the one at the edge, the share button beside it) */
+  .panel .enlarge { top: 14px; right: 12px; }
+  .panel.boardable .share, .panel.boardable .copied { right: 50px; }
+  .panel.boardable .panel-head h2 { padding-right: 74px; }
   .panel-head .notes { margin-right: 0; }
   /* A sheet has little room: every note is one line there, cut where it does
      not fit. app.js makes a button of what is cut, and keeps all notes to a
@@ -968,3 +987,186 @@ li:last-child > .row.stop .rail::before { bottom: 50%; }
   .dialog .dialog-body { padding-top: 2px; }
   .banner { bottom: auto; top: 50%; }
 }
+
+/* ---------- the board of a stop (#81) ---------- */
+
+/* The details of a stop enlarged (see "the board" in app.js): the map gives
+   up the share of the screen the board takes (--board), on the right of a
+   screen wider than high, at the bottom of one standing upright. The board
+   lies beside the map, not on it, in the colours of the page; its edge is a
+   line with a grip in its middle. With all of the screen it is alone: the
+   map stays behind it as large as the screen, out of sight, and so does the
+   header card. */
+:root[data-board=""] #map { right: var(--board); }
+:root[data-board="alone"] #map,
+:root[data-board="alone"] .controls { visibility: hidden; }
+:root[data-board] .panel {
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: auto;
+  width: var(--board);
+  height: auto;
+  max-height: none;
+  padding: var(--safe-top) var(--safe-right) var(--safe-bottom) 0;
+  border-left: 1px solid var(--border);
+  border-radius: 0;
+  box-shadow: none;
+  overflow: visible;
+  transition: none;
+  /* (its type grows with it, see below) */
+  container-type: size;
+}
+:root[data-board="alone"] .panel { left: 0; width: auto; padding-left: var(--safe-left); border-left: 0; }
+/* (beside the board the header card is as wide as the map leaves room for) */
+:root[data-board=""] .controls { max-width: calc(100% - var(--board) - 2 * var(--gap) - var(--safe-left)); }
+@media (orientation: portrait) {
+  :root[data-board=""] #map { right: 0; bottom: var(--board); }
+  :root[data-board=""] .panel {
+    top: auto;
+    left: 0;
+    width: auto;
+    height: var(--board);
+    padding: 0 var(--safe-right) var(--safe-bottom) var(--safe-left);
+    border-left: 0;
+    border-top: 1px solid var(--border);
+  }
+  :root[data-board=""] .controls { max-width: none; }
+  /* Above a board the map has little height: of the header card its title
+     row stays, as in display mode, and the status line where it warns. */
+  :root[data-board] .controls > :not(.title, .status, .search, .bubble),
+  :root[data-board] .status:not([data-state="outage"], [data-state="error"]) { display: none; }
+}
+
+/* The grip: as large as a finger needs (the button), and in its middle a
+   pill across the edge (::before) with two strokes on it (::after). Upright
+   on a wide screen, across on one standing upright; where the board is
+   alone, at the edge of the screen. */
+:root[data-board] .handle {
+  display: block;
+  position: absolute;
+  z-index: 3;
+  top: calc(50% - 32px);
+  left: -16px;
+  width: 32px;
+  height: 64px;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: none;
+  cursor: ew-resize;
+  touch-action: none;
+}
+:root[data-board] .handle::before {
+  content: "";
+  position: absolute;
+  top: 10px;
+  left: 9px;
+  width: 14px;
+  height: 44px;
+  box-sizing: border-box;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: var(--bg);
+}
+:root[data-board] .handle::after {
+  content: "";
+  position: absolute;
+  top: 22px;
+  left: 14px;
+  width: 4px;
+  height: 20px;
+  box-sizing: border-box;
+  border: solid var(--text-muted);
+  border-width: 0 1px;
+}
+:root[data-board="alone"] .handle { left: 0; }
+@media (orientation: portrait) {
+  :root[data-board] .handle { top: -16px; left: calc(50% - 32px); width: 64px; height: 32px; cursor: ns-resize; }
+  :root[data-board] .handle::before { top: 9px; left: 10px; width: 44px; height: 14px; }
+  :root[data-board] .handle::after { top: 14px; left: 22px; width: 20px; height: 4px; border-width: 1px 0; }
+  :root[data-board="alone"] .handle { top: 0; }
+}
+
+/* Its buttons are at its top on every screen, the one that closes it
+   among them: a board is no sheet that is dragged away. */
+:root[data-board] .panel .close,
+:root[data-board] .panel .share,
+:root[data-board] .panel .enlarge { top: 8px; width: 32px; height: 32px; overflow: visible; clip-path: none; }
+:root[data-board] .panel .close { right: calc(8px + var(--safe-right)); }
+:root[data-board] .panel .enlarge { right: calc(46px + var(--safe-right)); }
+:root[data-board] .panel .share { right: calc(84px + var(--safe-right)); }
+:root[data-board] .panel .copied { top: 46px; right: calc(84px + var(--safe-right)); }
+
+/* The type of a board grows with it: a share of its height, or of its width
+   where that is less, from a little more than the details have to that of a
+   sign at a station. With all of the screen it is half as large again. */
+:root[data-board] #panel-head,
+:root[data-board] #panel-body { font-size: clamp(16px, min(3.4cqh, 4.6cqw), 48px); }
+:root[data-board="alone"] #panel-head,
+:root[data-board="alone"] #panel-body { font-size: calc(1.5 * clamp(16px, min(3.4cqh, 4.6cqw), 48px)); }
+:root[data-board] #panel-body { display: flex; flex-direction: column; padding: 0 0.9em; overflow: hidden; }
+
+/* At its top the name of the stop, and the clock under the buttons; on a
+   wall, where the buttons are not, beside the name. */
+.panel .panel-head.board-head {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-areas: "title title" "sub clock" "notes notes";
+  align-items: baseline;
+  column-gap: 0.6em;
+  padding: 0.6em 0.9em 0.3em;
+  border-bottom: 0;
+}
+.panel.boardable .board-head h2 { grid-area: title; font-size: 1.3em; padding-right: 116px; }
+.board-head .sub { grid-area: sub; margin: 0.1em 0 0; font-size: max(13px, 0.6em); }
+.board-clock { grid-area: clock; margin: 0; font-size: 1.3em; font-weight: 700; font-variant-numeric: tabular-nums; line-height: 1.15; }
+.board-head .notes { grid-area: notes; margin: 0.4em 0 0; font-size: max(12.5px, 0.55em); }
+:root[data-display="fixed"] .panel .panel-head.board-head { grid-template-areas: "title clock" "sub sub" "notes notes"; }
+:root[data-display="fixed"] .panel.boardable .board-head h2 { padding-right: 0; }
+
+/* The departures: one grid for all rows, so that the parts of a row begin
+   at the same place in each (subgrid): the line, where it goes, a platform,
+   and the parts of its time, the minutes larger. A narrow board with both
+   has the time of day and the delay under the minutes. */
+.board-rows {
+  flex: 1;
+  min-height: 0;
+  margin: 0;
+  padding: 0.2em 0 0;
+  list-style: none;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto auto auto;
+  align-content: start;
+  column-gap: 0.55em;
+  overflow: hidden;
+}
+.board-rows.times-both { grid-template-columns: auto minmax(0, 1fr) auto auto auto auto; }
+.board-rows > li { display: grid; grid-template-columns: subgrid; grid-column: 1 / -1; align-items: baseline; padding: 0.28em 0; }
+.board-rows .badge { min-width: 2.6em; padding: 0.12em 0.4em; border-radius: 0.3em; font-size: 0.8em; }
+.board-rows .name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.board-rows .platform { color: var(--text-muted); font-size: 0.7em; white-space: nowrap; }
+.board-rows .cancelled .name { text-decoration: line-through; color: var(--text-muted); }
+/* (the parts of the time are cells of the row; the delay hugs the minutes where it is before them) */
+.board-rows .when { display: contents; }
+.board-rows .when > * { white-space: nowrap; font-variant-numeric: tabular-nums; }
+.board-rows .at, .board-rows .minutes, .board-rows.times-minutes .when > :first-child { justify-self: end; }
+.board-rows .minutes, .board-rows .times-time .at { font-size: 1.05em; font-weight: 700; }
+.board-rows .times-both .at { color: var(--text-muted); font-size: 0.8em; }
+.board-rows .delay { font-size: 0.75em; }
+.board-rows .sign { display: inline-block; width: 0.96em; height: 0.96em; margin-left: 0.2em; vertical-align: -0.12em; color: var(--delay-major); }
+.board-rows .gone { grid-column: 4 / -1; justify-self: end; color: var(--delay-severe); font-size: 0.85em; font-weight: 700; }
+@container (max-width: 520px) {
+  .board-rows.times-both { grid-template-columns: auto minmax(0, 1fr) auto auto; }
+  .board-rows.times-both .when { display: grid; grid-template-columns: auto auto; justify-content: end; justify-items: end; line-height: 1.15; }
+  .board-rows.times-both .minutes, .board-rows.times-both .gone { grid-column: 1 / -1; }
+  .board-rows.times-both .at,
+  .board-rows.times-both .when > .delay,
+  .board-rows.times-both .when > .late { grid-row: 2; font-size: max(11.5px, 0.7em); }
+  .board-rows.times-both .when > :not(:empty, .at) { margin-left: 0.35em; }
+}
+
+/* (the credits of the data, at its foot where the map with its own is not there) */
+.board-credits { flex: none; margin: 0; padding: 0.5em 0 0.7em; color: var(--text-muted); font-size: max(11px, 0.36em); }
+.board-credits a { color: inherit; }
+:root:not([data-board="alone"]) .board-credits { display: none; }

@@ -10,8 +10,8 @@
 
 import { parseAddress, stopPath, wordsOf } from './address.js';
 import { APP_NAME, formatNumber, formatTime, languagePicker, loadLanguage, pageTexts, setTimeZone, t, translatePage } from './i18n.js';
-import { displayQuery, readDisplay } from './display.js';
-import { mdiAlert, mdiChevronRight, mdiCityVariantOutline, mdiEye, mdiEyeOff, mdiFullscreen, mdiFullscreenExit } from './vendor/material-design-icons/icons.js';
+import { BOARD_MAX, BOARD_SHARE, boardQuery, boardShare, displayQuery, readBoard, readDisplay } from './display.js';
+import { mdiAlert, mdiArrowCollapse, mdiArrowExpand, mdiChevronRight, mdiCityVariantOutline, mdiEye, mdiEyeOff, mdiFullscreen, mdiFullscreenExit } from './vendor/material-design-icons/icons.js';
 import { AttributionControl, MapLibreMap, NavigationControl } from './vendor/maplibre-gl/maplibre-gl.mjs';
 
 // The modes, each with a chip where the timetable has it. Same ids as MODES in
@@ -34,6 +34,10 @@ const OPENED_AS_DISPLAY = ASKED !== null;
 const FIXED = ASKED?.fixed ?? false;
 const DISPLAY_LEAVE_MS = 6000; // how long the way out shows after a fixed display was touched
 const DISPLAY_VERSION_MS = 10 * 60_000; // how often a fixed display asks whether the server runs another version
+
+// How departure times show, in every list of them (#81): the time of day,
+// the minutes until it leaves, or both.
+const TIMES = ['time', 'minutes', 'both'];
 
 const POLL_MS = 10_000;
 const RETRY_LOADING_MS = 5000; // while the server has no timetable yet
@@ -217,6 +221,9 @@ const state = {
   colorBy: loadSetting('colorBy', 'mode') === 'delay' ? 'delay' : 'mode',
   flags: loadSetting('flags', true) !== false, // the vehicles carry their delay as a flag
   theme: 'auto', // one of THEMES, see there
+  times: 'both', // one of TIMES, see there
+  clock: loadSetting('clock', true) !== false, // the board of a stop has a clock
+  board: null, // the share of the screen in percent the open stop takes as a board, or null for its details (see "the board")
   selection: null, // { type: 'trip' | 'station' | 'line', id, data }, see select()
   hits: [], // what can be pointed at on the map: { x, y, r, vehicle or station }, see draw()
   covers: [], // the boxes of the bubbles, which hide what is under them: [x, y, width, height]
@@ -1664,6 +1671,43 @@ document.addEventListener('pointerdown', (event) => {
   show();
 }
 
+// Departure times as the time of day, as the minutes until they leave, or
+// both: chosen in the settings, kept in the browser, for every list of
+// departures (#81).
+{
+  const buttons = [...document.querySelectorAll('[data-times-choice]')];
+  const choose = (times) => {
+    state.times = TIMES.includes(times) ? times : 'both';
+    for (const button of buttons) button.setAttribute('aria-pressed', String(button.dataset.timesChoice === state.times));
+  };
+  choose(loadSetting('times', 'both'));
+  for (const button of buttons) {
+    button.addEventListener('click', () => {
+      choose(button.dataset.timesChoice);
+      saveSetting('times', state.times);
+      showSelection();
+    });
+  }
+}
+
+// The clock on the board of a stop, or none for a board on a screen that
+// has a clock of its own: chosen in the settings, kept in the browser.
+{
+  const buttons = [...document.querySelectorAll('[data-clock-choice]')];
+  const show = () => {
+    for (const button of buttons) button.setAttribute('aria-pressed', String((button.dataset.clockChoice === 'on') === state.clock));
+  };
+  for (const button of buttons) {
+    button.addEventListener('click', () => {
+      state.clock = button.dataset.clockChoice === 'on';
+      saveSetting('clock', state.clock);
+      show();
+      showSelection();
+    });
+  }
+  show();
+}
+
 // ---------- detail panel ----------
 
 const panel = $('panel');
@@ -1673,6 +1717,8 @@ const panelBody = $('panel-body');
 let panelTimer = null;
 
 function closePanel() {
+  // (a board closes with its details, and the address loses it)
+  if (state.board !== null) setBoard(null);
   const picked = pickedQuery();
   state.selection = null;
   shareable(false);
@@ -1759,8 +1805,11 @@ async function openAddress(loaded = false) {
     selectLine(found, { counted: loaded });
     return true;
   }
-  // (as from the search: on a narrow screen the details cover the lower half, so the stop goes above the middle)
-  map.easeTo({ center: [found.lon, found.lat], zoom: Math.max(map.getZoom(), SEARCH_ZOOM), offset: [0, narrowScreen.matches ? -0.12 * viewSize.y : 0], duration: 0 });
+  // (the board of the stop, where the address has one: a line has none)
+  const board = readBoard(location.search);
+  if (board !== state.board) setBoard(board);
+  // (as from the search: on a narrow screen the details cover the lower half, so the stop goes above the middle; a board does not)
+  map.easeTo({ center: [found.lon, found.lat], zoom: Math.max(map.getZoom(), SEARCH_ZOOM), offset: [0, narrowScreen.matches && board === null ? -0.12 * viewSize.y : 0], duration: 0 });
   select('station', null, { at: found, counted: loaded });
   return true;
 }
@@ -1789,13 +1838,20 @@ addEventListener('popstate', () => {
 // a computer it is copied, and a note says so for a moment.
 const shareButton = $('panel-share');
 const copiedNote = $('panel-copied');
+// (and beside it the button that enlarges the details of a stop into a board, see "the board")
+const boardButton = $('panel-board');
 let copiedTimer = null;
 
-/** Shows the share button where what is open has an address, a stop or a line. */
-function shareable(yes) {
+/**
+ * Shows the share button where what is open has an address, a stop or a
+ * line, and for a stop the button that enlarges it into a board.
+ */
+function shareable(yes, board = false) {
   shareButton.hidden = !yes;
+  boardButton.hidden = !board;
   if (!yes) copiedNote.hidden = true;
   panel.classList.toggle('shareable', yes);
+  panel.classList.toggle('boardable', board);
 }
 
 shareButton.addEventListener('click', async () => {
@@ -1826,6 +1882,8 @@ shareButton.addEventListener('click', async () => {
  *   counted already (#158)
  */
 function select(type, id, more = {}) {
+  // (a board is of a stop: what else is opened is shown as details)
+  if (type !== 'station' && state.board !== null) setBoard(null);
   // The row that was activated is about to go: keep the keyboard focus in the panel.
   if (panelBody.contains(document.activeElement) || panelHead.contains(document.activeElement)) panel.focus({ preventScroll: true });
   const picked = pickedQuery();
@@ -1866,7 +1924,9 @@ async function loadSelection(first = false) {
       if (data.route) selection.route = data.route;
       if (first && selection.type === 'station') {
         showAddress(stopPath(data.name, data.lat, data.lon), stopTitle(data.name));
-        shareable(true);
+        shareable(true, true);
+        // (a board keeps the stop it shows in the middle of the map)
+        if (state.board !== null) map.jumpTo({ center: [data.lon, data.lat] });
       }
       if (first && selection.type === 'line') {
         // (from now on asked for by the place the server has for it)
@@ -2206,10 +2266,12 @@ function clearOfCards() {
   // the right; without details only the one. A sheet just opened is still
   // gliding up as it fills: as high as it may get by itself, as in
   // clearOfSheet.
-  const sheetTop = panel.hidden ? viewSize.y : panel.classList.contains('sized') ? details.top : Math.min(details.top, viewSize.y * (1 - SHEET_MIDDLE));
+  // (a board is beside the map, not on it)
+  const over = !panel.hidden && state.board === null;
+  const sheetTop = !over ? viewSize.y : panel.classList.contains('sized') ? details.top : Math.min(details.top, viewSize.y * (1 - SHEET_MIDDLE));
   const padding = narrowScreen.matches
     ? { top: card.bottom + margin, bottom: viewSize.y - sheetTop + margin, left: margin, right: margin }
-    : { top: margin, bottom: margin, left: card.right + margin, right: panel.hidden ? margin : viewSize.x - details.left + margin };
+    : { top: margin, bottom: margin, left: card.right + margin, right: !over ? margin : viewSize.x - details.left + margin };
   // (in a window too small for that, better covered in part than not shown)
   const fits = padding.left + padding.right < 0.8 * viewSize.x && padding.top + padding.bottom < 0.8 * viewSize.y;
   return fits ? padding : { top: margin, bottom: margin, left: margin, right: margin };
@@ -2254,17 +2316,50 @@ function renderLine(line, first) {
   }
 }
 
+/** When a departure leaves, in epoch seconds: as planned, moved by the delay as it is shown. */
+const leavesAt = (dep) => dep.planned + Math.round((dep.delay ?? 0) / 60) * 60;
+
+/** How long until a departure leaves, as the clock goes: "4 min", "now" under a minute. */
+function untilText(leaves) {
+  const minutes = Math.floor(leaves / 60) - Math.floor(now() / 60);
+  return minutes < 1 ? t('departures.now') : t('departures.minutes', { count: minutes });
+}
+
+/** The minutes until a departure leaves, which count down by themselves between two answers of the server (tickTimes). */
+function minutesNode(dep) {
+  const leaves = leavesAt(dep);
+  return el('span', { class: 'minutes', text: untilText(leaves), data: { leaves } });
+}
+
+/** The minutes in the lists of departures and the clock of a board, as time goes on. */
+function tickTimes() {
+  if (panel.hidden) return;
+  const update = (node, text) => {
+    if (node.textContent !== text) node.textContent = text;
+  };
+  for (const node of panel.querySelectorAll('.minutes[data-leaves]')) update(node, untilText(Number(node.dataset.leaves)));
+  const clock = panel.querySelector('.board-clock');
+  if (clock) update(clock, formatTime(now()));
+}
+
 function renderStation(board) {
+  if (state.board !== null) {
+    renderBoard(board);
+    return;
+  }
   const scrollTop = panelBody.scrollTop;
   const signed = board.departures.some((dep) => dep.warnings.length > 0);
+  // (the time of day first, or the minutes in its place; with both, the minutes at the end of the row)
+  const times = state.times;
   const rows = board.departures.map((dep) =>
     el('li', {}, [
-      el('button', { type: 'button', class: `row departure${dep.cancelled ? ' cancelled' : ''}`, onclick: () => select('trip', dep.trip) }, [
-        el('span', { class: 'time', text: formatTime(dep.planned) }),
+      el('button', { type: 'button', class: `row departure times-${times}${dep.cancelled ? ' cancelled' : ''}`, onclick: () => select('trip', dep.trip) }, [
+        times === 'minutes' ? minutesNode(dep) : el('span', { class: 'time', text: formatTime(dep.planned) }),
         delayCell(dep.cancelled ? el('span', { class: 'delay' }) : delayNode(dep.delay), dep.warnings, signed),
         badge(dep.line, dep.mode),
         el('span', { class: 'name', text: dep.to, title: dep.to }),
         el('span', { class: 'platform', text: dep.cancelled ? t('departures.cancelled') : platformText(dep.platform) }),
+        ...(times === 'both' ? [minutesNode(dep)] : []),
       ]),
     ]),
   );
@@ -2313,7 +2408,7 @@ function sheetHeights() {
 
 /** Moves the map so that what is at the height y of the screen is not under the sheet, if there is room for it above. */
 function clearOfSheet(y) {
-  if (!narrowScreen.matches || panel.hidden) return;
+  if (!narrowScreen.matches || panel.hidden || state.board !== null) return;
   const top = $('controls').getBoundingClientRect().bottom;
   // (just opened, it is still filling up: as far as it may get by itself)
   const bottom = panel.classList.contains('sized') ? panel.getBoundingClientRect().top : viewSize.y * (1 - SHEET_MIDDLE);
@@ -2332,6 +2427,8 @@ function restSheet(height) {
 }
 
 sheetHandle.addEventListener('click', () => {
+  // (on a board the bar is the grip of its edge, see "the board")
+  if (state.board !== null) return;
   const heights = sheetHeights();
   const now = panel.offsetHeight;
   // one up from where it is, and from the highest back to the middle
@@ -2342,7 +2439,7 @@ sheetHandle.addEventListener('click', () => {
 {
   let drag = null; // while a finger is down on the bar or the head: where it began and whether it has moved enough to drag
   const begin = (event) => {
-    if (!narrowScreen.matches || !event.isPrimary || event.button !== 0) return;
+    if (!narrowScreen.matches || state.board !== null || !event.isPrimary || event.button !== 0) return;
     drag = { id: event.pointerId, y: event.clientY, height: panel.offsetHeight, moved: false, last: [[event.timeStamp, event.clientY]] };
     // From here on all of it comes to this part, wherever the pointer goes: a
     // finger does that by itself, a mouse does not. Not from a button in the
@@ -2437,6 +2534,150 @@ for (const [dialog, ...parts] of [[aboutDialog, $('about-handle'), $('about-titl
   }
 }
 
+// ---------- the board (#81) ----------
+
+// The details of a stop enlarge into a board, for a screen that shows the
+// departures there: the same on every screen, a dashboard whatever its size.
+// On a screen wider than high the map is on the left and the board on the
+// right; on one standing upright, a phone among them, the map is above and
+// the board below (style.css). The edge between them is dragged by the grip
+// in its middle, from a narrow board to all of the screen, where the map is
+// gone; the map keeps the stop in its middle. The board is part of the
+// address of the stop (board=<share>, display.js), so that the address opens
+// it again, and with display=fixed puts it on a wall.
+
+const upright = matchMedia('(orientation: portrait)'); // as in style.css
+// The data of the timetable are credited on the map; with all of the screen
+// the board does that itself (loadArea).
+let boardCredits = '';
+// (what a board took last, for the next one)
+let boardWas = BOARD_SHARE;
+
+/**
+ * Enlarges the details of the open stop into a board that takes this share
+ * of the screen, or makes it the details again (null).
+ * @param written whether the address is to say so now: not while the edge is dragged
+ */
+function setBoard(share, written = true) {
+  const was = state.board;
+  state.board = share;
+  const root = document.documentElement;
+  if (share === null) {
+    delete root.dataset.board;
+    root.style.removeProperty('--board');
+  } else {
+    boardWas = share;
+    root.dataset.board = share === 100 ? 'alone' : '';
+    root.style.setProperty('--board', `${share}%`);
+  }
+  const label = share === null ? t('panel.enlarge') : t('panel.shrink');
+  boardButton.title = label;
+  boardButton.setAttribute('aria-label', label);
+  boardButton.replaceChildren(icon(share === null ? mdiArrowExpand : mdiArrowCollapse));
+  if ((was === null) !== (share === null)) {
+    // (a sheet has a height of its own, a board its share; in the map's corner there is room for the map's own buttons)
+    setSheetHeight(null);
+    showSelection();
+    const at = state.selection?.data;
+    if (share !== null && state.selection?.type === 'station' && at) map.jumpTo({ center: [at.lon, at.lat] });
+  }
+  if (written) writeBoard();
+}
+
+/** Puts the board into the address of the page, or takes it out. */
+function writeBoard() {
+  if (state.display) writeAddress();
+  else history.replaceState(null, '', `${location.pathname}${boardQuery(location.search, state.board)}`);
+}
+
+boardButton.addEventListener('click', () => setBoard(state.board === null ? boardWas : null));
+
+/**
+ * The departures of a stop as a board: the line, where it goes and when it
+ * leaves, in type that grows with the board (style.css), as many as there is
+ * room for (fitBoard). A row is not a button: a board is read, not operated.
+ */
+function renderBoard(board) {
+  const times = state.times;
+  const rows = board.departures.map((dep) => {
+    // (a delay shows where there is one: on time the board says nothing)
+    const delay = Math.round((dep.delay ?? 0) / 60) === 0 ? null : dep.delay;
+    const late = delayCell(delayNode(delay), dep.warnings, dep.warnings.length > 0);
+    const at = () => el('span', { class: 'at', text: formatTime(dep.planned) });
+    const when = dep.cancelled ? [el('span', { class: 'gone', text: t('departures.cancelled') })]
+      : times === 'time' ? [at(), late]
+        : times === 'minutes' ? [late, minutesNode(dep)]
+          : [at(), late, minutesNode(dep)];
+    return el('li', { class: dep.cancelled ? 'cancelled' : '' }, [
+      badge(dep.line, dep.mode),
+      el('span', { class: 'name', text: dep.to }),
+      el('span', { class: 'platform', text: platformText(dep.platform) }),
+      el('span', { class: `when times-${times}` }, when),
+    ]);
+  });
+  const head = [el('h2', { text: board.name }), el('p', { class: 'sub', text: t('departures.title') })];
+  if (state.clock) head.push(el('p', { class: 'board-clock', text: formatTime(now()) }));
+  const credits = el('p', { class: 'board-credits' });
+  credits.innerHTML = [escapeHtml(siteName), boardCredits].filter(Boolean).join(' · ');
+  fillPanel(
+    [el('div', { class: 'panel-head board-head' }, [...head, notesList(board.notes)])],
+    rows.length ? el('ul', { class: `board-rows times-${times}` }, rows) : el('p', { class: 'panel-empty', text: t('departures.none') }),
+    credits,
+  );
+  fitBoard();
+}
+
+/** Shows as many departures as the board has room for: whole rows, those that do not fit hidden. */
+function fitBoard() {
+  const list = panelBody.querySelector('.board-rows');
+  if (!list) return;
+  const rows = [...list.children];
+  for (const row of rows) row.hidden = false;
+  const room = list.getBoundingClientRect().bottom + 0.5;
+  // (all measured first, then hidden: from the first row that does not fit on)
+  const ends = rows.map((row) => row.getBoundingClientRect().bottom);
+  const over = ends.findIndex((end) => end > room);
+  if (over >= 0) for (const row of rows.slice(over)) row.hidden = true;
+}
+// (the board's room changes with its share of the screen, and with the screen)
+new ResizeObserver(() => {
+  if (state.board !== null) fitBoard();
+}).observe(panel);
+
+// The grip in the middle of the edge: dragged, the edge follows it; from
+// the keyboard the arrows move it. Where the board takes as much as it may
+// beside the map, the next step is all of the screen, and from there back.
+{
+  let drag = null; // the pointer that holds the grip
+  sheetHandle.addEventListener('pointerdown', (event) => {
+    if (state.board === null || !event.isPrimary || event.button !== 0) return;
+    drag = event.pointerId;
+    sheetHandle.setPointerCapture(drag);
+    panel.classList.add('dragging');
+  });
+  sheetHandle.addEventListener('pointermove', (event) => {
+    if (event.pointerId !== drag) return;
+    const share = boardShare(100 * (upright.matches ? 1 - event.clientY / innerHeight : 1 - event.clientX / innerWidth));
+    if (share !== state.board) setBoard(share, false);
+  });
+  const end = (event) => {
+    if (event.pointerId !== drag) return;
+    drag = null;
+    panel.classList.remove('dragging');
+    writeBoard();
+  };
+  sheetHandle.addEventListener('pointerup', end);
+  sheetHandle.addEventListener('pointercancel', end);
+  sheetHandle.addEventListener('keydown', (event) => {
+    const by = { ArrowLeft: 5, ArrowUp: 5, ArrowRight: -5, ArrowDown: -5 }[event.key];
+    if (state.board === null || !by) return;
+    event.preventDefault();
+    const larger = by > 0;
+    const next = state.board === 100 ? (larger ? 100 : BOARD_MAX) : state.board === BOARD_MAX && larger ? 100 : boardShare(state.board + by);
+    if (next !== state.board) setBoard(next);
+  });
+}
+
 // ---------- data loading ----------
 
 let pollTimer = null;
@@ -2512,6 +2753,8 @@ async function loadArea() {
   // thing in the corner, with a marker or without.
   const data = [`${t('attribution.data')} ${area.attribution.data}`, versionCredit(about)].filter(Boolean).join(' | ');
   const credits = [area.attribution.map, data].filter(Boolean);
+  // (where a board takes all of the screen, it names the data itself: the map is not there)
+  boardCredits = `${t('attribution.data')} ${area.attribution.data}`;
   // (the credits first: of the controls in a bottom corner, the one added last is on top)
   map.addControl(new AttributionControl({ customAttribution: credits }), 'bottom-right');
   map.addControl(new NavigationControl({ showCompass: false }), 'bottom-right');
@@ -2659,9 +2902,11 @@ function writeAddress() {
     colorBy: state.colorBy,
     flags: state.flags,
     hiddenModes: MODES.filter((mode) => !state.enabled.has(mode)),
+    times: state.times,
+    clock: state.clock,
   };
   // (with the path: the stop or the line that is open stays in it; a query alone would be taken from the base of the page, where the instance is)
-  history.replaceState(null, '', `${location.pathname}${displayQuery({ fixed: FIXED, language, settings }, MODES)}`);
+  history.replaceState(null, '', `${location.pathname}${displayQuery({ fixed: FIXED, language, board: state.board, settings }, MODES)}`);
 }
 
 /** Brings the page in line with whether it is a display. */
@@ -2681,7 +2926,7 @@ function setDisplay(on) {
   if (!on && OPENED_AS_DISPLAY) {
     // What is set came with the address and not from this browser: the page
     // with its controls starts afresh, with what is stored here.
-    location.search = ASKED.language ? `?lang=${encodeURIComponent(ASKED.language)}` : '';
+    location.search = boardQuery(ASKED.language ? `?lang=${encodeURIComponent(ASKED.language)}` : '', state.board);
     return;
   }
   state.display = on;
@@ -2695,7 +2940,8 @@ function setDisplay(on) {
     writeAddress();
     return;
   }
-  history.replaceState(null, '', `${location.pathname}${OWN_SEARCH}`);
+  // (with the board that is open, which the page was perhaps opened with, or not)
+  history.replaceState(null, '', `${location.pathname}${boardQuery(OWN_SEARCH, state.board)}`);
   // (where the map was moved to meanwhile is what the browser keeps again)
   const center = map.getCenter();
   saveSetting('view', { lat: center.lat, lon: center.lng, zoom: map.getZoom() });
@@ -2772,6 +3018,9 @@ function init() {
   // The lists have a column for the time, as wide as the language writes it (14:05 or 12:05 PM).
   const hours = Array.from({ length: 24 }, (_, hour) => formatTime(hour * 3600));
   document.documentElement.style.setProperty('--time-chars', Math.max(...hours.map((text) => text.length)));
+  // (and one for the minutes until a departure leaves, as wide as the longest of the two hours they reach)
+  const minutes = [t('departures.now'), t('departures.minutes', { count: 120 })];
+  document.documentElement.style.setProperty('--minutes-chars', Math.max(...minutes.map((text) => text.length)));
   buildControls();
   // (the header card is what this visitor gets now; where the page came that way, first.js has shown it already)
   document.documentElement.dataset.controls = 'shown';
@@ -2780,6 +3029,7 @@ function init() {
   resizeCanvas();
   requestAnimationFrame(frame);
   setInterval(updateStatus, 1000);
+  setInterval(tickTimes, 1000);
   showDisplay();
   if (FIXED) startFixed();
   poll();

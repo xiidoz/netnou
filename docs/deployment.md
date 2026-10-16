@@ -272,9 +272,10 @@ Worth watching:
   browser and the site they came from, which it passes on, with the address
   and the title of the page, to the analytics service named there, and
   keeps nothing of either
-  ([Counting visits](configuration.md#counting-visits)). The page stores six settings in the browser's
+  ([Counting visits](configuration.md#counting-visits)). The page stores eight settings in the browser's
   `localStorage` (`netnou.lang`, `netnou.theme`, `netnou.flags`,
-  `netnou.hiddenModes`, `netnou.colorBy`, `netnou.view`) and its own files in the browser cache `netnou-shell-v3`
+  `netnou.hiddenModes`, `netnou.colorBy`, `netnou.view`, `netnou.times`,
+  `netnou.clock`) and its own files in the browser cache `netnou-shell-v3`
   for the offline start. While its controls are hidden, and as a display on a
   wall, it reads and writes none of the settings: its address says them
   ([A screen on a wall](#a-screen-on-a-wall)). The only requests a visitor's browser makes to a
@@ -316,6 +317,8 @@ https://example.org/?display=fixed&view=49.4478,11.0765,13.4&theme=dark&lang=de
 | `color=delay` | vehicles coloured by delay, with the legend | coloured by kind of transport |
 | `flags=off` | no delay flags on the vehicles | with flags |
 | `modes=tram,subway` | only these kinds of transport, of `subway`, `tram`, `bus`, `suburban`, `regional`, `longdistance`, `ferry`, `cable` and `other` | all |
+| `times=time` or `times=minutes` | departure times as the time of day or as the minutes until they leave | both |
+| `clock=off` | no clock on the board of a stop | with a clock |
 | `lang=de` | the language | the language of the browser |
 
 The quick way to such an address: open the page, set it up as the screen
@@ -323,6 +326,23 @@ should show it, and press the button with the eye next to the settings. That
 hides the controls, and from then on the address says what is shown and
 follows the map as you move it. Copy it and write `display=fixed` in place
 of `display`.
+
+The screen can also show the departures of one stop, as a board beside the
+map or on all of the screen. The address is then that of the stop, with the
+board in it:
+
+```text
+https://example.org/stop/nuernberg-plaerrer@49.4481,11.0648?display=fixed&board=50&lang=de
+```
+
+| In the address | Meaning | Without it |
+| --- | --- | --- |
+| `board=<share>` | the departures as a board that takes this share of the screen in percent, from 25 to 75: on the right of the map, or below it on a screen standing upright; `board=100` is all of the screen, without the map | the map alone |
+
+To set it up, open the stop and press the button with the two arrows in its
+details. Drag the edge between map and board to where it should be, and set
+how the times show and whether the board has a clock behind the gear. Then
+press the eye and copy the address as above.
 
 What a fixed display does by itself:
 

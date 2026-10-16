@@ -26,6 +26,15 @@ export default {
   'flags.label': 'Delay on the vehicles',
   'flags.on': 'Show',
   'flags.off': 'Hide',
+  // how the departures of a stop give their times: the time of day, the minutes until they leave, or both
+  'times.label': 'Departure times',
+  'times.time': 'Time',
+  'times.minutes': 'Minutes',
+  'times.both': 'Both',
+  // the time of day at the top of the board of a stop, which a screen with a clock of its own can do without
+  'clock.label': 'Clock on the board',
+  'clock.on': 'Show',
+  'clock.off': 'Hide',
 
   'map.label': 'Map with the current positions of the vehicles',
   'map.zoomIn': 'Zoom in',
@@ -137,6 +146,9 @@ export default {
   'panel.loadFailed': 'The data could not be loaded.',
   'panel.share': 'Share',
   'panel.copied': 'Address copied',
+  // the button that enlarges the details of a stop into a board of its departures, and the one that makes the board the details again
+  'panel.enlarge': 'Enlarge',
+  'panel.shrink': 'Make smaller',
 
   'trip.realtime': 'realtime data',
   'trip.scheduleOnly': 'timetable data only',
@@ -168,6 +180,9 @@ export default {
   'departures.title': 'Departures',
   'departures.none': 'No departures in the next two hours.',
   'departures.cancelled': 'cancelled',
+  // how long until a departure leaves: under a minute, and in whole minutes
+  'departures.now': 'now',
+  'departures.minutes': '{count} min',
 
   // the page of an address of a stop or a line (#37), for search engines and previews
   'address.stopTitle': '{stop} departures live',

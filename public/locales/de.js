@@ -13,6 +13,13 @@ export default {
   'flags.label': 'Verspätung an den Fahrzeugen',
   'flags.on': 'Anzeigen',
   'flags.off': 'Ausblenden',
+  'times.label': 'Abfahrtszeiten',
+  'times.time': 'Uhrzeit',
+  'times.minutes': 'Minuten',
+  'times.both': 'Beides',
+  'clock.label': 'Uhr auf der Tafel',
+  'clock.on': 'Anzeigen',
+  'clock.off': 'Ausblenden',
 
   'map.label': 'Karte mit den aktuellen Positionen der Fahrzeuge',
   'map.zoomIn': 'Vergrößern',
@@ -104,6 +111,8 @@ export default {
   'panel.loadFailed': 'Daten konnten nicht geladen werden.',
   'panel.share': 'Teilen',
   'panel.copied': 'Adresse kopiert',
+  'panel.enlarge': 'Vergrößern',
+  'panel.shrink': 'Verkleinern',
 
   'trip.realtime': 'Echtzeitdaten',
   'trip.scheduleOnly': 'nur Fahrplandaten',
@@ -127,6 +136,8 @@ export default {
   'departures.title': 'Abfahrten',
   'departures.none': 'Keine Abfahrten in den nächsten zwei Stunden.',
   'departures.cancelled': 'fällt aus',
+  'departures.now': 'jetzt',
+  'departures.minutes': '{count} min',
 
   // the page of an address of a stop or a line (#37), for search engines and previews
   'address.stopTitle': 'Abfahrten {stop} live',
