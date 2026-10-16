@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { displayQuery, readDisplay } from '../public/display.js';
+import { BOARD_MAX, BOARD_MIN, BOARD_SHARE, boardQuery, boardShare, displayQuery, readBoard, readDisplay } from '../public/display.js';
 
 const MODES = ['subway', 'tram', 'bus', 'suburban', 'regional', 'longdistance'];
 
@@ -14,7 +14,8 @@ test('a display without anything else shows the whole area as the device has it'
   assert.deepEqual(readDisplay('?display', MODES), {
     fixed: false,
     language: null,
-    settings: { view: null, theme: null, colorBy: null, flags: true, hiddenModes: [] },
+    board: null,
+    settings: { view: null, theme: null, colorBy: null, flags: true, hiddenModes: [], times: null, clock: true },
   });
   // (as a browser writes it after a form, and with a value that means nothing)
   assert.equal(readDisplay('?display=', MODES).fixed, false);
@@ -23,17 +24,22 @@ test('a display without anything else shows the whole area as the device has it'
 });
 
 test('the address says what a display shows', () => {
-  assert.deepEqual(readDisplay('?display=fixed&view=49.4478,11.0765,13.4&theme=dark&color=delay&flags=off&modes=tram,subway&lang=de', MODES), {
+  assert.deepEqual(readDisplay('?display=fixed&view=49.4478,11.0765,13.4&theme=dark&color=delay&flags=off&modes=tram,subway&times=minutes&clock=off&board=60&lang=de', MODES), {
     fixed: true,
     language: 'de',
+    board: 60,
     settings: {
       view: { lat: 49.4478, lon: 11.0765, zoom: 13.4 },
       theme: 'dark',
       colorBy: 'delay',
       flags: false,
       hiddenModes: ['bus', 'suburban', 'regional', 'longdistance'],
+      times: 'minutes',
+      clock: false,
     },
   });
+  // only "off" takes the clock away
+  assert.equal(readDisplay('?display&clock=on', MODES).settings.clock, true);
   // only "off" takes the flags away, and a kind of transport nobody knows shows nothing more
   assert.equal(readDisplay('?display&flags=on', MODES).settings.flags, true);
   assert.deepEqual(readDisplay('?display&modes=tram,ferry', MODES).settings.hiddenModes, MODES.filter((mode) => mode !== 'tram'));
@@ -50,14 +56,49 @@ test('a section of the map that is none comes out as one that no map has', () =>
 
 test('the address written for a display reads as the same display again', () => {
   const displays = [
-    { fixed: false, language: 'de', settings: { view: { lat: 49.4478, lon: 11.0765, zoom: 14.2 }, theme: null, colorBy: null, flags: true, hiddenModes: [] } },
-    { fixed: true, language: 'en', settings: { view: { lat: 50.3, lon: 11.9, zoom: 9 }, theme: 'dark', colorBy: 'delay', flags: false, hiddenModes: ['bus'] } },
-    { fixed: false, language: 'de', settings: { view: { lat: -33.9, lon: 18.4, zoom: 11.5 }, theme: 'light', colorBy: null, flags: true, hiddenModes: MODES } },
+    { fixed: false, language: 'de', board: null, settings: { view: { lat: 49.4478, lon: 11.0765, zoom: 14.2 }, theme: null, colorBy: null, flags: true, hiddenModes: [], times: null, clock: true } },
+    { fixed: true, language: 'en', board: 100, settings: { view: { lat: 50.3, lon: 11.9, zoom: 9 }, theme: 'dark', colorBy: 'delay', flags: false, hiddenModes: ['bus'], times: 'time', clock: false } },
+    { fixed: false, language: 'de', board: 35, settings: { view: { lat: -33.9, lon: 18.4, zoom: 11.5 }, theme: 'light', colorBy: null, flags: true, hiddenModes: MODES, times: 'minutes', clock: true } },
   ];
   for (const display of displays) assert.deepEqual(readDisplay(displayQuery(display, MODES), MODES), display);
 
   assert.equal(displayQuery(displays[0], MODES), '?display&view=49.4478,11.0765,14.2&lang=de');
-  assert.equal(displayQuery(displays[1], MODES), '?display=fixed&view=50.3000,11.9000,9.0&lang=en&theme=dark&color=delay&flags=off&modes=subway,tram,suburban,regional,longdistance');
-  // what the page keeps for "as the device has it", or by the kind of transport, is not named
-  assert.equal(displayQuery({ ...displays[0], settings: { ...displays[0].settings, theme: 'auto', colorBy: 'mode' } }, MODES), '?display&view=49.4478,11.0765,14.2&lang=de');
+  assert.equal(displayQuery(displays[1], MODES), '?display=fixed&view=50.3000,11.9000,9.0&lang=en&theme=dark&color=delay&flags=off&modes=subway,tram,suburban,regional,longdistance&times=time&clock=off&board=100');
+  // what the page keeps for "as the device has it", by the kind of transport, or both times, is not named
+  assert.equal(displayQuery({ ...displays[0], settings: { ...displays[0].settings, theme: 'auto', colorBy: 'mode', times: 'both' } }, MODES), '?display&view=49.4478,11.0765,14.2&lang=de');
+});
+
+test('a board takes a share of the screen between its least and its most, or all of it', () => {
+  assert.equal(boardShare(60), 60);
+  assert.equal(boardShare(33.4), 33);
+  assert.equal(boardShare(10), BOARD_MIN);
+  assert.equal(boardShare(-5), BOARD_MIN);
+  // (beyond its most it stays there, until it is nearly all of the screen: then it is all of it)
+  assert.equal(boardShare(82), BOARD_MAX);
+  assert.equal(boardShare(90), 100);
+  assert.equal(boardShare(140), 100);
+  assert.equal(boardShare(Number.NaN), BOARD_SHARE);
+});
+
+test('the address of a stop says whether its board is open, and how much of the screen it takes', () => {
+  assert.equal(readBoard(''), null);
+  assert.equal(readBoard('?lang=de'), null);
+  assert.equal(readBoard('?board=60'), 60);
+  assert.equal(readBoard('?lang=de&board=100'), 100);
+  // (a board asked for without a share, or with one that is none, takes what a board takes by itself)
+  assert.equal(readBoard('?board'), BOARD_SHARE);
+  assert.equal(readBoard('?board='), BOARD_SHARE);
+  assert.equal(readBoard('?board=half'), BOARD_SHARE);
+  assert.equal(readBoard('?board=5'), BOARD_MIN);
+});
+
+test('the board goes into the address and out of it, and what else it asks for stays as it was', () => {
+  assert.equal(boardQuery('', 60), '?board=60');
+  assert.equal(boardQuery('?lang=de', 60), '?lang=de&board=60');
+  assert.equal(boardQuery('?board=40&lang=de', 100), '?lang=de&board=100');
+  assert.equal(boardQuery('?lang=de&board=40', null), '?lang=de');
+  assert.equal(boardQuery('?board', null), '');
+  // (as written, not as URLSearchParams would write it again)
+  assert.equal(boardQuery('?display&view=49.4478,11.0765,14.2', 50), '?display&view=49.4478,11.0765,14.2&board=50');
+  assert.equal(readBoard(boardQuery('?lang=en', 35)), 35);
 });

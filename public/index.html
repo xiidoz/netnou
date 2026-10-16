@@ -41,8 +41,9 @@
     </div>
     <!-- What a visitor can set for themselves, kept in their browser: the
          language (app.js fills in the list), whether the page is light or
-         dark, and whether the vehicles carry their delay as a flag. A small
-         box that hangs at the gear, which opens and shuts it. -->
+         dark, whether the vehicles carry their delay as a flag, how departure
+         times show and whether the board of a stop has a clock. A small box
+         that hangs at the gear, which opens and shuts it. -->
     <div class="bubble" id="settings" role="group" aria-label="Settings" data-i18n-aria-label="settings.title" hidden>
       <div class="setting">
         <label for="language" data-i18n="language.label">Language</label>
@@ -61,6 +62,21 @@
         <div class="segmented">
           <button type="button" data-flags-choice="on" aria-pressed="true" data-i18n="flags.on">Show</button>
           <button type="button" data-flags-choice="off" aria-pressed="false" data-i18n="flags.off">Hide</button>
+        </div>
+      </div>
+      <div class="setting" role="group" aria-labelledby="times-label">
+        <span id="times-label" data-i18n="times.label">Departure times</span>
+        <div class="segmented">
+          <button type="button" data-times-choice="time" aria-pressed="false" data-i18n="times.time">Time</button>
+          <button type="button" data-times-choice="minutes" aria-pressed="false" data-i18n="times.minutes">Minutes</button>
+          <button type="button" data-times-choice="both" aria-pressed="true" data-i18n="times.both">Both</button>
+        </div>
+      </div>
+      <div class="setting" role="group" aria-labelledby="clock-label">
+        <span id="clock-label" data-i18n="clock.label">Clock on the board</span>
+        <div class="segmented">
+          <button type="button" data-clock-choice="on" aria-pressed="true" data-i18n="clock.on">Show</button>
+          <button type="button" data-clock-choice="off" aria-pressed="false" data-i18n="clock.off">Hide</button>
         </div>
       </div>
     </div>
@@ -129,6 +145,8 @@
     <button type="button" class="handle" id="panel-handle" aria-label="Make the details larger or smaller" data-i18n-aria-label="panel.resize"></button>
     <!-- the address of a stop or a line, for others (#37) -->
     <button type="button" class="share" id="panel-share" hidden aria-label="Share" data-i18n-aria-label="panel.share" data-icon="mdiShareVariant"></button>
+    <!-- enlarges the details of a stop into a board, and makes them the details again (#81, "the board" in app.js) -->
+    <button type="button" class="enlarge" id="panel-board" hidden aria-label="Enlarge" data-i18n-aria-label="panel.enlarge" title="Enlarge" data-i18n-title="panel.enlarge" data-icon="mdiArrowExpand"></button>
     <button type="button" class="close" id="panel-close" aria-label="Close" data-i18n-aria-label="panel.close" data-icon="mdiClose"></button>
     <p class="copied" id="panel-copied" role="status" hidden data-i18n="panel.copied">Address copied</p>
     <div id="panel-head"></div>

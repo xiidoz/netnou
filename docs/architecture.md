@@ -117,7 +117,7 @@ Page (`public/`):
 | --- | --- |
 | `index.html`, `style.css` | structure and appearance; colours for canvas and DOM live in the style sheet |
 | `app.js` | map, polling, animation, drawing on a canvas, detail panel |
-| `display.js` | display mode in the address of the page: what an address asks for, and the address for what is shown |
+| `display.js` | display mode and the board of a stop in the address of the page: what an address asks for, and the address for what is shown |
 | `address.js` | the addresses of stops and lines, for the page and the server: how a name is written in one, and what an address names (`stopPath`, `linePath`, `parseAddress`) |
 | `search.js` | finding stops, lines and towns by name: matching and order, without the page around it |
 | `search-worker.js` | the thread that loads the list of stops, lines and towns and searches it |
@@ -659,6 +659,23 @@ otherwise a server would load a file written by older code:
   keyboard and for screen readers and shows itself with the focus. "How it
   works" is such a sheet too and closes when it is dragged down. All of
   this is plain pointer events in `app.js`.
+- **The board of a stop.** A button beside the share button enlarges the
+  details of a stop into a board of its departures
+  ([#81](https://github.com/xiidoz/netnou/issues/81)), the same on every
+  screen: beside the map on a screen wider than high, below it on one
+  standing upright, a phone among them. The map gives the board its share of
+  the screen and keeps the stop in its middle; the edge between them is
+  dragged by a grip in its middle, or moved with the arrow keys, from a
+  quarter of the screen to three quarters, and from there to all of it, where
+  the map is gone and the board names the timetable data at its foot. Its
+  type grows with it (container query units), and it shows as many rows as
+  it has room for, whole ones; a row is not a button. The board is part of
+  the address of the stop (`board=<share>`), also with the controls, so that
+  the address opens it again and `display=fixed` puts it on a wall. How
+  departure times show is one setting for every list of them: the time of
+  day, the minutes until a train leaves, counted from when it actually
+  leaves and counting down between two answers of the server, or both; on
+  the board a clock can be switched off.
 - **Search.** The field in the header card finds stops and lines by name.
   The list of all of them is fetched when the field is first used, and
   searched in the browser: what is typed stays there, and so do the
