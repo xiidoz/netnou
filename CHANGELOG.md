@@ -8,6 +8,22 @@ This file is written by
 messages when a release is made. Do not edit it by hand; see
 [Releases](CONTRIBUTING.md#releases).
 
+## [0.14.0](https://github.com/xiidoz/netnou/compare/v0.13.0...v0.14.0) (2026-10-16)
+
+
+### Features
+
+* **departures:** go on with the next ones where two hours hold few ([#171](https://github.com/xiidoz/netnou/issues/171)) ([0a3af68](https://github.com/xiidoz/netnou/commit/0a3af68918ca73d856e78aeaa67515a216451046)), closes [#165](https://github.com/xiidoz/netnou/issues/165)
+* **page:** enlarge the departures of a stop into a board, for a dashboard or a wall ([#167](https://github.com/xiidoz/netnou/issues/167)) ([df25cec](https://github.com/xiidoz/netnou/commit/df25cec6efafa17cb3f5e222ef6f09e10386681b)), closes [#81](https://github.com/xiidoz/netnou/issues/81)
+* **page:** open the settings beside the header card on a wide screen ([#169](https://github.com/xiidoz/netnou/issues/169)) ([b000bbc](https://github.com/xiidoz/netnou/commit/b000bbc2b28ac08f178ff5e80f77888795031ffb))
+* **search:** find a town by its name and show all its stations on the map ([#161](https://github.com/xiidoz/netnou/issues/161)) ([92a8344](https://github.com/xiidoz/netnou/commit/92a83443a469729c7ac5214963fa8b91df8206a2)), closes [#24](https://github.com/xiidoz/netnou/issues/24)
+* **settings:** let named sites show the page in a frame, such as a dashboard ([#170](https://github.com/xiidoz/netnou/issues/170)) ([3222d71](https://github.com/xiidoz/netnou/commit/3222d7163fd6cb66326d0b186ff04d4f5d66388b))
+
+
+### Bug Fixes
+
+* **page:** keep the open stop or line in the address while the controls are hidden ([#166](https://github.com/xiidoz/netnou/issues/166)) ([6b35934](https://github.com/xiidoz/netnou/commit/6b35934c628cb29d5acd876dc286922b48824d04))
+
 ## [0.13.0](https://github.com/xiidoz/netnou/compare/v0.12.0...v0.13.0) (2026-10-16)
 
 
