@@ -1,0 +1,109 @@
+name: Pull request image
+
+# The image of a pull request, for a server to try it on: built as CI tests
+# the pull request, merged into main, for the same platforms as release.yml
+# builds, and pushed as ghcr.io/xiidoz/netnou:pr-<number> with every push to
+# the pull request. It goes again once the pull request is closed, merged or
+# not (see "Trying a pull request" in CONTRIBUTING.md).
+#
+# Only for pull requests from branches of this repository: one from a fork
+# gets a token that cannot write packages, and so does one of Dependabot.
+# Nothing here is a check main asks for: a pull request without its image can
+# still be merged.
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, closed]
+
+permissions:
+  contents: read
+
+# (a newer push replaces what an older one is still building; closing ends both)
+concurrency:
+  group: pr-image-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  push:
+    name: Image of the pull request
+    if: github.event.action != 'closed' && github.event.pull_request.head.repo.full_name == github.repository && github.actor != 'dependabot[bot]'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: docker/setup-qemu-action@v4
+      - uses: docker/setup-buildx-action@v4
+      - uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - id: meta
+        uses: docker/metadata-action@v6
+        with:
+          images: ghcr.io/xiidoz/netnou
+          flavor: latest=false
+          # pr-<number>
+          tags: type=ref,event=pr
+      - uses: docker/build-push-action@v7
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          # The server calls itself "edge" with the last commit of the pull
+          # request, the one its page lists (see the Dockerfile).
+          build-args: |
+            COMMIT=${{ github.event.pull_request.head.sha }}
+      - name: Say how to run it
+        run: |
+          {
+            echo "Pushed \`$IMAGE\`, the pull request at ${HEAD:0:7} merged into main. To run it on port 8090, with a volume of its own:"
+            echo
+            echo '```sh'
+            echo "docker run -d --name netnou-pr-$NUMBER -p 8090:8080 -v netnou-pr-$NUMBER:/data $IMAGE"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+        env:
+          IMAGE: ${{ steps.meta.outputs.tags }}
+          HEAD: ${{ github.event.pull_request.head.sha }}
+          NUMBER: ${{ github.event.pull_request.number }}
+
+  delete:
+    name: Delete the image of the pull request
+    if: github.event.action == 'closed' && github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    permissions:
+      packages: write
+    steps:
+      # Deleting a version of a package needs more than writing it: the
+      # repository must have the role "Admin" under "Manage Actions access"
+      # in the settings of the package. Without it the image stays, with a
+      # warning, and can be deleted there by hand.
+      - name: Delete the version tagged pr-<number>
+        run: |
+          tag="pr-$NUMBER"
+          versions="users/$OWNER/packages/container/netnou/versions"
+          if ! ids=$(gh api --paginate "$versions" --jq ".[] | select(.metadata.container.tags | index(\"$tag\")) | .id" 2>&1); then
+            echo "::warning title=Image of the pull request kept::$tag could not be looked up: $ids"
+            exit 0
+          fi
+          if [ -z "$ids" ]; then
+            echo "There is no image $tag."
+            exit 0
+          fi
+          for id in $ids; do
+            if gh api --method DELETE "$versions/$id" --silent; then
+              echo "Deleted $tag (version $id)."
+            else
+              echo "::warning title=Image of the pull request kept::$tag (version $id) could not be deleted. Give this repository the role Admin under Manage Actions access in the settings of the package, or delete the version there."
+            fi
+          done
+        env:
+          GH_TOKEN: ${{ github.token }}
+          OWNER: ${{ github.repository_owner }}
+          NUMBER: ${{ github.event.pull_request.number }}

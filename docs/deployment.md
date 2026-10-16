@@ -88,6 +88,7 @@ What the container looks like:
   | `0.3.1` | exactly that release |
   | `0.3` | the newest patch release of 0.3 |
   | `edge` | the main branch, rebuilt with every commit; not a release |
+  | `pr-<number>` | an open pull request merged into the main branch, rebuilt with every push to it and deleted once it is closed: for trying a change, not for running ([Trying a pull request](../CONTRIBUTING.md#trying-a-pull-request)) |
 
   Below version 1.0 a new minor version can change settings or the API, so
   `latest` can bring such a change with an update; a tag like `0.3` cannot.
