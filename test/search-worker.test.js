@@ -8,13 +8,13 @@ import { searchList } from '../server/lib/search-list.js';
 import { MODES } from '../server/lib/timetable.js';
 
 const { list } = searchList([
-  { name: 'Nürnberg Hbf', lat: 49.44561, lon: 11.08299, service: 13695, modes: ['subway', 'tram', 'bus', 'regional'] },
-  { name: 'Nürnberg Plärrer', lat: 49.44809, lon: 11.0648, service: 9098, modes: ['subway', 'tram', 'bus'] },
-  { name: 'Fürth Rathaus', lat: 49.47765, lon: 10.98859, service: 4714, modes: ['subway', 'bus'] },
+  { name: 'Nürnberg Hbf', lat: 49.44561, lon: 11.08299, service: 13695, modes: ['subway', 'tram', 'bus', 'regional'], town: 0 },
+  { name: 'Nürnberg Plärrer', lat: 49.44809, lon: 11.0648, service: 9098, modes: ['subway', 'tram', 'bus'], town: 0 },
+  { name: 'Fürth Rathaus', lat: 49.47765, lon: 10.98859, service: 4714, modes: ['subway', 'bus'], town: 1 },
 ], [
   { name: 'U1', mode: 'subway', agency: 'VerkehrsAG Nürnberg', to: ['Fürth Hardhöhe', 'Langwasser Süd'], lat: 49.44428, lon: 11.05986, service: 1911 },
   { name: '33', mode: 'bus', agency: 'Stadtverkehr Fürth', to: ['Fürth Hauptbahnhof'], lat: 49.48582, lon: 11.03156, service: 296 },
-], MODES);
+], MODES, [{ name: 'Nürnberg', district: null }, { name: 'Fürth', district: null }]);
 
 // The server: what it answers a request for the list with, and when.
 const server = { requests: [], status: 200, waiting: [] };
@@ -37,7 +37,7 @@ console.warn = (...words) => warnings.push(words.join(' '));
 
 await import('../public/search-worker.js');
 const tell = (data) => listeners.forEach((listener) => listener({ data }));
-const ask = (turn, query, more = {}) => tell({ turn, query, near: null, limits: { lines: 3, stops: 8 }, modeNames: { subway: 'U-Bahn', bus: 'Bus' }, ...more });
+const ask = (turn, query, more = {}) => tell({ turn, query, near: null, limits: { towns: 3, lines: 3, stops: 8 }, modeNames: { subway: 'U-Bahn', bus: 'Bus' }, ...more });
 const sleep = (ms) => new Promise((resolve) => { setTimeout(resolve, ms); });
 async function until(condition, what) {
   for (let waited = 0; !condition(); waited += 2) {
@@ -57,6 +57,8 @@ test('the first question fetches the list, and every question is answered from i
   ask(1, 'nürnberg');
   assert.deepEqual(await answered(), {
     turn: 1,
+    // (the town too, with the rectangle around its stations)
+    towns: [{ name: 'Nürnberg', box: [49.44561, 11.0648, 49.44809, 11.08299] }],
     lines: [],
     stops: [
       { name: 'Nürnberg Hbf', lat: 49.44561, lon: 11.08299, modes: ['subway', 'tram', 'bus', 'regional'] },
@@ -67,15 +69,15 @@ test('the first question fetches the list, and every question is answered from i
 
   // a line by the name the visitor reads its mode called; as many as are asked for
   ask(2, 'u-bahn 1');
-  assert.deepEqual(await answered(), { turn: 2, lines: [{ name: 'U1', mode: 'subway', agency: 'VerkehrsAG Nürnberg', to: ['Fürth Hardhöhe', 'Langwasser Süd'], at: [49.44428, 11.05986] }], stops: [] });
-  ask(3, 'nürnberg', { limits: { lines: 3, stops: 1 } });
+  assert.deepEqual(await answered(), { turn: 2, towns: [], lines: [{ name: 'U1', mode: 'subway', agency: 'VerkehrsAG Nürnberg', to: ['Fürth Hardhöhe', 'Langwasser Süd'], at: [49.44428, 11.05986] }], stops: [] });
+  ask(3, 'nürnberg', { limits: { towns: 3, lines: 3, stops: 1 } });
   assert.deepEqual((await answered()).stops.map((stop) => stop.name), ['Nürnberg Hbf']);
   // the nearer one first, for whoever has their position shown
   ask(4, 'nürnberg', { near: { lat: 49.4481, lon: 11.0648 } });
   assert.deepEqual((await answered()).stops.map((stop) => stop.name), ['Nürnberg Plärrer', 'Nürnberg Hbf']);
   // nothing typed: a question for the list alone
   ask(5, '');
-  assert.deepEqual(await answered(), { turn: 5, lines: [], stops: [] });
+  assert.deepEqual(await answered(), { turn: 5, towns: [], lines: [], stops: [] });
   assert.deepEqual(server.requests, ['api/search']);
 });
 
@@ -100,7 +102,7 @@ test('of the questions that come in while it is busy, the last one is answered',
   ask(9, 'p');
   ask(10, 'pl');
   ask(11, 'plä');
-  assert.deepEqual(await answered(), { turn: 11, lines: [], stops: [{ name: 'Nürnberg Plärrer', lat: 49.44809, lon: 11.0648, modes: ['subway', 'tram', 'bus'] }] });
+  assert.deepEqual(await answered(), { turn: 11, towns: [], lines: [], stops: [{ name: 'Nürnberg Plärrer', lat: 49.44809, lon: 11.0648, modes: ['subway', 'tram', 'bus'] }] });
   await sleep(30);
   assert.equal(answers.at(-1).turn, 11);
 });

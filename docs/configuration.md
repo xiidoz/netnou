@@ -220,8 +220,8 @@ NETNOU_OSM_PBF_URLS=https://download.geofabrik.de/europe/germany/bayern/oberbaye
    network a few kilometres beyond its edge. Several extracts are separated by
    commas. Prefer the smallest extracts that do the job; each is downloaded in
    full and read once. The extracts also say which town a stop is in, by the
-   borders of the municipalities in them: a stop beyond them is found by its
-   name alone.
+   borders of the municipalities in them, and so which towns the search
+   finds: a stop beyond them is found by its name alone.
 
 If the extracts do not cover the area, the map keeps using straight lines and
 the log says:

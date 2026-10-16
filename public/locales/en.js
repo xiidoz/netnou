@@ -67,15 +67,16 @@ export default {
   'locate.outside': 'Your location is outside the area of this map.',
 
   // The search for stops and lines, in the card with the filters. The label is also what the empty field says.
-  'search.label': 'Search for a stop or a line',
+  'search.label': 'Search for a town, a stop or a line',
   // the button with the lens that opens the search on a narrow screen, and the one that shuts it again
   'search.open': 'Search',
   'search.close': 'Close the search',
-  'search.results': 'Stops and lines found',
+  'search.results': 'Towns, stops and lines found',
   // the headings in the list of what was found, where it is both
+  'search.towns': 'Towns',
   'search.lines': 'Lines',
   'search.stops': 'Stops',
-  'search.none': 'No stop or line of that name.',
+  'search.none': 'No town, stop or line of that name.',
   'search.loading': 'Loading stops and lines …',
   'search.failed': 'Stops and lines could not be loaded.',
 

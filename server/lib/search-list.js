@@ -14,7 +14,12 @@
 //   sent as the difference from the one before: small numbers that compress
 //   well. The names are one text with a line for each.
 // - The towns are named once, and a station has the number of its own: in
-//   that order the stations of a town follow each other.
+//   that order the stations of a town follow each other. Towns of one name
+//   are towns apart, and each of them has the name of its district beside
+//   it, which tells them apart (#24); a town whose name no other has, has
+//   none. Two of one name in one district are taken for one: OpenStreetMap
+//   has a few places twice, such as a municipality and the forest beside it
+//   that belongs to none.
 // - The lines are in the order of their operators, whose names are sent once.
 
 // A place is two whole numbers of 1e-5 degrees, about a metre.
@@ -54,15 +59,17 @@ const inOrder = (a, b) => (a < b ? -1 : a > b ? 1 : 0);
 /**
  * @param stations [{ name, lat, lon, modes, service, town }]: the place in
  *   degrees, the modes by their names, how often a trip stops there, and the
- *   name of the town it is in, if that is known
+ *   number of the town it is in among `towns`, -1 if none is known
  * @param lines [{ name, mode, agency, to, lat, lon, service }]: where most of
  *   its trips go, the middle of its stops and the number of its trips
  * @param modes the names of all modes: a mode is sent as its number in them
+ * @param towns [{ name, district }]: the towns, with the name of the district
+ *   each is in, null where that is not known
  * @returns { list, at }: what api/search sends, and a function that says for
  *   a place of that list (in degrees) which of `stations` is there, by its
  *   number, or -1 if none is
  */
-export function searchList(stations, lines, modes) {
+export function searchList(stations, lines, modes, towns = []) {
   const count = stations.length;
   const lat = new Int32Array(count);
   const lon = new Int32Array(count);
@@ -81,18 +88,24 @@ export function searchList(stations, lines, modes) {
   const bits = (names) => names.reduce((sum, name) => sum | (1 << modes.indexOf(name)), 0);
 
   // (the towns in the order in which the list comes to them)
-  const towns = [];
+  const listed = [];
   const townNumber = new Map();
   const townOf = (i) => {
-    const name = stations[i].town;
-    if (!name) return -1;
-    if (!townNumber.has(name)) townNumber.set(name, towns.push(name) - 1);
-    return townNumber.get(name);
+    const town = towns[stations[i].town];
+    if (!town) return -1;
+    const key = `${town.name}\n${town.district ?? ''}`;
+    if (!townNumber.has(key)) townNumber.set(key, listed.push(town) - 1);
+    return townNumber.get(key);
   };
 
   const byOperator = [...lines].sort((a, b) => inOrder(a.agency, b.agency) || inOrder(a.name, b.name) || inOrder(a.mode, b.mode));
   const agencies = [...new Set(byOperator.map((line) => line.agency))];
   const operator = new Map(agencies.map((agency, i) => [agency, i]));
+
+  const town = column(townOf);
+  // (how many towns of the list have each name)
+  const named = new Map();
+  for (const { name } of listed) named.set(name, (named.get(name) ?? 0) + 1);
 
   const list = {
     modes,
@@ -103,8 +116,10 @@ export function searchList(stations, lines, modes) {
       lon: differences(column((i) => lon[i])),
       modes: column((i) => bits(stations[i].modes)),
       service: column((i) => stations[i].service),
-      town: column(townOf),
-      towns,
+      town,
+      towns: listed.map(({ name }) => name),
+      // (the district where another town of the list has the name too, '' elsewhere)
+      districts: listed.map(({ name, district }) => (named.get(name) > 1 ? district ?? '' : '')),
     },
     lines: {
       name: byOperator.map((line) => line.name),

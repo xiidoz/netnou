@@ -17,7 +17,8 @@ import { readGz, writeGz } from './files.js';
 
 // Bump when what is kept of the borders changes: the copy in the data
 // directory is then made again from a fresh download of the extracts.
-const TOWNS_VERSION = 1;
+// (2: with the district of each town, #24)
+const TOWNS_VERSION = 2;
 
 // The levels of administrative borders (admin_level) that are read, the
 // lowest first. A municipality is at level 8 in Germany and in most of its
@@ -125,8 +126,12 @@ function finder(areas) {
  * rings. A way is the same in every extract that has it, so a border that
  * lies across two extracts is whole with both, though with neither alone.
  * @param readings what readPbfBoundaries read of each extract
- * @returns [{ level, name, lines }], the municipalities first: the border of
- *   each as lines of latitude, longitude, latitude, … in 1e-7 degrees
+ * @returns [{ level, name, district, lines }], the municipalities first: the
+ *   border of each as lines of latitude, longitude, latitude, … in 1e-7
+ *   degrees, and the name of the district a municipality is in (the area of
+ *   the level of districts around it), which tells apart the towns of one
+ *   name (#24); null for a town that is a district or more itself, and for
+ *   one whose district is not known
  */
 export function townsAmong(readings) {
   const ways = new Map();
@@ -149,8 +154,16 @@ export function townsAmong(readings) {
     const around = finder(here);
     const parts = new Uint8Array(here.length);
     for (const { lines } of below) for (const i of around(...pointIn(lines))) parts[i] = 1;
-    towns.push(...here.filter((_, i) => !parts[i]));
+    towns.push(...here.filter((_, i) => !parts[i]).map((area) => ({ ...area, district: null })));
     below = [...below, ...here];
+  }
+  // (the districts are the areas of the level after that of the municipalities)
+  const districts = areas.filter((area) => area.level === BORDER_LEVELS[1]);
+  const around = finder(districts);
+  for (const town of towns) {
+    if (town.level !== BORDER_LEVELS[0]) continue;
+    const [district] = around(...pointIn(town.lines));
+    if (district !== undefined) town.district = districts[district].name;
   }
   return towns;
 }
@@ -165,6 +178,7 @@ export function writeTowns(file, { fetchedAt, scope, sources, towns }) {
     area: scope,
     sources,
     names: towns.map((town) => town.name),
+    districts: towns.map((town) => town.district),
     // (a line as its first point and from there on the difference from the point before: small numbers)
     lines: Array.from(numbers.keys(), (line) => Array.from(line, (value, i) => (i < 2 ? value : value - line[i - 2]))),
     borders: towns.map((town) => town.lines.map((line) => numbers.get(line))),
@@ -174,8 +188,9 @@ export function writeTowns(file, { fetchedAt, scope, sources, towns }) {
 /**
  * The towns as writeTowns kept them, if they are of these extracts and of
  * the reading that the networks in use are of.
- * @returns { fetchedAt, names, at }: for a place in degrees `at` says the
- *   name of the town it is in, or null; null if there is no such copy
+ * @returns { fetchedAt, names, districts, at }: the name of every town and
+ *   the name of its district (townsAmong), and for a place in degrees `at`
+ *   says the number of the town it is in, or -1; null if there is no such copy
  */
 export function readTowns(file, { scope, sources, fetchedAt }) {
   let kept;
@@ -192,27 +207,34 @@ export function readTowns(file, { scope, sources, fetchedAt }) {
   });
   const around = finder(kept.borders.map((numbers) => ({ lines: numbers.map((number) => lines[number]) })));
   // (a place in two of them is in the first: a municipality before an area above)
-  return { fetchedAt: kept.fetchedAt, names: kept.names, at: (lat, lon) => kept.names[around(Math.round(lat * UNIT), Math.round(lon * UNIT))[0]] ?? null };
+  return { fetchedAt: kept.fetchedAt, names: kept.names, districts: kept.districts, at: (lat, lon) => around(Math.round(lat * UNIT), Math.round(lon * UNIT))[0] ?? -1 };
 }
 
 /**
  * The town of every stop that is a station.
  * @param stops { lat, lon, parent } of a dataset
  * @param towns from readTowns
- * @returns { names, of }: the names of the towns that have a station, each
- *   once, and for every stop the number of its town in them: -1 for a
- *   platform, and for a station in no town that is known
+ * @returns { names, districts, of }: the towns that have a station, each
+ *   once, by their names and those of their districts ('' where none is
+ *   known); towns of one name are towns apart. And for every stop the
+ *   number of its town in them: -1 for a platform, and for a station in no
+ *   town that is known.
  */
 export function townsOf(stops, towns) {
   const of = new Int32Array(stops.lat.length).fill(-1);
   const names = [];
-  const numbers = new Map();
+  const districts = [];
+  const numbers = new Map(); // by the number of the town in `towns`
   for (let i = 0; i < of.length; i++) {
     if (stops.parent[i] >= 0) continue;
-    const name = towns.at(stops.lat[i], stops.lon[i]);
-    if (name === null) continue;
-    if (!numbers.has(name)) numbers.set(name, names.push(name) - 1);
-    of[i] = numbers.get(name);
+    const town = towns.at(stops.lat[i], stops.lon[i]);
+    if (town < 0) continue;
+    if (!numbers.has(town)) {
+      numbers.set(town, names.length);
+      names.push(towns.names[town]);
+      districts.push(towns.districts[town] ?? '');
+    }
+    of[i] = numbers.get(town);
   }
-  return { names, of };
+  return { names, districts, of };
 }

@@ -727,8 +727,10 @@ export class Timetable extends Schedule {
     // How often a trip stops at each station, over the whole timetable: it
     // says how much is going on there compared with the others.
     this.stationService = order.map((s) => stationService[s]);
-    // The town each station is in, by its name, or null where none is known (towns.js).
-    this.stationTown = order.map((s) => data.towns[this.stops.town[s]] ?? null);
+    // The town each station is in, as its number among the towns, or -1
+    // where none is known (towns.js); towns of one name are towns apart.
+    this.stationTown = order.map((s) => this.stops.town[s]);
+    this.towns = data.towns.map((name, i) => ({ name, district: data.districts[i] || null }));
 
     // Route geometry per hop (see shapes.js); absent until OSM data was loaded.
     // A hop is found by its key among the keys in their order. The points of
@@ -1116,7 +1118,7 @@ export class Timetable extends Schedule {
       lon: line.lon / line.stops,
       service: line.trips,
     }));
-    const { list, at } = searchList(stations, lines, MODES);
+    const { list, at } = searchList(stations, lines, MODES, this.towns);
     return { list, stationAt: (lat, lon) => this.stations[at(lat, lon)]?.id };
   }
 

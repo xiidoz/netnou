@@ -1,4 +1,4 @@
-// Finds stops and lines by their name, in the browser: what a visitor types
+// Finds stops, lines and towns by their name, in the browser: what a visitor types
 // stays there, and so does their position, which the order of the results
 // makes use of. Nothing in here knows the page, so that test/search.test.js
 // runs it as it is.
@@ -200,8 +200,25 @@ export function buildIndex({ modes, stations, lines }, modeNames = {}) {
   const rail = RAIL_MODES.reduce((sum, mode) => sum | (1 << modes.indexOf(mode)), 0);
   const { plain, twoLetters } = wordsTexts(names, count);
   // The towns are looked through as the stops are: their names as texts of
-  // words. A town has no signs.
+  // words. A town has no signs. Found itself (#24), a town has the service
+  // of all its stations and the rectangle around them, [south, west,
+  // north, east] for each.
   const towns = stations.towns ?? [];
+  const townOf = stations.town ? Int32Array.from(stations.town) : new Int32Array(count).fill(-1);
+  const lat = degrees(stations.lat);
+  const lon = degrees(stations.lon);
+  const townService = new Float64Array(towns.length);
+  const box = new Float64Array(4 * towns.length);
+  for (let t = 0; t < towns.length; t++) box.set([Infinity, Infinity, -Infinity, -Infinity], 4 * t);
+  for (let i = 0; i < count; i++) {
+    const t = townOf[i];
+    if (t < 0) continue;
+    townService[t] += stations.service[i];
+    box[4 * t] = Math.min(box[4 * t], lat[i]);
+    box[4 * t + 1] = Math.min(box[4 * t + 1], lon[i]);
+    box[4 * t + 2] = Math.max(box[4 * t + 2], lat[i]);
+    box[4 * t + 3] = Math.max(box[4 * t + 3], lon[i]);
+  }
   return {
     count,
     modes,
@@ -209,11 +226,20 @@ export function buildIndex({ modes, stations, lines }, modeNames = {}) {
     nameStarts,
     plain,
     twoLetters,
-    towns: { count: towns.length, names: towns, ...wordsTexts(towns.join('\n'), towns.length), signs: new Uint8Array(towns.length) },
+    towns: {
+      count: towns.length,
+      names: towns,
+      // (where another town has the name too, '' elsewhere)
+      districts: stations.districts ?? towns.map(() => ''),
+      service: townService,
+      box,
+      ...wordsTexts(towns.join('\n'), towns.length),
+      signs: new Uint8Array(towns.length),
+    },
     // (the number of its town for every stop, -1 where none is known)
-    townOf: stations.town ? Int32Array.from(stations.town) : new Int32Array(count).fill(-1),
-    lat: degrees(stations.lat),
-    lon: degrees(stations.lon),
+    townOf,
+    lat,
+    lon,
     kinds,
     service: Float64Array.from(stations.service),
     signs: signsOf(plain, kinds.map((kind) => kind & rail)),
@@ -651,6 +677,41 @@ export function search(index, query, { near = null, limit = 8 } = {}) {
     const town = townToShow(index, i);
     return { name: nameOf(index, i), lat: index.lat[i], lon: index.lon[i], modes: index.modes.filter((_, bit) => index.kinds[i] & (1 << bit)), ...(town ? { town } : {}) };
   });
+}
+
+/**
+ * The towns whose name has a word that begins with each word typed (#24):
+ * "fürth" is the town of Fürth, "neuenk" every Neuenkirchen. Not by a word
+ * inside a name, nor by a close spelling, which would bring in many a town
+ * that was not meant, and not before three letters are typed. A town of
+ * exactly that name comes first, then the one with more service, which
+ * counts for less the further from `near` the town is.
+ * @param index from buildIndex
+ * @param near as for search()
+ * @returns up to `limit` of { name, district, box }: `district` only where
+ *   another town has the name too, `box` the rectangle around its stations,
+ *   [south, west, north, east]
+ */
+export function searchTowns(index, query, { near = null, limit = 3 } = {}) {
+  const words = wordsOf(query);
+  const { towns } = index;
+  if (!towns.count || limit < 1 || words.join('').length < 3) return [];
+  // (each word marks the towns that have a word that begins with it; a town is found by all of them)
+  const marks = words.map((word) => townMarks(index, formsOf(word), BEGINNING));
+  if (marks.some((mark) => !mark)) return [];
+  const typed = [...words].sort().join(' ');
+  const found = [];
+  for (let t = 0; t < towns.count; t++) {
+    if (marks.some((mark) => mark[t] !== BEGINNING)) continue;
+    const name = towns.names[t];
+    const exact = split(fold(name)).sort().join(' ') === typed;
+    const [south, west, north, east] = towns.box.subarray(4 * t, 4 * t + 4);
+    found.push({ t, exact, weight: weigh(towns.service[t], (south + north) / 2, (west + east) / 2, near) });
+  }
+  return found
+    .sort((a, b) => b.exact - a.exact || b.weight - a.weight || towns.names[a.t].localeCompare(towns.names[b.t]))
+    .slice(0, limit)
+    .map(({ t }) => ({ name: towns.names[t], ...(towns.districts[t] ? { district: towns.districts[t] } : {}), box: Array.from(towns.box.subarray(4 * t, 4 * t + 4)) }));
 }
 
 /**

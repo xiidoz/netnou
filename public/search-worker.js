@@ -1,18 +1,18 @@
-// Worker thread of the page: finds stops and lines (search.js). The list they
-// are found in is megabytes for a whole country. Here neither loading it and
-// getting it ready nor reading through it holds up the page, and what is
-// typed still goes nowhere but into this browser.
+// Worker thread of the page: finds stops, lines and towns (search.js). The
+// list they are found in is megabytes for a whole country. Here neither
+// loading it and getting it ready nor reading through it holds up the page,
+// and what is typed still goes nowhere but into this browser.
 //
 // The page asks with { turn, query, near, limits, modeNames } and is answered
 // with one of
-//   { turn, lines, stops }   what was found
+//   { turn, towns, lines, stops }   what was found
 //   { turn, failed: true }   the list could not be loaded
 // Only the question asked last is answered: one that was overtaken while the
 // thread was busy has nobody waiting for it. A question with nothing typed
 // is one for the list alone. { forget: true } tells the thread that its list
 // is no longer the server's: the next question loads it again.
 
-import { buildIndex, search, searchLines } from './search.js';
+import { buildIndex, search, searchLines, searchTowns } from './search.js';
 
 let index = null; // what search.js looks through, once it is there
 let asked = null; // the question to answer next
@@ -40,7 +40,7 @@ async function answer() {
     if (!index) await load(modeNames);
     if (asked) continue;
     if (!index) postMessage({ turn, failed: true });
-    else postMessage({ turn, lines: searchLines(index, query, { near, limit: limits.lines }), stops: search(index, query, { near, limit: limits.stops }) });
+    else postMessage({ turn, towns: searchTowns(index, query, { near, limit: limits.towns }), lines: searchLines(index, query, { near, limit: limits.lines }), stops: search(index, query, { near, limit: limits.stops }) });
   }
 }
 

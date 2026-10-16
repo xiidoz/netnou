@@ -11,7 +11,7 @@
 import { parseAddress, stopPath, wordsOf } from './address.js';
 import { APP_NAME, formatNumber, formatTime, languagePicker, loadLanguage, pageTexts, setTimeZone, t, translatePage } from './i18n.js';
 import { displayQuery, readDisplay } from './display.js';
-import { mdiAlert, mdiChevronRight, mdiEye, mdiEyeOff, mdiFullscreen, mdiFullscreenExit } from './vendor/material-design-icons/icons.js';
+import { mdiAlert, mdiChevronRight, mdiCityVariantOutline, mdiEye, mdiEyeOff, mdiFullscreen, mdiFullscreenExit } from './vendor/material-design-icons/icons.js';
 import { AttributionControl, MapLibreMap, NavigationControl } from './vendor/maplibre-gl/maplibre-gl.mjs';
 
 // The modes, each with a chip where the timetable has it. Same ids as MODES in
@@ -110,12 +110,15 @@ const REALTIME_GRACE_MS = 90_000;
 const LOCATE_ZOOM = 15;
 const LOCATE_TIMEOUT_MS = 15_000;
 const NOTE_MS = 6000; // a note on what the visitor just did goes away after this
-// The search: how many lines and stops it lists, the zoom a chosen stop brings
-// the map in to, and how far in the map goes at most to show a line.
+// The search: how many towns, lines and stops it lists, the zoom a chosen stop
+// brings the map in to, and how far in the map goes at most to show a line or
+// a town.
+const TOWN_LIMIT = 3;
 const LINE_LIMIT = 3;
 const SEARCH_LIMIT = 8;
 const SEARCH_ZOOM = 16;
 const LINE_ZOOM = 15;
+const TOWN_ZOOM = 14;
 const EQUATOR_M = 40_075_017; // its length; what a pixel of the map stands for follows from it
 
 const $ = (id) => document.getElementById(id);
@@ -1193,10 +1196,10 @@ map.on('moveend', (event) => {
 
 // ---------- search ----------
 
-// Stops and lines are searched for in the browser, in a thread of its own
-// (search-worker.js with search.js): what is typed is sent nowhere, and
-// neither is the visitor's position, which puts what is around them first.
-// The list of both is fetched when the field is first used.
+// Stops, lines and towns are searched for in the browser, in a thread of
+// its own (search-worker.js with search.js): what is typed is sent nowhere,
+// and neither is the visitor's position, which puts what is around them
+// first. The list of them is fetched when the field is first used.
 
 const searchBox = $('search');
 const searchField = $('search-field');
@@ -1231,7 +1234,7 @@ function ask(query) {
     : { lat: view.getCenter().lat, lon: view.getCenter().lng, km: view.getSouthWest().distanceTo(view.getNorthEast()) / 2000 };
   // (with the names of the modes as the visitor reads them: "bus 33" is a line of the buses)
   const modeNames = Object.fromEntries(DRAW_ORDER.map((mode) => [mode, t(`mode.${mode}`)]));
-  finder.postMessage({ turn: ++turn, query, near, limits: { lines: LINE_LIMIT, stops: SEARCH_LIMIT }, modeNames });
+  finder.postMessage({ turn: ++turn, query, near, limits: { towns: TOWN_LIMIT, lines: LINE_LIMIT, stops: SEARCH_LIMIT }, modeNames });
 }
 
 /** The list the thread has is not the server's any more: it loads it again with the next question. */
@@ -1254,13 +1257,21 @@ function setActive(index) {
   }
 }
 
-/** Shows the lines and the stops found below the field, or a note in their place. */
-function listResults(lines, stops, note = '') {
+/** Shows the towns, the lines and the stops found below the field, or a note in their place. */
+function listResults(towns, lines, stops, note = '') {
   const option = (choose, props, children) => {
     found.push(choose);
     return el('li', { id: `search-result-${found.length - 1}`, role: 'option', 'aria-selected': 'false', onclick: choose, ...props }, children);
   };
   found = [];
+  // A town has a sign where a stop has its dots, and below its name its
+  // district where another town has the name too (#24).
+  const townRows = towns.map((town) => option(() => chooseTown(town), { class: `place${town.district ? ' in-town' : ''}` }, [
+    el('span', { class: 'sign' }, [icon(mdiCityVariantOutline)]),
+    town.district
+      ? el('span', { class: 'name' }, [el('span', { class: 'stop', text: town.name }), el('span', { class: 'town', text: town.district })])
+      : el('span', { class: 'name', text: town.name }),
+  ]));
   // A line begins with its name on the colour of its mode, as in the departures.
   const lineRows = lines.map((line) => option(() => chooseLine(line), { class: 'line' }, [
     badge(line.name, line.mode),
@@ -1279,9 +1290,10 @@ function listResults(lines, stops, note = '') {
       : el('span', { class: 'name', text: stop.name });
     return option(() => chooseStop(stop), { class: stop.town ? 'in-town' : '', title: stop.modes.map((mode) => t(`mode.${mode}`)).join(', ') }, [el('span', { class: 'dots' }, dots), name]);
   });
-  // (each kind under its heading where there are both)
-  const heading = (text) => (lines.length && stops.length ? [el('li', { class: 'search-heading', role: 'presentation', text })] : []);
-  searchResults.replaceChildren(...heading(t('search.lines')), ...lineRows, ...heading(t('search.stops')), ...stopRows);
+  // (each kind under its heading where more than one kind was found)
+  const kinds = [towns, lines, stops].filter((list) => list.length).length;
+  const heading = (list, text) => (kinds > 1 && list.length ? [el('li', { class: 'search-heading', role: 'presentation', text })] : []);
+  searchResults.replaceChildren(...heading(towns, t('search.towns')), ...townRows, ...heading(lines, t('search.lines')), ...lineRows, ...heading(stops, t('search.stops')), ...stopRows);
   $('search-note').textContent = note;
   setActive(-1);
   searchBox.classList.toggle('open', found.length > 0 || note !== '');
@@ -1291,25 +1303,25 @@ function listResults(lines, stops, note = '') {
 function runSearch() {
   const query = searchField.value;
   ask(query);
-  if (!query.trim()) listResults([], []);
-  else if (!finderHasList) listResults([], [], t('search.loading'));
+  if (!query.trim()) listResults([], [], []);
+  else if (!finderHasList) listResults([], [], [], t('search.loading'));
 }
 
 /** Shows what the thread found, unless something else has been typed since. */
-function answered({ turn: of, failed = false, lines, stops }) {
+function answered({ turn: of, failed = false, towns = [], lines, stops }) {
   // (whatever it was asked: it has the list now, or has not)
   finderHasList = !failed;
   // (asked for the list alone, or typed on meanwhile)
   if (of !== turn || !searchField.value.trim()) return;
-  if (failed) listResults([], [], t('search.failed'));
-  else listResults(lines, stops, lines.length || stops.length ? '' : t('search.none'));
+  if (failed) listResults([], [], [], t('search.failed'));
+  else listResults(towns, lines, stops, towns.length || lines.length || stops.length ? '' : t('search.none'));
 }
 
 /** Shuts the list, and on a narrow screen the field with it. */
 function closeSearch() {
   // (an answer that is still to come would open it again)
   turn++;
-  listResults([], []);
+  listResults([], [], []);
   $('controls').classList.remove('searching');
 }
 
@@ -1328,6 +1340,17 @@ function leaveSearch(text) {
 function chooseLine(line) {
   leaveSearch(line.name);
   selectLine(line);
+}
+
+/**
+ * Shows a town: all its stations in view, with nothing opened (#24). What
+ * was open is closed, so that the map is free for it.
+ */
+function chooseTown(town) {
+  leaveSearch(town.name);
+  if (!panel.hidden) closePanel();
+  const [south, west, north, east] = town.box;
+  map.fitBounds([[west, south], [east, north]], { padding: clearOfCards(), maxZoom: TOWN_ZOOM });
 }
 
 function chooseStop(stop) {
@@ -2167,12 +2190,13 @@ function clearOfCards() {
   const card = $('controls').getBoundingClientRect();
   const details = panel.getBoundingClientRect();
   // On a narrow screen the cards are above and below, else to the left and
-  // the right. A sheet just opened is still gliding up as it fills: as high
-  // as it may get by itself, as in clearOfSheet.
-  const sheetTop = panel.classList.contains('sized') ? details.top : Math.min(details.top, viewSize.y * (1 - SHEET_MIDDLE));
+  // the right; without details only the one. A sheet just opened is still
+  // gliding up as it fills: as high as it may get by itself, as in
+  // clearOfSheet.
+  const sheetTop = panel.hidden ? viewSize.y : panel.classList.contains('sized') ? details.top : Math.min(details.top, viewSize.y * (1 - SHEET_MIDDLE));
   const padding = narrowScreen.matches
     ? { top: card.bottom + margin, bottom: viewSize.y - sheetTop + margin, left: margin, right: margin }
-    : { top: margin, bottom: margin, left: card.right + margin, right: viewSize.x - details.left + margin };
+    : { top: margin, bottom: margin, left: card.right + margin, right: panel.hidden ? margin : viewSize.x - details.left + margin };
   // (in a window too small for that, better covered in part than not shown)
   const fits = padding.left + padding.right < 0.8 * viewSize.x && padding.top + padding.bottom < 0.8 * viewSize.y;
   return fits ? padding : { top: margin, bottom: margin, left: margin, right: margin };
