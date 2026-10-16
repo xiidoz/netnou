@@ -2660,7 +2660,8 @@ function writeAddress() {
     flags: state.flags,
     hiddenModes: MODES.filter((mode) => !state.enabled.has(mode)),
   };
-  history.replaceState(null, '', displayQuery({ fixed: FIXED, language, settings }, MODES));
+  // (with the path: the stop or the line that is open stays in it; a query alone would be taken from the base of the page, where the instance is)
+  history.replaceState(null, '', `${location.pathname}${displayQuery({ fixed: FIXED, language, settings }, MODES)}`);
 }
 
 /** Brings the page in line with whether it is a display. */

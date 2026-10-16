@@ -212,6 +212,13 @@ test('index.html carries the English texts and marks them for translation', () =
 
 // app.js gets the elements of the page by their ids, and stops at the first
 // one that is not there.
+test('what app.js writes into the address bar keeps the stop or the line that is open', () => {
+  // (the page has a base, where the instance is: an address of a query alone would be taken from there, without the path)
+  const writes = [...withoutComments(read('app.js')).matchAll(/history\.(?:push|replace)State\(null, '', ([^;]*)\);/g)];
+  assert.ok(writes.length >= 4, `only ${writes.length} writes found`);
+  for (const [call, address] of writes) assert.match(address, /^(`\$\{location\.pathname\}|new URL\()/, call);
+});
+
 test('every element app.js asks for by its id is in index.html', () => {
   const html = read('index.html');
   const ids = new Set([...withoutComments(read('app.js')).matchAll(/\$\('([^']+)'\)/g)].map((match) => match[1]));
