@@ -38,11 +38,13 @@ let timeZone; // of the area; undefined = the browser's
 let numberFormat;
 let pluralRules;
 let timeFormat;
+let dayFormat;
 
 function setFormats() {
   numberFormat = new Intl.NumberFormat(locale);
   pluralRules = new Intl.PluralRules(locale);
   timeFormat = new Intl.DateTimeFormat(locale, { timeStyle: 'short', timeZone });
+  dayFormat = new Intl.DateTimeFormat('en-CA', { year: 'numeric', month: '2-digit', day: '2-digit', timeZone });
 }
 setFormats();
 
@@ -119,6 +121,9 @@ export const formatNumber = (value) => numberFormat.format(value);
 
 /** Clock time of a point in time given in epoch seconds. */
 export const formatTime = (epoch) => timeFormat.format(epoch * 1000);
+
+/** The date of a point in time given in epoch seconds, as YYYY-MM-DD where the area is: what tells today from tomorrow. */
+export const dayOf = (epoch) => dayFormat.format(epoch * 1000);
 
 /**
  * Times are shown in the time zone of the area (timeZone of api/area), as on

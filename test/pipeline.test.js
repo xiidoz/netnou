@@ -261,7 +261,8 @@ test('without an area an instance has everything the feed has', async () => {
   assert.deepEqual([...all.tripIndex.keys()].sort(), ['T1', 'T2', 'T3', 'T4']);
   // every stop belongs to it: the stations far outside the box are listed and have departures
   assert.deepEqual(all.stations.map((s) => s.id).sort(), ['B', 'C', 'SA', 'X', 'Y']);
-  assert.deepEqual(all.departures('X', at('11:55'), null).departures.map((d) => d.line), ['99']);
+  // (the 99 within two hours, and as that is all, the next one: tomorrow's ICE, #165)
+  assert.deepEqual(all.departures('X', at('11:55'), null).departures.map((d) => d.line), ['99', 'ICE 5']);
   assert.equal(timetable.departures('X', at('11:55'), null), null);
   // what it covers is the rectangle around its stops
   assert.deepEqual(all.bbox, [48, 11, 52, 13]);
@@ -567,6 +568,22 @@ test('realtime delays shift positions and carry forward to later stops', () => {
   assert.deepEqual(board.departures.map((d) => [d.line, d.to, d.planned, d.delay]), [['U1', 'Gamma, Endstation', at('10:00'), 300]]);
   // a terminus has no departures: T4 ends at A, T1 ends at C
   assert.deepEqual(timetable.departures('C', at('10:15'), rt).departures, []);
+});
+
+test('where two hours hold few departures, the board goes on with the next ones within a day', () => {
+  const board = (station, time, options) => timetable.departures(station, at(time), null, options).departures.map((d) => [d.line, d.planned]);
+  // The U1 leaves Alpha at ten every day: an hour after it, the next one is tomorrow's.
+  assert.deepEqual(board('SA', '11:00'), [['U1', at('10:00', addDays(DAY, 1))]]);
+  // Two minutes before it, that one is the board, and tomorrow's is further off than a day.
+  assert.deepEqual(board('SA', '09:58'), [['U1', at('10:00')]]);
+  // At Beta the two trains of the day follow, the ICE first, as they leave tomorrow.
+  assert.deepEqual(board('B', '11:00').map(([line]) => line), ['ICE 5', 'U1']);
+  // Only as far as the list is short: with two hours enough, nothing further off ...
+  assert.deepEqual(board('B', '10:00', { least: 2 }).map(([line]) => line), ['ICE 5', 'U1']);
+  assert.deepEqual(board('B', '10:00', { least: 1 }), board('B', '10:00', { least: 0 }));
+  // ... and with fewer, up to that many and no more.
+  assert.deepEqual(board('B', '10:10', { least: 2 }).map(([line, planned]) => [line, planned === at('10:12')]), [['U1', true], ['ICE 5', false]]);
+  assert.deepEqual(board('B', '10:10', { least: 2, furthestS: 3600 }).map(([line]) => line), ['U1']);
 });
 
 test('alerts are shown only during their active periods', () => {

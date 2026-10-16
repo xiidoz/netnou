@@ -178,11 +178,13 @@ export default {
   'stop.skipped': 'skipped',
 
   'departures.title': 'Departures',
-  'departures.none': 'No departures in the next two hours.',
+  'departures.none': 'No departures in the next 24 hours.',
   'departures.cancelled': 'cancelled',
   // how long until a departure leaves: under a minute, and in whole minutes
   'departures.now': 'now',
   'departures.minutes': '{count} min',
+  // the line in a list of departures where the next day begins
+  'departures.tomorrow': 'tomorrow',
 
   // the page of an address of a stop or a line (#37), for search engines and previews
   'address.stopTitle': '{stop} departures live',

@@ -240,7 +240,10 @@ What the API asks goes by pattern, not by trip:
 - **A station knows the patterns that stop at it,** each with the position
   of the stop in the pattern, and a pattern knows its trips in the order of
   their first departures. A departure board looks among those for the trips
-  that leave in time.
+  that leave in the next two hours, and where they are fewer than ten, a
+  second time for those of the next 24 hours: only at a quiet stop, so a
+  busy one costs no more than before
+  ([#165](https://github.com/xiidoz/netnou/issues/165)).
 - **The vehicles under way:** the trips of a service day are put in the order
   of their first departures when the day is first asked for. That list is
   gone through up to the trips that have not started yet. A trip with
@@ -675,7 +678,9 @@ otherwise a server would load a file written by older code:
   departure times show is one setting for every list of them: the time of
   day, the minutes until a train leaves, counted from when it actually
   leaves and counting down between two answers of the server, or both; on
-  the board a clock can be switched off.
+  the board a clock can be switched off. Minutes go up to an hour; a train
+  further off shows its time of day in their place, and where the next day
+  begins, a line says "morgen".
 - **Search.** The field in the header card finds stops and lines by name.
   The list of all of them is fetched when the field is first used, and
   searched in the browser: what is typed stays there, and so do the
@@ -840,7 +845,8 @@ otherwise a server would load a file written by older code:
 - A timetable server without `ETag` and `Last-Modified` is never refreshed.
 - Alerts for whole agencies, routes or route types are not shown. Of an alert
   in several languages the German text is used.
-- The departure board is fixed at two hours and 40 entries.
+- The departure board is fixed at two hours and 40 entries, or the next ten
+  within 24 hours.
 - The grid of the area assumes a latitude of about 49–50° north.
 - The installed app's name and description (web app manifest) are in English
   only. Right-to-left languages are not prepared.

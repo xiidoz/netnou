@@ -665,6 +665,9 @@ button:focus-visible, select:focus-visible, .row:focus-visible, .panel:focus-vis
 .rows.signed .row.vehicle { grid-template-columns: 1fr 48px; }
 .row.vehicle .late .delay { margin-right: 3px; text-align: right; }
 .rows-head { margin: 0; padding: 10px 14px 0; color: var(--text-muted); font-size: 13px; font-weight: 650; }
+/* (where the next day begins in a list of departures: the word, and a line on to the edge) */
+.day-head { display: flex; align-items: center; gap: 8px; padding-right: 14px; }
+.day-head::after { content: ""; flex: 1; border-top: 1px solid var(--border); }
 /* The badge at the top of a trip leads to its line (#147): the sign in it
    says so, and under a mouse a ring. A finger has 40 px of height to hit it,
    which the margins take back from the line of the head; above the line
@@ -1150,6 +1153,9 @@ li:last-child > .row.stop .rail::before { bottom: 50%; }
 }
 .board-rows.times-both { grid-template-columns: auto minmax(0, 1fr) auto auto auto auto; }
 .board-rows > li { display: grid; grid-template-columns: subgrid; grid-column: 1 / -1; align-items: baseline; padding: 0.28em 0; }
+/* (where the next day begins: the word, and a line across the board) */
+.board-rows > li.day { display: flex; align-items: center; gap: 0.5em; padding: 0.45em 0 0.15em; color: var(--text-muted); font-size: max(12px, 0.6em); font-weight: 650; }
+.board-rows > li.day::after { content: ""; flex: 1; border-top: 1px solid var(--border); }
 .board-rows .badge { min-width: 2.6em; padding: 0.12em 0.4em; border-radius: 0.3em; font-size: 0.8em; }
 .board-rows .name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .board-rows .platform { color: var(--text-muted); font-size: 0.7em; white-space: nowrap; }

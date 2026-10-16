@@ -134,10 +134,11 @@ export default {
   'stop.skipped': 'entfällt',
 
   'departures.title': 'Abfahrten',
-  'departures.none': 'Keine Abfahrten in den nächsten zwei Stunden.',
+  'departures.none': 'Keine Abfahrten in den nächsten 24 Stunden.',
   'departures.cancelled': 'fällt aus',
   'departures.now': 'jetzt',
   'departures.minutes': '{count} min',
+  'departures.tomorrow': 'morgen',
 
   // the page of an address of a stop or a line (#37), for search engines and previews
   'address.stopTitle': 'Abfahrten {stop} live',
