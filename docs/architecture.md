@@ -812,7 +812,9 @@ otherwise a server would load a file written by older code:
 - **Security.** The Content-Security-Policy allows scripts, styles, workers
   and connections from the page's own origin only. The one exception is the
   map, which may be fetched from the server of its style or tiles and from
-  those in `NETNOU_MAP_ORIGINS`. There are no inline scripts or styles.
+  those in `NETNOU_MAP_ORIGINS`. There are no inline scripts or styles. No
+  other site may show the page in a frame, unless it is named in
+  `NETNOU_EMBED_ORIGINS` (`securityPolicy` in `lib/page.js`).
 - **Browsers.** There is no build step, so the page runs as written. The map
   library sets the floor: it needs WebGL 2 and the JavaScript of 2022,
   roughly Chrome and Edge 94, Firefox 114, Safari 16.4 and newer.

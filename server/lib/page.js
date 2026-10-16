@@ -123,6 +123,19 @@ export function languageFor(header = '', main) {
 const escapeHtml = (text) => String(text).replace(/[&<>"']/g, (char) => `&#${char.charCodeAt(0)};`);
 
 /** The title of a page as renderPage wrote it, as text. */
+/**
+ * The Content-Security-Policy of the server's answers. The map is the only
+ * thing the page loads from elsewhere: MapLibre fetches the style, tiles and
+ * fonts (connect-src) and may load icons as images, and what it has fetched
+ * it turns into images by way of blob: URLs. Another site may show the page
+ * in a frame of its own, as a dashboard does, only if it is one of
+ * `embedOrigins` (NETNOU_EMBED_ORIGINS): unless the operator names some, none.
+ */
+export function securityPolicy({ mapOrigins = [], embedOrigins = [] }) {
+  const map = mapOrigins.join(' ');
+  return `default-src 'self'; img-src 'self' data: blob: ${map}; style-src 'self'; script-src 'self'; worker-src 'self'; connect-src 'self' ${map}; frame-ancestors ${embedOrigins.length ? embedOrigins.join(' ') : "'none'"}`;
+}
+
 export const titleOf = (html) => (/<title>([^<]*)<\/title>/.exec(html)?.[1] ?? '').replace(/&#(\d+);/g, (_, code) => String.fromCharCode(Number(code)));
 
 /** The title of the page at the address of a stop or a line: the title of what it names (lib/addresses.js), then the instance. */

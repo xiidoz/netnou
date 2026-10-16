@@ -47,7 +47,7 @@ const REALTIME = encodeFeed({
 });
 
 // Every setting the server reads; none may leak in from the shell running the tests.
-const SETTINGS = ['NETNOU_PORT', 'NETNOU_HOST', 'NETNOU_DATA_DIR', 'NETNOU_AREA', 'NETNOU_AREA_FILE', 'NETNOU_BBOX', 'NETNOU_AGENCIES', 'NETNOU_AREA_NAME', 'NETNOU_VIEW', 'NETNOU_TIMEZONE', 'NETNOU_MAP_STYLE_URL', 'NETNOU_MAP_ORIGINS', 'NETNOU_TILE_URL', 'NETNOU_TILE_ATTRIBUTION', 'NETNOU_DATA_ATTRIBUTION',
+const SETTINGS = ['NETNOU_PORT', 'NETNOU_HOST', 'NETNOU_DATA_DIR', 'NETNOU_AREA', 'NETNOU_AREA_FILE', 'NETNOU_BBOX', 'NETNOU_AGENCIES', 'NETNOU_AREA_NAME', 'NETNOU_VIEW', 'NETNOU_TIMEZONE', 'NETNOU_MAP_STYLE_URL', 'NETNOU_MAP_ORIGINS', 'NETNOU_EMBED_ORIGINS', 'NETNOU_TILE_URL', 'NETNOU_TILE_ATTRIBUTION', 'NETNOU_DATA_ATTRIBUTION',
   'NETNOU_OSM_PBF_URLS', 'NETNOU_OSM_MAX_AGE_DAYS', 'NETNOU_FEED_URL', 'NETNOU_FEED_CHECK_MINUTES', 'NETNOU_DOWNLOAD_TIMEOUT_MINUTES', 'NETNOU_REALTIME_URL', 'NETNOU_REALTIME_INTERVAL_SECONDS', 'NETNOU_REALTIME_IDLE_SECONDS', 'NETNOU_UPDATE_CHECK',
   'NETNOU_LANGUAGE', 'NETNOU_PUBLIC_URL', 'NETNOU_SEARCH_ENGINES', 'NETNOU_SITE_NAME', 'NETNOU_SITE_TITLE', 'NETNOU_SITE_DESCRIPTION', 'NETNOU_LINKS', 'NETNOU_BRAND_DIR',
   'NETNOU_VISITS_URL', 'NETNOU_VISITS_BODY', 'NETNOU_VISITS_HEADERS',
@@ -445,7 +445,7 @@ test('static files: types, revalidation, HEAD, gzip and Brotli', async () => {
   assert.ok(page.body.length > fs.statSync(path.join(root, 'public', 'index.html')).size);
   assert.ok(page.body.includes('<script type="module" src="app.js"></script>'));
   assert.ok((await request('/index.html')).body.equals(page.body));
-  // the map is the only thing allowed from elsewhere
+  // the map is the only thing allowed from elsewhere, and no other site may show the page in a frame
   const map = 'https://maps.example.org https://tiles.example.org';
   assert.equal(page.headers['content-security-policy'], `default-src 'self'; img-src 'self' data: blob: ${map}; style-src 'self'; script-src 'self'; worker-src 'self'; connect-src 'self' ${map}; frame-ancestors 'none'`);
   assert.equal(page.headers['x-content-type-options'], 'nosniff');
