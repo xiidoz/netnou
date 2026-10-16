@@ -266,10 +266,11 @@ Worth watching:
   and writes no access log; it logs a request only when handling it failed
   with an error. Of the languages a browser names with its request it takes
   the language to send the page in, and keeps nothing of them. With
-  `NETNOU_VISITS_URL` set, it reads more of a request that opens the page:
-  the visitor's IP address, the name of their browser and the site they
-  came from, which it passes on, with the address and the title of the
-  page, to the analytics service named there, and keeps nothing of either
+  `NETNOU_VISITS_URL` set, it reads more of a request that opens the page,
+  or a stop or a line in it: the visitor's IP address, the name of their
+  browser and the site they came from, which it passes on, with the address
+  and the title of the page, to the analytics service named there, and
+  keeps nothing of either
   ([Counting visits](configuration.md#counting-visits)). The page stores six settings in the browser's
   `localStorage` (`netnou.lang`, `netnou.theme`, `netnou.flags`,
   `netnou.hiddenModes`, `netnou.colorBy`, `netnou.view`) and its own files in the browser cache `netnou-shell-v3`
