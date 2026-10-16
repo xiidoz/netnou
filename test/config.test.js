@@ -115,6 +115,8 @@ test('defaults: the VGN, its OSM extracts, the gtfs.de feeds and OpenStreetMap t
   assert.equal(config.styleUrl, 'https://tiles.openfreemap.org/styles/bright');
   assert.equal(config.tileUrl, null);
   assert.deepEqual(config.mapOrigins, ['https://tiles.openfreemap.org']);
+  // (no other site may show the page in a frame)
+  assert.deepEqual(config.embedOrigins, []);
   assert.equal(config.tileAttribution, '');
   assert.equal(config.dataAttribution, '<a href="https://gtfs.de">GTFS.DE</a> / <a href="https://www.delfi.de">DELFI e.V.</a> (<a href="https://creativecommons.org/licenses/by-sa/4.0/">CC BY-SA 4.0</a>)');
 });
@@ -151,6 +153,7 @@ test('every setting can be given', () => {
     NETNOU_TILE_URL: 'https://{s}.tiles.example.org/{z}/{x}/{y}{r}.png?key=1',
     NETNOU_TILE_ATTRIBUTION: '<b>tiles</b>',
     NETNOU_MAP_ORIGINS: 'https://fonts.example.org/noto/{fontstack}/{range}.pbf, http://localhost:8082,',
+    NETNOU_EMBED_ORIGINS: 'https://home.example.org:8443/lovelace/0, http://homeassistant.local:8123, https://home.example.org:8443,',
     NETNOU_DATA_ATTRIBUTION: '<b>data</b>',
     NETNOU_FEED_URL: 'http://127.0.0.1:8000/feed.zip',
     NETNOU_REALTIME_URL: 'http://127.0.0.1:8000/realtime.pb',
@@ -171,6 +174,8 @@ test('every setting can be given', () => {
   assert.equal(config.styleUrl, null);
   assert.equal(config.tileUrl, 'https://{s}.tiles.example.org/{z}/{x}/{y}{r}.png?key=1');
   assert.deepEqual(config.mapOrigins, ['https://*.tiles.example.org', 'https://fonts.example.org', 'http://localhost:8082']);
+  // (of each site its origin, and each once)
+  assert.deepEqual(config.embedOrigins, ['https://home.example.org:8443', 'http://homeassistant.local:8123']);
   assert.equal(config.tileAttribution, '<b>tiles</b>');
   assert.equal(config.dataAttribution, '<b>data</b>');
   assert.equal(config.feedUrl, 'http://127.0.0.1:8000/feed.zip');
@@ -314,6 +319,8 @@ test('wrong settings are refused with a message that names the variable', () => 
     [{ NETNOU_MAP_STYLE_URL: 'styles/bright' }, /^NETNOU_MAP_STYLE_URL must be an http\(s\) URL \(got "styles\/bright"\)$/],
     [{ NETNOU_MAP_STYLE_URL: 'https://maps.example.org/style.json', NETNOU_TILE_URL: 'https://tile.example.org/{z}/{x}/{y}.png' }, /^NETNOU_MAP_STYLE_URL and NETNOU_TILE_URL are both set; use only one of them$/],
     [{ NETNOU_MAP_ORIGINS: 'https://tiles.example.org, fonts.example.org' }, /^NETNOU_MAP_ORIGINS must be an http\(s\) URL \(got "fonts\.example\.org"\)$/],
+    [{ NETNOU_EMBED_ORIGINS: 'https://home.example.org, homeassistant.local:8123' }, /^NETNOU_EMBED_ORIGINS must be the addresses of the sites that may show the page in a frame, http\(s\) URLs separated by commas, or \* for every site \(got "https:\/\/home\.example\.org, homeassistant\.local:8123"\)$/],
+    [{ NETNOU_EMBED_ORIGINS: 'file:///dashboard.html' }, /^NETNOU_EMBED_ORIGINS must be /],
     [{ NETNOU_TILE_URL: 'https://tile.example.org/{z}/{x}.png' }, /^NETNOU_TILE_URL must be an http\(s\) URL template with \{z\}, \{x\} and \{y\}/],
     [{ NETNOU_TILE_URL: '/tiles/{z}/{x}/{y}.png' }, /^NETNOU_TILE_URL must be /],
     [{ NETNOU_TILE_URL: 'file:///tiles/{z}/{x}/{y}.png' }, /^NETNOU_TILE_URL must be /],
@@ -324,6 +331,13 @@ test('wrong settings are refused with a message that names the variable', () => 
   for (const [env, message] of cases) {
     assert.throws(() => loadConfig({ NETNOU_BBOX, ...env }), (err) => err instanceof Error && message.test(err.message), `${JSON.stringify(env)} -> ${message}`);
   }
+});
+
+test('every site may show the page in a frame where NETNOU_EMBED_ORIGINS says so', () => {
+  assert.deepEqual(loadConfig({ NETNOU_BBOX, NETNOU_EMBED_ORIGINS: ' * ' }).embedOrigins, ['*']);
+  // (with every site, a site of its own adds nothing)
+  assert.deepEqual(loadConfig({ NETNOU_BBOX, NETNOU_EMBED_ORIGINS: 'https://home.example.org, *' }).embedOrigins, ['*']);
+  assert.deepEqual(loadConfig({ NETNOU_BBOX, NETNOU_EMBED_ORIGINS: ' , ' }).embedOrigins, []);
 });
 
 test('only names that begin with NETNOU_ are read', () => {

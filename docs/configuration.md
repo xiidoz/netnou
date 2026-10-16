@@ -84,6 +84,7 @@ needs `NETNOU_PORT` set to the same number.
 | `NETNOU_DOWNLOAD_TIMEOUT_MINUTES` | `30` | 1–1440 | limit for one download of the timetable or of an extract |
 | `NETNOU_MAP_STYLE_URL` | `https://tiles.openfreemap.org/styles/bright` | http(s) URL | the style of the map behind the vehicles, see [The map](#the-map) |
 | `NETNOU_MAP_ORIGINS` | – | comma-separated http(s) URLs | further servers the map is loaded from, if the style does not take everything from its own |
+| `NETNOU_EMBED_ORIGINS` | none | comma-separated http(s) URLs, or `*` for every site | the sites that may show the page in a frame of their own, such as a dashboard, see [On a dashboard](deployment.md#on-a-dashboard) |
 | `NETNOU_TILE_URL` | – | http(s) URL template with `{z}`, `{x}`, `{y}` | raster tiles as the map, instead of `NETNOU_MAP_STYLE_URL` |
 | `NETNOU_TILE_ATTRIBUTION` | `© OpenStreetMap` with a link if `NETNOU_TILE_URL` is set, otherwise nothing | HTML | credit shown for the map, besides what a style names itself |
 | `NETNOU_UPDATE_CHECK` | `on` | `on` or `off` | whether the server asks GitHub once a day for a newer release, see [Version and updates](#version-and-updates) |

@@ -9,7 +9,7 @@ import { loadConfig, parseBox, parsePlace } from './config.js';
 import { Addresses, stopTitle } from './lib/addresses.js';
 import { FeedUpdater } from './lib/feed.js';
 import { RealtimePoller } from './lib/realtime.js';
-import { addressTitle, LANGUAGE_CODES, languageFor, ownFiles, pictureSize, renderManifest, renderPage, robotsTxt, sitemapFiles, titleOf } from './lib/page.js';
+import { addressTitle, LANGUAGE_CODES, languageFor, ownFiles, pictureSize, renderManifest, renderPage, robotsTxt, securityPolicy, sitemapFiles, titleOf } from './lib/page.js';
 import { setTimeZone } from './lib/time.js';
 import { sharesFor, thinOut, ZOOM_ALL, ZOOM_MIN } from './lib/thinning.js';
 import { LITE_AHEAD_S, MODES, lite } from './lib/timetable.js';
@@ -89,7 +89,6 @@ const MIME = {
 };
 const COMPRESSIBLE = /^(text\/|application\/(json|manifest\+json|xml)|image\/svg)/;
 
-const MAP_ORIGINS = config.mapOrigins.join(' ');
 // Data is no page for the results of a search engine, and on an instance that
 // is not to be found (NETNOU_SEARCH_ENGINES) nothing is. It may be read all the same:
 // a search engine that runs the page asks for data as a browser does, and one
@@ -102,11 +101,7 @@ const SECURITY_HEADERS = {
   ...(config.searchEngines ? {} : NOT_LISTED),
   'X-Content-Type-Options': 'nosniff',
   'Referrer-Policy': 'strict-origin-when-cross-origin',
-  // The map is the only thing the page loads from elsewhere: MapLibre fetches
-  // the style, tiles and fonts (connect-src) and may load icons as images. What
-  // it has fetched it turns into images by way of blob: URLs.
-  'Content-Security-Policy':
-    `default-src 'self'; img-src 'self' data: blob: ${MAP_ORIGINS}; style-src 'self'; script-src 'self'; worker-src 'self'; connect-src 'self' ${MAP_ORIGINS}; frame-ancestors 'none'`,
+  'Content-Security-Policy': securityPolicy(config),
 };
 
 const gzip = (body) => zlib.gzipSync(body, { level: 6 });

@@ -214,7 +214,9 @@ reachable through the proxy.
   (`Vary: Accept-Language`). A proxy or a content delivery network that is
   set to keep pages has to keep them apart by that header; one that does
   not look at it must not keep the page.
-- **Embedding** the page in a frame on another site is not possible: the
+- **Embedding** the page in a frame on another site, such as a dashboard, is
+  possible for the sites named in `NETNOU_EMBED_ORIGINS`
+  ([On a dashboard](#on-a-dashboard)). For all others the
   Content-Security-Policy says `frame-ancestors 'none'`.
 
 ## Monitoring
@@ -361,6 +363,30 @@ feed day and night
 ([Realtime polling and traffic](configuration.md#realtime-polling-and-traffic)).
 On an instance of your own that is what it is there for. Before you point a
 display at somebody else's instance, ask them.
+
+### On a dashboard
+
+A dashboard such as the one of Home Assistant can show the page in a frame
+of its own, with a Webpage card or as a Webpage dashboard, at the address of
+a display as above. The page lets only the sites named in
+`NETNOU_EMBED_ORIGINS` do so. Any other site gets nothing to show; Firefox
+says that the page "will not allow Firefox to display the page if another
+site has embedded it".
+
+```sh
+NETNOU_EMBED_ORIGINS=https://home.example.org,http://homeassistant.local:8123
+```
+
+- A site is the address the dashboard is opened under, as the address bar of
+  its browser shows it; only scheme, host and port count. A dashboard that is
+  opened under two addresses, at home and from outside, needs both.
+- `*` lets every site show the page.
+- Without the setting no site may: another site could show the page as a
+  part of its own, or lay buttons of its own over it.
+- In a frame the page works as on its own, with two exceptions that are up
+  to the frame: the button for the visitor's position and keeping the screen
+  on need `allow="geolocation; screen-wake-lock"` on the frame. Without that
+  the page goes on without them.
 
 ## Troubleshooting
 

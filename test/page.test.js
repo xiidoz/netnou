@@ -11,7 +11,7 @@ import { LANGUAGES, pageTexts, pickLanguage } from '../public/i18n.js';
 import de from '../public/locales/de.js';
 import en from '../public/locales/en.js';
 import * as shapes from '../public/vendor/material-design-icons/icons.js';
-import { LANGUAGE_CODES, PAGE_MODULES, languageFor, ownFiles, pictureSize, renderManifest, renderPage, robotsTxt, sitemapFiles } from '../server/lib/page.js';
+import { LANGUAGE_CODES, PAGE_MODULES, languageFor, ownFiles, pictureSize, renderManifest, renderPage, robotsTxt, securityPolicy, sitemapFiles } from '../server/lib/page.js';
 
 const html = fs.readFileSync(new URL('../public/index.html', import.meta.url), 'utf8');
 const URL_ = 'https://karte.example.org/live/';
@@ -232,6 +232,15 @@ test('a title and a description of the operator\'s own take the place of the pag
   const file = fs.readFileSync(new URL('../public/manifest.webmanifest', import.meta.url), 'utf8');
   assert.equal(JSON.parse(renderManifest(file, { ...german, ...own })).description, own.siteDescription);
   assert.equal(JSON.parse(renderManifest(file, { ...german, siteTitle: own.siteTitle })).description, de['page.descriptionIn'].replace('{area}', 'Großraum Nürnberg (VGN)'));
+});
+
+test('the page lets the map come from its servers, and lets only the sites named show it in a frame', () => {
+  const map = ['https://maps.example.org', 'https://tiles.example.org'];
+  const rest = "default-src 'self'; img-src 'self' data: blob: https://maps.example.org https://tiles.example.org; style-src 'self'; script-src 'self'; worker-src 'self'; connect-src 'self' https://maps.example.org https://tiles.example.org";
+  assert.equal(securityPolicy({ mapOrigins: map }), `${rest}; frame-ancestors 'none'`);
+  assert.equal(securityPolicy({ mapOrigins: map, embedOrigins: [] }), `${rest}; frame-ancestors 'none'`);
+  assert.equal(securityPolicy({ mapOrigins: map, embedOrigins: ['https://home.example.org', 'http://homeassistant.local:8123'] }), `${rest}; frame-ancestors https://home.example.org http://homeassistant.local:8123`);
+  assert.equal(securityPolicy({ mapOrigins: map, embedOrigins: ['*'] }), `${rest}; frame-ancestors *`);
 });
 
 test('the page names what it fetches at its start, and where its map comes from', () => {
