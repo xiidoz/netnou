@@ -194,6 +194,13 @@ button { font: inherit; color: inherit; }
   background: var(--bg);
   transform: rotate(45deg);
 }
+/* On a wide screen the box opens beside the card, over the map and not over
+   what the card shows, its top level with the card's and its tip pointing at
+   the gear from the left. (On a narrow one the card takes the width.) */
+@media (min-width: 721px) {
+  .bubble { top: 0; right: auto; left: calc(100% + 10px); }
+  .bubble::before { top: 18px; right: auto; left: -7px; border-width: 0 0 1px 1px; }
+}
 /* A setting: what it is called, and under it the choice. */
 .setting { display: grid; gap: 4px; margin-top: 10px; }
 .setting > :first-child { color: var(--text-muted); }
