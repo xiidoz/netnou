@@ -8,6 +8,13 @@ This file is written by
 messages when a release is made. Do not edit it by hand; see
 [Releases](CONTRIBUTING.md#releases).
 
+## [0.13.0](https://github.com/xiidoz/netnou/compare/v0.12.0...v0.13.0) (2026-10-16)
+
+
+### Features
+
+* **server:** count a stop or a line opened in the page as a visit of its address ([#159](https://github.com/xiidoz/netnou/issues/159)) ([d87a525](https://github.com/xiidoz/netnou/commit/d87a5256b2701ef5c9faca54108d5c56d27b9e2b)), closes [#158](https://github.com/xiidoz/netnou/issues/158)
+
 ## [0.12.0](https://github.com/xiidoz/netnou/compare/v0.11.0...v0.12.0) (2026-10-16)
 
 
