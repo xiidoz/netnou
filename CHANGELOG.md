@@ -8,6 +8,13 @@ This file is written by
 messages when a release is made. Do not edit it by hand; see
 [Releases](CONTRIBUTING.md#releases).
 
+## [0.12.0](https://github.com/xiidoz/netnou/compare/v0.11.0...v0.12.0) (2026-10-16)
+
+
+### Features
+
+* **server:** report visits to an analytics service the operator names ([#156](https://github.com/xiidoz/netnou/issues/156)) ([0d94780](https://github.com/xiidoz/netnou/commit/0d94780c6d8a6faa3668c7df2547df90d0795e90)), closes [#114](https://github.com/xiidoz/netnou/issues/114)
+
 ## [0.11.0](https://github.com/xiidoz/netnou/compare/v0.10.0...v0.11.0) (2026-10-15)
 
 
