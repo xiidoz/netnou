@@ -79,6 +79,12 @@ services:
       # No daily question to GitHub whether there is a newer release, and no
       # marker in the page when there is one.
       # NETNOU_UPDATE_CHECK: "off"
+      # Each visit of the page reported to an analytics service of your
+      # choice, here an Umami next to it: a pattern of the request, whose
+      # placeholders the server fills in (docs/configuration.md, "Counting
+      # visits"). Tell your visitors, as your privacy notice does.
+      # NETNOU_VISITS_URL: "http://umami:3000/api/send"
+      # NETNOU_VISITS_BODY: '{"type":"event","payload":{"website":"<id>","hostname":"{host}","url":"{path}","referrer":"{source}","language":"{language}","title":"{title}","ip":"{ip}","userAgent":"{browser}"}}'
       # Importing a timetable takes about 1.1 GB of memory for a minute
       # (measured for the default area). Node derives its heap limit from the
       # memory it sees; on a small host, or with a memory limit on the

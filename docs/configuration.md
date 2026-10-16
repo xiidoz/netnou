@@ -88,6 +88,9 @@ needs `NETNOU_PORT` set to the same number.
 | `NETNOU_TILE_ATTRIBUTION` | `© OpenStreetMap` with a link if `NETNOU_TILE_URL` is set, otherwise nothing | HTML | credit shown for the map, besides what a style names itself |
 | `NETNOU_UPDATE_CHECK` | `on` | `on` or `off` | whether the server asks GitHub once a day for a newer release, see [Version and updates](#version-and-updates) |
 | `NETNOU_DATA_ATTRIBUTION` | `GTFS.DE / DELFI e.V. (CC BY-SA 4.0)` with links | HTML | credit shown on the map for the timetable and realtime data |
+| `NETNOU_VISITS_URL` | – | http(s) URL, with placeholders in the values of its query | where the server reports each visit of the page; nothing is reported without it, see [Counting visits](#counting-visits) |
+| `NETNOU_VISITS_BODY` | – | JSON, with placeholders in its texts | what the report carries; with it the report is a `POST` of JSON, without it a `GET` |
+| `NETNOU_VISITS_HEADERS` | – | JSON object of header names and texts, with placeholders | headers of the report, e.g. a key |
 
 Rules that apply to all of them:
 
@@ -492,6 +495,132 @@ rest. Only put text there that you control. If you change the feeds or the
 map, change the credit with them; the licences of the default sources
 require it to be visible (see
 [THIRD-PARTY-NOTICES.md](../THIRD-PARTY-NOTICES.md)).
+
+## Counting visits
+
+The server keeps no access log and the page loads no script from elsewhere,
+so on its own an instance cannot tell how much it is used. The server can
+tell an analytics service of each visit, though, with what the browser sent
+with its request anyway: nothing is stored in the visitor's browser and
+nothing read from it. Which service that is, and the shape of its request,
+is yours: the three settings are a pattern of the request, whose
+placeholders the server fills in. It knows no service by name. Without
+`NETNOU_VISITS_URL` nothing is reported. What only a script in the page
+could learn, a screen's size or how long the page took to load, is not
+known so; and a program that fetches the page as a browser would, without
+saying that it is one, is counted.
+
+```sh
+NETNOU_VISITS_URL='http://umami:3000/api/send'
+NETNOU_VISITS_BODY='{"type":"event","payload":{"website":"<id>","hostname":"{host}","url":"{path}","referrer":"{source}","language":"{language}","title":"{title}","ip":"{ip}","userAgent":"{browser}"}}'
+```
+
+With `NETNOU_VISITS_BODY` the report is a `POST` with `Content-Type:
+application/json`, without it a `GET`. `NETNOU_VISITS_HEADERS` adds headers,
+for a service that wants a key or a fact there. A pattern that is not
+understood, or a placeholder that does not exist, stops the server at start
+with a line that names the setting.
+
+| Placeholder | Stands for |
+| --- | --- |
+| `{address}` | the address of the page as the visitor opened it: `https://transit.example.org/?lang=en` |
+| `{host}` | its host: `transit.example.org` |
+| `{path}` | its path and query: `/?lang=en`, or `/stop/nuernberg-plaerrer@49.4481,11.0648` for the page of a stop |
+| `{source}` | where the visitor came from: the `Referer` of the request, where it names another host than the instance |
+| `{language}` | the language the browser names first, as it sends it: `de-DE` |
+| `{browser}` | the `User-Agent` of the request, as it is sent |
+| `{ip}` | the IP address of the visitor |
+| `{ip-short}` | the same without its end: of an IPv4 address the last number 0, of an IPv6 address the first 48 bits |
+| `{title}` | the title of the page, in the language it was sent in |
+
+- **Host and path** are those of `NETNOU_PUBLIC_URL` where it is set. Without
+  it they come from the request: its `Host` header, `https` where
+  `X-Forwarded-Proto` says so.
+- **Of the query** only `lang`, `display` and the five `utm_…` parameters are
+  passed on. Everything else is left out, among it the map position that the
+  address of a display holds (`view`).
+- **The IP address** is the last entry of `X-Forwarded-For`, the one the
+  reverse proxy in front has written; without that header it is the
+  address of the connection. Where two proxies stand in front, the nearer
+  one has to pass the visitor's address on.
+- **Filled in** are the texts of the body, so that what is sent is always
+  JSON; the values of the query, encoded; and the values of the headers. A
+  header that cannot carry what is filled in is left out.
+- **Nothing to fill in:** a field of the body, a parameter of the query or a
+  header that is one placeholder and nothing else is left out where there
+  is nothing for it, such as `{source}` for a visitor who typed the address.
+- Without a `User-Agent` of its own the report names the server, as its
+  other requests do: `Netnou/<version>`.
+
+What counts as a visit:
+
+- **A `GET` of the page,** at its address or at that of a stop or a line,
+  whether it is answered with the page or with "not modified".
+- **Opened by a browser:** `Sec-Fetch-Mode` is `navigate`, and
+  `Sec-Fetch-Dest` is `document`, or `empty` where the page's service worker
+  passes the request on. A browser that sends neither header counts where
+  its `Accept` names `text/html`. A script fetching the page is no visit,
+  nor is the worker filling its cache.
+- **Not a prefetch** (`Sec-Purpose` or `Purpose` names `prefetch`), and not a
+  browser that asks not to be tracked (`DNT: 1` or `Sec-GPC: 1`).
+- **Which browsers are bots** is left to the service, which is told their
+  names. A display counts like any other visit; `display` in its path tells
+  it apart.
+
+A visit is reported once the answer to the visitor has been written, with
+one attempt of at most 5 seconds; with 20 reports under way, more are
+dropped, so that a service that hangs cannot hold up the server. A visit
+that cannot be reported is lost: the server keeps nothing of it. The log
+says at the start where visits are reported, by the host alone, as the
+address may hold a key; once when reports begin to fail, with the status
+and the beginning of the answer; and once when they get through again.
+Nothing is logged for a single visit.
+
+### Patterns for some services
+
+Written from what each service documents, in October 2026; not yet tried
+against a running one. What is in angle brackets is yours.
+
+**Umami**, from its source at version 3.4.0 (`POST /api/send`). It tells
+visitors apart by a hash of the IP address and the browser it is given, and
+keeps no IP address:
+
+```sh
+NETNOU_VISITS_URL='http://umami:3000/api/send'
+NETNOU_VISITS_BODY='{"type":"event","payload":{"website":"<the ID Umami gives the site>","hostname":"{host}","url":"{path}","referrer":"{source}","language":"{language}","title":"{title}","ip":"{ip}","userAgent":"{browser}"}}'
+```
+
+**Plausible**, its Events API (`POST /api/event`). The browser and the IP
+address go in headers:
+
+```sh
+NETNOU_VISITS_URL='https://plausible.io/api/event'
+NETNOU_VISITS_BODY='{"name":"pageview","url":"{address}","domain":"<the domain of the site in Plausible>","referrer":"{source}"}'
+NETNOU_VISITS_HEADERS='{"User-Agent":"{browser}","X-Forwarded-For":"{ip}"}'
+```
+
+**Matomo**, its Tracking HTTP API (`matomo.php`). The IP address of the
+visitor, `cip`, is taken only with a `token_auth` that may write to the
+site:
+
+```sh
+NETNOU_VISITS_URL='https://<matomo>/matomo.php?idsite=<1>&rec=1&apiv=1&send_image=0&url={address}&urlref={source}&action_name={title}&ua={browser}&lang={language}&cip={ip}&token_auth=<token>'
+```
+
+**GoatCounter**, its API (`POST /api/v0/count`, with a key):
+
+```sh
+NETNOU_VISITS_URL='https://<code>.goatcounter.com/api/v0/count'
+NETNOU_VISITS_BODY='{"hits":[{"path":"{path}","title":"{title}","ref":"{source}","user_agent":"{browser}","ip":"{ip}"}]}'
+NETNOU_VISITS_HEADERS='{"Authorization":"Bearer <key>"}'
+```
+
+A service that is to have less than the whole IP address gets `{ip-short}`
+in place of `{ip}`, and tells visitors of one network apart the less well.
+
+Telling visitors about it, what is passed on to which service and how long
+that keeps it, is your responsibility, as the legal notices are
+([Running a public instance](deployment.md#running-a-public-instance)).
 
 ## Version and updates
 

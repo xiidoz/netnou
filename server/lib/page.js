@@ -122,6 +122,9 @@ export function languageFor(header = '', main) {
 
 const escapeHtml = (text) => String(text).replace(/[&<>"']/g, (char) => `&#${char.charCodeAt(0)};`);
 
+/** The title of a page as renderPage wrote it, as text. */
+export const titleOf = (html) => (/<title>([^<]*)<\/title>/.exec(html)?.[1] ?? '').replace(/&#(\d+);/g, (_, code) => String.fromCharCode(Number(code)));
+
 /**
  * The texts of index.html, which has the English ones, in another language:
  * what translatePage (public/i18n.js) does in the browser. data-i18n names the

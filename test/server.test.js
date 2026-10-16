@@ -50,6 +50,7 @@ const REALTIME = encodeFeed({
 const SETTINGS = ['NETNOU_PORT', 'NETNOU_HOST', 'NETNOU_DATA_DIR', 'NETNOU_AREA', 'NETNOU_AREA_FILE', 'NETNOU_BBOX', 'NETNOU_AGENCIES', 'NETNOU_AREA_NAME', 'NETNOU_VIEW', 'NETNOU_TIMEZONE', 'NETNOU_MAP_STYLE_URL', 'NETNOU_MAP_ORIGINS', 'NETNOU_TILE_URL', 'NETNOU_TILE_ATTRIBUTION', 'NETNOU_DATA_ATTRIBUTION',
   'NETNOU_OSM_PBF_URLS', 'NETNOU_OSM_MAX_AGE_DAYS', 'NETNOU_FEED_URL', 'NETNOU_FEED_CHECK_MINUTES', 'NETNOU_DOWNLOAD_TIMEOUT_MINUTES', 'NETNOU_REALTIME_URL', 'NETNOU_REALTIME_INTERVAL_SECONDS', 'NETNOU_REALTIME_IDLE_SECONDS', 'NETNOU_UPDATE_CHECK',
   'NETNOU_LANGUAGE', 'NETNOU_PUBLIC_URL', 'NETNOU_SEARCH_ENGINES', 'NETNOU_SITE_NAME', 'NETNOU_SITE_TITLE', 'NETNOU_SITE_DESCRIPTION', 'NETNOU_LINKS', 'NETNOU_BRAND_DIR',
+  'NETNOU_VISITS_URL', 'NETNOU_VISITS_BODY', 'NETNOU_VISITS_HEADERS',
   // (a title and a description may be set for one language alone)
   ...LANGUAGES.flatMap(([code]) => [`NETNOU_SITE_TITLE_${code.toUpperCase()}`, `NETNOU_SITE_DESCRIPTION_${code.toUpperCase()}`])];
 // Words of the operator's own for the page, the same in each of its languages; null for none.
@@ -892,6 +893,126 @@ test('a zoomed-out map of a large instance is thinned out', async () => {
   }
 });
 
+test('a visit of the page is reported to the analytics service the operator names, with what its request says (#114)', async () => {
+  // a stand-in for the service: what it is sent, and an answer it may be told to give
+  const reports = [];
+  let answer = 200;
+  const service = http.createServer((req, res) => {
+    const chunks = [];
+    req.on('data', (chunk) => chunks.push(chunk));
+    req.on('end', () => {
+      reports.push({ method: req.method, url: req.url, headers: req.headers, body: Buffer.concat(chunks).toString() });
+      res.writeHead(answer, { 'Content-Type': 'text/plain' });
+      res.end(answer === 200 ? 'ok' : 'website not found');
+    });
+  });
+  service.listen(0, '127.0.0.1');
+  await once(service, 'listening');
+  // (a feed of its own, which nothing holds back)
+  const other = await startUpstream({ zip: makeZip(FEED), etag: '"v1"', realtime: REALTIME });
+  const proc = start({
+    NETNOU_PORT: '0',
+    NETNOU_HOST: '127.0.0.1',
+    NETNOU_DATA_DIR: path.join(dir, 'visits'),
+    NETNOU_BBOX: BBOX.join(','),
+    NETNOU_TIMEZONE: 'UTC',
+    NETNOU_OSM_PBF_URLS: '',
+    NETNOU_FEED_URL: `${other.url}/feed.zip`,
+    NETNOU_REALTIME_URL: `${other.url}/realtime.pb`,
+    NETNOU_PUBLIC_URL: 'https://karte.example.org/live/',
+    NETNOU_VISITS_URL: `http://127.0.0.1:${service.address().port}/api/send?site=7&from={source}`,
+    NETNOU_VISITS_BODY: '{"type":"event","payload":{"url":"{path}","hostname":"{host}","referrer":"{source}","language":"{language}","title":"{title}","ip":"{ip}","near":"{ip-short}","userAgent":"{browser}","page":"{address}"}}',
+    NETNOU_VISITS_HEADERS: '{"Authorization":"Bearer geheim","X-Title":"{title}"}',
+  });
+  let text = '';
+  proc.stdout.on('data', (chunk) => { text += chunk; });
+  proc.stderr.on('data', (chunk) => { text += chunk; });
+  const browser = 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/154.0.0.0 Safari/537.36';
+  // what a browser sends when it opens the page, and when it opens it through the service worker
+  const opened = { 'Sec-Fetch-Mode': 'navigate', 'Sec-Fetch-Dest': 'document', Accept: 'text/html,application/xhtml+xml', 'User-Agent': browser, 'Accept-Language': 'de-DE,de;q=0.9,en;q=0.8', 'X-Forwarded-For': '10.0.0.9, 203.0.113.47' };
+  const throughWorker = { ...opened, 'Sec-Fetch-Dest': 'empty' };
+  // (reported once the answer is out: the requests are waited for)
+  const reported = async (count) => until(() => reports.length >= count, `${count} reports`).then(() => new Promise((resolve) => setTimeout(resolve, 150)));
+  try {
+    port = Number((await until(() => /Netnou listening on http:\/\/127\.0\.0\.1:(\d+)/.exec(text), 'the server with visits to listen'))[1]);
+    assert.match(text, new RegExp(`Visits: reported to 127\\.0\\.0\\.1:${service.address().port}\n`));
+    // (the page changes with the timetable, its kinds of transport: it is there before the page is asked for)
+    await until(() => /Timetable loaded/.test(text), 'the timetable of the server with visits');
+
+    // a visit, with a map position in its address and from another site
+    const page = await request('/?lang=en&view=49.45,11.08,12&utm_source=flyer', { headers: { ...opened, Referer: 'https://www.example.com/' } });
+    assert.equal(page.status, 200);
+    await reported(1);
+    const [first] = reports;
+    assert.equal(first.method, 'POST');
+    assert.equal(first.url, `/api/send?site=7&from=${encodeURIComponent('https://www.example.com/')}`);
+    assert.equal(first.headers['content-type'], 'application/json');
+    assert.equal(first.headers.authorization, 'Bearer geheim');
+    assert.match(first.headers['user-agent'], /^Netnou\//);
+    const title = JSON.parse(first.body).payload.title;
+    assert.match(title, /Netnou/);
+    // (what a header cannot carry, such as a dash beyond Latin-1, leaves the header out)
+    assert.equal(first.headers['x-title'], /^[\x20-\xff]*$/.test(title) ? title : undefined);
+    assert.deepEqual(JSON.parse(first.body), {
+      type: 'event',
+      payload: {
+        // (the map position is left out, the language and where the visitor came from are kept)
+        url: '/live/?lang=en&utm_source=flyer',
+        hostname: 'karte.example.org',
+        referrer: 'https://www.example.com/',
+        language: 'de-DE',
+        title,
+        ip: '203.0.113.47',
+        near: '203.0.113.0',
+        userAgent: browser,
+        page: 'https://karte.example.org/live/?lang=en&utm_source=flyer',
+      },
+    });
+
+    // opened again through the worker, answered with "not modified", and without a source: the source is left out
+    const again = await request('/?lang=en', { headers: { ...throughWorker, 'If-None-Match': page.headers.etag, Referer: 'https://karte.example.org/live/' } });
+    assert.equal(again.status, 304);
+    await reported(2);
+    assert.equal(reports[1].url, '/api/send?site=7');
+    assert.deepEqual(Object.keys(JSON.parse(reports[1].body).payload).sort(), ['hostname', 'ip', 'language', 'near', 'page', 'title', 'url', 'userAgent']);
+    // the page of a stop is a visit too, at its address
+    await request('/stop/alpha@49.4000,11.0000', { headers: opened });
+    await reported(3);
+    assert.equal(JSON.parse(reports[2].body).payload.url, '/live/stop/alpha@49.4000,11.0000');
+
+    // no visits: the worker filling its cache, a script fetching the page, a prefetch, HEAD, Do Not Track and GPC, a script's request for data
+    for (const headers of [
+      { 'Sec-Fetch-Mode': 'cors', 'Sec-Fetch-Dest': 'empty', Accept: '*/*' },
+      { 'Sec-Fetch-Mode': 'no-cors', 'Sec-Fetch-Dest': 'empty', Accept: '*/*', 'Sec-Purpose': 'prefetch' },
+      { ...opened, 'Sec-Purpose': 'prefetch;prerender' },
+      { ...opened, DNT: '1' },
+      { ...opened, 'Sec-GPC': '1' },
+      { Accept: '*/*' },
+    ]) await request('/', { headers });
+    await request('/', { method: 'HEAD', headers: opened });
+    await request('/api/area', { headers: opened });
+    // (without the Sec-Fetch headers, as from an older browser: by what it accepts)
+    await request('/', { headers: { Accept: 'text/html' } });
+    await reported(4);
+    assert.equal(reports.length, 4);
+
+    // a service that refuses: one line when that begins, none for each visit, one when it is over
+    answer = 404;
+    for (let i = 0; i < 3; i++) await request('/', { headers: opened });
+    await reported(7);
+    answer = 200;
+    await request('/', { headers: opened });
+    await reported(8);
+    assert.equal(text.match(/Visits: cannot report to [^\n]*: HTTP 404: website not found\n/g)?.length, 1);
+    assert.equal(text.match(/Visits: reported to [^\n]* again\n/g)?.length, 1);
+  } finally {
+    proc.kill();
+    await once(proc, 'exit');
+    service.close();
+    await other.close();
+  }
+});
+
 test('a wrong setting or an unusable data directory ends the start with exit code 1', async () => {
   const run = async (settings) => {
     const proc = start({ NETNOU_PORT: '0', NETNOU_HOST: '127.0.0.1', NETNOU_BBOX: BBOX.join(','), NETNOU_FEED_URL: `${upstream.url}/feed.zip`, NETNOU_REALTIME_URL: `${upstream.url}/realtime.pb`, ...settings });
@@ -906,6 +1027,10 @@ test('a wrong setting or an unusable data directory ends the start with exit cod
   // one line, no stack trace
   assert.equal(config.text.trim(), 'Configuration error: NETNOU_REALTIME_INTERVAL_SECONDS must be a number from 10 to 3600 (got "0")');
   assert.ok(!fs.existsSync(path.join(dir, 'unused')));
+  // (a pattern of the visits: with a placeholder that does not exist)
+  const visits = await run({ NETNOU_DATA_DIR: path.join(dir, 'unused'), NETNOU_VISITS_URL: 'https://stats.example.org/count?page={page}' });
+  assert.equal(visits.code, 1);
+  assert.match(visits.text, /^Configuration error: NETNOU_VISITS_URL: \{page\} is no placeholder; there are \{address\}, /);
 
   // a data directory below a file cannot be created
   fs.writeFileSync(path.join(dir, 'file'), '');

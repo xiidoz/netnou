@@ -7,6 +7,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { APP_NAME, LANGUAGES } from '../public/i18n.js';
 import { Area, agencyKey, scopeId } from './lib/area.js';
+import { visitsPattern } from './lib/visits.js';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 // The languages the page has texts in.
@@ -382,5 +383,9 @@ export function loadConfig(env = process.env) {
     // instances are private or for trying things out, and whoever names the
     // address wants to be found.
     searchEngines: onOff('NETNOU_SEARCH_ENGINES', Boolean(publicUrl)),
+
+    // Where visits of the page are reported, and how: the patterns of the
+    // request to an analytics service (lib/visits.js), or null for none.
+    visits: visitsPattern({ url: text('NETNOU_VISITS_URL'), body: text('NETNOU_VISITS_BODY'), headers: text('NETNOU_VISITS_HEADERS') }),
   };
 }
