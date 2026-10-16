@@ -433,6 +433,7 @@ The vehicles of one line that are under way.
 | `name`, `mode`, `agency` | the line, as [`/api/search`](#get-apisearch) lists it; all three are needed |
 | `at` | `lat,lon`: of the lines of that name, mode and operator in places apart, the one whose place (`at` of the answer) is nearest; without it the busiest |
 | `route` | `1`: with `route`, where the line runs today (below) |
+| `open` | `1`: the page's first request for a line it opens, which counts as a visit of its address where [visits are counted](configuration.md#counting-visits) |
 
 ```json
 {
@@ -563,6 +564,7 @@ going.
 | --- | --- |
 | `station` | the id of the station, as [`/api/stations`](#get-apistations) and the stops of [a trip](#get-apitrip) have it |
 | `at` | in place of the id, where the station is: `latitude,longitude` as [`/api/search`](#get-apisearch) lists it, in degrees, for example `at=49.44561,11.08299`. It is the station at that very place, not the nearest one |
+| `open` | `1`: the page's first request for a stop it opens, which counts as a visit of its address where [visits are counted](configuration.md#counting-visits) |
 
 404 `{ "error": "station not found" }` for an unknown id and for a place
 without a station.

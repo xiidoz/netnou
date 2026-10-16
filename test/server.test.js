@@ -893,7 +893,7 @@ test('a zoomed-out map of a large instance is thinned out', async () => {
   }
 });
 
-test('a visit of the page is reported to the analytics service the operator names, with what its request says (#114)', async () => {
+test('a visit of the page is reported to the analytics service the operator names, with what its request says (#114), and so is a stop or a line opened in it (#158)', async () => {
   // a stand-in for the service: what it is sent, and an answer it may be told to give
   const reports = [];
   let answer = 200;
@@ -996,13 +996,42 @@ test('a visit of the page is reported to the analytics service the operator name
     await reported(4);
     assert.equal(reports.length, 4);
 
+    // a stop and a line opened in the page: its first request for each, which it marks, is a visit of the address (#158)
+    const asked = { 'Sec-Fetch-Mode': 'cors', 'Sec-Fetch-Dest': 'empty', 'Sec-Fetch-Site': 'same-origin', Accept: '*/*', 'User-Agent': browser, 'Accept-Language': 'de-DE,de;q=0.9,en;q=0.8', 'X-Forwarded-For': '10.0.0.9, 203.0.113.47', Referer: 'https://karte.example.org/live/' };
+    assert.equal((await request('/api/departures?station=A&open=1', { headers: asked })).status, 200);
+    assert.equal((await request('/api/line?name=U1&mode=subway&agency=Testbetrieb&route=1&open=1', { headers: asked })).status, 200);
+    // no visits: the requests that keep the details up to date, a trip, a stop that is not there, another site's page, Do Not Track
+    await request('/api/departures?station=A', { headers: asked });
+    await request('/api/line?name=U1&mode=subway&agency=Testbetrieb', { headers: asked });
+    await request('/api/trip?id=T1_20261003&open=1', { headers: asked });
+    assert.equal((await request('/api/departures?station=nowhere&open=1', { headers: asked })).status, 404);
+    await request('/api/departures?at=49.4,11&open=1', { headers: { ...asked, 'Sec-Fetch-Site': 'cross-site' } });
+    await request('/api/departures?station=A&open=1', { headers: { ...asked, DNT: '1' } });
+    await reported(6);
+    assert.equal(reports.length, 6);
+    const of = (part) => reports.slice(4).map((report) => JSON.parse(report.body).payload).find((visit) => visit.page.includes(part));
+    // (without a source: the visitor came from the page itself; with the title of the page at the address)
+    assert.deepEqual(of('/stop/'), {
+      url: '/live/stop/alpha@49.4000,11.0000',
+      hostname: 'karte.example.org',
+      language: 'de-DE',
+      title: 'Abfahrten Alpha live – Netnou',
+      ip: '203.0.113.47',
+      near: '203.0.113.0',
+      userAgent: browser,
+      page: 'https://karte.example.org/live/stop/alpha@49.4000,11.0000',
+    });
+    assert.equal(reports.find((report) => report.body.includes('/stop/')).url, '/api/send?site=7');
+    const lineTitle = /<title>([^<]*)<\/title>/.exec((await request('/line/testbetrieb/subway/u1', { headers: { 'Accept-Language': 'de-DE' } })).body.toString())[1];
+    assert.deepEqual([of('/line/').url, of('/line/').title], ['/live/line/testbetrieb/subway/u1', lineTitle]);
+
     // a service that refuses: one line when that begins, none for each visit, one when it is over
     answer = 404;
     for (let i = 0; i < 3; i++) await request('/', { headers: opened });
-    await reported(7);
+    await reported(9);
     answer = 200;
     await request('/', { headers: opened });
-    await reported(8);
+    await reported(10);
     assert.equal(text.match(/Visits: cannot report to [^\n]*: HTTP 404: website not found\n/g)?.length, 1);
     assert.equal(text.match(/Visits: reported to [^\n]* again\n/g)?.length, 1);
   } finally {

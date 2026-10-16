@@ -566,6 +566,17 @@ What counts as a visit:
 - **Which browsers are bots** is left to the service, which is told their
   names. A display counts like any other visit; `display` in its path tells
   it apart.
+- **A stop or a line opened in the page** counts as a visit of its address
+  too. The page opens them without loading itself again: it asks the server
+  for their data and changes its address itself. Its first request for one
+  says so (`open=1` on [`/api/departures` or `/api/line`](api.md)), and the
+  server reports it with the address and the title of their page, from the
+  facts of that request; `{source}` stays empty, as the visitor came from
+  the page itself. The requests that keep the details up to date are no
+  visits, nor is a trip, which has no address, nor a stop or a line at whose
+  address the page was loaded: that visit was the page's. The mark counts
+  from the page itself only, where the browser says whose a request is
+  (`Sec-Fetch-Site: same-origin`), and with the same exceptions as above.
 
 A visit is reported once the answer to the visitor has been written, with
 one attempt of at most 5 seconds; with 20 reports under way, more are

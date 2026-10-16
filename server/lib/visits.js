@@ -1,7 +1,8 @@
-// Visits of the page, reported to an analytics service of the operator's
-// choice (#114). The server tells the service of each visit itself, with what
-// the browser sent along with its request anyway; the page loads nothing from
-// elsewhere for it. The service and the shape of its request are the
+// Visits of the page, and of the stops and lines opened in it (#158),
+// reported to an analytics service of the operator's choice (#114). The
+// server tells the service of each visit itself, with what the browser sent
+// along with its request anyway; the page loads nothing from elsewhere for
+// it. The service and the shape of its request are the
 // operator's: NETNOU_VISITS_URL, NETNOU_VISITS_BODY and NETNOU_VISITS_HEADERS
 // are patterns whose placeholders are filled in here. No service is known by
 // name, and nothing of a visit is kept.
@@ -83,6 +84,14 @@ function texts(value, visit) {
   else if (value && typeof value === 'object') for (const item of Object.values(value)) texts(item, visit);
 }
 
+/** Whether a request is never a visit: anything but GET, a prefetch, or from a browser that asks not to be tracked. */
+function declined(req) {
+  const header = (name) => req.headers[name] ?? '';
+  if (req.method !== 'GET') return true;
+  if (/prefetch/i.test(header('sec-purpose')) || /prefetch/i.test(header('purpose'))) return true;
+  return header('dnt') === '1' || header('sec-gpc') === '1';
+}
+
 /**
  * Whether a request for the page is a visit: a browser opening it, not a
  * script fetching it, a prefetch, or a browser that asks not to be tracked.
@@ -91,14 +100,25 @@ function texts(value, visit) {
  */
 export function isVisit(req) {
   const header = (name) => req.headers[name] ?? '';
-  if (req.method !== 'GET') return false;
-  if (/prefetch/i.test(header('sec-purpose')) || /prefetch/i.test(header('purpose'))) return false;
-  if (header('dnt') === '1' || header('sec-gpc') === '1') return false;
+  if (declined(req)) return false;
   // (Sec-Fetch-Dest is "empty" for a page opened through the service worker)
   if (req.headers['sec-fetch-mode'] !== undefined || req.headers['sec-fetch-dest'] !== undefined) {
     return header('sec-fetch-mode') === 'navigate' && ['document', 'empty'].includes(header('sec-fetch-dest'));
   }
   return /\btext\/html\b/.test(header('accept'));
+}
+
+/**
+ * Whether the page's request for a stop or a line that it opens, its first
+ * one for it, which it marks as such (#158), is a visit: one of the page
+ * itself, where the browser says whose a request is, and not a prefetch or
+ * from a browser that asks not to be tracked. (Another site's page can send
+ * the same request, but its browser says that it is another site's.)
+ */
+export function isOpened(req) {
+  if (declined(req)) return false;
+  const site = req.headers['sec-fetch-site'];
+  return site === undefined || site === 'same-origin';
 }
 
 /** An IP address without its end: an IPv4 address with its last number 0, of an IPv6 address the first 48 bits. */
@@ -243,6 +263,18 @@ export class Visits {
     if (!isVisit(req)) return;
     // (taken now: the connection may be gone once the answer is out)
     const facts = factsOf(req, { ...page, publicUrl: this.publicUrl });
+    res.once('finish', () => this.report(facts));
+  }
+
+  /**
+   * Reports a stop or a line that the page opens as a visit of its address
+   * (#158), if the request is one, once the answer to it has been written.
+   * Where the visitor came from is left out: from the page itself.
+   * @param address { pathname, title } of the address, as its page has them
+   */
+  opened(req, res, { pathname, title }) {
+    if (!isOpened(req)) return;
+    const facts = { ...factsOf(req, { pathname, query: new URLSearchParams(), title, publicUrl: this.publicUrl }), source: null };
     res.once('finish', () => this.report(facts));
   }
 
