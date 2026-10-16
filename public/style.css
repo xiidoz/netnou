@@ -253,10 +253,14 @@ button { font: inherit; color: inherit; }
 .search-results li:hover, .search-results li[aria-selected="true"] { background: var(--bg-subtle); }
 /* up to six dots in three columns, so that the names begin below one another */
 .search-results .dots { display: grid; flex: none; grid-template-columns: repeat(3, 8px); gap: 2px; }
+/* a town has its sign where a stop has the dots, as wide as three of them (#24) */
+.search-results .sign { display: grid; flex: none; width: 28px; justify-items: center; color: var(--text-muted); }
+.search-results .sign .icon { width: 16px; height: 16px; }
 .search-results .swatch { width: 8px; height: 8px; background: var(--chip-color); }
 .search-results .name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 /* Two lines: a line has where it goes, and below that in small print who
-   runs it; a stop whose name does not say its town has the town there. */
+   runs it; a stop whose name does not say its town has the town there, and
+   a town its district where another town has the name too. */
 .search-results .line .name, .search-results .in-town .name { display: grid; min-width: 0; line-height: 1.25; }
 .search-results .line .to, .search-results .line .agency, .search-results .in-town .stop, .search-results .in-town .town { overflow: hidden; text-overflow: ellipsis; }
 .search-results .line .agency, .search-results .in-town .town { color: var(--text-muted); font-size: 12px; }

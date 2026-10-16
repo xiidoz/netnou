@@ -1,11 +1,11 @@
-// The search for stops and lines (public/search.js) needs no browser and is
+// The search for stops, lines and towns (public/search.js) needs no browser and is
 // run as it is, on a list as the server makes it (server/lib/search-list.js).
 // The stops and lines are real ones of the default area, with their positions
 // and with how much service they have in a timetable of October 2026.
 
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { buildIndex, fold, search, searchLines, wordsOf } from '../public/search.js';
+import { buildIndex, fold, search, searchLines, searchTowns, wordsOf } from '../public/search.js';
 import { searchList } from '../server/lib/search-list.js';
 import { MODES } from '../server/lib/timetable.js';
 
@@ -47,12 +47,25 @@ const LINES = [
   ['RB16', 'regional', 'DB Regio AG Bayern', ['München Hbf', 'Nürnberg Hbf'], 49.10328, 10.99763, 153],
   ['RB16', 'bus', 'DB Regio AG Bayern', ['Bahnhof, Treuchtlingen', 'Bahnhof, Roth (Mittelfranken)'], 49.13429, 11.00186, 4],
 ];
-/** What api/search sends for these stops and lines, as a browser gets it. */
+/**
+ * What api/search sends for these stops and lines, as a browser gets it. The
+ * town of a stop is its name, or its name and its district: towns of one
+ * name are towns apart.
+ */
 function listOf(stops, lines = []) {
+  const towns = [];
+  const numbers = new Map();
+  const townOf = (town) => {
+    if (!town) return -1;
+    const [name, district = null] = [town].flat();
+    if (!numbers.has(`${name}\n${district}`)) numbers.set(`${name}\n${district}`, towns.push({ name, district }) - 1);
+    return numbers.get(`${name}\n${district}`);
+  };
   const { list } = searchList(
-    stops.map(([name, lat, lon, service, modes, town = null]) => ({ name, lat, lon, service, modes, town })),
+    stops.map(([name, lat, lon, service, modes, town = null]) => ({ name, lat, lon, service, modes, town: townOf(town) })),
     lines.map(([name, mode, agency, to, lat, lon, service]) => ({ name, mode, agency, to, lat, lon, service })),
     MODES,
+    towns,
   );
   return JSON.parse(JSON.stringify(list));
 }
@@ -441,4 +454,51 @@ test('a result has its town where its name does not say it', () => {
 test('with towns, a search finds the same whatever was searched for before it', () => {
   const TYPED = ['münchen', 'münchen m', 'münchen marienplatz', 'münchn marienplatz', 'münchn', 'marienplatz', 'stuttgart marienplatz', 'm', 'mü', 'düsseldrof steinstr', 'düsseldorf', 'erlangen', 'erlangen k'];
   for (const typed of [...TYPED, ...TYPED.toReversed()]) assert.deepEqual(inTowns(typed), search(buildIndex(listOf(WITH_TOWNS)), typed).map((stop) => (stop.town ? `${stop.name} · ${stop.town}` : stop.name)), typed);
+});
+
+// Besides those: towns of one name, in two districts, and a busy town whose name begins with that of another
+const TWINS = [
+  ...WITH_TOWNS,
+  ['Neuenkirchen, Realschule', 52.24, 7.375, 202, ['bus'], ['Neuenkirchen', 'Kreis Steinfurt']],
+  ['Neuenkirchen, Rheiner Str.', 52.247, 7.375, 182, ['bus'], ['Neuenkirchen', 'Kreis Steinfurt']],
+  ['Neuenkirchen(b Bramsche) Kirche', 52.418, 7.838, 191, ['bus'], ['Neuenkirchen', 'Landkreis Osnabrück']],
+  ['Hofheim (Taunus) Bahnhof', 50.0844, 8.4449, 5000, ['suburban'], 'Hofheim am Taunus'],
+];
+const twins = buildIndex(listOf(TWINS));
+/** The towns found, each as its name and, where the result has one, its district. */
+const towns = (query, options) => searchTowns(twins, query, options).map((town) => (town.district ? `${town.name} · ${town.district}` : town.name));
+
+test('a town is found by what each of the words of its name begins with, as a stop is (#24)', () => {
+  assert.deepEqual(towns('münchen'), ['München']);
+  // without umlauts, in part, any word of its name, in any order
+  for (const typed of ['muenchen', 'munch', 'MÜNCHEN']) assert.deepEqual(towns(typed), ['München'], typed);
+  assert.deepEqual(towns('main'), ['Frankfurt am Main']);
+  assert.deepEqual(towns('main frank'), ['Frankfurt am Main']);
+  assert.deepEqual(towns('bad wind'), ['Bad Windsheim']);
+  // not by a word inside one, not with a slip, not before three letters, and not by a word that is not in its name
+  assert.deepEqual(towns('dorf'), []);
+  assert.deepEqual(towns('stutgart'), []);
+  assert.deepEqual(towns('mü'), []);
+  assert.deepEqual(towns('münchen marienplatz'), []);
+  assert.deepEqual(towns(''), []);
+});
+
+test('a town of exactly that name comes first, then the busier and nearer ones, as many as are asked for', () => {
+  // Hof before the busier Hofheim
+  assert.deepEqual(towns('hof'), ['Hof', 'Hofheim am Taunus']);
+  assert.deepEqual(towns('hof', { limit: 1 }), ['Hof']);
+  assert.deepEqual(towns('hof', { limit: 0 }), []);
+  // towns of one name, each with its district: the busier one first, or the nearer one
+  assert.deepEqual(towns('neuenkirchen'), ['Neuenkirchen · Kreis Steinfurt', 'Neuenkirchen · Landkreis Osnabrück']);
+  assert.deepEqual(towns('neuenkirchen', { near: { lat: 52.42, lon: 7.84 } }), ['Neuenkirchen · Landkreis Osnabrück', 'Neuenkirchen · Kreis Steinfurt']);
+  assert.deepEqual(towns('neuenkirchen', { near: { lat: 52.42, lon: 7.84, km: 5 } }), ['Neuenkirchen · Landkreis Osnabrück', 'Neuenkirchen · Kreis Steinfurt']);
+});
+
+test('a town found has the rectangle around its stations, to be shown in', () => {
+  // [south, west, north, east] of the four stations of München
+  assert.deepEqual(searchTowns(twins, 'münchen'), [{ name: 'München', box: [48.1335, 11.5584, 48.1403, 11.5767] }]);
+  // one with a single station: a rectangle of no size
+  assert.deepEqual(searchTowns(twins, 'schwerin')[0].box, [53.6288, 11.4127, 53.6288, 11.4127]);
+  // a list without towns, as without OpenStreetMap extracts
+  assert.deepEqual(searchTowns(index, 'nürnberg'), []);
 });

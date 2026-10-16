@@ -11,7 +11,7 @@ import fs from 'node:fs';
 // including the route geometry (shapes.js) and what the importer puts into a
 // field: a stored dataset of another version is discarded and imported again
 // on start.
-export const DATASET_VERSION = 9;
+export const DATASET_VERSION = 10;
 
 const MAGIC = 'netnou dataset\n';
 // Columns begin at a multiple of this, so that a typed array can be laid over

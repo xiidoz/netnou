@@ -38,10 +38,10 @@ changes as breaking.
   places in the visitor's language.
 - Stop list with delays, skipped stops and cancellations for every trip;
   departure board for every station; notes from the feed.
-- Search for stops and lines that runs in the browser. A stop is found by
-  its town as well as by its name, and the search forgives abbreviations,
-  missing umlauts and typing slips; a line shows its vehicles under way,
-  alone on the map.
+- Search for stops, lines and towns that runs in the browser. A stop is
+  found by its town as well as by its name, and the search forgives
+  abbreviations, missing umlauts and typing slips; a line shows its
+  vehicles under way, alone on the map, and a town all its stations.
 - Every stop and line has an address of its own, to share, keep and find
   with a search engine, which finds it again in later timetables; a button
   in its details shares it.

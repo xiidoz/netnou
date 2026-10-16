@@ -141,12 +141,17 @@ test('the towns are kept with every line once, and a place finds the town it is 
   const kept = readTowns(file, about);
   assert.equal(kept.fetchedAt, about.fetchedAt);
   assert.deepEqual(kept.names, ['West', 'Ost', 'Umland', 'Insel', 'Stadt', 'Zweiteil']);
+  // the district of a municipality is the area of the next level around it; a town of that level or above has none (#24)
+  assert.deepEqual(kept.districts, ['Kreis', 'Kreis', null, null, null, null]);
+  // (the town a place is in, by its number among them)
+  const at = (lat, lon) => kept.names[kept.at(lat, lon)] ?? null;
   assert.deepEqual([
-    kept.at(49.45, 11.05), kept.at(49.45, 11.15), kept.at(49.55, 11.1), // in the three
-    kept.at(49.42, 11.35), kept.at(49.5, 11.45), kept.at(49.58, 11.55), // around the island, on it, around it
-    kept.at(49.72, 11.02), kept.at(49.22, 11.02), kept.at(49.78, 11.08), // in each of the two parts, and beside one
-    kept.at(49.65, 11.1), kept.at(49.45, 10.95), kept.at(0, 0), kept.at(-49.45, -11.05), // in none
+    at(49.45, 11.05), at(49.45, 11.15), at(49.55, 11.1), // in the three
+    at(49.42, 11.35), at(49.5, 11.45), at(49.58, 11.55), // around the island, on it, around it
+    at(49.72, 11.02), at(49.22, 11.02), at(49.78, 11.08), // in each of the two parts, and beside one
+    at(49.65, 11.1), at(49.45, 10.95), at(0, 0), at(-49.45, -11.05), // in none
   ], ['West', 'Ost', 'Stadt', 'Umland', 'Insel', 'Umland', 'Zweiteil', 'Zweiteil', null, null, null, null, null]);
+  assert.equal(kept.at(0, 0), -1);
 
   // West and Ost have the way between them in common, and so have the town and the one inside it theirs
   const { lines, borders } = readGz(file);
@@ -168,7 +173,7 @@ test('where a place is in two towns it is in the municipality', (t) => {
   const about = { fetchedAt: 'then', scope: 'x', sources: [] };
   writeTowns(file, { ...about, towns });
   const kept = readTowns(file, about);
-  assert.deepEqual([kept.at(49.42, 11.15), kept.at(49.5, 11.15), kept.at(49.35, 11.4)], ['Gemeinde', 'Stadt', 'Gemeinde']);
+  assert.deepEqual([kept.at(49.42, 11.15), kept.at(49.5, 11.15), kept.at(49.35, 11.4)].map((town) => kept.names[town]), ['Gemeinde', 'Stadt', 'Gemeinde']);
 });
 
 test('the towns that are kept are those of one reading of the extracts', (t) => {
@@ -176,7 +181,7 @@ test('the towns that are kept are those of one reading of the extracts', (t) => 
   const about = { fetchedAt: '2026-10-01T00:00:00.000Z', scope: 'area-1', sources: ['https://osm.example.org/a.osm.pbf'] };
   assert.equal(readTowns(file, about), null); // no file
   writeTowns(file, { ...about, towns: townsAmong([reading(BORDERS)]) });
-  assert.equal(readTowns(file, about).at(49.45, 11.05), 'West');
+  assert.equal(readTowns(file, about).at(49.45, 11.05), 0);
   // another reading, another area, other extracts
   assert.equal(readTowns(file, { ...about, fetchedAt: '2026-10-02T00:00:00.000Z' }), null);
   assert.equal(readTowns(file, { ...about, scope: 'area-2' }), null);
@@ -188,7 +193,7 @@ test('the towns that are kept are those of one reading of the extracts', (t) => 
   assert.equal(readTowns(file, about), null);
 });
 
-test('every station has the number of its town among the towns that have one', (t) => {
+test('every station has the number of its town among the towns that have one, also where two towns have one name', (t) => {
   const file = path.join(tempDir(t), 'osm-towns.json.gz');
   const about = { fetchedAt: 'then', scope: 'x', sources: [] };
   // two towns of one name, as there are many
@@ -196,8 +201,10 @@ test('every station has the number of its town among the towns that have one', (
   writeTowns(file, { ...about, towns: townsAmong([read]) });
   // Stations in Ost, in West, in none, in the other West and in Ost again, and a platform of the first.
   const stops = { lat: [49.45, 49.45, 48.0, 49.55, 49.41, 49.45], lon: [11.15, 11.05, 11.0, 11.1, 11.19, 11.15], parent: [-1, -1, -1, -1, -1, 0] };
-  const { names, of } = townsOf(stops, readTowns(file, about));
-  assert.deepEqual(names, ['Ost', 'West']);
-  assert.deepEqual(of, Int32Array.of(0, 1, -1, 1, 0, -1));
-  assert.deepEqual(townsOf({ lat: [], lon: [], parent: [] }, readTowns(file, about)), { names: [], of: new Int32Array(0) });
+  const { names, districts, of } = townsOf(stops, readTowns(file, about));
+  // (the two of one name apart, each with its district: the city is one itself)
+  assert.deepEqual(names, ['Ost', 'West', 'West']);
+  assert.deepEqual(districts, ['Kreis', 'Kreis', '']);
+  assert.deepEqual(of, Int32Array.of(0, 1, -1, 2, 0, -1));
+  assert.deepEqual(townsOf({ lat: [], lon: [], parent: [] }, readTowns(file, about)), { names: [], districts: [], of: new Int32Array(0) });
 });

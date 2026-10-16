@@ -351,7 +351,8 @@ realtime feed.
     "modes": [4, 4, 16, …],
     "service": [15, 49, 54, …],
     "town": [-1, -1, -1, …, 0, 0, 1, …],
-    "towns": ["Ludwigsstadt", "Steinbach am Wald", …]
+    "towns": ["Ludwigsstadt", "Steinbach am Wald", …],
+    "districts": ["", "", …]
   },
   "lines": {
     "name": ["750 Anrufsammeltaxi Wüstenbruck", "750 Rufbus Wüstenbruck - AN Bf.", …],
@@ -384,7 +385,8 @@ The stations:
 | `modes` | array of whole numbers | the modes that call at the station: the bit with the number of a mode is set if it does, so `6` is tram and bus |
 | `service` | array of whole numbers | how often a trip stops at the station over the whole timetable; a measure of how much is going on there compared with other stations, not a number of departures per day |
 | `town` | array of whole numbers | the town the station is in, as the number of it in `towns`; `-1` where none is known |
-| `towns` | array of strings | the towns that have a station, each once |
+| `towns` | array of strings | the towns that have a station, each once; towns of one name are towns apart, unless they are in one district |
+| `districts` | array of strings | for each town of `towns` the name of its district, where another town of the list has the name too; `""` for all others |
 
 The stations are in an order in which each is near the one before it, which
 keeps the differences small; it is not the order of `/api/stations`. They
@@ -399,6 +401,10 @@ are known as far as the [OpenStreetMap extracts](configuration.md#settings)
 of the instance reach: a station beyond them has none, and an instance
 without extracts has an empty `towns`. The page finds a station by its town
 as well as by its name and shows the town where the name does not say it.
+It finds the towns themselves too, and shows one with all its stations in
+view. The district of a town is the area of the next level of borders
+around it, `admin_level` 6 in Germany: what tells apart the Neuenkirchen of
+Kreis Steinfurt from that of Landkreis Osnabrück.
 
 A line is the routes of the feed that have the same name, the same mode and
 the same agency. The name alone does not say which line it is: agencies

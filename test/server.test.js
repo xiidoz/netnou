@@ -299,7 +299,7 @@ test('/api/search: all stations and lines as columns, sent again only when they 
     // The places in 1e-5 degrees, each as the difference from the one before
     // (B comes first in the order of the list); a bit for each mode that stops
     // there. T1 stops 51 times at each of the two, T2 once more at B.
-    stations: { names: 'Beta\nAlpha', lat: [4950000, -10000], lon: [1100000, 0], modes: [0b100001, 0b000001], service: [52, 51], town: [-1, -1], towns: [] },
+    stations: { names: 'Beta\nAlpha', lat: [4950000, -10000], lon: [1100000, 0], modes: [0b100001, 0b000001], service: [52, 51], town: [-1, -1], towns: [], districts: [] },
     // each with its one trip and where that goes; the place is the middle of the stops inside the area
     lines: { name: ['ICE 5', 'U1'], mode: [5, 0], agencies: ['Testbetrieb'], agency: [0, 0], to: [['Beta'], ['Rundkurs']], lat: [4950000, -5000], lon: [1100000, 0], service: [1, 1] },
   });

@@ -95,7 +95,7 @@ Server (`server/`):
 | `lib/network.js` | builds routable networks from the ways (`classifyWay`, `buildNetworks`), cuts the roads of a country into tiles (`tilesOf`, `windowOf`) and finds paths (`Network`) |
 | `lib/shapes.js` | route geometry for every hop (`loadNetworks`, `buildSegments`) |
 | `lib/kept-routes.js` | the routes of the hops, kept from one import to the next by the places of their stops (`KeptRoutes`) |
-| `lib/towns.js` | which town a station is in: the towns among the borders of the extracts (`townsAmong`), kept between imports, and the town around a place (`townsOf`) |
+| `lib/towns.js` | which town a station is in: the towns among the borders of the extracts with their districts (`townsAmong`), kept between imports, and the town around a place (`townsOf`) |
 | `lib/timetable.js` | the loaded dataset and the queries of the API (`Timetable`), and the part of it that realtime data is matched against (`Schedule`); finds the trains that run coupled (`findSharedWays`) |
 | `lib/realtime.js` | says when the realtime feed is fetched (`RealtimePoller`), matches it to the trips and gives the portions of a coupled train the same delays where they share their way |
 | `lib/realtime-worker.js` | the thread that fetches the feed, reads it and matches it |
@@ -119,8 +119,8 @@ Page (`public/`):
 | `app.js` | map, polling, animation, drawing on a canvas, detail panel |
 | `display.js` | display mode in the address of the page: what an address asks for, and the address for what is shown |
 | `address.js` | the addresses of stops and lines, for the page and the server: how a name is written in one, and what an address names (`stopPath`, `linePath`, `parseAddress`) |
-| `search.js` | finding stops and lines by name: matching and order, without the page around it |
-| `search-worker.js` | the thread that loads the list of stops and lines and searches it |
+| `search.js` | finding stops, lines and towns by name: matching and order, without the page around it |
+| `search-worker.js` | the thread that loads the list of stops, lines and towns and searches it |
 | `i18n.js`, `locales/` | texts in the visitor's language, see [translating.md](translating.md) |
 | `first.js` | what is settled before the page is drawn: light or dark, by the visitor's choice or else the scheme of the device, whether the header card shows at once, and where the instance is (the base of the page) |
 | `sw.js`, `manifest.webmanifest`, `icons/` | installable app and offline start |
@@ -428,8 +428,14 @@ Stuttgart, so every station gets its town when the timetable is imported
   municipality has the name of that area.
 
 In the dataset a station has the number of its town (`stops.town`), and the
-towns that have a station are named once (`towns`). The list of the search
-has them the same way.
+towns that have a station are named once (`towns`), towns of one name apart.
+Each has the name of its district beside it (`districts`): the area of the
+next level of borders around it, which tells such towns apart, as the
+search finds towns themselves (#24). The list of the search has them the
+same way, with the district only for a name that more than one town has;
+two of one name in one district are one town there, as OpenStreetMap has a
+few places twice, a municipality and a forest beside it that belongs to
+none.
 
 ## Realtime
 
@@ -722,6 +728,14 @@ otherwise a server would load a file written by older code:
   to, and an abbreviation that is typed is looked for as the word it stands
   for as well: "hbf" finds a "Hauptbahnhof". For the list of a country a search takes a few milliseconds on a
   desktop machine.
+- **A town is a result of its own** (#24), and choosing it shows all its
+  stations on the map. It is found where a word of its name begins with each
+  word typed, from three letters on; not by a word inside its name or with a
+  slip, as a stop is, since the towns come before the stops and would push
+  them aside. Of exactly the name typed it comes first, the others by the
+  service of their stations, near the visitor or the map as a stop is, and
+  three at most. Its service and the rectangle around its stations are
+  added up from the stations when the list is got ready.
 - **Own position.** A button above the zoom buttons shows where the visitor
   is and has the map follow them, until they move the map themselves or
   switch it off. It is off at every start, and a visitor outside the area is

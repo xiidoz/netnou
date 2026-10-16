@@ -32,26 +32,43 @@ test('a station is its name, its place, what stops there and how much, each in a
   assert.deepEqual([hbf, rathaus, buchdorf].map((i) => list.stations.modes[i]), [0b111111, 0b000101, 0b000100]);
   assert.deepEqual([hbf, rathaus, buchdorf].map((i) => list.stations.service[i]), [13695, 4714, 44]);
   // (no town is known of these)
-  assert.deepEqual([list.stations.town, list.stations.towns], [[-1, -1, -1], []]);
-  assert.deepEqual(Object.keys(list.stations), ['names', 'lat', 'lon', 'modes', 'service', 'town', 'towns']);
+  assert.deepEqual([list.stations.town, list.stations.towns, list.stations.districts], [[-1, -1, -1], [], []]);
+  assert.deepEqual(Object.keys(list.stations), ['names', 'lat', 'lon', 'modes', 'service', 'town', 'towns', 'districts']);
 });
 
-test('the towns are named once, and a station has the number of its own', () => {
-  const stations = [
-    { ...station('Marienplatz', 48.13725, 11.57542), town: 'München' },
-    { ...station('Sendlinger Tor', 48.1335, 11.5668), town: 'München' },
-    { ...station('Marienplatz', 48.7709, 9.1728), town: 'Stuttgart' },
-    { ...station('Amsterdam Centraal', 52.3791, 4.9003), town: null },
-    station('Salzburg Hbf', 47.8128, 13.0457),
-    { ...station('Pasing', 48.1499, 11.4613), town: 'München' },
+test('the towns are named once, towns of one name apart with their districts, and a station has the number of its own', () => {
+  // (as the timetable has them: the district of a town that is one itself is not known)
+  const towns = [
+    { name: 'München', district: null },
+    { name: 'Stuttgart', district: 'Region Stuttgart' },
+    { name: 'Neuenkirchen', district: 'Kreis Steinfurt' },
+    { name: 'Neuenkirchen', district: 'Landkreis Osnabrück' },
+    { name: 'Ohnehalt', district: 'Kreis Irgendwo' },
+    // (a town that OpenStreetMap has twice, in one district)
+    { name: 'Neuenkirchen', district: 'Kreis Steinfurt' },
   ];
-  const { list } = searchList(stations, [], MODES);
+  const stations = [
+    { ...station('Marienplatz', 48.13725, 11.57542), town: 0 },
+    { ...station('Sendlinger Tor', 48.1335, 11.5668), town: 0 },
+    { ...station('Marienplatz', 48.7709, 9.1728), town: 1 },
+    { ...station('Amsterdam Centraal', 52.3791, 4.9003), town: -1 },
+    station('Salzburg Hbf', 47.8128, 13.0457),
+    { ...station('Pasing', 48.1499, 11.4613), town: 0 },
+    { ...station('Neuenkirchen, Realschule', 52.24, 7.375), town: 2 },
+    { ...station('Neuenkirchen(b Bramsche) Kirche', 52.418, 7.838), town: 3 },
+    { ...station('Neuenkirchen, Feldhof', 52.244, 7.374), town: 5 },
+  ];
+  const { list } = searchList(stations, [], MODES, towns);
   const names = list.stations.names.split('\n');
-  const { town, towns } = list.stations;
-  assert.deepEqual(towns.toSorted(), ['München', 'Stuttgart']);
-  assert.deepEqual(names.map((name, i) => `${name}: ${towns[town[i]] ?? '-'}`).toSorted(), [
-    'Amsterdam Centraal: -', 'Marienplatz: München', 'Marienplatz: Stuttgart', 'Pasing: München', 'Salzburg Hbf: -', 'Sendlinger Tor: München',
+  const { town, towns: named, districts } = list.stations;
+  // each town that has a station once; a district only where another town has the name too
+  assert.deepEqual(named.map((name, i) => `${name} ${districts[i]}`.trim()).toSorted(), ['München', 'Neuenkirchen Kreis Steinfurt', 'Neuenkirchen Landkreis Osnabrück', 'Stuttgart']);
+  assert.deepEqual(names.map((name, i) => `${name}: ${named[town[i]] ?? '-'}`).toSorted(), [
+    'Amsterdam Centraal: -', 'Marienplatz: München', 'Marienplatz: Stuttgart', 'Neuenkirchen(b Bramsche) Kirche: Neuenkirchen', 'Neuenkirchen, Feldhof: Neuenkirchen', 'Neuenkirchen, Realschule: Neuenkirchen', 'Pasing: München', 'Salzburg Hbf: -', 'Sendlinger Tor: München',
   ]);
+  // the two of Kreis Steinfurt are one, and that of Landkreis Osnabrück another
+  assert.equal(town[names.indexOf('Neuenkirchen, Realschule')], town[names.indexOf('Neuenkirchen, Feldhof')]);
+  assert.notEqual(town[names.indexOf('Neuenkirchen, Realschule')], town[names.indexOf('Neuenkirchen(b Bramsche) Kirche')]);
   // in the order in which the list comes to them: the first town it names has the number 0
   assert.equal(town.find((number) => number >= 0), 0);
 });
@@ -129,5 +146,5 @@ test('lines are in the order of their operators, each of which is named once', (
     lon: [1103156, 1110000 - 1103156, 1110032 - 1110000, 1105986 - 1110032],
     service: [296, 3, 1149, 1911],
   });
-  assert.deepEqual(searchList([], [], MODES).list, { modes: MODES, stations: { names: '', lat: [], lon: [], modes: [], service: [], town: [], towns: [] }, lines: { name: [], mode: [], agencies: [], agency: [], to: [], lat: [], lon: [], service: [] } });
+  assert.deepEqual(searchList([], [], MODES).list, { modes: MODES, stations: { names: '', lat: [], lon: [], modes: [], service: [], town: [], towns: [], districts: [] }, lines: { name: [], mode: [], agencies: [], agency: [], to: [], lat: [], lon: [], service: [] } });
 });

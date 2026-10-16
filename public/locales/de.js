@@ -46,13 +46,14 @@ export default {
   'locate.failed': 'Der Standort konnte nicht ermittelt werden.',
   'locate.outside': 'Der Standort liegt außerhalb des Gebiets dieser Karte.',
 
-  'search.label': 'Haltestelle oder Linie suchen',
+  'search.label': 'Ort, Haltestelle oder Linie suchen',
   'search.open': 'Suche',
   'search.close': 'Suche schließen',
-  'search.results': 'Gefundene Haltestellen und Linien',
+  'search.results': 'Gefundene Orte, Haltestellen und Linien',
+  'search.towns': 'Orte',
   'search.lines': 'Linien',
   'search.stops': 'Haltestellen',
-  'search.none': 'Keine Haltestelle oder Linie mit diesem Namen.',
+  'search.none': 'Kein Ort, keine Haltestelle und keine Linie mit diesem Namen.',
   'search.loading': 'Haltestellen und Linien werden geladen …',
   'search.failed': 'Haltestellen und Linien konnten nicht geladen werden.',
 

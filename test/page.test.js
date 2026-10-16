@@ -112,7 +112,7 @@ test('the page comes with its texts in its language and its icons drawn', () => 
     if (key === 'page.description') continue;
     assert.equal(text, escaped(de[key]), `${what} of ${key}`);
   }
-  for (const text of ['Verbinde …', 'Haltestelle oder Linie suchen', 'Regionalzug', 'So funktioniert’s']) assert.ok(page.includes(text), text);
+  for (const text of ['Verbinde …', 'Ort, Haltestelle oder Linie suchen', 'Regionalzug', 'So funktioniert’s']) assert.ok(page.includes(text), text);
   for (const text of ['Connecting', 'Search for a stop', 'Regional train', 'How it works']) assert.ok(!page.includes(text), text);
   // the marks stay: the script puts in the texts of a visitor with another language by them
   assert.equal(page.match(/\sdata-i18n(-[a-z-]+)?=/g).length, html.match(/\sdata-i18n(-[a-z-]+)?=/g).length);

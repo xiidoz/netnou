@@ -61,8 +61,8 @@ if (osm.urls.length) {
     data.segments = buildSegments(data, networks.nets, region, onProgress, { kept });
     kept.save();
     // (the towns of the stations, by the borders in the same extracts)
-    const { names, of } = townsOf(data.stops, networks.towns);
-    Object.assign(data, { towns: names, stops: { ...data.stops, town: of } });
+    const { names, districts, of } = townsOf(data.stops, networks.towns);
+    Object.assign(data, { towns: names, districts, stops: { ...data.stops, town: of } });
   }
 }
 if (!networks) data.segments = null;
