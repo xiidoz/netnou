@@ -410,8 +410,10 @@ test('/api/departures', async () => {
   assert.equal(status, 200);
   const { now, departures, ...board } = json;
   assert.deepEqual(board, { id: 'A', name: 'Alpha', lat: 49.4, lon: 11, notes: [{ title: 'Aufzug gestört', text: 'Aufzug außer Betrieb', severity: 'info' }] });
-  // one an hour from each of the runs under way, for the next two hours
-  assert.ok(departures.length >= 4 && departures.length <= 9, `${departures.length} departures`);
+  // one an hour from each of the runs under way: four to nine in the next two hours, and as that is fewer than ten, the next ones up to ten (#165)
+  const soon = departures.filter((d) => d.planned <= now + 7200).length;
+  assert.ok(soon >= 4 && soon <= 9, `${soon} departures in two hours`);
+  assert.equal(departures.length, 10);
   for (const d of departures) {
     assert.deepEqual(Object.keys(d).sort(), ['cancelled', 'delay', 'line', 'mode', 'planned', 'platform', 'to', 'trip', 'warnings']);
     // what is wrong with T1 is said of each of its runs, as its notes are; the note about the lift is the station's
@@ -419,7 +421,7 @@ test('/api/departures', async () => {
     assert.deepEqual([d.line, d.mode, d.to, d.platform, d.cancelled], ['U1', 'subway', 'Rundkurs', '', false]);
     assert.equal(d.planned % 3600, 0);
     assert.equal(d.delay, d.trip === `T1_${today}` ? 120 : null);
-    assert.ok(d.planned + (d.delay ?? 0) >= now - 30 && d.planned <= now + 7200);
+    assert.ok(d.planned + (d.delay ?? 0) >= now - 30 && d.planned <= now + 86_400);
   }
   const times = departures.map((d) => d.planned + (d.delay ?? 0));
   assert.deepEqual(times, [...times].sort((a, b) => a - b));

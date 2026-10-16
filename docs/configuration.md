@@ -700,7 +700,7 @@ to change:
 | A feed's own `shapes.txt` is not used; route geometry always comes from OpenStreetMap | `server/lib/shapes.js` |
 | The town of a stop is the municipality that OpenStreetMap has at `admin_level` 8, or an area at level 6 or 4 with no municipality in it, as a city that is a district of its own and Berlin are. Where municipalities have another level, a stop has no town, or the name of a larger area | `BORDER_LEVELS` in `server/lib/towns.js` |
 | The labels "U-Bahn" and "S-Bahn" in the English texts | `public/locales/en.js` |
-| The departure board covers two hours and 40 entries | `departures` in `server/lib/timetable.js` |
+| The departure board covers two hours and 40 entries; where that is fewer than ten, the next ones up to ten from 24 hours | `departures` in `server/lib/timetable.js` |
 
 The user interface language is independent of all this, see
 [translating.md](translating.md).

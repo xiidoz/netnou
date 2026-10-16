@@ -1268,11 +1268,50 @@ export class Timetable extends Schedule {
     };
   }
 
-  /** Departures from a station (all its platforms) in the next `windowS` seconds. */
-  departures(stationId, now, realtime, { windowS = 7200, limit = 40 } = {}) {
+  /**
+   * Departures from a station (all its platforms): those of the next
+   * `windowS` seconds, `limit` at most, and where they are fewer than
+   * `least`, the next ones after them up to `least`, from the next
+   * `furthestS` seconds (#165). So a quiet stop, at night above all, shows
+   * when its next train leaves, however far ahead that is.
+   */
+  departures(stationId, now, realtime, { windowS = 7200, limit = 40, least = 10, furthestS = 86_400 } = {}) {
     const station = this.stopIndex.get(stationId);
     if (station === undefined || this.visitStart[station] === this.visitStart[station + 1]) return null;
 
+    let found = this.leaving(station, now, realtime, windowS).slice(0, limit);
+    // (the longer search only where it is needed: a busy station has enough within the window)
+    if (found.length < least) found = this.leaving(station, now, realtime, furthestS).slice(0, least);
+    return {
+      id: stationId,
+      name: this.stops.name[station],
+      lat: this.stops.lat[station],
+      lon: this.stops.lon[station],
+      notes: realtime?.notesOfStation(station) ?? [],
+      departures: found.map(({ t, p, date, planned, delay, cancelled }) => {
+        const route = this.tripRoute[t];
+        return {
+          trip: `${this.tripId(t)}_${date}`,
+          line: this.lineName(route),
+          mode: this.routeModes[route],
+          to: this.headsign(t),
+          platform: this.stops.platform[this.patternStops[this.patternStart[this.tripPattern[t]] + p]],
+          planned,
+          delay,
+          cancelled,
+          // What is wrong with the trip right now, for a list that marks such a departure.
+          warnings: realtime?.warningsOfTrip(t) ?? [],
+        };
+      }),
+    };
+  }
+
+  /**
+   * What leaves a station (by its number) within `windowS` seconds of `now`,
+   * by when it leaves. A day ahead at most: the service days looked at are
+   * yesterday, today and tomorrow.
+   */
+  leaving(station, now, realtime, windowS) {
     const today = localDate(now);
     const start = this.tripStart;
     const found = [];
@@ -1314,28 +1353,7 @@ export class Timetable extends Schedule {
     });
     // By when they leave; those that leave at the same time by day, trip and stop.
     found.sort((a, b) => a.planned + (a.delay ?? 0) - (b.planned + (b.delay ?? 0)) || a.day - b.day || a.t - b.t || a.p - b.p);
-    return {
-      id: stationId,
-      name: this.stops.name[station],
-      lat: this.stops.lat[station],
-      lon: this.stops.lon[station],
-      notes: realtime?.notesOfStation(station) ?? [],
-      departures: found.slice(0, limit).map(({ t, p, date, planned, delay, cancelled }) => {
-        const route = this.tripRoute[t];
-        return {
-          trip: `${this.tripId(t)}_${date}`,
-          line: this.lineName(route),
-          mode: this.routeModes[route],
-          to: this.headsign(t),
-          platform: this.stops.platform[this.patternStops[this.patternStart[this.tripPattern[t]] + p]],
-          planned,
-          delay,
-          cancelled,
-          // What is wrong with the trip right now, for a list that marks such a departure.
-          warnings: realtime?.warningsOfTrip(t) ?? [],
-        };
-      }),
-    };
+    return found;
   }
 }
 

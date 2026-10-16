@@ -587,7 +587,10 @@ without a station.
 ```
 
 The board covers the next two hours with at most 40 departures from all
-platforms of the station, sorted by expected time (`planned` + `delay`). A
+platforms of the station. Where those are fewer than ten, it goes on with
+the next ones up to ten, from the next 24 hours: a quiet stop late in the
+evening has its first departures of the morning. They are sorted by
+expected time (`planned` + `delay`). A
 departure stays on the board until 30 seconds after its expected time.
 `cancelled` is true when the run is cancelled or skips this station. `notes`
 are notes of the feed about the station, such as a lift out of order, each

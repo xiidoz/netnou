@@ -9,7 +9,7 @@
 // lines, stops and operators, and the notes of the feed.
 
 import { parseAddress, stopPath, wordsOf } from './address.js';
-import { APP_NAME, formatNumber, formatTime, languagePicker, loadLanguage, pageTexts, setTimeZone, t, translatePage } from './i18n.js';
+import { APP_NAME, dayOf, formatNumber, formatTime, languagePicker, loadLanguage, pageTexts, setTimeZone, t, translatePage } from './i18n.js';
 import { BOARD_MAX, BOARD_SHARE, boardQuery, boardShare, displayQuery, readBoard, readDisplay } from './display.js';
 import { mdiAlert, mdiArrowCollapse, mdiArrowExpand, mdiChevronRight, mdiCityVariantOutline, mdiEye, mdiEyeOff, mdiFullscreen, mdiFullscreenExit } from './vendor/material-design-icons/icons.js';
 import { AttributionControl, MapLibreMap, NavigationControl } from './vendor/maplibre-gl/maplibre-gl.mjs';
@@ -38,6 +38,8 @@ const DISPLAY_VERSION_MS = 10 * 60_000; // how often a fixed display asks whethe
 // How departure times show, in every list of them (#81): the time of day,
 // the minutes until it leaves, or both.
 const TIMES = ['time', 'minutes', 'both'];
+// Minutes count up to an hour; a departure further off shows its time of day (#165).
+const MINUTES_MAX = 60;
 
 const POLL_MS = 10_000;
 const RETRY_LOADING_MS = 5000; // while the server has no timetable yet
@@ -2319,16 +2321,31 @@ function renderLine(line, first) {
 /** When a departure leaves, in epoch seconds: as planned, moved by the delay as it is shown. */
 const leavesAt = (dep) => dep.planned + Math.round((dep.delay ?? 0) / 60) * 60;
 
-/** How long until a departure leaves, as the clock goes: "4 min", "now" under a minute. */
-function untilText(leaves) {
-  const minutes = Math.floor(leaves / 60) - Math.floor(now() / 60);
+/** How many whole minutes until a departure leaves, as the clock goes. */
+const minutesUntil = (leaves) => Math.floor(leaves / 60) - Math.floor(now() / 60);
+
+/**
+ * How long until a departure leaves: "4 min", "now" under a minute. Further
+ * off than an hour its time of day says more (#165): that, or nothing where
+ * the row has it already.
+ * @param far 'time' or 'none': what stands there beyond the hour
+ */
+function untilText(leaves, planned, far) {
+  const minutes = minutesUntil(leaves);
+  if (minutes > MINUTES_MAX) return far === 'time' ? formatTime(planned) : '';
   return minutes < 1 ? t('departures.now') : t('departures.minutes', { count: minutes });
 }
 
 /** The minutes until a departure leaves, which count down by themselves between two answers of the server (tickTimes). */
-function minutesNode(dep) {
+function minutesNode(dep, far) {
   const leaves = leavesAt(dep);
-  return el('span', { class: 'minutes', text: untilText(leaves), data: { leaves } });
+  return el('span', { class: 'minutes', text: untilText(leaves, dep.planned, far), data: { leaves, planned: dep.planned, far } });
+}
+
+/** Where in a list of departures the next day begins, which a line says ("tomorrow"): the first that leaves on another date, or -1. */
+function tomorrowAt(departures) {
+  const today = dayOf(now());
+  return departures.findIndex((dep) => dayOf(dep.planned) !== today);
 }
 
 /** The minutes in the lists of departures and the clock of a board, as time goes on. */
@@ -2337,7 +2354,7 @@ function tickTimes() {
   const update = (node, text) => {
     if (node.textContent !== text) node.textContent = text;
   };
-  for (const node of panel.querySelectorAll('.minutes[data-leaves]')) update(node, untilText(Number(node.dataset.leaves)));
+  for (const node of panel.querySelectorAll('.minutes[data-leaves]')) update(node, untilText(Number(node.dataset.leaves), Number(node.dataset.planned), node.dataset.far));
   const clock = panel.querySelector('.board-clock');
   if (clock) update(clock, formatTime(now()));
 }
@@ -2354,19 +2371,23 @@ function renderStation(board) {
   const rows = board.departures.map((dep) =>
     el('li', {}, [
       el('button', { type: 'button', class: `row departure times-${times}${dep.cancelled ? ' cancelled' : ''}`, onclick: () => select('trip', dep.trip) }, [
-        times === 'minutes' ? minutesNode(dep) : el('span', { class: 'time', text: formatTime(dep.planned) }),
+        times === 'minutes' ? minutesNode(dep, 'time') : el('span', { class: 'time', text: formatTime(dep.planned) }),
         delayCell(dep.cancelled ? el('span', { class: 'delay' }) : delayNode(dep.delay), dep.warnings, signed),
         badge(dep.line, dep.mode),
         el('span', { class: 'name', text: dep.to, title: dep.to }),
         el('span', { class: 'platform', text: dep.cancelled ? t('departures.cancelled') : platformText(dep.platform) }),
-        ...(times === 'both' ? [minutesNode(dep)] : []),
+        ...(times === 'both' ? [minutesNode(dep, 'none')] : []),
       ]),
     ]),
   );
+  // (where the next day begins, a line says so, between two lists)
+  const list = (part) => el('ul', { class: `rows${signed ? ' signed' : ''}` }, part);
+  const split = tomorrowAt(board.departures);
+  const lists = split < 0 ? [list(rows)] : [...(split > 0 ? [list(rows.slice(0, split))] : []), el('h3', { class: 'rows-head day-head', text: t('departures.tomorrow') }), list(rows.slice(split))];
   fillPanel(
     [el('div', { class: 'panel-head' }, [el('h2', { text: board.name }), el('p', { class: 'sub', text: t('departures.title') }), notesList(board.notes)])],
-    // (the two hours the text speaks of are the default window of departures() in server/lib/timetable.js)
-    rows.length ? el('ul', { class: `rows${signed ? ' signed' : ''}` }, rows) : el('p', { class: 'panel-empty', text: t('departures.none') }),
+    // (the 24 hours the text speaks of are the furthest departures() in server/lib/timetable.js looks)
+    ...(rows.length ? lists : [el('p', { class: 'panel-empty', text: t('departures.none') })]),
   );
   panelBody.scrollTop = scrollTop;
 }
@@ -2603,11 +2624,13 @@ function renderBoard(board) {
     // (a delay shows where there is one: on time the board says nothing)
     const delay = Math.round((dep.delay ?? 0) / 60) === 0 ? null : dep.delay;
     const late = delayCell(delayNode(delay), dep.warnings, dep.warnings.length > 0);
-    const at = () => el('span', { class: 'at', text: formatTime(dep.planned) });
+    // (further off than an hour, the time of day stands where the minutes do, and with both not twice)
+    const far = minutesUntil(leavesAt(dep)) > MINUTES_MAX;
+    const at = (shown = true) => el('span', { class: 'at', text: shown ? formatTime(dep.planned) : '' });
     const when = dep.cancelled ? [el('span', { class: 'gone', text: t('departures.cancelled') })]
       : times === 'time' ? [at(), late]
-        : times === 'minutes' ? [late, minutesNode(dep)]
-          : [at(), late, minutesNode(dep)];
+        : times === 'minutes' ? [late, minutesNode(dep, 'time')]
+          : [at(!far), late, minutesNode(dep, 'time')];
     return el('li', { class: dep.cancelled ? 'cancelled' : '' }, [
       badge(dep.line, dep.mode),
       el('span', { class: 'name', text: dep.to }),
@@ -2615,6 +2638,9 @@ function renderBoard(board) {
       el('span', { class: `when times-${times}` }, when),
     ]);
   });
+  // (where the next day begins, a line across the board says so)
+  const split = tomorrowAt(board.departures);
+  if (split >= 0) rows.splice(split, 0, el('li', { class: 'day' }, [el('span', { text: t('departures.tomorrow') })]));
   const head = [el('h2', { text: board.name }), el('p', { class: 'sub', text: t('departures.title') })];
   if (state.clock) head.push(el('p', { class: 'board-clock', text: formatTime(now()) }));
   const credits = el('p', { class: 'board-credits' });
@@ -2638,6 +2664,9 @@ function fitBoard() {
   const ends = rows.map((row) => row.getBoundingClientRect().bottom);
   const over = ends.findIndex((end) => end > room);
   if (over >= 0) for (const row of rows.slice(over)) row.hidden = true;
+  // (the line of the next day goes with the row it stands over)
+  const shown = rows.filter((row) => !row.hidden);
+  if (shown.at(-1)?.classList.contains('day')) shown.at(-1).hidden = true;
 }
 // (the board's room changes with its share of the screen, and with the screen)
 new ResizeObserver(() => {
@@ -3018,8 +3047,8 @@ function init() {
   // The lists have a column for the time, as wide as the language writes it (14:05 or 12:05 PM).
   const hours = Array.from({ length: 24 }, (_, hour) => formatTime(hour * 3600));
   document.documentElement.style.setProperty('--time-chars', Math.max(...hours.map((text) => text.length)));
-  // (and one for the minutes until a departure leaves, as wide as the longest of the two hours they reach)
-  const minutes = [t('departures.now'), t('departures.minutes', { count: 120 })];
+  // (and one for the minutes until a departure leaves, up to an hour, and the time of day in their place beyond it)
+  const minutes = [t('departures.now'), t('departures.minutes', { count: MINUTES_MAX }), ...hours];
   document.documentElement.style.setProperty('--minutes-chars', Math.max(...minutes.map((text) => text.length)));
   buildControls();
   // (the header card is what this visitor gets now; where the page came that way, first.js has shown it already)
