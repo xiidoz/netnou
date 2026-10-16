@@ -72,6 +72,10 @@ services:
       # name its own address to search engines and carry a picture for
       # previews of links, and there is a /sitemap.xml.
       # NETNOU_PUBLIC_URL: "https://transit.example.org/"
+      # Sites that may show the page in a frame of their own, such as a
+      # dashboard: the address the dashboard is opened under, each address
+      # under which it is.
+      # NETNOU_EMBED_ORIGINS: "https://home.example.org"
       # For an instance with an address that search engines are not to list,
       # such as a test instance next to the real one. Without an address an
       # instance is not listed anyway.

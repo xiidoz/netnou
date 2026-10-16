@@ -293,6 +293,15 @@ export function loadConfig(env = process.env) {
     throw new Error(`NETNOU_LINKS must be links as "Text=address", separated by commas, each address an http(s) URL or a path that starts with "/" (not understood: "${links.wrong}")`);
   }
 
+  // Other sites that may show the page in a frame of their own, as a dashboard
+  // does (NETNOU_EMBED_ORIGINS): each as its origin, or "*" for every site. Unless
+  // the operator names some, none may.
+  const embedOrigins = text('NETNOU_EMBED_ORIGINS').split(',').map((s) => s.trim()).filter(Boolean).map((site) => {
+    if (site === '*') return site;
+    if (!isHttpUrl(site)) throw invalid('NETNOU_EMBED_ORIGINS', 'the addresses of the sites that may show the page in a frame, http(s) URLs separated by commas, or * for every site');
+    return new URL(site).origin;
+  });
+
   const osmUrls = env.NETNOU_OSM_PBF_URLS === undefined
     ? (builtIn?.osmUrls ?? [])
     : env.NETNOU_OSM_PBF_URLS.split(',').map((s) => s.trim()).filter(Boolean).map((url) => httpUrl('NETNOU_OSM_PBF_URLS', url));
@@ -347,6 +356,8 @@ export function loadConfig(env = process.env) {
     styleUrl,
     tileUrl,
     mapOrigins: [...new Set(mapOrigins)],
+    // The sites that may show the page in a frame of their own; ['*'] for every site, none by default.
+    embedOrigins: embedOrigins.includes('*') ? ['*'] : [...new Set(embedOrigins)],
     // Credit for the map (HTML). A style names its sources itself, raster tiles cannot.
     tileAttribution: text('NETNOU_TILE_ATTRIBUTION') || (tileUrl ? '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>' : ''),
     // Credit for the timetable and realtime data (HTML).
