@@ -235,6 +235,27 @@ pull request that was opened before another one was merged has to be brought
 up to date first, with "Update branch" or by rebasing it; its checks then
 run again.
 
+### Trying a pull request
+
+Every push to a pull request from a branch of this repository builds its
+image as CI tests it, merged into `main`, and pushes it as
+`ghcr.io/xiidoz/netnou:pr-<number>`
+([`.github/workflows/pr-image.yml`](.github/workflows/pr-image.yml)); the
+summary of the run says how to start it. To try it beside an instance, give
+it a port and a volume of its own, as its first start imports the timetable:
+
+```sh
+docker run -d --name netnou-pr-167 -p 8090:8080 -v netnou-pr-167:/data ghcr.io/xiidoz/netnou:pr-167
+```
+
+Settings go in with `-e NETNOU_…`. A newer push to the pull request
+replaces the image under the same tag: `docker pull` and a new container
+get it. Once the pull request is closed, merged or not, the image is
+deleted. That needs the repository to have the role "Admin" under "Manage
+Actions access" in the settings of the package; without it the workflow
+leaves the image and says so in a warning. A pull request from a fork gets
+no image: its token cannot write packages.
+
 ## Releases
 
 Releases are made by
