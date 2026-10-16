@@ -3,13 +3,13 @@ import fs from 'node:fs';
 import http from 'node:http';
 import path from 'node:path';
 import zlib from 'node:zlib';
-import { parseAddress } from '../public/address.js';
+import { parseAddress, stopPath } from '../public/address.js';
 import { t } from '../public/i18n.js';
 import { loadConfig, parseBox, parsePlace } from './config.js';
-import { Addresses } from './lib/addresses.js';
+import { Addresses, stopTitle } from './lib/addresses.js';
 import { FeedUpdater } from './lib/feed.js';
 import { RealtimePoller } from './lib/realtime.js';
-import { LANGUAGE_CODES, languageFor, ownFiles, pictureSize, renderManifest, renderPage, robotsTxt, sitemapFiles, titleOf } from './lib/page.js';
+import { addressTitle, LANGUAGE_CODES, languageFor, ownFiles, pictureSize, renderManifest, renderPage, robotsTxt, sitemapFiles, titleOf } from './lib/page.js';
 import { setTimeZone } from './lib/time.js';
 import { sharesFor, thinOut, ZOOM_ALL, ZOOM_MIN } from './lib/thinning.js';
 import { LITE_AHEAD_S, MODES, lite } from './lib/timetable.js';
@@ -248,6 +248,19 @@ function addressed(asked) {
   const found = named.type === 'stop' ? addressesNow().station(named) : addressesNow().line(named);
   if (found < 0) return null;
   return { type: named.type, found, path: named.type === 'stop' ? addressesNow().stationPath(found) : addressesNow().linePath(found) };
+}
+
+/**
+ * A stop or a line that the page opens, which it marks in its first request
+ * for it (?open=1): a visit of its address (#158), with the title its page
+ * has in the language the browser asks for.
+ * @param path the address, as addressed() has it
+ * @param titled (language, texts) => the title of what it names (lib/addresses.js)
+ */
+function visitOpened(req, res, url, path, titled) {
+  if (!visits || url.searchParams.get('open') !== '1') return;
+  const language = languageFor(req.headers['accept-language'], config.language);
+  visits.opened(req, res, { pathname: `/${path}`, title: addressTitle(titled(language, texts[language]), config.siteName) });
 }
 
 /**
@@ -575,7 +588,9 @@ function handleApi(req, res, url) {
       realtime.touch();
       // (where it runs, asked for once: when the page opens the line, #148)
       const route = url.searchParams.get('route') === '1' ? { route: timetable.lineRoute(index, at) } : {};
-      return sendJson(req, res, 200, { now: at, ...timetable.lineVehicles(index, all), path: addressesNow().linePath(index), ...route });
+      const path = addressesNow().linePath(index);
+      visitOpened(req, res, url, path, (language, words) => addressesNow().lineWords(index, language, words).title);
+      return sendJson(req, res, 200, { now: at, ...timetable.lineVehicles(index, all), path, ...route });
     }
 
     case '/api/trip': {
@@ -607,6 +622,8 @@ function handleApi(req, res, url) {
       const board = timetable.departures(station ?? '', now, realtime.snapshot);
       if (!board) return sendJson(req, res, 404, { error: 'station not found' });
       realtime.touch();
+      // (its address as the page writes it into its own: by the name and the place of the station)
+      visitOpened(req, res, url, stopPath(board.name, board.lat, board.lon), (language, words) => stopTitle(board.name, words));
       return sendJson(req, res, 200, { now, ...board });
     }
 

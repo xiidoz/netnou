@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
+import { EventEmitter } from 'node:events';
 import { test } from 'node:test';
-import { factsOf, isVisit, reportOf, shortIp, Visits, visitsPattern } from '../server/lib/visits.js';
+import { factsOf, isOpened, isVisit, reportOf, shortIp, Visits, visitsPattern } from '../server/lib/visits.js';
 
 const UMAMI = '{"type":"event","payload":{"website":"7f3c","hostname":"{host}","url":"{path}","referrer":"{source}","language":"{language}","title":"{title}","ip":"{ip}","userAgent":"{browser}"}}';
 const BROWSER = 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/154.0.0.0 Safari/537.36';
@@ -48,6 +49,22 @@ test('a visit is a browser opening the page, not a script fetching it, a prefetc
     // neither header, nor a page asked for
     [{ Accept: '*/*' }],
   ]) assert.ok(!isVisit(requestOf(headers, { method })), JSON.stringify(headers));
+});
+
+test('a stop or a line the page opens counts where the request is the page\'s own, not a prefetch, and not from a browser that asks not to be tracked (#158)', () => {
+  const asked = { 'Sec-Fetch-Mode': 'cors', 'Sec-Fetch-Dest': 'empty', 'Sec-Fetch-Site': 'same-origin', Accept: '*/*' };
+  // the page's request, and one of a browser that does not say whose a request is
+  for (const headers of [asked, { Accept: '*/*' }]) assert.ok(isOpened(requestOf(headers)), JSON.stringify(headers));
+  for (const [headers, method] of [
+    [asked, 'HEAD'],
+    // another site's page sending the same request, and the address typed in
+    [{ ...asked, 'Sec-Fetch-Site': 'cross-site' }],
+    [{ ...asked, 'Sec-Fetch-Site': 'same-site' }],
+    [{ 'Sec-Fetch-Mode': 'navigate', 'Sec-Fetch-Dest': 'document', 'Sec-Fetch-Site': 'none', Accept: 'text/html' }],
+    [{ ...asked, 'Sec-Purpose': 'prefetch' }],
+    [{ ...asked, DNT: '1' }],
+    [{ ...asked, 'Sec-GPC': '1' }],
+  ]) assert.ok(!isOpened(requestOf(headers, { method })), JSON.stringify(headers));
 });
 
 test('an IP address without its end: the last number of IPv4, all but the first 48 bits of IPv6', () => {
@@ -109,6 +126,34 @@ test('the request fills the facts in: inside the texts of the body, the values o
   // in the headers; what a header cannot carry is left out, as is one for which there is nothing
   const plausible = reportOf(visitsPattern({ url: 'https://plausible.io/api/event', body: '{"name":"pageview","url":"{address}","domain":"karte.example.org"}', headers: '{"User-Agent":"{browser}","X-Forwarded-For":"{ip}","X-Title":"{title}","X-From":"{source}"}' }), facts);
   assert.deepEqual([...plausible.init.headers].sort(), [['content-type', 'application/json'], ['user-agent', BROWSER], ['x-forwarded-for', '203.0.113.47']]);
+});
+
+test('a stop or a line the page opens is reported as a visit of its address, once the answer is out, and without a source (#158)', async () => {
+  const calls = [];
+  const visits = new Visits(visitsPattern({ url: 'https://stats.example.org/api/send', body: UMAMI, headers: '' }), { publicUrl: 'https://karte.example.org/live/', log: () => {}, fetch: (url, init) => { calls.push({ url, init }); return Promise.resolve(new Response('', { status: 200 })); } });
+  const asked = { 'Sec-Fetch-Mode': 'cors', 'Sec-Fetch-Dest': 'empty', 'Sec-Fetch-Site': 'same-origin', 'User-Agent': BROWSER, 'Accept-Language': 'en-GB,en;q=0.9', 'X-Forwarded-For': '203.0.113.47' };
+  const opened = async (headers) => {
+    const res = new EventEmitter();
+    visits.opened(requestOf(headers), res, { pathname: '/stop/alpha@49.4000,11.0000', title: 'Departures Alpha live – Netnou' });
+    await new Promise((resolve) => setImmediate(resolve));
+    const before = calls.length;
+    res.emit('finish');
+    await new Promise((resolve) => setImmediate(resolve));
+    return { before, after: calls.length };
+  };
+  // (the page reached under another name than its public address: still no source, the visitor came from the page)
+  assert.deepEqual(await opened({ ...asked, Referer: 'https://www.karte.example.org/live/?lang=en' }), { before: 0, after: 1 });
+  assert.deepEqual(JSON.parse(calls[0].init.body).payload, {
+    website: '7f3c',
+    hostname: 'karte.example.org',
+    url: '/live/stop/alpha@49.4000,11.0000',
+    language: 'en-GB',
+    title: 'Departures Alpha live – Netnou',
+    ip: '203.0.113.47',
+    userAgent: BROWSER,
+  });
+  // not from another site's page, nor with Do Not Track
+  for (const headers of [{ ...asked, 'Sec-Fetch-Site': 'cross-site' }, { ...asked, DNT: '1' }]) assert.deepEqual(await opened(headers), { before: 1, after: 1 }, JSON.stringify(headers));
 });
 
 test('reports go out one each, are dropped where too many are under way, and a failure is logged when it begins and ends', async () => {

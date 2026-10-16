@@ -1717,8 +1717,10 @@ function showAddress(path, title) {
  * the map on it, or the line. Where it names nothing, the page says so and
  * looks for the name in it with the search. False while the server has no
  * timetable to look in: asked again with its next answer.
+ * @param loaded whether the page was loaded at the address: then the server
+ *   has counted it as a visit of it already (#158)
  */
-async function openAddress() {
+async function openAddress(loaded = false) {
   const path = here();
   if (!path) return true;
   const res = await fetch(`api/address?path=${encodeURIComponent(path)}`);
@@ -1731,12 +1733,12 @@ async function openAddress() {
   // (a stop that has moved a little, or has another name: the address it has now)
   if (found.path !== path) history.replaceState(null, '', new URL(`${found.path}${location.search}`, document.baseURI));
   if (found.type === 'line') {
-    selectLine(found);
+    selectLine(found, { counted: loaded });
     return true;
   }
   // (as from the search: on a narrow screen the details cover the lower half, so the stop goes above the middle)
   map.easeTo({ center: [found.lon, found.lat], zoom: Math.max(map.getZoom(), SEARCH_ZOOM), offset: [0, narrowScreen.matches ? -0.12 * viewSize.y : 0], duration: 0 });
-  select('station', null, { at: found });
+  select('station', null, { at: found, counted: loaded });
   return true;
 }
 
@@ -1796,7 +1798,9 @@ shareButton.addEventListener('click', async () => {
  * Opens the details of a trip, a station or a line.
  * @param id of a trip or a station; null for a line, and for a station of the search
  * @param more what else there is to know: of a line what it is ({ line }),
- *   of a station of the search where it is ({ at })
+ *   of a station of the search where it is ({ at }); and { counted: true } for
+ *   what the address the page was loaded at names, whose visit the server has
+ *   counted already (#158)
  */
 function select(type, id, more = {}) {
   // The row that was activated is about to go: keep the keyboard focus in the panel.
@@ -1812,12 +1816,18 @@ function select(type, id, more = {}) {
   loadSelection(true);
 }
 
-function selectionUrl({ type, id, line, at, route }) {
+/**
+ * Where the details of what is chosen come from.
+ * @param open whether it is the first request for a stop or a line that is
+ *   opened: the server counts that as a visit of its address, where visits
+ *   are counted (#158). A trip has no address.
+ */
+function selectionUrl({ type, id, line, at, route }, open = false) {
   if (type === 'trip') return `api/trip?id=${encodeURIComponent(id)}`;
   // (a line is its name, its mode and its operator together, and its place where lines of the name are in places
   // apart, #152; where it runs is asked for until it is known, #148)
-  if (type === 'line') return `api/line?${new URLSearchParams({ name: line.name, mode: line.mode, agency: line.agency, ...(line.at ? { at: line.at.join(',') } : {}), ...(route ? {} : { route: '1' }) })}`;
-  return at ? `api/departures?at=${at.lat.toFixed(5)},${at.lon.toFixed(5)}` : `api/departures?station=${encodeURIComponent(id)}`;
+  if (type === 'line') return `api/line?${new URLSearchParams({ name: line.name, mode: line.mode, agency: line.agency, ...(line.at ? { at: line.at.join(',') } : {}), ...(route ? {} : { route: '1' }), ...(open ? { open: '1' } : {}) })}`;
+  return `${at ? `api/departures?at=${at.lat.toFixed(5)},${at.lon.toFixed(5)}` : `api/departures?station=${encodeURIComponent(id)}`}${open ? '&open=1' : ''}`;
 }
 
 async function loadSelection(first = false) {
@@ -1825,7 +1835,7 @@ async function loadSelection(first = false) {
   if (!selection) return;
   clearTimeout(panelTimer);
   try {
-    const res = await fetch(selectionUrl(selection));
+    const res = await fetch(selectionUrl(selection, first && !selection.counted));
     const data = res.ok ? await res.json() : null;
     if (state.selection !== selection) return; // user moved on meanwhile
     if (data) {
@@ -2155,9 +2165,12 @@ function renderTrip(trip, scrollToNext) {
   else panelBody.scrollTop = scrollTop;
 }
 
-/** Opens the view of a line: its vehicles under way in the panel and, alone, on the map. */
-function selectLine(line) {
-  select('line', JSON.stringify([line.name, line.mode, line.agency, line.at ?? null]), { line });
+/**
+ * Opens the view of a line: its vehicles under way in the panel and, alone, on the map.
+ * @param more as for select
+ */
+function selectLine(line, more = {}) {
+  select('line', JSON.stringify([line.name, line.mode, line.agency, line.at ?? null]), { line, ...more });
 }
 
 /** What of each edge of the map is to stay free, so that the cards do not cover what is shown in between. */
@@ -2542,7 +2555,7 @@ async function poll() {
       // (once there is a timetable to look in)
       if (!state.addressOpened) {
         state.addressOpened = true;
-        openAddress().then((done) => {
+        openAddress(true).then((done) => {
           if (!done) state.addressOpened = false;
         }).catch((err) => {
           console.warn('address not opened:', err);

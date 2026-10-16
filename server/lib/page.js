@@ -125,6 +125,9 @@ const escapeHtml = (text) => String(text).replace(/[&<>"']/g, (char) => `&#${cha
 /** The title of a page as renderPage wrote it, as text. */
 export const titleOf = (html) => (/<title>([^<]*)<\/title>/.exec(html)?.[1] ?? '').replace(/&#(\d+);/g, (_, code) => String.fromCharCode(Number(code)));
 
+/** The title of the page at the address of a stop or a line: the title of what it names (lib/addresses.js), then the instance. */
+export const addressTitle = (title, siteName) => `${title} – ${siteName}`;
+
 /**
  * The texts of index.html, which has the English ones, in another language:
  * what translatePage (public/i18n.js) does in the browser. data-i18n names the
@@ -191,7 +194,7 @@ const versions = (publicUrl) => [...LANGUAGE_CODES.map((code) => [code, addressI
 export function renderPage(html, { language, asked, texts, siteName, areaName, siteTitle = null, siteDescription = null, links = [], preview = null, previewSize = null, publicUrl, listed, styleUrl = null, mapOrigins = [], kinds = null, address = null }) {
   const worded = pageTexts(areaName, texts, siteName);
   const named = Boolean(address?.title);
-  const title = named ? `${address.title} – ${siteName}` : siteTitle ?? worded.title;
+  const title = named ? addressTitle(address.title, siteName) : siteTitle ?? worded.title;
   const description = named ? address.description : siteDescription ?? worded.description;
   // The texts first: of what follows, some takes the place of one of them.
   // Then the icons, each into the empty element that asks for one.
