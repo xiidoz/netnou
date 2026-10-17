@@ -33,7 +33,10 @@ const OPENED_AS_DISPLAY = ASKED !== null;
 // A screen on a wall that nobody operates: the map stands still, and the page looks after itself (startFixed).
 const FIXED = ASKED?.fixed ?? false;
 const DISPLAY_LEAVE_MS = 6000; // how long the way out shows after a fixed display was touched
-const DISPLAY_VERSION_MS = 10 * 60_000; // how often a fixed display asks whether the server runs another version
+// A new version on the server (see "a new version"): how often a page in view
+// asks for it, and how long nobody has to use the page before it loads itself again.
+const VERSION_CHECK_MS = 5 * 60_000;
+const IDLE_RELOAD_MS = 2 * 60_000;
 
 // How departure times show, in every list of them (#81): the time of day,
 // the minutes until it leaves, or both.
@@ -2745,6 +2748,8 @@ function versionCredit(about) {
 async function loadArea() {
   // (api/status says which version runs; the map does without it if need be)
   const [res, about] = await Promise.all([fetch('api/area'), fetch('api/status').then((status) => (status.ok ? status.json() : null)).catch(() => null)]);
+  // (and that is the version the page runs, see "a new version")
+  if (about && runningVersion === null) runningVersion = versionOf(about);
   if (res.status === 503) return res.json();
   if (!res.ok) throw new Error(`api/area: HTTP ${res.status}`);
   const area = await res.json();
@@ -3007,24 +3012,61 @@ function startFixed() {
   document.addEventListener('visibilitychange', () => {
     if (!document.hidden) keepAwake();
   });
-
-  // Nobody reloads it: it does so itself once the server runs another version.
-  let running = null;
-  const checkVersion = async () => {
-    try {
-      const res = await fetch('api/status');
-      if (!res.ok) return;
-      const about = await res.json();
-      const version = `${about.version} ${about.commit ?? ''}`;
-      if (running !== null && version !== running) location.reload();
-      running = version;
-    } catch {
-      // no connection: the next check will tell
-    }
-  };
-  checkVersion();
-  setInterval(checkVersion, DISPLAY_VERSION_MS);
+  // (nobody reloads it: it does so itself once the server runs another version, see "a new version")
 }
+
+// ---------- a new version ----------
+
+// A page that is open while the server is updated runs the old version until
+// it is loaded again: a tab left open, a phone that brings its tab back
+// without loading it, the installed app, a screen on a wall. And what it
+// loads later, such as the thread of the search, is of the new version and
+// may not fit the old. So the page asks which version the server runs, as it
+// comes into view and every few minutes while it is in view. Once that has
+// changed it loads itself again at a moment nobody is using it: as it comes
+// into view, after a while without a touch, a click or a key, and on a screen
+// on a wall at once. What is open stays, as it is in the address, and so do
+// the settings and the map, which the browser keeps; an open trip and what
+// was typed into the search go.
+
+let runningVersion = null; // the version the server ran when the page was loaded (versionOf)
+let newVersion = false; // the server runs another one by now
+let lastInput = Date.now(); // when the page was last touched, clicked or typed into
+for (const type of ['pointerdown', 'keydown', 'wheel']) addEventListener(type, () => { lastInput = Date.now(); }, { capture: true, passive: true });
+
+/** What tells one version of the server from another, of an answer of api/status. */
+const versionOf = (about) => `${about.version} ${about.commit ?? ''}`;
+
+/** Asks which version the server runs. True if it is another than the page's. */
+async function checkVersion() {
+  try {
+    const res = await fetch('api/status');
+    if (!res.ok) return newVersion;
+    const version = versionOf(await res.json());
+    if (runningVersion === null) runningVersion = version;
+    else if (version !== runningVersion) newVersion = true;
+  } catch {
+    // no connection: the next check will tell
+  }
+  return newVersion;
+}
+
+/** Loads the page again where the server runs another version and nobody is using the page. */
+function reloadIfIdle() {
+  if (newVersion && !document.hidden && (FIXED || Date.now() - lastInput >= IDLE_RELOAD_MS)) location.reload();
+}
+
+setInterval(async () => {
+  if (document.hidden) return;
+  await checkVersion();
+  reloadIfIdle();
+}, VERSION_CHECK_MS);
+// (when it comes into view, nobody has begun to use it yet)
+document.addEventListener('visibilitychange', async () => {
+  if (!document.hidden && (await checkVersion())) location.reload();
+});
+// (a page in use is loaded again as soon as it is left alone for a while: this costs no request)
+setInterval(reloadIfIdle, 15_000);
 
 // ---------- full screen ----------
 

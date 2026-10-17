@@ -772,6 +772,14 @@ otherwise a server would load a file written by older code:
   installed app can still start without a connection (and then says that it
   needs one). It takes the page it has kept, in whatever language that came.
   API answers and the map are never cached.
+- **A new version.** A page that stays open runs the version it was loaded
+  with: a tab, a phone that brings its tab back without loading it, the
+  installed app, a screen on a wall. And what it loads later, such as the
+  thread of the search, would be of the new version. So it asks `api/status`
+  which version runs, as it comes into view and every five minutes while it
+  is, and once that has changed loads itself again where nobody is using
+  it: as it comes into view, after two minutes without a touch, a click or a
+  key, and on a wall at once. What is open is in the address and stays.
 - **Texts** come from locale files through `t()`; nothing a visitor reads is
   written out in `app.js` or in the server, apart from data such as
   names of stops and notes of the feed. See [translating.md](translating.md).

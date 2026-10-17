@@ -125,6 +125,12 @@ docker compose pull && docker compose up -d
 git pull && docker compose -f compose.yaml -f compose.build.yaml up -d --build
 ```
 
+Pages that are open take the new version by themselves. A page asks which
+version runs as it comes into view and every five minutes while it is in
+view, and once that has changed loads itself again: as it comes into view,
+or after two minutes without a touch, a click or a key. What is open stays,
+as it is in the address.
+
 Do not give the container a memory limit below about 2 GB, or 4 GB for all of
 Germany. If it is killed during an import it restarts and downloads the
 timetable again. On a host with little memory, tell Node how much it may use,
@@ -348,8 +354,8 @@ press the eye and copy the address as above.
 
 What a fixed display does by itself:
 
-- It asks the server every ten minutes which version runs, and loads the page
-  again when that has changed.
+- It asks the server every five minutes which version runs, and loads the
+  page again at once when that has changed.
 - It asks the browser to keep the screen on. That needs HTTPS and a browser
   that knows the Screen Wake Lock API; set the screen's own power saving as
   well.
