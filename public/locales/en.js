@@ -195,6 +195,10 @@ export default {
   'address.lineDescription': '{line} ({agency}) live on the map, every trip with its delay.',
   'address.stopGone': 'This stop is not in the timetable.',
   'address.lineGone': 'This line is not in the timetable.',
+  // a trip (#178): its line and where it goes, where and when it starts (the time and the day as the language writes them)
+  'address.tripTitle': '{line} to {to} live',
+  'address.tripDescription': '{line} to {to}, from {from} at {time} on {day}: live on the map, with its delay at every stop.',
+  'address.tripGone': 'This trip is not in the timetable.',
   // (the kinds of transport within a sentence)
   'address.kind.subway': 'U-Bahn',
   'address.kind.tram': 'tram',

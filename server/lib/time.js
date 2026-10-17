@@ -61,6 +61,12 @@ export function localDate(epochSec) {
   return `${p.year}${String(p.month).padStart(2, '0')}${String(p.day).padStart(2, '0')}`;
 }
 
+/** Local time of day (HHMM) at the given epoch seconds. */
+export function localClock(epochSec) {
+  const p = localParts(epochSec * 1000);
+  return `${String(p.hour).padStart(2, '0')}${String(p.minute).padStart(2, '0')}`;
+}
+
 export function addDays(yyyymmdd, days) {
   const d = new Date(Date.UTC(+yyyymmdd.slice(0, 4), +yyyymmdd.slice(4, 6) - 1, +yyyymmdd.slice(6, 8) + days));
   return d.toISOString().slice(0, 10).replaceAll('-', '');

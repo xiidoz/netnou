@@ -53,10 +53,10 @@ self.addEventListener('fetch', (event) => {
   const scope = new URL(self.registration.scope);
   if (request.method !== 'GET' || url.origin !== scope.origin || !url.pathname.startsWith(scope.pathname)) return;
   const path = url.pathname.slice(scope.pathname.length) || './';
-  // The address of a stop or a line (#37) is the page, with what the server
+  // The address of a stop, a line or a trip (#37, #178) is the page, with what the server
   // writes into it. Without a connection it is the page that is kept, with
   // the base the server would have given it there.
-  if (request.mode === 'navigate' && /^(stop|line)\//.test(path)) {
+  if (request.mode === 'navigate' && /^(stop|line|trip)\//.test(path)) {
     event.respondWith(fetch(request).catch(async () => {
       const kept = await caches.match(new URL('./', scope).href, { ignoreSearch: true, ignoreVary: true });
       if (!kept) return Response.error();

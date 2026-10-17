@@ -492,7 +492,9 @@ and `bounds` is `null`.
 
 One run of a trip: `?id=<trip id>`. Keeps the fetching of the realtime feed
 going. 404 `{ "error": "trip not found" }` for a malformed id, an unknown
-trip or a day on which the trip does not run.
+trip or a day on which the trip does not run. The page marks its first
+request for a trip it opens with `open=1`, which counts as a visit of its
+address where visits are counted ([Counting visits](configuration.md#counting-visits)).
 
 ```json
 {
@@ -507,6 +509,7 @@ trip or a day on which the trip does not run.
   "source": "VAG Nürnberg",
   "cancelled": false,
   "notes": [],
+  "address": "trip/verkehrsag-nuernberg/tram/10/2026-10-04/1546-nuernberg-am-wegfeld",
   "path": [49.49253, 11.05405, 49.49195, 11.0543, 49.49181, 11.05421, …],
   "stops": [
     { "station": "637231", "name": "Nürnberg Am Wegfeld", "platform": "", "lat": 49.492527, "lon": 11.05403,
@@ -527,6 +530,7 @@ trip or a day on which the trip does not run.
 | `source` | string or null | who provides the realtime data of the trip, where the feed says so |
 | `cancelled` | boolean | the whole run is cancelled |
 | `notes` | array of objects | notes of the feed about the trip, in the language of the feed, see below |
+| `address` | string | the address of this run (#178), see [`/api/address`](#get-apiaddress) |
 | `path` | array of numbers | the whole route as a flat list `lat, lon, lat, lon, …` |
 | `stops[].station` | string | id for `/api/departures` |
 | `stops[].name`, `platform` | string | name of the stop; platform, `""` if unknown |
@@ -602,15 +606,16 @@ none.
 
 ## `GET /api/address`
 
-What the address of a stop or a line names now. The page asks for it when
-it is opened at such an address ([Addresses](architecture.md#the-page)):
+What the address of a stop, a line or a trip names now. The page asks for
+it when it is opened at such an address ([Addresses](architecture.md#the-page)):
 the ids of a feed change with every timetable, so a stop is named by its
-name and its place, and a line by its operator, its kind and its name, and
-by its place where lines of that name are in places apart.
+name and its place, a line by its operator, its kind and its name, and by
+its place where lines of that name are in places apart, and a trip by its
+line, its day and when and where it starts.
 
 | Parameter | Meaning |
 | --- | --- |
-| `path` | the address from where the instance is: `stop/<name>@<latitude>,<longitude>` or `line/<operator>/<kind>/<name>`, with `@<latitude>,<longitude>` after it where lines of the name are in places apart |
+| `path` | the address from where the instance is: `stop/<name>@<latitude>,<longitude>`; `line/<operator>/<kind>/<name>`, with `@<latitude>,<longitude>` after it where lines of the name are in places apart; or `trip/<operator>/<kind>/<line>/<YYYY-MM-DD>/<HHMM>-<first stop>`, the day and the time those of the clock where the instance is, of the planned departure from its first stop |
 
 ```json
 { "type": "stop", "name": "Nürnberg Plärrer", "lat": 49.44809, "lon": 11.0648, "path": "stop/nuernberg-plaerrer@49.4481,11.0648" }
@@ -620,12 +625,19 @@ by its place where lines of that name are in places apart.
 { "type": "line", "name": "U1", "mode": "subway", "agency": "VerkehrsAG Nürnberg", "at": [49.44391, 11.0599], "path": "line/verkehrsag-nuernberg/subway/u1" }
 ```
 
+```json
+{ "type": "trip", "id": "671753_20261004", "path": "trip/verkehrsag-nuernberg/tram/10/2026-10-04/1546-nuernberg-am-wegfeld" }
+```
+
 The stop is the one of that name nearest the place, up to 1 km away, else
 one of any name within 10 m of it; `lat` and `lon` are its place as
 `/api/departures` takes it with `at`. Of lines of a name in places apart
 the line is the one whose address it is, else the one nearest the place in
 it, and without a place the busiest; `at` is its place as `/api/line`
-takes it. `path` is the address of what was
+takes it. A trip is the run of its line that leaves its first stop at that
+day and time, from the stop of that name, else the only run of the line
+that leaves then; `id` is its id for [`/api/trip`](#get-apitrip), which
+lasts as long as the timetable. `path` is the address of what was
 found as it is now, which may differ from the one asked for. A name in an
 address is written in small letters, with ä as ae and the words joined by
 hyphens; the kind of a line is one of the [modes](#modes). 404

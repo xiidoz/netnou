@@ -1813,6 +1813,13 @@ function lineTitle({ name, mode }) {
   return `${words.charAt(0).toUpperCase()}${words.slice(1)} – ${siteName}`;
 }
 
+/** The title of the page of a trip (#178), as the server writes it (tripWords in server/lib/addresses.js). */
+function tripTitle({ line: name, mode, to }) {
+  const line = /^\d/.test(name) ? `${t(`address.kind.${mode}`)} ${name}` : name;
+  const words = t('address.tripTitle', { line, to });
+  return `${words.charAt(0).toUpperCase()}${words.slice(1)} – ${siteName}`;
+}
+
 // (the address the page was sent for: the title the server gave it says more than this script knows, a line's ends, and is kept while the page is there)
 let servedAt = here();
 
@@ -1851,6 +1858,11 @@ async function openAddress(loaded = false) {
     selectLine(found, { counted: loaded });
     return true;
   }
+  // (a trip, #178: the map is brought to it once it is there, see renderTrip, unless a display's address says where the map is)
+  if (found.type === 'trip') {
+    select('trip', found.id, { counted: loaded, fit: !(loaded && state.viewAsked) });
+    return true;
+  }
   // (the board of the stop, where the address has one: a line has none)
   const board = readBoard(location.search);
   if (board !== state.board) setBoard(board);
@@ -1869,7 +1881,8 @@ function addressGone(path) {
   shareable(false);
   panel.hidden = false;
   panelHead.replaceChildren();
-  panelBody.replaceChildren(el('p', { class: 'panel-empty', text: path.startsWith('line/') ? t('address.lineGone') : t('address.stopGone') }));
+  const gone = path.startsWith('line/') ? t('address.lineGone') : path.startsWith('trip/') ? t('address.tripGone') : t('address.stopGone');
+  panelBody.replaceChildren(el('p', { class: 'panel-empty', text: gone }));
   const named = parseAddress(path);
   if (!named) return;
   $('controls').classList.add('searching');
@@ -1956,7 +1969,7 @@ function select(type, id, more = {}) {
  *   are counted (#158). A trip has no address.
  */
 function selectionUrl({ type, id, line, at, route }, open = false) {
-  if (type === 'trip') return `api/trip?id=${encodeURIComponent(id)}`;
+  if (type === 'trip') return `api/trip?id=${encodeURIComponent(id)}${open ? '&open=1' : ''}`;
   // (a line is its name, its mode and its operator together, and its place where lines of the name are in places
   // apart, #152; where it runs is asked for until it is known, #148)
   if (type === 'line') return `api/line?${new URLSearchParams({ name: line.name, mode: line.mode, agency: line.agency, ...(line.at ? { at: line.at.join(',') } : {}), ...(route ? {} : { route: '1' }), ...(open ? { open: '1' } : {}) })}`;
@@ -1984,6 +1997,10 @@ async function loadSelection(first = false) {
         // (from now on asked for by the place the server has for it)
         selection.line = { ...selection.line, at: data.at };
         showAddress(data.path, lineTitle(data));
+        shareable(true);
+      }
+      if (first && selection.type === 'trip') {
+        showAddress(data.address, tripTitle(data));
         shareable(true);
       }
       showSelection(first);
@@ -2298,6 +2315,19 @@ function renderTrip(trip, scrollToNext) {
   );
   if (scrollToNext) nextRow?.scrollIntoView({ block: 'center' });
   else panelBody.scrollTop = scrollTop;
+
+  // Once, when the trip is opened at its address (#178): the map on where it
+  // is, between the stop it left last and the next one; where it is not
+  // under way, on all of its run.
+  const selection = state.selection;
+  if (!scrollToNext || !selection?.fit) return;
+  selection.fit = false;
+  const next = trip.stops.findIndex((stop, i) => (i === lastIndex ? stop.arr + (stop.arrDelay ?? 0) : stop.dep + (stop.depDelay ?? stop.arrDelay ?? 0)) >= trip.now);
+  const points = next > 0 ? [trip.stops[next - 1], trip.stops[next]].flatMap((stop) => [stop.lat, stop.lon]) : trip.path;
+  if (points.length < 2) return;
+  const lats = points.filter((_, i) => i % 2 === 0);
+  const lons = points.filter((_, i) => i % 2 === 1);
+  map.fitBounds([[Math.min(...lons), Math.min(...lats)], [Math.max(...lons), Math.max(...lats)]], { padding: clearOfCards(), maxZoom: LINE_ZOOM, duration: 0 });
 }
 
 /**

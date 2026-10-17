@@ -369,6 +369,8 @@ test('/api/trip', async () => {
     source: 'Testbetrieb', // from the gtfs.de note, which is not one of the notes
     cancelled: false,
     notes: [{ title: null, text: 'Signalstörung', severity: 'warning' }],
+    // its address (#178): its line, its day and where and when it starts, by the clock of the instance (UTC here)
+    address: `trip/testbetrieb/subway/u1/${today.slice(0, 4)}-${today.slice(4, 6)}-${today.slice(6)}/0000-alpha`,
   });
   assert.ok(Math.abs(now - Date.now() / 1000) < 5);
   assert.equal(stops.length, 102);
@@ -643,6 +645,30 @@ test('the address of a stop or a line is a page of its own, found again by its n
   // (with the place of the line: the middle of the three stations of the ICE, for the page to ask for it by)
   assert.deepEqual((await get('/api/address?path=line/testbetrieb/longdistance/ice-5')).json, { type: 'line', name: 'ICE 5', mode: 'longdistance', agency: 'Testbetrieb', at: [51.13333, 12.33333], path: 'line/testbetrieb/longdistance/ice-5' });
   for (const path of ['stop/nirgends@48.0000,10.0000', 'line/anders/subway/u1', 'nothing']) assert.equal((await get(`/api/address?path=${encodeURIComponent(path)}`)).status, 404, path);
+
+  // The address of a trip (#178): its run of the day, found by its line and where and when it starts.
+  const day = `${today.slice(0, 4)}-${today.slice(4, 6)}-${today.slice(6)}`;
+  const run = `trip/testbetrieb/subway/u1/${day}/0000-alpha`;
+  assert.deepEqual((await get(`/api/address?path=${encodeURIComponent(run)}`)).json, { type: 'trip', id: `T1_${today}`, path: run });
+  // (its first stop has another name now: the one run of the line that leaves then)
+  assert.deepEqual((await get(`/api/address?path=${encodeURIComponent(run.replace(/alpha$/, 'anders'))}`)).json.path, run);
+  // its page, for previews of a shared link; it lives for its day, so not for search engines
+  const tripPage = await request(`/${run}`, { headers: { 'Accept-Language': 'de-DE' } });
+  assert.equal(tripPage.status, 200);
+  assert.equal(tripPage.headers['x-robots-tag'], 'noindex');
+  const tripBody = tripPage.body.toString();
+  assert.match(tripBody, /<base href="\.\.\/\.\.\/\.\.\/\.\.\/\.\.\/">/);
+  assert.match(tripBody, /<title>U1 nach Rundkurs live – Netnou<\/title>/);
+  assert.match(tripBody, /content="U1 nach Rundkurs, ab Alpha um 00:00 am \d+\. \p{L}+: live auf der Karte, mit der Verspätung an jedem Halt\."/u);
+  assert.match(tripBody, /<meta name="robots" content="noindex">/);
+  assert.doesNotMatch(tripBody, /rel="canonical"/);
+  // another time, or a day the timetable does not have: no trip
+  for (const path of [run.replace('/0000-', '/0100-'), `trip/testbetrieb/subway/u1/2031-01-01/0000-alpha`, run.replace('/subway/', '/bus/')]) {
+    assert.equal((await get(`/api/address?path=${encodeURIComponent(path)}`)).status, 404, path);
+  }
+  const gone = await request('/trip/testbetrieb/subway/u1/2031-01-01/0000-alpha', { headers: { 'Accept-Language': 'de-DE' } });
+  assert.equal(gone.status, 404);
+  assert.ok(gone.body.toString().includes('Diese Fahrt ist nicht im Fahrplan.'));
 });
 
 test('what is not there, not allowed or not a URL', async () => {
@@ -1015,15 +1041,17 @@ test('a visit of the page is reported to the analytics service the operator name
     const asked = { 'Sec-Fetch-Mode': 'cors', 'Sec-Fetch-Dest': 'empty', 'Sec-Fetch-Site': 'same-origin', Accept: '*/*', 'User-Agent': browser, 'Accept-Language': 'de-DE,de;q=0.9,en;q=0.8', 'X-Forwarded-For': '10.0.0.9, 203.0.113.47', Referer: 'https://karte.example.org/live/' };
     assert.equal((await request('/api/departures?station=A&open=1', { headers: asked })).status, 200);
     assert.equal((await request('/api/line?name=U1&mode=subway&agency=Testbetrieb&route=1&open=1', { headers: asked })).status, 200);
-    // no visits: the requests that keep the details up to date, a trip, a stop that is not there, another site's page, Do Not Track
+    // and a trip (#178)
+    assert.equal((await request(`/api/trip?id=T1_${today}&open=1`, { headers: asked })).status, 200);
+    // no visits: the requests that keep the details up to date, a stop that is not there, another site's page, Do Not Track
     await request('/api/departures?station=A', { headers: asked });
     await request('/api/line?name=U1&mode=subway&agency=Testbetrieb', { headers: asked });
-    await request('/api/trip?id=T1_20261003&open=1', { headers: asked });
+    await request(`/api/trip?id=T1_${today}`, { headers: asked });
     assert.equal((await request('/api/departures?station=nowhere&open=1', { headers: asked })).status, 404);
     await request('/api/departures?at=49.4,11&open=1', { headers: { ...asked, 'Sec-Fetch-Site': 'cross-site' } });
     await request('/api/departures?station=A&open=1', { headers: { ...asked, DNT: '1' } });
-    await reported(6);
-    assert.equal(reports.length, 6);
+    await reported(7);
+    assert.equal(reports.length, 7);
     const of = (part) => reports.slice(4).map((report) => JSON.parse(report.body).payload).find((visit) => visit.page.includes(part));
     // (without a source: the visitor came from the page itself; with the title of the page at the address)
     assert.deepEqual(of('/stop/'), {
@@ -1039,6 +1067,7 @@ test('a visit of the page is reported to the analytics service the operator name
     assert.equal(reports.find((report) => report.body.includes('/stop/')).url, '/api/send?site=7');
     const lineTitle = /<title>([^<]*)<\/title>/.exec((await request('/line/testbetrieb/subway/u1', { headers: { 'Accept-Language': 'de-DE' } })).body.toString())[1];
     assert.deepEqual([of('/line/').url, of('/line/').title], ['/live/line/testbetrieb/subway/u1', lineTitle]);
+    assert.deepEqual([of('/trip/').url, of('/trip/').title], [`/live/trip/testbetrieb/subway/u1/${today.slice(0, 4)}-${today.slice(4, 6)}-${today.slice(6)}/0000-alpha`, 'U1 nach Rundkurs live – Netnou']);
 
     // a service that refuses: one line when that begins, none for each visit, one when it is over
     answer = 404;

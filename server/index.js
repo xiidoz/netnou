@@ -244,19 +244,24 @@ function servePage(req, res, url) {
   return send(req, res, 200, MIME['.html'], page.body, headers, (page.packed ??= keep(page.body)));
 }
 
-// What the addresses of stops and lines name (#37), in the timetable of the
-// moment: looked up again in each new one.
+// What the addresses of stops, lines (#37) and trips (#178) name, in the
+// timetable of the moment: looked up again in each new one.
 let addresses = null;
 const addressesNow = () => (addresses?.timetable === timetable ? addresses : (addresses = new Addresses(timetable)));
 
 /**
- * What an address of a stop or a line names in the timetable
+ * What an address of a stop, a line or a trip names in the timetable
  * (lib/addresses.js), or null: { type, found, path }, with the number of the
- * station or line and its address now.
+ * station or line, or the run of the trip ({ trip, date }), and its address
+ * now.
  */
 function addressed(asked) {
   const named = parseAddress(asked.toLowerCase());
   if (!named || !timetable) return null;
+  if (named.type === 'trip') {
+    const run = addressesNow().trip(named);
+    return run && { type: 'trip', found: run, path: addressesNow().tripPath(run.trip, run.date) };
+  }
   const found = named.type === 'stop' ? addressesNow().station(named) : addressesNow().line(named);
   if (found < 0) return null;
   return { type: named.type, found, path: named.type === 'stop' ? addressesNow().stationPath(found) : addressesNow().linePath(found) };
@@ -293,18 +298,20 @@ function serveAddress(req, res, url) {
   if (timetable) {
     const named = addressed(asked);
     if (!named) {
-      address.gone = t(asked.startsWith('line/') ? 'address.lineGone' : 'address.stopGone', {}, words);
+      address.gone = t(asked.startsWith('line/') ? 'address.lineGone' : asked.startsWith('trip/') ? 'address.tripGone' : 'address.stopGone', {}, words);
       status = 404;
     } else if (named.path !== asked) {
       res.writeHead(301, { ...SECURITY_HEADERS, Location: `${'../'.repeat(address.depth)}${named.path}${url.search}`, 'Cache-Control': 'no-cache' });
       return res.end();
     } else {
-      Object.assign(address, named.type === 'stop' ? addressesNow().stationWords(named.found, language, words) : addressesNow().lineWords(named.found, language, words));
+      const { found } = named;
+      Object.assign(address, named.type === 'stop' ? addressesNow().stationWords(found, language, words) : named.type === 'line' ? addressesNow().lineWords(found, language, words) : addressesNow().tripWords(found.trip, found.date, language, words));
     }
   }
   const body = pageBody(language, askedLanguage, address);
   const etag = etagOf(body);
-  const headers = { ETag: etag, 'Cache-Control': 'no-cache', ...(askedLanguage ? {} : { Vary: 'Accept-Language' }), ...(status === 200 ? {} : NOT_LISTED), ...pageInline().headers };
+  // (a trip lives for its day: not for search engines either)
+  const headers = { ETag: etag, 'Cache-Control': 'no-cache', ...(askedLanguage ? {} : { Vary: 'Accept-Language' }), ...(status === 200 && !address.unlisted ? {} : NOT_LISTED), ...pageInline().headers };
   // (the page of a stop, a line, or of one no longer in the timetable is a visit as the page is)
   visits?.seen(req, res, { pathname: url.pathname, query: url.searchParams, title: titleOf(body.toString()) });
   if (status === 200 && etagMatches(req, etag)) {
@@ -612,13 +619,21 @@ function handleApi(req, res, url) {
       const trip = match && timetable.trip(match[1], match[2], realtime.snapshot);
       if (!trip) return sendJson(req, res, 404, { error: 'trip not found' });
       realtime.touch();
-      return sendJson(req, res, 200, { now, ...trip });
+      // (its address, #178, and the visit of it where the page opens it)
+      const number = timetable.tripIndex.get(match[1]);
+      const address = addressesNow().tripPath(number, match[2]);
+      visitOpened(req, res, url, address, (language, words) => addressesNow().tripWords(number, match[2], language, words).title);
+      return sendJson(req, res, 200, { now, ...trip, address });
     }
 
     case '/api/address': {
-      // What the address of a stop or a line names now (#37), for the page at it.
+      // What the address of a stop, a line or a trip names now (#37, #178), for the page at it.
       const named = addressed(url.searchParams.get('path') ?? '');
       if (!named) return sendJson(req, res, 404, { error: 'not found' });
+      if (named.type === 'trip') {
+        const { trip, date } = named.found;
+        return sendJson(req, res, 200, { type: 'trip', id: `${timetable.tripId(trip)}_${date}`, path: named.path });
+      }
       if (named.type === 'stop') {
         const { name, lat, lon } = timetable.stations[named.found];
         return sendJson(req, res, 200, { type: 'stop', name, lat, lon, path: named.path });
@@ -657,7 +672,7 @@ const server = http.createServer((req, res) => {
     if (url.pathname === '/robots.txt') return send(req, res, 200, MIME['.txt'], Buffer.from(robotsTxt(sitemapAt)), { 'Cache-Control': 'no-cache' });
     const sitemap = /^\/sitemap(?:-(\d{1,4}))?\.xml$/.exec(url.pathname);
     if (sitemap && sitemapAt) return serveSitemap(req, res, Number(sitemap[1] ?? 0));
-    if (url.pathname.startsWith('/stop/') || url.pathname.startsWith('/line/')) return serveAddress(req, res, url);
+    if (/^\/(stop|line|trip)\//.test(url.pathname)) return serveAddress(req, res, url);
     return serveStatic(req, res, decodeURIComponent(url.pathname));
   } catch (err) {
     // A URL that cannot be decoded is the client's mistake and not worth a log
