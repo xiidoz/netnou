@@ -3,6 +3,7 @@
 
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
+import crypto from 'node:crypto';
 import { once } from 'node:events';
 import fs from 'node:fs';
 import http from 'node:http';
@@ -449,7 +450,17 @@ test('static files: types, revalidation, HEAD, gzip and Brotli', async () => {
   assert.ok((await request('/index.html')).body.equals(page.body));
   // the map is the only thing allowed from elsewhere, and no other site may show the page in a frame
   const map = 'https://maps.example.org https://tiles.example.org';
-  assert.equal(page.headers['content-security-policy'], `default-src 'self'; img-src 'self' data: blob: ${map}; style-src 'self'; script-src 'self'; worker-src 'self'; connect-src 'self' ${map}; frame-ancestors 'none'`);
+  const policy = `default-src 'self'; img-src 'self' data: blob: ${map}; style-src 'self'; script-src 'self'; worker-src 'self'; connect-src 'self' ${map}; frame-ancestors 'none'`;
+  assert.equal((await request('/app.js')).headers['content-security-policy'], policy);
+  // The page carries its style sheets and its first script, which its own
+  // answer allows by their hashes (see the test of the page), and nothing else inline.
+  const inline = Object.fromEntries(['first.js', 'style.css', 'vendor/maplibre-gl/maplibre-gl.css'].map((file) => [file, fs.readFileSync(path.join(root, 'public', file), 'utf8')]));
+  const hashOf = (text) => `'sha256-${crypto.createHash('sha256').update(text).digest('base64')}'`;
+  assert.equal(page.headers['content-security-policy'], policy.replace("style-src 'self'", `style-src 'self' ${hashOf(inline['style.css'])} ${hashOf(inline['vendor/maplibre-gl/maplibre-gl.css'])}`).replace("script-src 'self'", `script-src 'self' ${hashOf(inline['first.js'])}`));
+  const text = page.body.toString();
+  assert.ok(text.includes(`<script>${inline['first.js']}</script>`));
+  for (const file of ['style.css', 'vendor/maplibre-gl/maplibre-gl.css']) assert.ok(text.includes(`<style>${inline[file]}</style>`), file);
+  assert.doesNotMatch(text, /<link rel="stylesheet"|<script src="first\.js">/);
   assert.equal(page.headers['x-content-type-options'], 'nosniff');
 
   const { etag } = page.headers;

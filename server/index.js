@@ -9,7 +9,7 @@ import { loadConfig, parseBox, parsePlace } from './config.js';
 import { Addresses, stopTitle } from './lib/addresses.js';
 import { FeedUpdater } from './lib/feed.js';
 import { RealtimePoller } from './lib/realtime.js';
-import { addressTitle, LANGUAGE_CODES, languageFor, ownFiles, pictureSize, renderManifest, renderPage, robotsTxt, securityPolicy, sitemapFiles, titleOf } from './lib/page.js';
+import { addressTitle, inlineHashes, LANGUAGE_CODES, languageFor, ownFiles, PAGE_INLINE, pictureSize, renderManifest, renderPage, robotsTxt, securityPolicy, sitemapFiles, titleOf } from './lib/page.js';
 import { setTimeZone } from './lib/time.js';
 import { sharesFor, thinOut, ZOOM_ALL, ZOOM_MIN } from './lib/thinning.js';
 import { LITE_AHEAD_S, MODES, lite } from './lib/timetable.js';
@@ -185,6 +185,23 @@ if (own.files.size) log(`Own files from ${config.brandDir}: ${[...own.files.keys
 const texts = Object.fromEntries(await Promise.all(LANGUAGE_CODES.map(async (code) => [code, (await import(`../public/locales/${code}.js`)).default])));
 const pages = new Map();
 
+// The style sheets and the first script of the page come within it
+// (PAGE_INLINE in lib/page.js), and the Content-Security-Policy of the page
+// allows them by their hashes: read again when one of them has changed.
+let inlined = null;
+function pageInline() {
+  const files = PAGE_INLINE.map((file) => path.join(config.publicDir, file));
+  const stamp = files.map((file) => {
+    const stat = fs.statSync(file);
+    return `${stat.size}-${stat.mtimeMs}`;
+  }).join();
+  if (inlined?.stamp !== stamp) {
+    const inline = new Map(PAGE_INLINE.map((file, i) => [file, fs.readFileSync(files[i], 'utf8')]));
+    inlined = { stamp, inline, headers: { 'Content-Security-Policy': securityPolicy(config, inlineHashes(inline)) } };
+  }
+  return inlined;
+}
+
 /** The language a page is sent in: the one its address asks for (`asked`), else the browser's, else the main one of the instance. */
 function pageLanguage(req, url) {
   const asked = LANGUAGE_CODES.includes(url.searchParams.get('lang')) ? url.searchParams.get('lang') : null;
@@ -195,7 +212,7 @@ function pageLanguage(req, url) {
 /** index.html as it is sent (renderPage), in a language: the page itself, or at the address of a stop or a line. */
 function pageBody(language, asked, address = null) {
   const file = path.join(config.publicDir, 'index.html');
-  return Buffer.from(renderPage(fs.readFileSync(file, 'utf8'), { language, asked, texts: texts[language], siteName: config.siteName, areaName: config.areaName, siteTitle: config.siteTitle[language], siteDescription: config.siteDescription[language], links: config.links, preview: own.preview, previewSize, publicUrl: config.publicUrl, listed: config.searchEngines, styleUrl: config.styleUrl, mapOrigins: config.mapOrigins, kinds: timetable?.kinds ?? null, address }));
+  return Buffer.from(renderPage(fs.readFileSync(file, 'utf8'), { language, asked, texts: texts[language], siteName: config.siteName, areaName: config.areaName, siteTitle: config.siteTitle[language], siteDescription: config.siteDescription[language], links: config.links, preview: own.preview, previewSize, publicUrl: config.publicUrl, listed: config.searchEngines, styleUrl: config.styleUrl, mapOrigins: config.mapOrigins, kinds: timetable?.kinds ?? null, address, inline: pageInline().inline }));
 }
 
 const etagOf = (body) => `"${crypto.createHash('sha1').update(body).digest('hex').slice(0, 16)}"`;
@@ -204,7 +221,7 @@ function servePage(req, res, url) {
   const file = path.join(config.publicDir, 'index.html');
   const stat = fs.statSync(file);
   // (the page has a chip for each kind of transport the timetable has: another timetable may need another page)
-  const stamp = `${stat.size}-${stat.mtimeMs}-${timetable?.kinds.join() ?? ''}`;
+  const stamp = `${stat.size}-${stat.mtimeMs}-${pageInline().stamp}-${timetable?.kinds.join() ?? ''}`;
   const { asked, language } = pageLanguage(req, url);
   // (the page of an address with a language names that address as its own: not the same page)
   const key = asked ? `?lang=${asked}` : language;
@@ -217,7 +234,7 @@ function servePage(req, res, url) {
   // Always revalidate, as the files are: a deploy shows up immediately. Where
   // the address names no language, the same address has an answer for each:
   // whoever keeps answers is told to keep them apart by the browser's languages.
-  const headers = { ETag: page.etag, 'Cache-Control': 'no-cache', ...(asked ? {} : { Vary: 'Accept-Language' }) };
+  const headers = { ETag: page.etag, 'Cache-Control': 'no-cache', ...(asked ? {} : { Vary: 'Accept-Language' }), ...pageInline().headers };
   // (a visit whether the page is sent or "not modified")
   visits?.seen(req, res, { pathname: url.pathname, query: url.searchParams, title: (page.title ??= titleOf(page.body.toString())) });
   if (etagMatches(req, page.etag)) {
@@ -287,7 +304,7 @@ function serveAddress(req, res, url) {
   }
   const body = pageBody(language, askedLanguage, address);
   const etag = etagOf(body);
-  const headers = { ETag: etag, 'Cache-Control': 'no-cache', ...(askedLanguage ? {} : { Vary: 'Accept-Language' }), ...(status === 200 ? {} : NOT_LISTED) };
+  const headers = { ETag: etag, 'Cache-Control': 'no-cache', ...(askedLanguage ? {} : { Vary: 'Accept-Language' }), ...(status === 200 ? {} : NOT_LISTED), ...pageInline().headers };
   // (the page of a stop, a line, or of one no longer in the timetable is a visit as the page is)
   visits?.seen(req, res, { pathname: url.pathname, query: url.searchParams, title: titleOf(body.toString()) });
   if (status === 200 && etagMatches(req, etag)) {

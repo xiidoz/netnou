@@ -122,7 +122,7 @@ Page (`public/`):
 | `search.js` | finding stops, lines and towns by name: matching and order, without the page around it |
 | `search-worker.js` | the thread that loads the list of stops, lines and towns and searches it |
 | `i18n.js`, `locales/` | texts in the visitor's language, see [translating.md](translating.md) |
-| `first.js` | what is settled before the page is drawn: light or dark, by the visitor's choice or else the scheme of the device, whether the header card shows at once, and where the instance is (the base of the page) |
+| `first.js` | what is settled before the page is drawn: light or dark, by the visitor's choice or else the scheme of the device, whether the header card shows at once and in which language, and where the instance is (the base of the page) |
 | `sw.js`, `manifest.webmanifest`, `icons/` | installable app and offline start |
 | `vendor/maplibre-gl/` | the map library, vendored, see [its README](../public/vendor/maplibre-gl/README.md) |
 | `vendor/material-design-icons/` | the shapes of the icons on the page's own buttons, see [its README](../public/vendor/material-design-icons/README.md) |
@@ -808,26 +808,42 @@ otherwise a server would load a file written by older code:
   (`Vary: Accept-Language`). `first.js`, the one script the page waits
   for, picks the visitor's language as `i18n.js` does and shows the card
   with the first paint where the page came as this visitor gets it. Where
-  it did not – another language chosen in the settings, modes switched off,
-  colours by delay, a display – the card stays out of sight until `app.js`
-  has made it so: it would change under the eyes of who reads it otherwise.
-  What `app.js` adds to a card that shows already is what its buttons do,
-  the numbers on the chips and the state of the connection. On a wide
-  screen the chips come folded (`style.css`), or open where the visitor
-  opened them (`first.js`): the card has its height from the first paint.
+  the language alone is another – a browser that names none, a language
+  chosen in the settings – it fetches the texts, a small module, and shows
+  the card in them long before `app.js` has arrived. Where more is another
+  – modes switched off, colours by delay, a display – the card stays out of
+  sight until `app.js` has made it so: it would change under the eyes of
+  who reads it otherwise. What `app.js` adds to a card that shows already
+  is what its buttons do, the numbers on the chips and the state of the
+  connection. On a wide screen the chips come folded (`style.css`), or open
+  where the visitor opened them (`first.js`): the card has its height from
+  the first paint.
+- **The page paints as soon as it has arrived.** Its style sheets and
+  `first.js` are what a browser has to have before it paints, and each
+  would be a request of its own, most of a second on a phone. The server
+  writes them into the page as it sends it, byte for byte (`PAGE_INLINE` and
+  `renderPage` in `lib/page.js`), and the answer allows them by their
+  hashes in its Content-Security-Policy (`inlineHashes`, `securityPolicy`).
+  `index.html` names them as files all the same, and they are served as
+  files too: the page works from a plain web server as well.
 - **What the page fetches at its start** it would learn of step by step: of
   `app.js` from the page, of the map library from `app.js`, of the area and
   the style of the map only once the script runs. The server names all of it
   in the head of the page (`PAGE_MODULES` and `renderPage` in `lib/page.js`):
   the scripts with the texts of the page's language, `api/area` and
   `api/status`, and the style of the map, or with raster tiles the
-  connection to their server. The browser then asks for everything at once.
+  connection to their server. The browser then asks for everything at once –
+  the texts and `i18n.js` first, which the header card of a visitor whose
+  language is another than the page's waits for, the rest, the map library
+  above all, with less urgency (`fetchpriority`).
 - **Security.** The Content-Security-Policy allows scripts, styles, workers
   and connections from the page's own origin only. The one exception is the
   map, which may be fetched from the server of its style or tiles and from
-  those in `NETNOU_MAP_ORIGINS`. There are no inline scripts or styles. No
-  other site may show the page in a frame, unless it is named in
-  `NETNOU_EMBED_ORIGINS` (`securityPolicy` in `lib/page.js`).
+  those in `NETNOU_MAP_ORIGINS`. The only inline script and styles are the
+  page's own `first.js` and style sheets, which the answer that is the page
+  allows by their hashes; every other answer allows none. No other site may
+  show the page in a frame, unless it is named in `NETNOU_EMBED_ORIGINS`
+  (`securityPolicy` in `lib/page.js`).
 - **Browsers.** There is no build step, so the page runs as written. The map
   library sets the floor: it needs WebGL 2 and the JavaScript of 2022,
   roughly Chrome and Edge 94, Firefox 114, Safari 16.4 and newer.

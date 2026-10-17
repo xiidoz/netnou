@@ -39,7 +39,10 @@ window.applyColorScheme();
 // language their browser asks for, every mode of transport switched on, the
 // vehicles coloured by their mode (server/lib/page.js). Where that is what
 // this visitor gets, the card shows with the first paint, well before app.js
-// has arrived. Where it is not – another language chosen in the settings, a
+// has arrived. Where the language alone is another – a browser that names
+// none, a language chosen in the settings – its texts are fetched here, a
+// small module where app.js and the map library are large, and the card
+// shows in them as soon as they are there. Where more is another – a
 // display, modes switched off, colours by delay – it stays out of sight until
 // app.js has made it so: a card that changes under the eyes of who reads it
 // is worse than one that comes later.
@@ -69,8 +72,19 @@ window.applyColorScheme();
   const preferred = (navigator.languages ?? []).map((tag) => tag.toLowerCase().split('-')[0]);
   const language = [stored('lang'), address.get('lang'), ...preferred].find((code) => languages.includes(code)) ?? 'en';
   const hiddenModes = setting('hiddenModes');
-  const asSent = language === root.lang && !address.has('display') && setting('colorBy') !== 'delay' && !(Array.isArray(hiddenModes) && hiddenModes.length);
-  if (asSent) root.dataset.controls = 'shown';
+  const asSentButLanguage = !address.has('display') && setting('colorBy') !== 'delay' && !(Array.isArray(hiddenModes) && hiddenModes.length);
+  if (asSentButLanguage && language === root.lang) root.dataset.controls = 'shown';
+  else if (asSentButLanguage) {
+    // (the texts as i18n.js puts them in; app.js puts in the same ones once it has arrived)
+    import('./i18n.js').then(async (i18n) => {
+      await i18n.loadLanguage();
+      if (document.readyState === 'loading') await new Promise((parsed) => document.addEventListener('DOMContentLoaded', parsed, { once: true }));
+      i18n.translatePage();
+      root.dataset.controls = 'shown';
+    }).catch(() => {
+      // a browser that cannot: the card comes with app.js, as it did
+    });
+  }
   // Chips that fold on a wide screen (style.css) are open where the visitor opened them.
   if (setting('chipsOpen') === true) root.dataset.chipsOpen = '';
 }

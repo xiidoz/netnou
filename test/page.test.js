@@ -3,6 +3,7 @@
 // not find its places in any more, this is where it shows.
 
 import assert from 'node:assert/strict';
+import crypto from 'node:crypto';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -11,7 +12,7 @@ import { LANGUAGES, pageTexts, pickLanguage } from '../public/i18n.js';
 import de from '../public/locales/de.js';
 import en from '../public/locales/en.js';
 import * as shapes from '../public/vendor/material-design-icons/icons.js';
-import { LANGUAGE_CODES, PAGE_MODULES, languageFor, ownFiles, pictureSize, renderManifest, renderPage, robotsTxt, securityPolicy, sitemapFiles } from '../server/lib/page.js';
+import { inlineHashes, LANGUAGE_CODES, languageFor, ownFiles, PAGE_INLINE, PAGE_MODULES, pictureSize, renderManifest, renderPage, robotsTxt, securityPolicy, sitemapFiles } from '../server/lib/page.js';
 
 const html = fs.readFileSync(new URL('../public/index.html', import.meta.url), 'utf8');
 const URL_ = 'https://karte.example.org/live/';
@@ -243,11 +244,39 @@ test('the page lets the map come from its servers, and lets only the sites named
   assert.equal(securityPolicy({ mapOrigins: map, embedOrigins: ['*'] }), `${rest}; frame-ancestors *`);
 });
 
+// A browser paints the page once it has its style sheets and has run the
+// first script, each a request of its own. Written into the page they come
+// with it, and the answer allows them by their hashes.
+test('the page carries its style sheets and its first script, and its answer allows them by their hashes', () => {
+  const inline = new Map(PAGE_INLINE.map((file) => [file, fs.readFileSync(new URL(`../public/${file}`, import.meta.url), 'utf8')]));
+  const page = renderPage(html, { ...german, inline });
+  assert.ok(page.includes(`<script>${inline.get('first.js')}</script>`));
+  assert.ok(page.includes(`<style>${inline.get('style.css')}</style>`));
+  assert.ok(page.includes(`<style>${inline.get('vendor/maplibre-gl/maplibre-gl.css')}</style>`));
+  assert.doesNotMatch(page, /<link rel="stylesheet"|<script src="first\.js">/);
+  // (the script before the style sheets, as in the file: the colour scheme is settled before anything is drawn)
+  assert.ok(page.indexOf('<script>') < page.indexOf('<style>'));
+  // the hashes are of what stands between the tags
+  const hashOf = (text) => `'sha256-${crypto.createHash('sha256').update(text).digest('base64')}'`;
+  const hashes = inlineHashes(inline);
+  assert.deepEqual(hashes, { styles: [hashOf(inline.get('style.css')), hashOf(inline.get('vendor/maplibre-gl/maplibre-gl.css'))], scripts: [hashOf(inline.get('first.js'))] });
+  const policy = securityPolicy({ mapOrigins: ['https://tiles.example.org'] }, hashes);
+  assert.ok(policy.includes(`; style-src 'self' ${hashes.styles[0]} ${hashes.styles[1]}; script-src 'self' ${hashes.scripts[0]}; worker-src 'self';`));
+  // a file the page does not name is one too many
+  assert.throws(() => renderPage(html, { ...german, inline: new Map([['other.css', 'p {}']]) }), /index\.html: nothing matches/);
+  // without them the tags stay, and nothing inline is allowed
+  assert.ok(renderPage(html, german).includes('<link rel="stylesheet" href="style.css">'));
+  assert.ok(renderPage(html, german).includes('<script src="first.js"></script>'));
+  assert.ok(securityPolicy({ mapOrigins: [] }).includes("; style-src 'self'; script-src 'self'; worker-src 'self';"));
+});
+
 test('the page names what it fetches at its start, and where its map comes from', () => {
-  const modules = (page) => [...page.matchAll(/<link rel="modulepreload" href="([^"]*)">/g)].map(([, file]) => file);
+  const modules = (page) => [...page.matchAll(/<link rel="modulepreload" href="([^"]*)"( fetchpriority="low")?>/g)].map(([, file]) => file);
   const page = renderPage(html, german);
   // its scripts, and the texts of its language with them
   assert.deepEqual(modules(page), [...PAGE_MODULES, 'locales/de.js']);
+  // the texts and what puts them in first, the rest with less urgency
+  for (const file of modules(page)) assert.equal(page.includes(`<link rel="modulepreload" href="${file}" fetchpriority="low">`), !(file === 'i18n.js' || file.startsWith('locales/')), file);
   for (const file of modules(page)) assert.ok(fs.existsSync(new URL(`../public/${file}`, import.meta.url)), file);
   // (English is among the scripts: every other language falls back on it)
   assert.deepEqual(modules(renderPage(html, { ...german, language: 'en', asked: 'en', texts: en })), PAGE_MODULES);

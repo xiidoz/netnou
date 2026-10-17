@@ -8,9 +8,11 @@
 // Changed files need no new name: with network first the cache follows. Bump
 // the version only to get rid of entries for files that were removed or renamed.
 const CACHE_PREFIX = 'netnou-shell-';
-const CACHE = `${CACHE_PREFIX}v3`;
+const CACHE = `${CACHE_PREFIX}v4`;
 // What the page needs to start. test/frontend.test.js checks that the files
-// exist and that every language of i18n.js is among them.
+// exist and that every language of i18n.js is among them. The style sheets
+// and the first script come within the page (PAGE_INLINE in
+// server/lib/page.js) and are not files of their own here.
 const SHELL = [
   './',
   'address.js',
@@ -19,17 +21,14 @@ const SHELL = [
   'i18n.js',
   'search.js',
   'search-worker.js',
-  'first.js',
   'locales/de.js',
   'locales/en.js',
-  'style.css',
   'favicon.svg',
   'manifest.webmanifest',
   'icons/icon-192.png',
   'vendor/maplibre-gl/maplibre-gl.mjs',
   'vendor/maplibre-gl/maplibre-gl-shared.mjs',
   'vendor/maplibre-gl/maplibre-gl-worker.mjs',
-  'vendor/maplibre-gl/maplibre-gl.css',
   'vendor/material-design-icons/icons.js',
 ];
 
