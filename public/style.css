@@ -295,15 +295,32 @@ button { font: inherit; color: inherit; }
   color: var(--text-muted);
   font-size: 13px;
   font-variant-numeric: tabular-nums;
+  /* (the pulse of the dot lies under what the line says, see below) */
+  isolation: isolate;
 }
 .status .dot {
+  position: relative;
   width: 11px;
   height: 11px;
   border-radius: 50%;
   background: var(--delay-none);
   flex: none;
 }
-.status[data-state="live"] .dot { background: var(--delay-ok); animation: pulse 2s ease-out infinite; }
+.status[data-state="live"] .dot { background: var(--delay-ok); }
+/* The pulse of the dot while it is live: a disc of its colour that grows out
+   of it and fades. Over the dot it is of the dot's own colour: only the ring
+   beyond it shows. It changes only in size and opacity, which the browser
+   animates without the page: a shadow that grew had the page paint anew at
+   every frame, as long as it was open. */
+.status[data-state="live"] .dot::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border-radius: 50%;
+  background: var(--delay-ok);
+  animation: pulse 2s ease-out infinite;
+}
 .status[data-state="error"] .dot { background: var(--delay-severe); }
 /* No realtime data at all: the line is a warning that is not overlooked, with
    a sign in place of the dot. (The ground is --delay-major, thinned.) */
@@ -321,12 +338,13 @@ button { font: inherit; color: inherit; }
 .status[data-state="outage"] .dot { display: none; }
 .status[data-state="outage"] .warn { display: block; }
 
+/* (out to 8 pixels beyond the dot of 11 on every side: 27 across) */
 @keyframes pulse {
-  0% { box-shadow: 0 0 0 0 rgb(42 157 75 / 0.55); }
-  100% { box-shadow: 0 0 0 8px rgb(42 157 75 / 0); }
+  0% { transform: scale(1); opacity: 0.55; }
+  100% { transform: scale(calc(27 / 11)); opacity: 0; }
 }
 @media (prefers-reduced-motion: reduce) {
-  .status .dot { animation: none !important; }
+  .status .dot::after { display: none; }
   /* the sheets come to rest at once */
   .panel, .dialog { transition: none !important; }
   .chips { scroll-behavior: auto !important; }
