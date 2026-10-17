@@ -17,6 +17,7 @@
 // gets to see in another language than that of its own browser. Hence an
 // address per language, ?lang=de, which the page names as its other versions.
 
+import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import { LANGUAGES, pageTexts, pickLanguage, t } from '../../public/i18n.js';
@@ -54,6 +55,26 @@ export const PAGE_MODULES = [
   'vendor/maplibre-gl/maplibre-gl.mjs',
   'vendor/maplibre-gl/maplibre-gl-shared.mjs',
 ];
+
+// What a browser has to have before it paints the page: its style sheets,
+// and the one script it waits for. Each is a request of its own, and on a
+// phone a request is most of a second. So the server writes them into the
+// page as it is sent (renderPage), and the Content-Security-Policy of that
+// answer allows them by their hashes (inlineHashes, securityPolicy).
+// index.html names them as files all the same, which a test holds together
+// with this list (test/frontend.test.js).
+export const PAGE_INLINE = ['first.js', 'style.css', 'vendor/maplibre-gl/maplibre-gl.css'];
+
+/**
+ * The hashes by which a Content-Security-Policy allows what is written into
+ * the page, as securityPolicy takes them: { styles, scripts }.
+ * @param inline the files written into the page, by their address (PAGE_INLINE)
+ */
+export function inlineHashes(inline) {
+  const hashOf = (text) => `'sha256-${crypto.createHash('sha256').update(text).digest('base64')}'`;
+  const of = (ending) => [...inline].filter(([file]) => file.endsWith(ending)).map(([, text]) => hashOf(text));
+  return { styles: of('.css'), scripts: of('.js') };
+}
 
 /**
  * The operator's own files in `dir`, as far as they are there.
@@ -130,10 +151,14 @@ const escapeHtml = (text) => String(text).replace(/[&<>"']/g, (char) => `&#${cha
  * it turns into images by way of blob: URLs. Another site may show the page
  * in a frame of its own, as a dashboard does, only if it is one of
  * `embedOrigins` (NETNOU_EMBED_ORIGINS): unless the operator names some, none.
+ * @param hashes those of the style sheets and the script written into the
+ *   page (inlineHashes), for the answer that is the page; no other inline
+ *   style or script is allowed
  */
-export function securityPolicy({ mapOrigins = [], embedOrigins = [] }) {
+export function securityPolicy({ mapOrigins = [], embedOrigins = [] }, hashes = { styles: [], scripts: [] }) {
   const map = mapOrigins.join(' ');
-  return `default-src 'self'; img-src 'self' data: blob: ${map}; style-src 'self'; script-src 'self'; worker-src 'self'; connect-src 'self' ${map}; frame-ancestors ${embedOrigins.length ? embedOrigins.join(' ') : "'none'"}`;
+  const allowed = (list) => list.map((hash) => ` ${hash}`).join('');
+  return `default-src 'self'; img-src 'self' data: blob: ${map}; style-src 'self'${allowed(hashes.styles)}; script-src 'self'${allowed(hashes.scripts)}; worker-src 'self'; connect-src 'self' ${map}; frame-ancestors ${embedOrigins.length ? embedOrigins.join(' ') : "'none'"}`;
 }
 
 export const titleOf = (html) => (/<title>([^<]*)<\/title>/.exec(html)?.[1] ?? '').replace(/&#(\d+);/g, (_, code) => String.fromCharCode(Number(code)));
@@ -203,8 +228,11 @@ const versions = (publicUrl) => [...LANGUAGE_CODES.map((code) => [code, addressI
  *   { title, description, heading, sub } of what it names (lib/addresses.js),
  *   or { gone } with the text that says it names nothing now, or neither
  *   while that is not known yet (there is no timetable)
+ * @param inline the style sheets and the first script, by their address in
+ *   index.html (PAGE_INLINE), to be written into the page in place of the
+ *   tags that name them; null leaves the tags
  */
-export function renderPage(html, { language, asked, texts, siteName, areaName, siteTitle = null, siteDescription = null, links = [], preview = null, previewSize = null, publicUrl, listed, styleUrl = null, mapOrigins = [], kinds = null, address = null }) {
+export function renderPage(html, { language, asked, texts, siteName, areaName, siteTitle = null, siteDescription = null, links = [], preview = null, previewSize = null, publicUrl, listed, styleUrl = null, mapOrigins = [], kinds = null, address = null, inline = null }) {
   const worded = pageTexts(areaName, texts, siteName);
   const named = Boolean(address?.title);
   const title = named ? addressTitle(address.title, siteName) : siteTitle ?? worded.title;
@@ -219,6 +247,15 @@ export function renderPage(html, { language, asked, texts, siteName, areaName, s
   };
   // (which languages there are: first.js picks the visitor's among them, and sees whether it is that of the page)
   put(/<html lang="[^"]*">/, () => `<html lang="${language}" data-languages="${LANGUAGE_CODES.join(' ')}">`);
+  // The style sheets and the first script within the page, so that a browser
+  // paints it as soon as it has arrived, without a request for each of them
+  // first; the answer allows them by their hashes (securityPolicy). As they
+  // are, byte for byte: the hash is of what stands between the tags.
+  for (const [file, text] of inline ?? []) {
+    const named = file.replace(/[./]/g, '\\$&');
+    if (file.endsWith('.css')) put(new RegExp(`<link rel="stylesheet" href="${named}">`), () => `<style>${text}</style>`);
+    else put(new RegExp(`<script src="${named}"></script>`), () => `<script>${text}</script>`);
+  }
   // (at an address, the page's own files are as many steps up as the address is deep)
   if (address) put(/<meta charset="utf-8">\n/, (start) => `${start}  <base href="${'../'.repeat(address.depth)}">\n`);
   put(/<title>[^<]*<\/title>/, () => `<title>${escapeHtml(title)}</title>`);
@@ -284,10 +321,17 @@ export function renderPage(html, { language, asked, texts, siteName, areaName, s
   // most cases), what the server says of the area and of itself (loadArea in
   // app.js), and the map. Of the map its style where it has one – else, and
   // for what a style takes from other servers, the connection is made ready.
+  // Of the scripts, the texts and what puts them in are wanted first: they
+  // are small, and the header card of a visitor whose language is another
+  // than the page's waits for them (first.js). The rest, the map library
+  // above all, is large and has time until the card stands; asked for with
+  // less urgency, it does not hold up the texts – nor, as Lighthouse sees it,
+  // the first paint.
   const own = `locales/${language}.js`;
+  const urgent = (file) => file === 'i18n.js' || file.startsWith('locales/');
   const styleOrigin = styleUrl ? new URL(styleUrl).origin : null;
   tags.push(
-    ...[...PAGE_MODULES, ...(PAGE_MODULES.includes(own) ? [] : [own])].map((file) => `<link rel="modulepreload" href="${file}">`),
+    ...[...PAGE_MODULES, ...(PAGE_MODULES.includes(own) ? [] : [own])].map((file) => `<link rel="modulepreload" href="${file}"${urgent(file) ? '' : ' fetchpriority="low"'}>`),
     // (crossorigin: as fetch() asks, or the answer is not the one it takes)
     '<link rel="preload" as="fetch" href="api/area" crossorigin>',
     '<link rel="preload" as="fetch" href="api/status" crossorigin>',

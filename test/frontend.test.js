@@ -9,7 +9,7 @@ import { test } from 'node:test';
 import vm from 'node:vm';
 import { ATTRIBUTES, LANGUAGES, formatNumber, formatTime, loadLanguage, pageTexts, pickLanguage, setTimeZone, t } from '../public/i18n.js';
 import en from '../public/locales/en.js';
-import { PAGE_MODULES } from '../server/lib/page.js';
+import { PAGE_INLINE, PAGE_MODULES } from '../server/lib/page.js';
 import { MODES } from '../server/lib/timetable.js';
 
 const publicDir = new URL('../public/', import.meta.url);
@@ -71,7 +71,25 @@ test('first.js keeps where the instance is as the base of the page, also at the 
 test('the service worker precaches files that exist', () => {
   assert.ok(shell.length > 0);
   for (const file of shell) assert.ok(fs.existsSync(new URL(file === './' ? 'index.html' : file, publicDir)), `${file} in SHELL of sw.js does not exist`);
-  for (const file of ['app.js', 'i18n.js', 'search.js', 'style.css']) assert.ok(shell.includes(file), `${file} is missing in SHELL of sw.js`);
+  for (const file of ['app.js', 'i18n.js', 'search.js']) assert.ok(shell.includes(file), `${file} is missing in SHELL of sw.js`);
+  // (the style sheets and the first script come within the page, which is in the shell)
+  for (const file of PAGE_INLINE) assert.ok(!shell.includes(file), `${file} comes within the page and need not be in SHELL of sw.js`);
+});
+
+// A browser paints the page once it has its style sheets and has run the
+// script it waits for. The server writes them into the page as it sends it
+// (PAGE_INLINE in server/lib/page.js), so that no request for them comes
+// before the first paint; index.html names them as files all the same.
+test('what the page waits for before it paints is what the server writes into it', () => {
+  const html = read('index.html');
+  const sheets = [...html.matchAll(/<link rel="stylesheet" href="([^"]*)">/g)].map(([, file]) => file);
+  const waited = [...html.matchAll(/<script src="([^"]*)"><\/script>/g)].map(([, file]) => file);
+  assert.deepEqual(PAGE_INLINE.toSorted(), [...sheets, ...waited].sort());
+  for (const file of PAGE_INLINE) {
+    assert.ok(fs.existsSync(new URL(file, publicDir)), `${file} does not exist`);
+    // (what is between the tags must not end them)
+    assert.doesNotMatch(read(file), /<\/(style|script)/i, `${file} would end its own tag`);
+  }
 });
 
 // The search runs in a thread of its own, which the page starts by the name
@@ -240,7 +258,6 @@ test('the colour scheme is put on the page first, and the style sheet follows it
   const script = html.indexOf('<script src="first.js"></script>');
   assert.ok(script > 0, 'index.html loads first.js as a script that is waited for');
   assert.ok(script < html.indexOf('<link rel="stylesheet"'), 'first.js comes before the style sheets');
-  assert.ok(shell.includes('first.js'), 'first.js is missing in SHELL of sw.js');
   // (a media query would follow the device whatever the visitor chose)
   assert.doesNotMatch(read('style.css'), /prefers-color-scheme/);
   assert.match(read('style.css'), /^:root\[data-theme="dark"\] \{$/m);
