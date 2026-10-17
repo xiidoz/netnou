@@ -43,6 +43,7 @@ server/
   config.js           settings
   lib/                import, route geometry, realtime, readers for the data formats
   areas/vgn.geojson   outline of the default area (generated)
+  areas/germany.geojson  border of Germany, drawn for NETNOU_AREA=Germany (generated)
 public/
   index.html, app.js, style.css   the page
   search.js           finding stops and lines by name
@@ -175,6 +176,9 @@ earlier ones.
   different polygons give the area a different id, and every running instance
   then imports the timetable again and downloads the OpenStreetMap extracts
   again. See [server/areas/README.md](server/areas/README.md).
+- **`server/areas/germany.geojson`** is written by `npm run build:germany`,
+  which asks Nominatim for the border of Germany. It is only drawn, so
+  regenerating it changes nothing that is stored.
 - **`public/icons/*.png`** are rendered from `public/favicon.svg` by
   `npm run build:icons`, which needs Chrome, Chromium or Edge (set `CHROME`
   to its path if it is not found). Run it after changing the favicon and

@@ -1145,8 +1145,8 @@ function showLocating() {
 
 /**
  * Whether a place is inside the outline of the area – by the even-odd rule, as
- * the veil is drawn. An instance without an area has no outline: there it is
- * the rectangle around all it covers.
+ * the veil is drawn. An instance without an outline has no area: there it is
+ * the rectangle around all it covers. (Germany has one, its border.)
  */
 function inArea(lat, lon) {
   if (!state.outline.length) return Boolean(state.bbox) && lat >= state.bbox[0] && lon >= state.bbox[1] && lat <= state.bbox[2] && lon <= state.bbox[3];

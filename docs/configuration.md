@@ -121,8 +121,8 @@ There are four ways to define it:
 
 - **Nothing set,** or `NETNOU_AREA=VGN`: the VGN, from
   `server/areas/vgn.geojson` (the outlines of its 11 cities and 23 districts).
-- **`NETNOU_AREA=Germany`:** all of Germany. It has no outline: every trip of
-  the feed is imported, see
+- **`NETNOU_AREA=Germany`:** all of Germany. Every trip of the feed is
+  imported, and the border of the country is drawn as its edge, see
   [All of Germany, and single operators](#all-of-germany-and-single-operators).
 - **`NETNOU_BBOX`:** a rectangle, `south,west,north,east` in degrees, for example
   `49.30,10.82,49.68,11.30`. Note the order: latitude first.
@@ -142,8 +142,8 @@ route geometry on the next start.
 
 ## All of Germany, and single operators
 
-Germany is an area without an outline, and an instance need not show every
-operator. There are two limits, each optional, and a trip has to pass both:
+Germany is an area that keeps everything the feed has, and an instance need
+not show every operator. There are two limits, each optional, and a trip has to pass both:
 
 | Instance | Area | Operators |
 | --- | --- | --- |
@@ -154,9 +154,12 @@ operator. There are two limits, each optional, and a trip has to pass both:
 | One operator in a network | the outline of the network | `NETNOU_AGENCIES` |
 
 - **`NETNOU_AREA=Germany`** takes every trip of the feed, which is the feed
-  of Germany unless `NETNOU_FEED_URL` names another. There is then nothing
-  that would be outside: every stop is listed, has a departure board and is
-  found by the search, and no edge is drawn on the map. It is called
+  of Germany unless `NETNOU_FEED_URL` names another. Nothing is left out:
+  every stop is listed, has a departure board and is found by the search,
+  also abroad. The border of Germany is drawn as the edge of the area and
+  the map is greyed out beyond it (`server/areas/germany.geojson`); it
+  decides nothing about what is kept, and a visitor beyond it who asks for
+  their position is told that it is outside the area. It is called
   `Deutschland`, shows the whole country on a first visit
   (`47.27,5.87,55.06,15.04`) and takes its roads, tracks and towns from the
   extract of Germany, `https://download.geofabrik.de/europe/germany-latest.osm.pbf`;
@@ -178,7 +181,7 @@ operator. There are two limits, each optional, and a trip has to pass both:
   still the built-in VGN: an operator from elsewhere then has no trips, and
   the error says so. Give it its own area, or `NETNOU_AREA=Germany`.
 
-Without an outline the instance still needs to know where its vehicles
+Without an area of polygons the instance still needs to know where its vehicles
 follow roads and tracks and which OpenStreetMap data to keep. It takes that
 from its trips: where their stops are, and the straight lines from each stop
 to the next. That is its extent. Extracts of your own in
