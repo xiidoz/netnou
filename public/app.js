@@ -217,6 +217,7 @@ const state = {
   online: false, // last poll delivered vehicles
   areaKnown: false, // api/area has answered: the map shows the area
   addressOpened: false, // what the address of the page names has been asked for (openAddress)
+  viewAsked: false, // the address of a display named the section of the map, which the stop it names then does not move (loadArea)
   outline: [], // the edge of the area: rings of [lat, lon]; none where the instance has no area
   bbox: null, // the rectangle around the area, or around all the instance covers: [south, west, north, east]
   thinned: false, // the last answer left vehicles out: zoomed out, where a screen cannot take them all
@@ -1813,9 +1814,11 @@ async function openAddress(loaded = false) {
   // (the board of the stop, where the address has one: a line has none)
   const board = readBoard(location.search);
   if (board !== state.board) setBoard(board);
-  // (as from the search: on a narrow screen the details cover the lower half, so the stop goes above the middle; a board does not)
-  map.easeTo({ center: [found.lon, found.lat], zoom: Math.max(map.getZoom(), SEARCH_ZOOM), offset: [0, narrowScreen.matches && board === null ? -0.12 * viewSize.y : 0], duration: 0 });
-  select('station', null, { at: found, counted: loaded });
+  // (as from the search: on a narrow screen the details cover the lower half, so the stop goes above the middle; a board does not.
+  // A display whose address names a section of the map keeps that section: it was set up so.)
+  const kept = loaded && state.viewAsked;
+  if (!kept) map.easeTo({ center: [found.lon, found.lat], zoom: Math.max(map.getZoom(), SEARCH_ZOOM), offset: [0, narrowScreen.matches && board === null ? -0.12 * viewSize.y : 0], duration: 0 });
+  select('station', null, { at: found, counted: loaded, kept });
   return true;
 }
 
@@ -1884,7 +1887,8 @@ shareButton.addEventListener('click', async () => {
  * @param more what else there is to know: of a line what it is ({ line }),
  *   of a station of the search where it is ({ at }); and { counted: true } for
  *   what the address the page was loaded at names, whose visit the server has
- *   counted already (#158)
+ *   counted already (#158), and { kept: true } where the map stays where the
+ *   address of a display put it
  */
 function select(type, id, more = {}) {
   // (a board is of a stop: what else is opened is shown as details)
@@ -1930,8 +1934,8 @@ async function loadSelection(first = false) {
       if (first && selection.type === 'station') {
         showAddress(stopPath(data.name, data.lat, data.lon), stopTitle(data.name));
         shareable(true, true);
-        // (a board keeps the stop it shows in the middle of the map)
-        if (state.board !== null) map.jumpTo({ center: [data.lon, data.lat] });
+        // (a board keeps the stop it shows in the middle of the map, unless the address of a display says where the map is)
+        if (state.board !== null && !selection.kept) map.jumpTo({ center: [data.lon, data.lat] });
       }
       if (first && selection.type === 'line') {
         // (from now on asked for by the place the server has for it)
@@ -2775,6 +2779,7 @@ async function loadArea() {
   const usable = saved && [saved.lat, saved.lon, saved.zoom].every(Number.isFinite)
     && saved.lat >= limit[0] && saved.lon >= limit[1] && saved.lat <= limit[2] && saved.lon <= limit[3];
   // (at once: gliding there from the placeholder would show nothing, and the vehicles are asked for right after)
+  state.viewAsked = OPENED_AS_DISPLAY && Boolean(usable);
   if (usable) map.jumpTo({ center: [saved.lon, saved.lat], zoom: saved.zoom });
   else map.fitBounds([[area.view[1], area.view[0]], [area.view[3], area.view[2]]], { animate: false });
 
