@@ -1498,9 +1498,11 @@ function watchChipFold(row, chips, fold) {
     const shown = [...chips.querySelectorAll('.chip')].filter((chip) => !chip.hidden);
     if (!wide.matches || !shown.length) return;
     row.style.setProperty('--chip-height', `${shown[0].offsetHeight}px`);
+    const first = shown[0].offsetTop;
+    // (those that a click cannot reach while they are folded, see style.css)
+    for (const chip of shown) chip.classList.toggle('below', chip.offsetTop > first);
     // (how many rows they take is known once they carry their numbers: before, they are narrower)
     if (!state.online) return;
-    const first = shown[0].offsetTop;
     const rows = new Set(shown.map((chip) => chip.offsetTop)).size;
     const offBelow = shown.some((chip) => chip.offsetTop > first && chip.getAttribute('aria-pressed') === 'false');
     row.classList.toggle('whole', rows <= 2 || offBelow);
