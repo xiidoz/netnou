@@ -223,9 +223,10 @@ const versions = (publicUrl) => [...LANGUAGE_CODES.map((code) => [code, addressI
  * @param kinds the kinds of transport the timetable has (MODES in
  *   lib/timetable.js), which get a chip and no others; null while there is no
  *   timetable: the chips are then those that index.html shows
- * @param address the address of a stop or a line that the page is sent for
- *   (#37), null for the page itself: { path, depth } of the address, with
- *   { title, description, heading, sub } of what it names (lib/addresses.js),
+ * @param address the address of a stop, a line or a trip that the page is
+ *   sent for (#37, #178), null for the page itself: { path, depth } of the
+ *   address, with { title, description, heading, sub, unlisted } of what it
+ *   names (lib/addresses.js),
  *   or { gone } with the text that says it names nothing now, or neither
  *   while that is not known yet (there is no timetable)
  * @param inline the style sheets and the first script, by their address in
@@ -291,12 +292,12 @@ export function renderPage(html, { language, asked, texts, siteName, areaName, s
     // (a picture of the operator's own is a wide one and shown large; the icon is not)
     `<meta name="twitter:card" content="${preview && publicUrl ? 'summary_large_image' : 'summary'}">`,
   ];
-  // (also said with every answer of the server, see NOT_LISTED in index.js; an address that names nothing, or nothing yet, is not to be listed either)
-  if (!listed || (address && !named)) tags.push('<meta name="robots" content="noindex">');
+  // (also said with every answer of the server, see NOT_LISTED in index.js; an address that names nothing, or nothing yet, or a trip, which lives for its day, is not to be listed either)
+  if (!listed || (address && !named) || address?.unlisted) tags.push('<meta name="robots" content="noindex">');
   if (publicUrl) {
     const own = publicUrl + (named ? address.path : '');
     const canonical = escapeHtml(addressIn(own, asked));
-    if (listed && (!address || named)) {
+    if (listed && (!address || named) && !address?.unlisted) {
       tags.push(
         `<link rel="canonical" href="${canonical}">`,
         ...versions(own).map(([code, href]) => `<link rel="alternate" hreflang="${code}" href="${escapeHtml(href)}">`),

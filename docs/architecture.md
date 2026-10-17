@@ -83,7 +83,7 @@ Server (`server/`):
 
 | File | Responsibility |
 | --- | --- |
-| `index.js` | HTTP server: static files, the API, the page at the address of a stop or a line, security headers, start and shutdown |
+| `index.js` | HTTP server: static files, the API, the page at the address of a stop, a line or a trip, security headers, start and shutdown |
 | `config.js` | reads and checks the settings (`loadConfig`) |
 | `lib/area.js` | the area as a grid of cells with their distance to it (`Area`, `NEAR`) |
 | `lib/feed.js` | keeps the timetable current: version check, download, worker, retries (`FeedUpdater`) |
@@ -104,9 +104,9 @@ Server (`server/`):
 | `lib/http.js` | the GET the realtime feed is fetched with: patient with a busy server (`get`) |
 | `lib/pb.js` | decodes the GTFS-Realtime message (`decodeFeed`) |
 | `lib/update.js` | what the server calls itself (`describeBuild`) and the daily look-out for a newer release (`UpdateChecker`) |
-| `lib/visits.js` | the visits of the page and of the stops and lines opened in it, reported to the analytics service the operator names: what counts as one (`isVisit`, `isOpened`), its facts (`factsOf`), the request the patterns make of them (`reportOf`), and sending it (`Visits`) |
+| `lib/visits.js` | the visits of the page and of the stops, lines and trips opened in it, reported to the analytics service the operator names: what counts as one (`isVisit`, `isOpened`), its facts (`factsOf`), the request the patterns make of them (`reportOf`), and sending it (`Visits`) |
 | `lib/time.js` | service days and the time zone of the feed |
-| `lib/addresses.js` | what the address of a stop or a line names in the timetable, found again by the name and the place of the stop, or the operator, kind and name of the line; what its page says of it (`Addresses`) |
+| `lib/addresses.js` | what the address of a stop, a line or a trip names in the timetable, found again by the name and the place of the stop, the operator, kind and name of the line, or the line, day and start of the trip; what its page says of it (`Addresses`) |
 | `lib/page.js` | which language the page is sent in, and what the server writes into it before it sends it: for search engines and previews of links, the header card as a visitor first sees it, and what the page is to fetch right away; `robots.txt` and the sitemap; which files of the operator's own take the place of built-in icons |
 | `lib/files.js` | downloads, gzipped JSON files (the networks from OpenStreetMap), error texts |
 | `areas/vgn.geojson` | outline of the default area, see [its README](../server/areas/README.md) |
@@ -119,7 +119,7 @@ Page (`public/`):
 | `index.html`, `style.css` | structure and appearance; colours for canvas and DOM live in the style sheet |
 | `app.js` | map, polling, animation, drawing on a canvas, detail panel |
 | `display.js` | display mode and the board of a stop in the address of the page: what an address asks for, and the address for what is shown |
-| `address.js` | the addresses of stops and lines, for the page and the server: how a name is written in one, and what an address names (`stopPath`, `linePath`, `parseAddress`) |
+| `address.js` | the addresses of stops, lines and trips, for the page and the server: how a name is written in one, and what an address names (`stopPath`, `linePath`, `tripPath`, `parseAddress`) |
 | `search.js` | finding stops, lines and towns by name: matching and order, without the page around it |
 | `search-worker.js` | the thread that loads the list of stops, lines and towns and searches it |
 | `i18n.js`, `locales/` | texts in the visitor's language, see [translating.md](translating.md) |
@@ -613,13 +613,19 @@ otherwise a server would load a file written by older code:
   about 96 in 100 stops again after nine months. A line is found by its
   operator, kind and name; of lines of a name in places apart, the one
   whose address it is, else the one nearest its place, and without a place
-  the busiest. An address that names a stop or a line otherwise than its
+  the busiest. A trip ([#178](https://github.com/xiidoz/netnou/issues/178))
+  is named by its line, its day and when and where it starts,
+  `trip/vag/bus/34/2026-10-17/0512-frd-ebert-platz`, and found as the run of
+  its line that leaves its first stop then, from the stop of that name, else
+  the only one that leaves then; it lives for its day, so its page is not
+  for search engines. An address that names a stop or a line otherwise than its
   own address does now sends the browser on to that (301); one that names
   nothing is the page saying so, with 404, and with the search for the name
   in it.
-- **The address in the page.** Opening a stop or a line puts its address
-  into the address bar, back closes it again, and a reload keeps it; a trip
-  has none. The page finds its files and data from where the instance is,
+- **The address in the page.** Opening a stop, a line or a trip puts its
+  address into the address bar, back closes it again, and a reload keeps it.
+  A trip opened at its address brings the map to it: between the stop it
+  left last and the next one, or to all of its run where it is not under way. The page finds its files and data from where the instance is,
   which `first.js` makes the base of the page: the server sends the page at
   an address with a `<base>` as many steps up as the address is deep. A
   button beside the close button of the details passes the address on: on a

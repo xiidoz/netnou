@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { linePath, parseAddress, slug, stopPath, wordsOf } from '../public/address.js';
+import { linePath, parseAddress, slug, stopPath, tripPath, wordsOf } from '../public/address.js';
 import { Addresses } from '../server/lib/addresses.js';
 import { sitemapFiles } from '../server/lib/page.js';
 
@@ -44,6 +44,17 @@ test('what an address names, and what is not an address', () => {
   }
   // its name, as the search takes it
   assert.equal(wordsOf('nuernberg-plaerrer'), 'nuernberg plaerrer');
+});
+
+test('the address of a trip is its line, its day, and when and where it starts (#178)', () => {
+  const path = tripPath({ agency: 'VerkehrsAG Nürnberg', mode: 'bus', name: '34' }, '2026-10-17', '0512', 'Nürnberg Frd.-Ebert-Platz');
+  assert.equal(path, 'trip/verkehrsag-nuernberg/bus/34/2026-10-17/0512-nuernberg-frd-ebert-platz');
+  assert.deepEqual(parseAddress(path), { type: 'trip', agency: 'verkehrsag-nuernberg', mode: 'bus', name: '34', day: '2026-10-17', time: '0512', from: 'nuernberg-frd-ebert-platz' });
+  // (a kind the address does not know is "other", as for a line)
+  assert.equal(tripPath({ agency: 'X', mode: 'airship', name: '1' }, '2026-10-17', '2359', 'A'), 'trip/x/other/1/2026-10-17/2359-a');
+  for (const path of ['trip/vag/bus/34/2026-10-17/0512', 'trip/vag/bus/34/2026-10-17/2412-a', 'trip/vag/bus/34/2026-10-17/0560-a', 'trip/vag/bus/34/17.10.2026/0512-a', 'trip/vag/airship/34/2026-10-17/0512-a', 'trip/vag/bus/2026-10-17/0512-a', 'trip/vag/bus/34/2026-10-17/0512-A']) {
+    assert.equal(parseAddress(path), null, path);
+  }
 });
 
 test('an address finds the stop of its name nearest its place, else one of any name right there', () => {

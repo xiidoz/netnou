@@ -1,7 +1,8 @@
-// The addresses of stops and lines (#37), which the page shows and passes on
-// and the server answers. The ids of the feed change with every timetable,
-// so a stop is named by its name and its place, and a line by its operator,
-// its kind and its name. The words of an address are English, the names in
+// The addresses of stops, lines (#37) and trips (#178), which the page shows
+// and passes on and the server answers. The ids of the feed change with every
+// timetable, so a stop is named by its name and its place, a line by its
+// operator, its kind and its name, and a trip by its line, its day and where
+// and when it starts. The words of an address are English, the names in
 // it as the timetable has them, written as one types them.
 
 /** The kinds of transport of a line's address, as the API names them (MODES in server/lib/timetable.js). */
@@ -29,21 +30,33 @@ export const stopPath = (name, lat, lon) => `stop/${slug(name)}@${lat.toFixed(4)
  */
 export const linePath = ({ agency, mode, name }, place = null) => `line/${slug(agency)}/${KINDS.includes(mode) ? mode : 'other'}/${slug(name)}${place ? `@${place}` : ''}`;
 
+/**
+ * The address of a trip (#178): trip/<operator>/<kind>/<line>/<day>/<time>-<first stop>,
+ * the day (YYYY-MM-DD) and the time (HHMM) those of the clock where the
+ * instance is, of its planned departure from its first stop. It names the
+ * run of that day.
+ */
+export const tripPath = ({ agency, mode, name }, day, time, from) => `trip/${slug(agency)}/${KINDS.includes(mode) ? mode : 'other'}/${slug(name)}/${day}/${time}-${slug(from)}`;
+
 // (a place in an address: latitude and longitude, each to up to seven decimals)
 const PLACE = String.raw`@(-?\d{1,2}(?:\.\d{1,7})?),(-?\d{1,3}(?:\.\d{1,7})?)`;
 const STOP = new RegExp(String.raw`^stop\/([a-z0-9-]+)${PLACE}$`);
 const LINE = new RegExp(String.raw`^line\/([a-z0-9-]+)\/([a-z]+)\/([a-z0-9-]+)(?:${PLACE})?$`);
+const TRIP = /^trip\/([a-z0-9-]+)\/([a-z]+)\/([a-z0-9-]+)\/(\d{4}-\d{2}-\d{2})\/((?:[01]\d|2[0-3])[0-5]\d)-([a-z0-9-]+)$/;
 
 /**
  * What an address names, given from where the instance is (`stop/…`,
- * `line/…`): { type: 'stop', name, lat, lon } or { type: 'line', agency,
- * mode, name }, with lat and lon where it has a place, the names as the
- * address writes them; null for any other.
+ * `line/…`, `trip/…`): { type: 'stop', name, lat, lon }, { type: 'line',
+ * agency, mode, name }, with lat and lon where it has a place, or { type:
+ * 'trip', agency, mode, name, day, time, from }; the names as the address
+ * writes them; null for any other.
  */
 export function parseAddress(path) {
   const placed = (lat, lon, named) => (lat === undefined ? named : Math.abs(lat) <= 90 && Math.abs(lon) <= 180 ? { ...named, lat: Number(lat), lon: Number(lon) } : null);
   const stop = STOP.exec(path);
   if (stop) return placed(stop[2], stop[3], { type: 'stop', name: stop[1] });
+  const trip = TRIP.exec(path);
+  if (trip) return KINDS.includes(trip[2]) ? { type: 'trip', agency: trip[1], mode: trip[2], name: trip[3], day: trip[4], time: trip[5], from: trip[6] } : null;
   const line = LINE.exec(path);
   return line && KINDS.includes(line[2]) ? placed(line[4], line[5], { type: 'line', agency: line[1], mode: line[2], name: line[3] }) : null;
 }

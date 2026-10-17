@@ -1,12 +1,13 @@
-// The addresses of stops and lines (#37, written and read by
-// public/address.js) as the timetable has them now. What an address names
+// The addresses of stops, lines (#37) and trips (#178), written and read by
+// public/address.js, as the timetable has them now. What an address names
 // is found again in a later timetable by what stays the same in it, which
 // the ids of the feed do not: a stop by its name and its place, a line by
 // its operator, its kind and its name, and by its place where lines of that
-// name are in places apart.
+// name are in places apart, a trip by its line and where and when it starts.
 
-import { linePath, slug, stopPath } from '../../public/address.js';
+import { linePath, slug, stopPath, tripPath } from '../../public/address.js';
 import { t } from '../../public/i18n.js';
+import { addDays, localClock, localDate, serviceDayStart, timeZone } from './time.js';
 import { MODES } from './timetable.js';
 
 // A stop of the name of an address is taken up to this far from its place.
@@ -137,6 +138,65 @@ export class Addresses {
     return own ?? numbers.reduce((best, i) => (away(i) < away(best) ? i : best));
   }
 
+  /**
+   * The trips of each line, by its number (lineTrips from lineTripStart[i]
+   * to lineTripStart[i + 1]). Made when a trip is first looked for: 7 MB in
+   * all of Germany.
+   */
+  indexTrips() {
+    if (this.lineTrips) return;
+    const { tripLine, tripCount, lines } = this.timetable;
+    const start = new Int32Array(lines.length + 1);
+    for (let k = 0; k < tripCount; k++) start[tripLine[k] + 1]++;
+    for (let i = 0; i < lines.length; i++) start[i + 1] += start[i];
+    const next = start.slice();
+    const trips = new Int32Array(tripCount);
+    for (let k = 0; k < tripCount; k++) trips[next[tripLine[k]]++] = k;
+    [this.lineTripStart, this.lineTrips] = [start, trips];
+  }
+
+  /**
+   * The run of a trip that an address names, { trip, date } with its service
+   * day (yyyymmdd), or null: of the trips of its line that leave their first
+   * stop at its day and time, the one from the stop of its name; else, where
+   * only one leaves then, that one (its first stop has another name now).
+   * @param asked a trip as parseAddress (public/address.js) has it
+   */
+  trip({ agency, mode, name, day, time, from }) {
+    const numbers = this.lines.get(`line/${agency}/${mode}/${name}`);
+    if (!numbers) return null;
+    this.indexTrips();
+    const tt = this.timetable;
+    const calendar = day.replaceAll('-', '');
+    // (about when it leaves, to look at the clock of those only: an hour either way, for the change of the clocks)
+    const about = serviceDayStart(calendar) + Number(time.slice(0, 2)) * 3600 + Number(time.slice(2)) * 60;
+    const found = [];
+    // (a trip after midnight may be one of the service day before)
+    for (const date of [calendar, addDays(calendar, -1)]) {
+      const base = serviceDayStart(date);
+      for (const line of numbers) {
+        for (let k = this.lineTripStart[line]; k < this.lineTripStart[line + 1]; k++) {
+          const trip = this.lineTrips[k];
+          const leaves = base + tt.schedDep(trip, 0);
+          if (Math.abs(leaves - about) > 3600 || localDate(leaves) !== calendar || localClock(leaves) !== time || !tt.runsOn(trip, date)) continue;
+          found.push({ trip, date, from: slug(tt.stops.name[tt.stopsOf(trip)[0]]) });
+        }
+      }
+    }
+    const run = found.find((one) => one.from === from) ?? (found.length === 1 ? found[0] : null);
+    return run && { trip: run.trip, date: run.date };
+  }
+
+  /** The address of trip number `trip` on its service day `date` (yyyymmdd). */
+  tripPath(trip, date) {
+    const tt = this.timetable;
+    const route = tt.tripRoute[trip];
+    const leaves = serviceDayStart(date) + tt.schedDep(trip, 0);
+    const day = localDate(leaves);
+    const line = { agency: tt.routes.agency[route], mode: tt.routeModes[route], name: tt.lineName(route) };
+    return tripPath(line, `${day.slice(0, 4)}-${day.slice(4, 6)}-${day.slice(6)}`, localClock(leaves), tt.stops.name[tt.stopsOf(trip)[0]]);
+  }
+
   /** The address of station number i. */
   stationPath(i) {
     const { name, lat, lon } = this.timetable.stations[i];
@@ -204,6 +264,29 @@ export class Addresses {
       description: firstUp(t('address.lineDescription', { line, agency }, texts)),
       heading: line,
       sub: agency,
+    };
+  }
+
+  /**
+   * What the page of a trip says of it, in a language (see stationWords).
+   * It lives for its day: not for search engines (unlisted).
+   */
+  tripWords(trip, date, language, texts) {
+    const tt = this.timetable;
+    const route = tt.tripRoute[trip];
+    const name = tt.lineName(route);
+    const line = labelled(name, name, tt.routeModes[route], texts);
+    const to = tt.headsign(trip);
+    const leaves = (serviceDayStart(date) + tt.schedDep(trip, 0)) * 1000;
+    const time = new Intl.DateTimeFormat(language, { timeStyle: 'short', timeZone: timeZone() }).format(leaves);
+    const day = new Intl.DateTimeFormat(language, { day: 'numeric', month: 'long', timeZone: timeZone() }).format(leaves);
+    const from = tt.stops.name[tt.stopsOf(trip)[0]];
+    return {
+      title: firstUp(t('address.tripTitle', { line, to }, texts)),
+      description: firstUp(t('address.tripDescription', { line, to, from, time, day }, texts)),
+      heading: line,
+      sub: t('line.to', { destination: to }, texts),
+      unlisted: true,
     };
   }
 }

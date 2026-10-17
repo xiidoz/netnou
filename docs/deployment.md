@@ -276,7 +276,7 @@ Worth watching:
   with an error. Of the languages a browser names with its request it takes
   the language to send the page in, and keeps nothing of them. With
   `NETNOU_VISITS_URL` set, it reads more of a request that opens the page,
-  or a stop or a line in it: the visitor's IP address, the name of their
+  or a stop, a line or a trip in it: the visitor's IP address, the name of their
   browser and the site they came from, which it passes on, with the address
   and the title of the page, to the analytics service named there, and
   keeps nothing of either
