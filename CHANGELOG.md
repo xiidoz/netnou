@@ -8,6 +8,26 @@ This file is written by
 messages when a release is made. Do not edit it by hand; see
 [Releases](CONTRIBUTING.md#releases).
 
+## [0.15.0](https://github.com/xiidoz/netnou/compare/v0.14.0...v0.15.0) (2026-10-17)
+
+
+### Features
+
+* **map:** draw the border of Germany, and grey out beyond it, for NETNOU_AREA=Germany ([#177](https://github.com/xiidoz/netnou/issues/177)) ([24538a2](https://github.com/xiidoz/netnou/commit/24538a2ab6fdda42c0b0e2466de70b33c14501a3))
+* **page:** give a trip an address of its own, to share it and follow it ([#179](https://github.com/xiidoz/netnou/issues/179)) ([389d405](https://github.com/xiidoz/netnou/commit/389d405fd56dc053536e84c251d2f372a0886bab)), closes [#178](https://github.com/xiidoz/netnou/issues/178)
+* **page:** load a new version by itself while nobody is using the page ([#173](https://github.com/xiidoz/netnou/issues/173)) ([aacb794](https://github.com/xiidoz/netnou/commit/aacb7948a122cead3bd9baaabbb52416a603e8be))
+
+
+### Bug Fixes
+
+* **page:** keep the section of the map a display's address names at a stop ([#172](https://github.com/xiidoz/netnou/issues/172)) ([1923527](https://github.com/xiidoz/netnou/commit/19235277350621c90f1d7ece192a89eb90726d28))
+
+
+### Performance Improvements
+
+* **page:** draw the vehicles only as often as the zoom needs ([#175](https://github.com/xiidoz/netnou/issues/175)) ([50bae10](https://github.com/xiidoz/netnou/commit/50bae10a78b1bc93b012acd8766a8f196d7ca8d0))
+* **page:** paint the header card before the scripts have arrived ([#176](https://github.com/xiidoz/netnou/issues/176)) ([1965a36](https://github.com/xiidoz/netnou/commit/1965a36fcbbf5a91962adcb17918abe14b0b563b))
+
 ## [0.14.0](https://github.com/xiidoz/netnou/compare/v0.13.0...v0.14.0) (2026-10-16)
 
 
