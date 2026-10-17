@@ -51,6 +51,14 @@ const QUICK_RETRIES = 5; // so often in a row; the realtime feed may also be dow
 const PANEL_REFRESH_MS = 15_000;
 const MOVE_SETTLE_MS = 150; // wait this long after the map was moved before reloading
 const FRAME_MS = 80;
+// Between two frames the vehicles move on by the time alone. Zoomed out that
+// is less than the eye can tell: no frame is drawn before the fastest of
+// them (FASTEST_M_S, a train at full speed) could have moved STILL_PX, half a
+// pixel – seconds on a map of the whole country, where a frame draws
+// thousands of markers. And a marker gliding to where it belongs stands
+// there, as far as the eye is concerned, once it is nearer than that. See frame().
+const FASTEST_M_S = 100;
+const STILL_PX = 0.5;
 const EASE_MS = 300;
 const JUMP_DEG = 0.02; // a marker further off than this (1–2 km) jumps instead of gliding
 // Share of the map section loaded beyond each of its edges.
@@ -497,11 +505,19 @@ function applyVehicles(list) {
   }
   for (const id of state.vehicles.keys()) if (!seen.has(id)) state.vehicles.delete(id);
   state.drawList = [...state.vehicles.values()].sort((a, b) => DRAW_ORDER.indexOf(a.mode) - DRAW_ORDER.indexOf(b.mode));
+  // (those that have come show with the next frame, those that have gone go with it)
+  drawAsked = true;
 }
 
 // ---------- drawing ----------
 
 let lastDraw = 0;
+// When the next frame is due, see frame(): at once where something has
+// changed that the canvas shows, or a marker is still gliding; else after
+// the fastest vehicle could have moved half a pixel at this zoom (quietMs).
+let drawAsked = true;
+let settling = false;
+let quietMs = FRAME_MS;
 
 function vehicleColor(v) {
   return state.colorBy === 'delay' ? colors.delay[delayClass(v.delay)] : colors.mode[v.mode] ?? colors.mode.other;
@@ -609,8 +625,13 @@ function stationShown(station, zoom) {
 
 function draw() {
   const time = now();
-  const dt = Math.min(performance.now() - lastDraw, 1000);
+  // The time the markers glide by (ease, below). Where vehicles have just
+  // come, that of one frame however long the last one is ago: the glide of a
+  // marker to where it now belongs starts with this frame.
+  const dt = Math.min(performance.now() - lastDraw, drawAsked ? FRAME_MS : 1000);
   lastDraw = performance.now();
+  drawAsked = false;
+  settling = false;
 
   const dpr = window.devicePixelRatio || 1;
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
@@ -621,6 +642,13 @@ function draw() {
     const point = map.project([lon, lat]);
     return [point.x, point.y];
   };
+  // How far a degree is in pixels here, for how far a marker is from where it
+  // belongs: along the parallel, and along the meridian at the middle of the
+  // view (near enough; the map is flat and north is up).
+  const centreLat = map.getCenter().lat;
+  const pxPerLon = (512 * 2 ** zoom) / 360;
+  const pxPerLat = pxPerLon / Math.cos((centreLat * Math.PI) / 180);
+  quietMs = Math.max(FRAME_MS, (1000 * STILL_PX * metresPerPixel(centreLat, zoom)) / FASTEST_M_S);
   // (with a margin: a marker whose centre is just outside still reaches in)
   const onScreen = (x, y) => x > -30 && y > -30 && x < viewSize.x + 30 && y < viewSize.y + 30;
   const hits = [];
@@ -782,6 +810,8 @@ function draw() {
     }
     const [x, y] = project(v.lat, v.lon);
     if (!onScreen(x, y)) continue;
+    // (still on its way to where it belongs: the next frame follows at once)
+    if (!settling && Math.abs(target.lat - v.lat) * pxPerLat + Math.abs(target.lon - v.lon) * pxPerLon > STILL_PX) settling = true;
 
     if (!labeled) {
       hits.push({ x, y, r: Math.max(r + 3, 10), vehicle: v });
@@ -995,8 +1025,13 @@ function draw() {
   state.chosenAt = chosen;
 }
 
+// A frame draws every vehicle in view: thousands on a map of the whole
+// country, which on a slow device takes longer than a frame lasts. So frames
+// come as often as they are needed and no oftener: FRAME_MS apart while a
+// marker glides or something has changed, else quietMs apart, as the zoom
+// has it (see draw). Moving the map draws by itself (map.on('move')).
 function frame() {
-  if (performance.now() - lastDraw >= FRAME_MS) draw();
+  if (performance.now() - lastDraw >= (drawAsked || settling ? FRAME_MS : quietMs)) draw();
   requestAnimationFrame(frame);
 }
 
@@ -1524,6 +1559,8 @@ function buildControls() {
   apply();
 }
 
+let shownRealtime = null; // the realtime state the card showed last (updateStatus)
+
 function updateStatus() {
   if (!state.online) return;
   // The numbers refer to the whole area, not just the map section in view.
@@ -1539,6 +1576,9 @@ function updateStatus() {
   // Without realtime data all positions are by the timetable alone. While it
   // may still be on its way that is said calmly, after that as a warning.
   const realtime = realtimeState();
+  // (the vehicles say it too, with their flags (flagOf): drawn anew when it changes, which between two answers happens here first)
+  if (realtime !== shownRealtime) drawAsked = true;
+  shownRealtime = realtime;
   $('status').dataset.state = { live: 'live', waiting: 'schedule', outage: 'outage' }[realtime];
   const text = realtime === 'live' ? t('status.live', { seconds: realtimeAge() }) : realtime === 'outage' ? t('status.outage') : t('status.waiting');
   $('status-text').textContent = `${t('status.vehicles', { count: shown })} · ${text}`;
@@ -1825,6 +1865,7 @@ async function openAddress(loaded = false) {
 /** Says that the address names nothing now, and looks for the name in it. */
 function addressGone(path) {
   state.selection = null;
+  drawAsked = true; // (what was open goes from the map with the next frame)
   shareable(false);
   panel.hidden = false;
   panelHead.replaceChildren();
@@ -1897,6 +1938,8 @@ function select(type, id, more = {}) {
   if (panelBody.contains(document.activeElement) || panelHead.contains(document.activeElement)) panel.focus({ preventScroll: true });
   const picked = pickedQuery();
   state.selection = { type, id, data: null, ...more };
+  // (the ring around the chosen vehicle, or a line's vehicles alone, with the next frame: not with the server's answer)
+  drawAsked = true;
   pickedChanged(picked);
   // (a stop and a line have their addresses once the server has said what they are: loadSelection; a trip has none)
   shareable(false);
@@ -2803,6 +2846,7 @@ async function loadArea() {
   if (document.fullscreenEnabled) map.addControl(fullscreenControl, 'bottom-right');
   state.outline = area.outline;
   state.bbox = area.bbox;
+  drawAsked = true;
   // What "how it works" ends with: the software by its name, as in the credits, with the way to its source.
   if (typeof about?.homepage === 'string') {
     const [before, after] = t('about.source').split('{software}');
