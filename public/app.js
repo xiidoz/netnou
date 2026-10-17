@@ -506,7 +506,7 @@ function applyVehicles(list) {
   for (const id of state.vehicles.keys()) if (!seen.has(id)) state.vehicles.delete(id);
   state.drawList = [...state.vehicles.values()].sort((a, b) => DRAW_ORDER.indexOf(a.mode) - DRAW_ORDER.indexOf(b.mode));
   // (those that have come show with the next frame, those that have gone go with it)
-  drawAsked = true;
+  askDraw();
 }
 
 // ---------- drawing ----------
@@ -1023,6 +1023,7 @@ function draw() {
   state.hits = hits;
   state.covers = covers;
   state.chosenAt = chosen;
+  nextFrame();
 }
 
 // A frame draws every vehicle in view: thousands on a map of the whole
@@ -1030,9 +1031,35 @@ function draw() {
 // come as often as they are needed and no oftener: FRAME_MS apart while a
 // marker glides or something has changed, else quietMs apart, as the zoom
 // has it (see draw). Moving the map draws by itself (map.on('move')).
+// Between two, the page asks the browser for no frame at all, but waits for
+// the next with a timer: a frame asked for draws the page anew, also where
+// nothing on it has changed.
+let frameTimer = null;
+let framePending = false;
+
 function frame() {
+  framePending = false;
   if (performance.now() - lastDraw >= (drawAsked || settling ? FRAME_MS : quietMs)) draw();
-  requestAnimationFrame(frame);
+  else nextFrame();
+}
+
+/** Asks for the next frame for when it is due: after each draw, and when something has changed. */
+function nextFrame() {
+  if (framePending) return;
+  clearTimeout(frameTimer);
+  const ask = () => {
+    framePending = true;
+    requestAnimationFrame(frame);
+  };
+  const wait = lastDraw + (drawAsked || settling ? FRAME_MS : quietMs) - performance.now();
+  if (wait > 0) frameTimer = setTimeout(ask, Math.ceil(wait));
+  else ask();
+}
+
+/** Says that what the canvas shows has changed: drawn with the next frame. */
+function askDraw() {
+  drawAsked = true;
+  nextFrame();
 }
 
 // ---------- interaction ----------
@@ -1577,7 +1604,7 @@ function updateStatus() {
   // may still be on its way that is said calmly, after that as a warning.
   const realtime = realtimeState();
   // (the vehicles say it too, with their flags (flagOf): drawn anew when it changes, which between two answers happens here first)
-  if (realtime !== shownRealtime) drawAsked = true;
+  if (realtime !== shownRealtime) askDraw();
   shownRealtime = realtime;
   $('status').dataset.state = { live: 'live', waiting: 'schedule', outage: 'outage' }[realtime];
   const text = realtime === 'live' ? t('status.live', { seconds: realtimeAge() }) : realtime === 'outage' ? t('status.outage') : t('status.waiting');
@@ -1877,7 +1904,7 @@ async function openAddress(loaded = false) {
 /** Says that the address names nothing now, and looks for the name in it. */
 function addressGone(path) {
   state.selection = null;
-  drawAsked = true; // (what was open goes from the map with the next frame)
+  askDraw(); // (what was open goes from the map with the next frame)
   shareable(false);
   panel.hidden = false;
   panelHead.replaceChildren();
@@ -1952,7 +1979,7 @@ function select(type, id, more = {}) {
   const picked = pickedQuery();
   state.selection = { type, id, data: null, ...more };
   // (the ring around the chosen vehicle, or a line's vehicles alone, with the next frame: not with the server's answer)
-  drawAsked = true;
+  askDraw();
   pickedChanged(picked);
   // (a stop and a line have their addresses once the server has said what they are: loadSelection; a trip has none)
   shareable(false);
@@ -2876,7 +2903,7 @@ async function loadArea() {
   if (document.fullscreenEnabled) map.addControl(fullscreenControl, 'bottom-right');
   state.outline = area.outline;
   state.bbox = area.bbox;
-  drawAsked = true;
+  askDraw();
   // What "how it works" ends with: the software by its name, as in the credits, with the way to its source.
   if (typeof about?.homepage === 'string') {
     const [before, after] = t('about.source').split('{software}');
@@ -3177,7 +3204,7 @@ function init() {
   // (and what was typed into it before this script had arrived is looked for)
   if (searchField.value) runSearch();
   resizeCanvas();
-  requestAnimationFrame(frame);
+  nextFrame();
   setInterval(updateStatus, 1000);
   setInterval(tickTimes, 1000);
   showDisplay();
