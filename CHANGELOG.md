@@ -8,6 +8,13 @@ This file is written by
 messages when a release is made. Do not edit it by hand; see
 [Releases](CONTRIBUTING.md#releases).
 
+## [0.15.2](https://github.com/xiidoz/netnou/compare/v0.15.1...v0.15.2) (2026-10-17)
+
+
+### Bug Fixes
+
+* **page:** name the icons by addresses that change with them, and answer /favicon.ico ([#183](https://github.com/xiidoz/netnou/issues/183)) ([8a09cc7](https://github.com/xiidoz/netnou/commit/8a09cc706f18e08c86700f82a44da5407209f400))
+
 ## [0.15.1](https://github.com/xiidoz/netnou/compare/v0.15.0...v0.15.1) (2026-10-17)
 
 
