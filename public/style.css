@@ -384,6 +384,12 @@ button { font: inherit; color: inherit; }
   }
   /* (half below the faded row: in it, as high as a chip, it would cover the row above) */
   :root:not([data-chips-open]) .chips-row:not(.whole) .chips-fold span { position: absolute; right: 0; bottom: -5px; }
+  /* Folded, only the chips of the first row take a click: the faded row lies
+     under the arrow's button, and what is further down is cut off. Said so,
+     the chips cut off do not count as lying over the buttons below the row
+     where tools such as Lighthouse measure how much of a button can be
+     pressed (app.js marks the chips of the rows below, .below). */
+  :root:not([data-chips-open]) .chips-row:not(.whole) .chip.below { pointer-events: none; }
   :root:not([data-chips-open]) .chips-fold .icon { transform: rotate(90deg); }
 }
 
@@ -476,8 +482,11 @@ button { font: inherit; color: inherit; }
 .link:hover, .link:focus-visible { color: var(--accent); }
 
 /* the operator's own links, at the foot of the card: small, and always in view */
-.links { display: flex; flex-wrap: wrap; gap: 2px 14px; font-size: 12px; line-height: 1.35; }
-.links a { color: var(--text-muted); }
+/* (each link can be pressed over 24 pixels of height, what WCAG asks of a
+   target, without taking more room than its line: 4 pixels above and below
+   that lie over the gap. The rows are far enough apart for that where they wrap.) */
+.links { display: flex; flex-wrap: wrap; gap: 8px 14px; font-size: 12px; line-height: 1.35; }
+.links a { padding: 4px 0; margin: -4px 0; color: var(--text-muted); }
 .links a:hover, .links a:focus-visible { color: var(--accent); }
 /* a sample of the grey that lies over the map outside the area */
 .swatch.veil {
