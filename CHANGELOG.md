@@ -8,6 +8,18 @@ This file is written by
 messages when a release is made. Do not edit it by hand; see
 [Releases](CONTRIBUTING.md#releases).
 
+## [0.15.1](https://github.com/xiidoz/netnou/compare/v0.15.0...v0.15.1) (2026-10-17)
+
+
+### Bug Fixes
+
+* **page:** give the card's links and colour buttons the room Lighthouse asks of a target ([#180](https://github.com/xiidoz/netnou/issues/180)) ([d953e07](https://github.com/xiidoz/netnou/commit/d953e074e7e312a6c7b8970cf03379711ac53317))
+
+
+### Performance Improvements
+
+* **page:** stop asking for a frame at every refresh while nothing on the page changes ([#181](https://github.com/xiidoz/netnou/issues/181)) ([9e5fe3f](https://github.com/xiidoz/netnou/commit/9e5fe3f3c95388c994a8c74b393ea5177235d272))
+
 ## [0.15.0](https://github.com/xiidoz/netnou/compare/v0.14.0...v0.15.0) (2026-10-17)
 
 

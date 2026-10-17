@@ -295,15 +295,32 @@ button { font: inherit; color: inherit; }
   color: var(--text-muted);
   font-size: 13px;
   font-variant-numeric: tabular-nums;
+  /* (the pulse of the dot lies under what the line says, see below) */
+  isolation: isolate;
 }
 .status .dot {
+  position: relative;
   width: 11px;
   height: 11px;
   border-radius: 50%;
   background: var(--delay-none);
   flex: none;
 }
-.status[data-state="live"] .dot { background: var(--delay-ok); animation: pulse 2s ease-out infinite; }
+.status[data-state="live"] .dot { background: var(--delay-ok); }
+/* The pulse of the dot while it is live: a disc of its colour that grows out
+   of it and fades. Over the dot it is of the dot's own colour: only the ring
+   beyond it shows. It changes only in size and opacity, which the browser
+   animates without the page: a shadow that grew had the page paint anew at
+   every frame, as long as it was open. */
+.status[data-state="live"] .dot::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border-radius: 50%;
+  background: var(--delay-ok);
+  animation: pulse 2s ease-out infinite;
+}
 .status[data-state="error"] .dot { background: var(--delay-severe); }
 /* No realtime data at all: the line is a warning that is not overlooked, with
    a sign in place of the dot. (The ground is --delay-major, thinned.) */
@@ -321,12 +338,13 @@ button { font: inherit; color: inherit; }
 .status[data-state="outage"] .dot { display: none; }
 .status[data-state="outage"] .warn { display: block; }
 
+/* (out to 8 pixels beyond the dot of 11 on every side: 27 across) */
 @keyframes pulse {
-  0% { box-shadow: 0 0 0 0 rgb(42 157 75 / 0.55); }
-  100% { box-shadow: 0 0 0 8px rgb(42 157 75 / 0); }
+  0% { transform: scale(1); opacity: 0.55; }
+  100% { transform: scale(calc(27 / 11)); opacity: 0; }
 }
 @media (prefers-reduced-motion: reduce) {
-  .status .dot { animation: none !important; }
+  .status .dot::after { display: none; }
   /* the sheets come to rest at once */
   .panel, .dialog { transition: none !important; }
   .chips { scroll-behavior: auto !important; }
@@ -384,6 +402,12 @@ button { font: inherit; color: inherit; }
   }
   /* (half below the faded row: in it, as high as a chip, it would cover the row above) */
   :root:not([data-chips-open]) .chips-row:not(.whole) .chips-fold span { position: absolute; right: 0; bottom: -5px; }
+  /* Folded, only the chips of the first row take a click: the faded row lies
+     under the arrow's button, and what is further down is cut off. Said so,
+     the chips cut off do not count as lying over the buttons below the row
+     where tools such as Lighthouse measure how much of a button can be
+     pressed (app.js marks the chips of the rows below, .below). */
+  :root:not([data-chips-open]) .chips-row:not(.whole) .chip.below { pointer-events: none; }
   :root:not([data-chips-open]) .chips-fold .icon { transform: rotate(90deg); }
 }
 
@@ -476,8 +500,11 @@ button { font: inherit; color: inherit; }
 .link:hover, .link:focus-visible { color: var(--accent); }
 
 /* the operator's own links, at the foot of the card: small, and always in view */
-.links { display: flex; flex-wrap: wrap; gap: 2px 14px; font-size: 12px; line-height: 1.35; }
-.links a { color: var(--text-muted); }
+/* (each link can be pressed over 24 pixels of height, what WCAG asks of a
+   target, without taking more room than its line: 4 pixels above and below
+   that lie over the gap. The rows are far enough apart for that where they wrap.) */
+.links { display: flex; flex-wrap: wrap; gap: 8px 14px; font-size: 12px; line-height: 1.35; }
+.links a { padding: 4px 0; margin: -4px 0; color: var(--text-muted); }
 .links a:hover, .links a:focus-visible { color: var(--accent); }
 /* a sample of the grey that lies over the map outside the area */
 .swatch.veil {

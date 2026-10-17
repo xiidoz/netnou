@@ -439,6 +439,30 @@ test('the map starts without a style, and raster tiles do not fade in', () => {
   assert.match(app, /'raster-fade-duration': 0/);
 });
 
+// The page keeps nothing moving that has it paint anew at every frame: an
+// animation of a shadow did so for as long as the page was open, on top of
+// the frames the map and the vehicles need. The browser animates size,
+// place and opacity by itself.
+test('the style sheet animates only transform and opacity', () => {
+  const css = read('style.css').replace(/\/\*[\s\S]*?\*\//g, '');
+  const keyframes = [...css.matchAll(/@keyframes\s+([\w-]+)\s*\{((?:[^{}]*\{[^{}]*\})*)\s*\}/g)];
+  assert.ok(keyframes.length > 0, 'no @keyframes found in style.css');
+  for (const [, name, body] of keyframes) {
+    for (const [, property] of body.matchAll(/([\w-]+)\s*:/g)) assert.ok(['transform', 'opacity'].includes(property), `@keyframes ${name} animates ${property}`);
+  }
+});
+
+// Between two frames of the canvas the page waits with a timer (nextFrame in
+// app.js), as long as quietMs where nothing moves. Something that changes
+// what the canvas shows has to say so through askDraw, which cuts the wait
+// short: drawAsked set by itself would wait for the timer.
+test('what asks for the canvas to be drawn anew wakes the frames', () => {
+  const app = withoutComments(read('app.js'));
+  assert.deepEqual(app.match(/\bdrawAsked = true\b/g), ['drawAsked = true', 'drawAsked = true'], 'drawAsked = true outside its declaration and askDraw');
+  assert.match(app, /function askDraw\(\) \{\s*drawAsked = true;\s*nextFrame\(\);\s*\}/);
+  assert.deepEqual(app.match(/requestAnimationFrame\(/g), ['requestAnimationFrame('], 'requestAnimationFrame outside nextFrame');
+});
+
 // ('xx' stands for a language the page does not have, whatever is added to it)
 test('the language is the stored choice, else the first language of the browser that exists, else English', () => {
   assert.equal(pickLanguage('de', ['en-US']), 'de');
