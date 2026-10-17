@@ -110,6 +110,7 @@ Server (`server/`):
 | `lib/page.js` | which language the page is sent in, and what the server writes into it before it sends it: for search engines and previews of links, the header card as a visitor first sees it, and what the page is to fetch right away; `robots.txt` and the sitemap; which files of the operator's own take the place of built-in icons |
 | `lib/files.js` | downloads, gzipped JSON files (the networks from OpenStreetMap), error texts |
 | `areas/vgn.geojson` | outline of the default area, see [its README](../server/areas/README.md) |
+| `areas/germany.geojson` | border of Germany, drawn as the edge of `NETNOU_AREA=Germany` |
 
 Page (`public/`):
 

@@ -31,17 +31,18 @@ running instance fetches and passes on.
 - Source: <https://pictogrammers.com/library/mdi/>,
   <https://github.com/Templarian/MaterialDesign>
 
-### Outline of the default area
+### Outlines of the built-in areas
 
 - Where: `server/areas/vgn.geojson`, the boundaries of the cities and
-  districts of the VGN.
+  districts of the VGN, and `server/areas/germany.geojson`, the border of
+  Germany.
 - © OpenStreetMap contributors. Derived from OpenStreetMap data through
   Nominatim and available under the
   [Open Database License 1.0](https://opendatacommons.org/licenses/odbl/1-0/).
   See <https://www.openstreetmap.org/copyright> and
   [server/areas/README.md](server/areas/README.md).
-- This file is not covered by the MIT License. Changed versions of it stay
-  under the ODbL.
+- These files are not covered by the MIT License. Changed versions of them
+  stay under the ODbL.
 
 ### Screenshot
 

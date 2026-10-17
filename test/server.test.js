@@ -767,9 +767,11 @@ test('an instance of all of Germany says what it covers once it has a timetable'
       const res = await get('/api/area');
       return res.status === 200 && res;
     }, 'the import to finish');
-    // the rectangle around all its stops, also those far from the others; no edge to draw
+    // the rectangle around all its stops, also those far from the others; the border of the country to draw, as [lat, lon]
     const around = [49.4, 11, 52, 13];
-    assert.deepEqual([area.json.bbox, area.json.view, area.json.outline, area.json.name], [around, germany, [], 'Deutschland']);
+    assert.deepEqual([area.json.bbox, area.json.view, area.json.name], [around, germany, 'Deutschland']);
+    const border = JSON.parse(fs.readFileSync(new URL('../server/areas/germany.geojson', import.meta.url), 'utf8')).outline;
+    assert.deepEqual(area.json.outline, border.map((ring) => ring.map(([lon, lat]) => [lat, lon])));
     const after = (await get('/api/status')).json;
     assert.deepEqual([after.area, after.view], [{ name: 'Deutschland', bbox: around, agencies: ['TESTBETRIEB'] }, germany]);
     assert.equal(after.timetable.trips, 2);

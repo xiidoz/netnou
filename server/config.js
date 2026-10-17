@@ -16,7 +16,9 @@ const LANGUAGE_CODES = LANGUAGES.map(([code]) => code);
 // The built-in areas, by their value of NETNOU_AREA in small letters. Each
 // brings its outline, its name, the map section of a first visit and the
 // OpenStreetMap extracts that cover it; a setting of its own takes the place
-// of each but the outline.
+// of each but the outline. An area is a file of polygons (`file`), or for
+// one that is everything the feed has, a border that is only drawn
+// (`edge`).
 const AREAS = new Map([
   // The VGN, the transit network around Nürnberg (see tools/build-vgn-area.mjs),
   // the area when nothing else is set.
@@ -28,10 +30,13 @@ const AREAS = new Map([
     // The VGN spans five Bavarian administrative regions.
     osmUrls: ['mittelfranken', 'oberfranken', 'oberpfalz', 'unterfranken', 'schwaben'].map((r) => `https://download.geofabrik.de/europe/germany/bayern/${r}-latest.osm.pbf`),
   }],
-  // All of Germany. It has no outline: every trip of the feed is kept, which
-  // is the feed of Germany unless NETNOU_FEED_URL names another.
+  // All of Germany. Every trip of the feed is kept, which is the feed of
+  // Germany unless NETNOU_FEED_URL names another; the border of the country is
+  // drawn as its edge (see tools/build-germany-outline.mjs), and decides
+  // nothing about what is kept.
   ['germany', {
     file: null,
+    edge: path.join(root, 'server', 'areas', 'germany.geojson'),
     name: 'Deutschland',
     // The country, from its southernmost point to its northernmost.
     view: [47.27, 5.87, 55.06, 15.04],
@@ -112,7 +117,23 @@ function tileOrigin(template) {
 }
 
 /** @param name the setting the file comes from, for the error message */
-function readArea(file, name) {
+/** The outline a file of an area brings: rings of [longitude, latitude], or undefined. */
+function outlineOf(json, file, name) {
+  const isRing = (ring) => Array.isArray(ring) && ring.every((p) => Array.isArray(p) && Number.isFinite(p[0]) && Number.isFinite(p[1]));
+  if (json?.outline !== undefined && !(Array.isArray(json.outline) && json.outline.every(isRing))) {
+    throw new Error(`${name}: ${file}: "outline" must be an array of rings of [longitude, latitude]`);
+  }
+  return json?.outline;
+}
+
+/** A file of an area that is only drawn, its "outline": the border of all of Germany. */
+function readOutline(file, name) {
+  const outline = outlineOf(readJson(file, name), file, name);
+  if (!outline?.length) throw new Error(`${name}: ${file} has no outline`);
+  return outline;
+}
+
+function readJson(file, name) {
   let text;
   try {
     text = fs.readFileSync(file, 'utf8');
@@ -125,12 +146,14 @@ function readArea(file, name) {
   } catch (err) {
     throw new Error(`${name}: ${file} is not valid JSON (${err.message})`, { cause: err });
   }
-  const isRing = (ring) => Array.isArray(ring) && ring.every((p) => Array.isArray(p) && Number.isFinite(p[0]) && Number.isFinite(p[1]));
-  if (json?.outline !== undefined && !(Array.isArray(json.outline) && json.outline.every(isRing))) {
-    throw new Error(`${name}: ${file}: "outline" must be an array of rings of [longitude, latitude]`);
-  }
+  return json;
+}
+
+function readArea(file, name) {
+  const json = readJson(file, name);
+  const outline = outlineOf(json, file, name);
   try {
-    return { area: Area.fromGeoJson(json), outline: json?.outline };
+    return { area: Area.fromGeoJson(json), outline };
   } catch (err) {
     throw new Error(`${name}: ${file}: ${err.message}`, { cause: err });
   }
@@ -250,6 +273,7 @@ export function loadConfig(env = process.env) {
   if (text('NETNOU_BBOX')) area = Area.fromBbox(box('NETNOU_BBOX'));
   else if (text('NETNOU_AREA_FILE')) ({ area, outline } = readArea(path.resolve(text('NETNOU_AREA_FILE')), 'NETNOU_AREA_FILE'));
   else if (builtIn.file) ({ area, outline } = readArea(builtIn.file, 'built-in area'));
+  else if (builtIn.edge) outline = readOutline(builtIn.edge, 'built-in area');
 
   // The operators covered: all of them, or those named (NETNOU_AGENCIES) as
   // agency.txt of the feed names them. A trip has to pass both, the area and
@@ -313,9 +337,9 @@ export function loadConfig(env = process.env) {
     publicDir: path.join(root, 'public'),
     dataDir: path.resolve(text('NETNOU_DATA_DIR') || path.join(root, 'data')),
 
-    // The area, or null for one without an outline (Germany). What the
-    // instance covers is then known once a timetable is loaded: its extent
-    // (Area.covering).
+    // The area, or null for one that is everything the feed has (Germany).
+    // What the instance covers is then known once a timetable is loaded: its
+    // extent (Area.covering).
     area,
     // The operators whose trips are kept, [{ name, key }], or null for all.
     agencies,
@@ -324,7 +348,7 @@ export function loadConfig(env = process.env) {
     // What the map draws as the edge of the area: rings of [lon, lat]. A GeoJSON
     // file may bring its own as a top-level "outline" member (useful when its
     // polygons are adjacent parts whose inner borders should not show).
-    // Without an outline there is no edge.
+    // Germany brings the border of the country. Without an outline there is no edge.
     areaOutline: outline ?? area?.polygons.flat() ?? [],
     // What the instance calls itself, where the page names itself: its
     // heading, its title, the installed app. The credits name the software.

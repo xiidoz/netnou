@@ -35,6 +35,7 @@
     "build:icons": "node tools/build-icons.mjs",
     "build:social": "node tools/build-social-preview.mjs",
     "build:area": "node tools/build-vgn-area.mjs",
+    "build:germany": "node tools/build-germany-outline.mjs",
     "prepare": "husky"
   },
   "devDependencies": {

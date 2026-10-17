@@ -5,6 +5,7 @@ import path from 'node:path';
 import { after, test } from 'node:test';
 import { LANGUAGES } from '../public/i18n.js';
 import { loadConfig, parseBox } from '../server/config.js';
+import { scopeId } from '../server/lib/area.js';
 
 const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'netnou-config-'));
 after(() => fs.rmSync(dir, { recursive: true, force: true }));
@@ -192,9 +193,18 @@ test('every setting can be given', () => {
 test('all of Germany is everything the feed has, and an instance may keep the trips of some operators only', () => {
   const plain = loadConfig({});
   const germany = loadConfig({ NETNOU_AREA: 'Germany' });
-  // no outline: what it covers is known once it has a timetable
+  // no area that decides what is kept: what it covers is known once it has a timetable
   assert.equal(germany.area, null);
-  assert.deepEqual(germany.areaOutline, []);
+  // The border of the country is drawn as its edge, the map greyed out beyond it by the even-odd rule:
+  // the exclaves of Büsingen and beyond the Vennbahn are in, Jungholz is a hole.
+  const inside = (lon, lat) => germany.areaOutline.reduce((odd, ring) => ring.reduce((o, [x1, y1], i) => {
+    const [x2, y2] = ring.at(i - 1);
+    return (y1 > lat) !== (y2 > lat) && lon < x1 + ((lat - y1) / (y2 - y1)) * (x2 - x1) ? !o : o;
+  }, odd), false);
+  const places = { Berlin: [13.405, 52.52], Kiel: [10.13, 54.32], Helgoland: [7.885, 54.18], Büsingen: [8.69, 47.697], Mützenich: [6.214, 50.567], Basel: [7.59, 47.56], Salzburg: [13.04, 47.80], Jungholz: [10.448, 47.574], Strasbourg: [7.75, 48.58] };
+  assert.deepEqual(Object.keys(places).filter((name) => inside(...places[name])), ['Berlin', 'Kiel', 'Helgoland', 'Büsingen', 'Mützenich']);
+  // (and it is no part of what stored data are tied to: an instance does not import again for it)
+  assert.equal(germany.scope, scopeId(null, null));
   // its name, the section to begin with and the extract of Germany
   assert.deepEqual([germany.areaName, germany.view, germany.osmUrls], ['Deutschland', [47.27, 5.87, 55.06, 15.04], ['https://download.geofabrik.de/europe/germany-latest.osm.pbf']]);
   assert.equal(germany.agencies, null);
