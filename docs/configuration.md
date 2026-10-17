@@ -345,9 +345,15 @@ screenshot of the map is several times smaller as a JPEG than as a PNG. The
 page tells previews how large the picture is; the server reads that from the
 file. No other file of the page can be
 replaced this way. The server looks into the folder when it starts and names
-what it found in its log, so restart it after changing the files. Browsers
-and chats keep icons and previews for a long time; a change may take a
-while to show.
+what it found in its log, so restart it after changing the files.
+
+Browsers, chats and search engines keep an icon or a preview by its address,
+some of them for weeks. So the page and the manifest name each with a few
+characters of what is in its file, as in `favicon.svg?v=3f2c9a1b04`: a
+changed file has a new address, and is fetched anew wherever the page is
+read again. A search engine shows the new icon once it has read the page
+again, which may still take days. Where a browser or a search engine asks for
+`/favicon.ico`, the server answers with `icon-192.png`.
 
 The colours of the page are not yours to set: they stay as they are.
 

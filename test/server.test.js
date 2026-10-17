@@ -528,8 +528,17 @@ test('the page says what and where the instance is before any script runs', asyn
   assert.ok(page.includes('<span id="status-text" data-i18n="status.connecting">Verbinde …</span>'));
   assert.ok(page.includes(`<link rel="canonical" href="${address}">`));
   assert.ok(page.includes(`<link rel="alternate" hreflang="en" href="${address}?lang=en">`));
-  assert.ok(page.includes(`<meta property="og:image" content="${address}icons/icon-512.png">`));
-  assert.equal((await request('/icons/icon-512.png')).status, 200);
+  // (the icons by addresses with the versions of their files, see versionsOfFiles)
+  const version = (file) => crypto.createHash('sha1').update(fs.readFileSync(path.join(root, 'public', file))).digest('hex').slice(0, 10);
+  assert.ok(page.includes(`<meta property="og:image" content="${address}icons/icon-512.png?v=${version('icons/icon-512.png')}">`));
+  assert.ok(page.includes(`<link rel="icon" href="favicon.svg?v=${version('favicon.svg')}" type="image/svg+xml">`));
+  assert.ok(page.includes(`<link rel="apple-touch-icon" href="icons/apple-touch-icon.png?v=${version('icons/apple-touch-icon.png')}">`));
+  assert.equal((await request(`/icons/icon-512.png?v=${version('icons/icon-512.png')}`)).status, 200);
+  assert.deepEqual((await get('/manifest.webmanifest')).json.icons.map((icon) => icon.src), ['icons/icon-192.png', 'icons/icon-512.png', 'icons/icon-maskable-512.png', 'favicon.svg'].map((file) => `${file}?v=${version(file)}`));
+  // (and where a page names none, or a search engine asks all the same: the icon of the app)
+  const ico = await request('/favicon.ico');
+  assert.deepEqual([ico.status, ico.headers['content-type']], [200, 'image/png']);
+  assert.ok(ico.body.equals(fs.readFileSync(path.join(root, 'public/icons/icon-192.png'))));
 
   // in the language the address asks for
   const english = await request('/?lang=en');
@@ -743,13 +752,17 @@ test('an instance that is not to be listed says so with every answer', async () 
       assert.equal(page.includes('<a href="/impressum">Impressum</a></nav>'), Boolean(settings.NETNOU_LINKS));
       assert.equal(/<nav class="links"[^>]* hidden>/.test(page), !settings.NETNOU_LINKS);
       assert.equal(page.includes('og:image'), address !== null);
-      if (address) assert.ok(page.includes(`<meta property="og:image" content="${address}preview.png">`));
+      if (address) assert.ok(page.includes(`<meta property="og:image" content="${address}preview.png?v=${crypto.createHash('sha1').update('not really a picture').digest('hex').slice(0, 10)}">`));
       // files of its own take the place of the built-in ones of that name, and of those alone
       const builtIn = (name) => fs.readFileSync(path.join(root, 'public', name));
       const icon = await request('/favicon.svg');
       assert.equal(icon.headers['content-type'], 'image/svg+xml');
       assert.equal(icon.body.equals(builtIn('favicon.svg')), !settings.NETNOU_BRAND_DIR);
       if (settings.NETNOU_BRAND_DIR) assert.equal(icon.body.toString(), '<svg xmlns="http://www.w3.org/2000/svg"/>');
+      // (named by the version of the file that is served: an icon of the operator's own has another address than the built-in one)
+      const served = crypto.createHash('sha1').update(icon.body).digest('hex').slice(0, 10);
+      assert.ok(page.includes(`<link rel="icon" href="favicon.svg?v=${served}" type="image/svg+xml">`));
+      assert.ok((await get('/manifest.webmanifest')).json.icons.some((entry) => entry.src === `favicon.svg?v=${served}`));
       assert.ok((await request('/icons/icon-192.png')).body.equals(builtIn('icons/icon-192.png')));
       const preview = await request('/preview.png');
       assert.deepEqual([preview.status, preview.headers['content-type']], settings.NETNOU_BRAND_DIR ? [200, 'image/png'] : [404, 'application/json; charset=utf-8']);

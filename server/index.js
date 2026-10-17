@@ -9,7 +9,7 @@ import { loadConfig, parseBox, parsePlace } from './config.js';
 import { Addresses, stopTitle } from './lib/addresses.js';
 import { FeedUpdater } from './lib/feed.js';
 import { RealtimePoller } from './lib/realtime.js';
-import { addressTitle, inlineHashes, LANGUAGE_CODES, languageFor, ownFiles, PAGE_INLINE, pictureSize, renderManifest, renderPage, robotsTxt, securityPolicy, sitemapFiles, titleOf } from './lib/page.js';
+import { addressTitle, inlineHashes, LANGUAGE_CODES, languageFor, ownFiles, PAGE_INLINE, pictureSize, renderManifest, renderPage, robotsTxt, securityPolicy, sitemapFiles, titleOf, versionsOfFiles } from './lib/page.js';
 import { setTimeZone } from './lib/time.js';
 import { sharesFor, thinOut, ZOOM_ALL, ZOOM_MIN } from './lib/thinning.js';
 import { LITE_AHEAD_S, MODES, lite } from './lib/timetable.js';
@@ -177,6 +177,8 @@ const compressed = new Map();
 const own = ownFiles(config.brandDir);
 const previewSize = own.preview ? pictureSize(own.files.get(own.preview)) : null;
 if (own.files.size) log(`Own files from ${config.brandDir}: ${[...own.files.keys()].join(', ')}`);
+// (and the version of each, by which the page names them: a changed icon has a new address)
+const fileVersions = versionsOfFiles(own, config.publicDir);
 
 // The page is index.html with what the instance is written into it
 // (lib/page.js), in the language the address asks for, else in the one the
@@ -212,7 +214,7 @@ function pageLanguage(req, url) {
 /** index.html as it is sent (renderPage), in a language: the page itself, or at the address of a stop or a line. */
 function pageBody(language, asked, address = null) {
   const file = path.join(config.publicDir, 'index.html');
-  return Buffer.from(renderPage(fs.readFileSync(file, 'utf8'), { language, asked, texts: texts[language], siteName: config.siteName, areaName: config.areaName, siteTitle: config.siteTitle[language], siteDescription: config.siteDescription[language], links: config.links, preview: own.preview, previewSize, publicUrl: config.publicUrl, listed: config.searchEngines, styleUrl: config.styleUrl, mapOrigins: config.mapOrigins, kinds: timetable?.kinds ?? null, address, inline: pageInline().inline }));
+  return Buffer.from(renderPage(fs.readFileSync(file, 'utf8'), { language, asked, texts: texts[language], siteName: config.siteName, areaName: config.areaName, siteTitle: config.siteTitle[language], siteDescription: config.siteDescription[language], links: config.links, preview: own.preview, previewSize, publicUrl: config.publicUrl, listed: config.searchEngines, styleUrl: config.styleUrl, mapOrigins: config.mapOrigins, kinds: timetable?.kinds ?? null, address, inline: pageInline().inline, fileVersions }));
 }
 
 const etagOf = (body) => `"${crypto.createHash('sha1').update(body).digest('hex').slice(0, 16)}"`;
@@ -344,7 +346,7 @@ function serveManifest(req, res) {
   const stat = fs.statSync(file);
   const stamp = `${stat.size}-${stat.mtimeMs}`;
   if (manifest?.stamp !== stamp) {
-    const body = Buffer.from(renderManifest(fs.readFileSync(file, 'utf8'), { language: config.language, texts: texts[config.language], siteName: config.siteName, areaName: config.areaName, siteDescription: config.siteDescription[config.language] }));
+    const body = Buffer.from(renderManifest(fs.readFileSync(file, 'utf8'), { language: config.language, texts: texts[config.language], siteName: config.siteName, areaName: config.areaName, siteDescription: config.siteDescription[config.language], fileVersions }));
     manifest = { stamp, body, etag: `"${crypto.createHash('sha1').update(body).digest('hex').slice(0, 16)}"` };
   }
   const headers = { ETag: manifest.etag, 'Cache-Control': 'no-cache' };
@@ -669,6 +671,10 @@ const server = http.createServer((req, res) => {
     if (url.pathname.startsWith('/api/')) return handleApi(req, res, url);
     if (url.pathname === '/' || url.pathname === '/index.html') return servePage(req, res, url);
     if (url.pathname === '/manifest.webmanifest') return serveManifest(req, res);
+    // Where a page names no icon, browsers and search engines ask for this
+    // one, and Google's asks for it also where the page does: the icon of
+    // the app, own or built-in, a PNG as a favicon may be.
+    if (url.pathname === '/favicon.ico') return serveStatic(req, res, '/icons/icon-192.png');
     if (url.pathname === '/robots.txt') return send(req, res, 200, MIME['.txt'], Buffer.from(robotsTxt(sitemapAt)), { 'Cache-Control': 'no-cache' });
     const sitemap = /^\/sitemap(?:-(\d{1,4}))?\.xml$/.exec(url.pathname);
     if (sitemap && sitemapAt) return serveSitemap(req, res, Number(sitemap[1] ?? 0));

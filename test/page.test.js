@@ -8,11 +8,12 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { test } from 'node:test';
+import { fileURLToPath } from 'node:url';
 import { LANGUAGES, pageTexts, pickLanguage } from '../public/i18n.js';
 import de from '../public/locales/de.js';
 import en from '../public/locales/en.js';
 import * as shapes from '../public/vendor/material-design-icons/icons.js';
-import { inlineHashes, LANGUAGE_CODES, languageFor, ownFiles, PAGE_INLINE, PAGE_MODULES, pictureSize, renderManifest, renderPage, robotsTxt, securityPolicy, sitemapFiles } from '../server/lib/page.js';
+import { inlineHashes, LANGUAGE_CODES, languageFor, ownFiles, PAGE_INLINE, PAGE_MODULES, pictureSize, renderManifest, renderPage, robotsTxt, securityPolicy, sitemapFiles, versionsOfFiles } from '../server/lib/page.js';
 
 const html = fs.readFileSync(new URL('../public/index.html', import.meta.url), 'utf8');
 const URL_ = 'https://karte.example.org/live/';
@@ -390,6 +391,39 @@ test('a picture of the operator\'s own is what a preview of a link shows, large'
   const bare = renderPage(html, { ...german, preview: 'preview.png', publicUrl: null });
   assert.ok(!bare.includes('og:image'));
   assert.equal(tag(bare, /<meta name="twitter:card" content="([^"]*)"/), 'summary');
+});
+
+// A search engine keeps the icon of a site by its address and asks for it
+// again rarely: with the content in the address, an icon of the operator's
+// own that comes after the built-in one is fetched anew.
+test('the icons and the preview are named by addresses that change with their files', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'netnou-brand-'));
+  try {
+    const publicDir = fileURLToPath(new URL('../public/', import.meta.url));
+    const builtIn = versionsOfFiles(ownFiles(null), publicDir);
+    assert.deepEqual(Object.keys(builtIn), ['favicon.svg', 'icons/icon-192.png', 'icons/icon-512.png', 'icons/icon-maskable-512.png', 'icons/apple-touch-icon.png']);
+    for (const version of Object.values(builtIn)) assert.match(version, /^[0-9a-f]{10}$/);
+    fs.writeFileSync(path.join(dir, 'favicon.svg'), '<svg xmlns="http://www.w3.org/2000/svg"/>');
+    fs.writeFileSync(path.join(dir, 'preview.jpg'), 'jpg');
+    const own = versionsOfFiles(ownFiles(dir), publicDir);
+    // (the operator's own favicon has a version of its own, the other icons keep theirs, the preview has one)
+    assert.notEqual(own['favicon.svg'], builtIn['favicon.svg']);
+    assert.equal(own['icons/icon-192.png'], builtIn['icons/icon-192.png']);
+    assert.match(own['preview.jpg'], /^[0-9a-f]{10}$/);
+
+    const page = renderPage(html, { ...german, preview: 'preview.jpg', fileVersions: own });
+    assert.equal(tag(page, /<link rel="icon" href="([^"]*)"/), `favicon.svg?v=${own['favicon.svg']}`);
+    assert.equal(tag(page, /<link rel="apple-touch-icon" href="([^"]*)"/), `icons/apple-touch-icon.png?v=${own['icons/apple-touch-icon.png']}`);
+    assert.equal(tag(page, /<meta property="og:image" content="([^"]*)"/), `${URL_}preview.jpg?v=${own['preview.jpg']}`);
+    assert.equal(tag(renderPage(html, { ...german, fileVersions: own }), /<meta property="og:image" content="([^"]*)"/), `${URL_}icons/icon-512.png?v=${own['icons/icon-512.png']}`);
+    // (without versions, the addresses are those of the files)
+    assert.equal(tag(renderPage(html, german), /<link rel="icon" href="([^"]*)"/), 'favicon.svg');
+
+    const manifest = JSON.parse(renderManifest(fs.readFileSync(path.join(publicDir, 'manifest.webmanifest'), 'utf8'), { ...german, fileVersions: own }));
+    for (const icon of manifest.icons) assert.equal(icon.src, `${icon.src.split('?')[0]}?v=${own[icon.src.split('?')[0]]}`);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
 });
 
 test('the installed app is called what the instance is called, in its language', () => {

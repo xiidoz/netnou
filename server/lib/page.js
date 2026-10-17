@@ -93,6 +93,31 @@ export function ownFiles(dir) {
 }
 
 /**
+ * The version of each icon and of the preview picture: a few characters of
+ * what is in the file, the operator's own or the built-in one, by the
+ * address it is served under. The page and the manifest name each with its
+ * version (?v=…). A search engine, a chat or a browser keeps an icon by its
+ * address and may not ask for it again for weeks; with the version in it, a
+ * new icon has a new address and is fetched anew.
+ * @param own what ownFiles found
+ * @param publicDir where the built-in files are
+ */
+export function versionsOfFiles(own, publicDir) {
+  const versions = {};
+  for (const address of [...Object.values(OWN_ICONS), ...(own.preview ? [own.preview] : [])]) {
+    try {
+      versions[address] = crypto.createHash('sha1').update(fs.readFileSync(own.files.get(address) ?? path.join(publicDir, address))).digest('hex').slice(0, 10);
+    } catch {
+      // (a built-in file that is missing has no version: its address stays as it is)
+    }
+  }
+  return versions;
+}
+
+/** An address of the page's files with the version of the file, where it has one (versionsOfFiles). */
+const versioned = (address, known) => (known[address] ? `${address}?v=${known[address]}` : address);
+
+/**
  * How large a picture is, read from its file: { width, height } of a PNG or a
  * JPEG, null of anything else and of a file that cannot be read.
  */
@@ -233,7 +258,7 @@ const versions = (publicUrl) => [...LANGUAGE_CODES.map((code) => [code, addressI
  *   index.html (PAGE_INLINE), to be written into the page in place of the
  *   tags that name them; null leaves the tags
  */
-export function renderPage(html, { language, asked, texts, siteName, areaName, siteTitle = null, siteDescription = null, links = [], preview = null, previewSize = null, publicUrl, listed, styleUrl = null, mapOrigins = [], kinds = null, address = null, inline = null }) {
+export function renderPage(html, { language, asked, texts, siteName, areaName, siteTitle = null, siteDescription = null, links = [], preview = null, previewSize = null, publicUrl, listed, styleUrl = null, mapOrigins = [], kinds = null, address = null, inline = null, fileVersions = {} }) {
   const worded = pageTexts(areaName, texts, siteName);
   const named = Boolean(address?.title);
   const title = named ? addressTitle(address.title, siteName) : siteTitle ?? worded.title;
@@ -265,6 +290,8 @@ export function renderPage(html, { language, asked, texts, siteName, areaName, s
   put(/(<meta name="apple-mobile-web-app-title" content=")[^"]*"/, (_, start) => `${start}${escapeHtml(siteName)}"`);
   put(/(<h1>)[^<]*/, (_, start) => `${start}${escapeHtml(siteName)}`);
   put(/(<p id="area-name">)[^<]*/, (_, start) => `${start}${escapeHtml(areaName)}`);
+  // (the icons by addresses with their versions: a new one is fetched anew)
+  for (const file of Object.keys(fileVersions)) page = page.replaceAll(`href="${file}"`, `href="${versioned(file, fileVersions)}"`);
   // A chip for each kind of transport the timetable has, so that none comes
   // or goes once the script has run (it follows the timetable from then on).
   if (kinds) put(/(<button type="button" class="chip" data-mode="([a-z]+)"[^>]*?)( hidden)?>/g, (_, start, mode) => `${start}${kinds.includes(mode) ? '' : ' hidden'}>`);
@@ -305,12 +332,12 @@ export function renderPage(html, { language, asked, texts, siteName, areaName, s
     }
     tags.push(`<meta property="og:url" content="${canonical}">`);
     if (preview) {
-      tags.push(`<meta property="og:image" content="${escapeHtml(publicUrl + preview)}">`);
+      tags.push(`<meta property="og:image" content="${escapeHtml(publicUrl + versioned(preview, fileVersions))}">`);
       // (some chats show a picture large only if they know its size before they have fetched it)
       if (previewSize) tags.push(`<meta property="og:image:width" content="${previewSize.width}">`, `<meta property="og:image:height" content="${previewSize.height}">`);
     } else {
       tags.push(
-        `<meta property="og:image" content="${escapeHtml(publicUrl + PREVIEW_ICON.path)}">`,
+        `<meta property="og:image" content="${escapeHtml(publicUrl + versioned(PREVIEW_ICON.path, fileVersions))}">`,
         `<meta property="og:image:width" content="${PREVIEW_ICON.size}">`,
         `<meta property="og:image:height" content="${PREVIEW_ICON.size}">`,
       );
@@ -350,10 +377,12 @@ export function renderPage(html, { language, asked, texts, siteName, areaName, s
  * the instance, and its language and description in place of the English ones.
  * @param json the file
  * @param siteDescription the operator's own description in that language, null for the page's
+ * @param fileVersions of the icons, which it names by addresses with their versions (versionsOfFiles)
  */
-export function renderManifest(json, { language, texts, siteName, areaName, siteDescription = null }) {
+export function renderManifest(json, { language, texts, siteName, areaName, siteDescription = null, fileVersions = {} }) {
   const manifest = JSON.parse(json);
-  return JSON.stringify({ ...manifest, name: siteName, short_name: siteName, description: siteDescription ?? pageTexts(areaName, texts, siteName).description, lang: language }, null, 2);
+  const icons = manifest.icons?.map((icon) => ({ ...icon, src: versioned(icon.src, fileVersions) }));
+  return JSON.stringify({ ...manifest, name: siteName, short_name: siteName, description: siteDescription ?? pageTexts(areaName, texts, siteName).description, lang: language, ...(icons ? { icons } : {}) }, null, 2);
 }
 
 /**
