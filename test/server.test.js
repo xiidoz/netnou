@@ -160,8 +160,10 @@ test('while the timetable is loading the API says so', async () => {
   assert.equal(status.json.timetable.step, 'download');
   assert.equal(status.json.timetable.trips, 0);
   assert.equal((await get('/api/area')).status, 200);
-  // the page itself as well
+  // the page itself as well, and what names nothing whatever the timetable (#198)
   assert.equal((await request('/')).status, 200);
+  assert.equal((await request('/stop/alpha@49.4000,11.0000/')).status, 301);
+  assert.equal((await request('/foo', { headers: { Accept: 'text/html' } })).status, 404);
 });
 
 test('once the feed is imported the API answers', async () => {
@@ -636,10 +638,17 @@ test('the address of a stop or a line is a page of its own, found again by its n
   assert.match(beta, /content="Departures at Beta in real time: U1, ICE 5, live on the map\."/);
 
   // moved a little, in capitals, or under another name at its place: sent on to the address it has, with the settings of the page
-  for (const asked of ['/stop/alpha@49.4010,11.0010', '/stop/ALPHA@49.4000,11.0000', '/stop/gamma@49.4000,11.0000?lang=en']) {
+  for (const asked of ['/stop/alpha@49.4010,11.0010', '/stop/ALPHA@49.4000,11.0000', '/STOP/alpha@49.4000,11.0000', '/stop/gamma@49.4000,11.0000?lang=en']) {
     const moved = await request(asked);
     assert.deepEqual([moved.status, moved.headers.location], [301, `../stop/alpha@49.4000,11.0000${asked.includes('?') ? '?lang=en' : ''}`], asked);
   }
+  // with a slash at its end, or more: sent on to the address without, from where the browser is (the instance may be at a path of its own, #198)
+  for (const [asked, to] of [['/stop/alpha@49.4000,11.0000/', '/stop/alpha@49.4000,11.0000'], ['/stop/alpha@49.4000,11.0000//?lang=en', '/stop/alpha@49.4000,11.0000?lang=en'], ['/line/testbetrieb/subway/u1/', '/line/testbetrieb/subway/u1'], ['/LINE/testbetrieb/subway/u1/', '/LINE/testbetrieb/subway/u1']]) {
+    const moved = await request(asked);
+    assert.equal(moved.status, 301, asked);
+    assert.equal(new URL(moved.headers.location, `https://karte.example.org/live${asked}`).href, `https://karte.example.org/live${to}`, asked);
+  }
+  assert.equal((await request('/stop/alpha@49.4000,11.0000/')).headers.location, '../../stop/alpha@49.4000,11.0000');
   // nothing of that name nearby, and no stop at its place: the page says so, and is not to be listed
   for (const asked of ['/stop/alpha@49.4200,11.0000', '/stop/nirgends@48.0000,10.0000', '/stop/kaputt']) {
     const gone = await request(asked);
@@ -686,14 +695,40 @@ test('the address of a stop or a line is a page of its own, found again by its n
   const gone = await request('/trip/testbetrieb/subway/u1/2031-01-01/0000-alpha', { headers: { 'Accept-Language': 'de-DE' } });
   assert.equal(gone.status, 404);
   assert.ok(gone.body.toString().includes('Diese Fahrt ist nicht im Fahrplan.'));
+  // (with a slash at its end too)
+  assert.deepEqual(await request(`/${run}/`).then((res) => [res.status, res.headers.location]), [301, `../../../../../../${run}`]);
 });
 
 test('what is not there, not allowed or not a URL', async () => {
   // nothing outside public/ is served, however the path is spelled
-  for (const pathname of ['/missing.html', '/icons', '/../package.json', '/..%2fpackage.json', '/..%2f..%2fpackage.json', '/%2e%2e/package.json', '/..%5cpackage.json', '/..%5c..%5cpackage.json', '/icons/..%2f..%2fserver/index.js', '//package.json/..%2f..%2fpackage.json']) {
+  for (const pathname of ['/missing.html', '/icons', '/../package.json', '/..%2fpackage.json', '/..%2f..%2fpackage.json', '/%2e%2e/package.json', '/..%5cpackage.json', '/..%5c..%5cpackage.json', '/icons/..%2f..%2fserver/index.js', '/package.json/..%2f..%2fpackage.json']) {
     const res = await request(pathname);
     assert.equal(res.status, 404, pathname);
     assert.deepEqual(JSON.parse(res.body), { error: 'not found' });
+  }
+  // A path that begins with "//", or has a slash twice in a row anywhere, is a path: sent on to its clean form (#198)
+  for (const [asked, to] of [['//app.js', '/app.js'], ['//', '/'], ['//?lang=en', '/?lang=en'], ['/icons//icon-192.png', '/icons/icon-192.png'], ['//api/area', '/api/area'], ['//package.json/..%2f..%2fpackage.json', '/package.json/..%2f..%2fpackage.json']]) {
+    const res = await request(asked);
+    assert.equal(res.status, 301, asked);
+    assert.equal(new URL(res.headers.location, `https://karte.example.org/live${asked}`).href, `https://karte.example.org/live${to}`, asked);
+  }
+  // A browser that asks for a page where there is none gets the page, saying that there is none, with its own files as
+  // many steps up as the path is deep; the API and files answer a script with data
+  const asPage = { Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8' };
+  for (const [pathname, base] of [['/foo', ''], ['/stop', ''], ['/stops/alpha', '../'], ['/missing/deeper/', '../../'], ['/..%2fpackage.json', '']]) {
+    const res = await request(pathname, { headers: asPage });
+    assert.deepEqual([res.status, res.headers['content-type'], res.headers['x-robots-tag'], res.headers.vary], [404, 'text/html; charset=utf-8', 'noindex', 'Accept, Accept-Language, Accept-Encoding'], pathname);
+    const page = res.body.toString();
+    assert.ok(page.includes(`<meta charset="utf-8">\n  <base href="${base}">\n`), pathname);
+    assert.ok(page.includes('<div id="panel-body"><p class="panel-empty">Diese Seite gibt es nicht.</p></div>'), pathname);
+    assert.match(page, /<meta name="robots" content="noindex">/);
+  }
+  const english = await request('/foo?lang=en', { headers: asPage });
+  assert.deepEqual([english.status, english.headers.vary], [404, 'Accept, Accept-Encoding']);
+  assert.ok(english.body.toString().includes('This page does not exist.'));
+  for (const [pathname, headers] of [['/api/nothing', asPage], ['/foo', { Accept: '*/*' }], ['/missing.js', {}]]) {
+    const res = await request(pathname, { headers });
+    assert.deepEqual([res.status, res.headers['content-type']], [404, 'application/json; charset=utf-8'], pathname);
   }
   const malformed = await request('/%E0%A4%A');
   assert.deepEqual([malformed.status, malformed.body.length], [400, 0]);
