@@ -378,7 +378,7 @@ test('/api/trip', async () => {
   assert.equal(stops.length, 102);
   assert.equal(line.length, 101 * 4); // no route geometry: a straight line per hop
   const dayStart = Date.parse(`${today.slice(0, 4)}-${today.slice(4, 6)}-${today.slice(6)}T00:00:00Z`) / 1000;
-  assert.deepEqual(stops[1], { station: 'B', name: 'Beta', platform: '', lat: 49.5, lon: 11, arr: dayStart + 1800, dep: dayStart + 1800, arrDelay: 120, depDelay: 120, skipped: false });
+  assert.deepEqual(stops[1], { station: 'B', name: 'Beta', platform: '', lat: 49.5, lon: 11, arr: dayStart + 1800, dep: dayStart + 1800, arrDelay: 120, depDelay: 120, skipped: false, to: 'Rundkurs' });
 
   // yesterday's run has no delays; notes and source belong to the trip, whatever the day
   const { json: yesterday } = await get(`/api/trip?id=T1_${addDays(today, -1)}`);

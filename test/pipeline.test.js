@@ -225,6 +225,44 @@ test('importer copes with a byte order mark, rows out of order, missing times an
   assert.deepEqual(rt.byDate.get(DAY).get(t1).arrDelay, [null, 60, 60]);
 });
 
+test('a trip goes where its operator says at each stop, and what is said at its last stop is no destination (#225)', async () => {
+  const signed = await importFeed({
+    'trips.txt': 'route_id,service_id,trip_id,trip_headsign\nR1,DAILY,T1,\nR2,DAILY,T2,Fern Süd über Beta\nR3,DAILY,T3,\nR1,FRI,T4,\n',
+    'stop_times.txt': [
+      'trip_id,arrival_time,departure_time,stop_id,stop_sequence,stop_headsign,pickup_type,drop_off_type',
+      // T1 backwards: a "via" that is behind it from Beta on, and what its operator gives at the last stop
+      'T1,10:20:00,10:20:00,C,2,Fahrt endet hier,,',
+      'T1,10:10:00,10:12:00,B,1,Gamma,,',
+      'T1,10:00:00,10:00:00,A,0,Gamma über Beta,,',
+      // T2 has its own at Beta only: trips.txt has the one for the other stops
+      'T2,9:00:00,9:00:00,X,0,,,',
+      'T2,10:00:00,10:05:00,B,1,Fern Süd,,',
+      'T2,11:00:00,11:00:00,Y,2,,,',
+      'T4,25:00:00,25:00:00,C,0,Alpha,,',
+      'T4,25:30:00,25:30:00,A,1,Alpha,,',
+    ].join('\n') + '\n',
+  }, 'signed.zip');
+  const [t1, t2, t4] = ['T1', 'T2', 'T4'].map((id) => signed.tripIndex.get(id));
+  assert.deepEqual([0, 1, 2].map((p) => signed.headsignAt(t1, p)), ['Gamma über Beta', 'Gamma', 'Gamma']);
+  assert.deepEqual([0, 1, 2].map((p) => signed.headsignAt(t2, p)), ['Fern Süd über Beta', 'Fern Süd', 'Fern Süd']);
+  assert.deepEqual([0, 1].map((p) => signed.headsignAt(t4, p)), ['Alpha', 'Alpha']);
+
+  // a departure goes where the operator says at its stop
+  assert.deepEqual(signed.departures('SA', at('09:55'), null).departures.map((d) => [d.line, d.to]), [['U1', 'Gamma über Beta']]);
+  assert.deepEqual(signed.departures('B', at('09:59'), null).departures.map((d) => [d.line, d.to]), [['ICE 5', 'Fern Süd'], ['U1', 'Gamma']]);
+  // a vehicle where it says at the stop ahead, also on the way to its last one
+  const to = (now) => Object.fromEntries(signed.vehicles(now, null).map((v) => [v.line, v.to]));
+  assert.deepEqual(to(at('09:30')), { 'ICE 5': 'Fern Süd' });
+  assert.deepEqual(to(at('10:05')), { U1: 'Gamma', 'ICE 5': 'Fern Süd' });
+  assert.deepEqual(to(at('10:15')), { U1: 'Gamma', 'ICE 5': 'Fern Süd' });
+  // a trip where it sets out for, and at each stop where it goes from there
+  const trip = signed.trip('T1', DAY, null);
+  assert.equal(trip.to, 'Gamma über Beta');
+  assert.deepEqual(trip.stops.map((stop) => stop.to), ['Gamma über Beta', 'Gamma', 'Gamma']);
+  // the destinations of a line are those its trips set out for
+  assert.deepEqual(signed.lines.find((line) => line.name === 'U1').headsigns, new Map([['Gamma über Beta', 1], ['Alpha', 1]]));
+});
+
 test('a trip whose rows come in two runs is put together, where the feed first names it', async () => {
   const split = await importFeed({
     'stop_times.txt': [

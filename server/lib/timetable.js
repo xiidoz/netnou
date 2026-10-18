@@ -398,7 +398,8 @@ class Vehicle {
     const next = Math.min(from + 1, last);
     this.line = timetable.lineName(route);
     this.mode = timetable.routeModes[route];
-    this.to = timetable.headsign(t);
+    // (where it is going from the stop ahead, which may be another place than where it set out for)
+    this.to = timetable.headsignAt(t, next);
     // Delay at the next stop in seconds; null when there is no realtime data.
     this.delay = row < 0 ? null : realtime.arrDelay(row, next);
     // current position, for filtering by map section (not sent to the browser)
@@ -580,6 +581,8 @@ export class Timetable extends Schedule {
     this.source = data.source ?? {};
     this.routes = data.routes;
     this.headsigns = data.headsigns;
+    this.signStart = data.signLists.start;
+    this.signs = data.signLists.signs;
 
     const { trips, patterns, profiles } = data;
     const { tripCount } = this;
@@ -857,11 +860,25 @@ export class Timetable extends Schedule {
     }
   }
 
-  headsign(t) {
-    const h = this.tripHeadsign[t];
+  /**
+   * Where trip t is going as it leaves its stop at position p: what the
+   * operator gives for that stop (stop_headsign, else trip_headsign), else
+   * its last stop. Operators change it on the way: for a "via" that is
+   * behind it, round a ring line, for the last part of the way (#225). At
+   * the last stop, where nothing leaves, it is that of the stop before: what
+   * is given there ("Fahrt endet hier") says nothing of where it goes.
+   */
+  headsignAt(t, p) {
+    let h = this.tripHeadsign[t];
+    if (h < -1) h = this.signs[this.signStart[-2 - h] + Math.min(p, this.stopCount(t) - 2)];
     if (h >= 0) return this.headsigns[h];
     const pattern = this.tripPattern[t];
     return this.stops.name[this.patternStops[this.patternStart[pattern + 1] - 1]];
+  }
+
+  /** Where trip t is going as it sets out: the title of its page and the destinations of its line go by this one. */
+  headsign(t) {
+    return this.headsignAt(t, 0);
   }
 
   /**
@@ -1278,6 +1295,7 @@ export class Timetable extends Schedule {
         arrDelay: row < 0 ? null : realtime.arrDelay(row, p),
         depDelay: row < 0 ? null : realtime.depDelay(row, p),
         skipped: row >= 0 && realtime.skipped(row, p),
+        to: this.headsignAt(t, p),
       })),
     };
   }
@@ -1308,7 +1326,7 @@ export class Timetable extends Schedule {
           trip: `${this.tripId(t)}_${date}`,
           line: this.lineName(route),
           mode: this.routeModes[route],
-          to: this.headsign(t),
+          to: this.headsignAt(t, p),
           platform: this.stops.platform[this.patternStops[this.patternStart[this.tripPattern[t]] + p]],
           planned,
           delay,
