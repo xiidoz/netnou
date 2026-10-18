@@ -54,7 +54,8 @@ changes as breaking.
   screen. With `?display=fixed` in its address the page is a
   [display for a screen on a wall](docs/deployment.md#a-screen-on-a-wall).
 - The departures of a stop enlarge into a board beside the map, or on the
-  whole screen, for a dashboard or a wall; departure times show as the time
+  whole screen, for a dashboard or a wall, with up to four stops, each in a
+  block of its own or together in one list; departure times show as the time
   of day, as the minutes until they leave, or both.
 - User interface in German and English, chosen per visitor; further languages
   are one file each.

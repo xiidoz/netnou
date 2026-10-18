@@ -282,6 +282,8 @@ button { font: inherit; color: inherit; }
 }
 .search-results li.search-heading:hover { background: none; }
 .search-note { margin: 0; padding: 9px 10px; color: var(--text-muted); font-size: 13px; }
+/* (what a stop picked is added to, where the search adds one to a board) */
+.search-mode { margin: 0; padding: 9px 10px 2px; color: var(--text-muted); font-size: 12.5px; font-weight: 600; }
 
 /* Its dot stands in the column of the dots in the filters below it (a chip
    has a border of 1 and a padding of 7 before its dot, of 11, and 6 after),
@@ -1205,6 +1207,89 @@ li:last-child > .row.stop .rail::before { bottom: 50%; }
   .board-rows.times-both .when > .late { grid-row: 2; font-size: max(11.5px, 0.7em); }
   .board-rows.times-both .when > :not(:empty, .at) { margin-left: 0.35em; }
 }
+
+/* A board of several stops (#163): its blocks one under the other, each
+   with its share of the height, which shareBoard in app.js gives it from
+   how high it is without one (a block of few rows leaves what it does not
+   need to the others); on a board wide enough for it, side by side in
+   columns (boardColumns), each block then a column of its own width for the
+   rules above. In one column the first block's heading is the head of the
+   board; in columns each block has its own, and the head keeps the clock. */
+.board-blocks { flex: 1; min-height: 0; display: flex; flex-direction: column; overflow: hidden; }
+.board-block { flex: none; box-sizing: border-box; min-height: 0; display: flex; flex-direction: column; }
+.board-block:only-child { flex: 1 1 0; }
+.board-block + .board-block { margin-top: 0.35em; padding-top: 0.3em; border-top: 1px solid var(--border); }
+/* (in columns its type is as large as a column of 22 of it allows, if less than the board's: the board's type follows its height) */
+.board-blocks.columns {
+  display: grid;
+  grid-template-columns: repeat(var(--columns), minmax(0, 1fr));
+  grid-auto-rows: minmax(0, 1fr);
+  column-gap: 1.2em;
+  font-size: min(1em, calc((100cqw - 0.6em - 1.2em * var(--columns)) / var(--columns) / 22));
+}
+.board-blocks.columns .board-block { container-type: inline-size; }
+.board-blocks.columns .board-block + .board-block { margin-top: 0; padding-top: 0; border-top: 0; }
+.board-block > .board-heading { flex: none; margin: 0.15em 0 0; font-size: 1.15em; }
+.board-blocks.columns .board-block > .board-heading { font-size: 1.3em; }
+.board-block > .sub { flex: none; margin: 0.1em 0 0; color: var(--text-muted); font-size: max(13px, 0.6em); }
+.board-block > .notes { flex: none; margin: 0.4em 0 0; font-size: max(12.5px, 0.55em); }
+.panel .board-head.columns { grid-template-areas: "notes clock"; min-height: 32px; }
+.panel.boardable .board-head.columns { padding-right: calc(0.9em + 116px); }
+:root[data-display="fixed"] .panel.boardable .board-head.columns { padding-right: 0.9em; }
+/* The names of its stops, and with the controls a minus after each and the
+   button that adds a stop to its list. */
+.board-heading { display: flex; flex-wrap: wrap; align-items: center; column-gap: 0.2em; }
+/* (a long name wraps; the dot before a name stays with it, by a space that does not break) */
+.board-heading .stop { min-width: 0; overflow-wrap: anywhere; }
+.board-heading .stop ~ .stop::before { content: "·\00a0"; }
+.board-control {
+  flex: none;
+  display: inline-grid;
+  place-items: center;
+  min-width: 24px;
+  min-height: 24px;
+  width: 1.15em;
+  height: 1.15em;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: none;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+.board-control .icon { width: 0.8em; height: 0.8em; min-width: 16px; min-height: 16px; }
+.board-control.merge { margin-left: 0.2em; background: var(--bg-subtle); color: var(--text); }
+.board-control:hover, .board-control:focus-visible { color: var(--accent); }
+/* (at the foot of the board: another stop, as a block of its own) */
+.board-add {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4em;
+  margin: 0.45em 0 0.6em;
+  padding: 0.35em 0.8em;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg);
+  color: var(--text);
+  font-size: max(13px, 0.6em);
+  cursor: pointer;
+}
+.board-add .icon { width: 1.3em; height: 1.3em; }
+.board-add:hover, .board-add:focus-visible { border-color: var(--accent); }
+/* (a display is read, not operated: drawn anew, the board has none of them, see setDisplay) */
+:root[data-display] .board-control, :root[data-display] .board-add { display: none; }
+/* (a list of several stops: under where it goes, the stop it leaves from) */
+.board-rows .name.from { display: flex; flex-direction: column; }
+.board-rows .name.from > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.board-rows .name .stop { color: var(--text-muted); font-size: max(12px, 0.6em); }
+.board-rows .cancelled .name.from { text-decoration: none; }
+.board-rows .cancelled .name .to { text-decoration: line-through; }
+/* (in place of a stop the timetable does not have) */
+.board-gone { flex: none; margin: 0.3em 0 0.1em; color: var(--text-muted); font-size: max(13px, 0.6em); }
+/* (while the search adds a stop to a board that takes all of the screen, its card shows over the board) */
+:root[data-board="alone"][data-adding] .controls { visibility: visible; }
 
 /* (the credits of the data, at its foot where the map with its own is not there) */
 .board-credits { flex: none; margin: 0; padding: 0.5em 0 0.7em; color: var(--text-muted); font-size: max(11px, 0.36em); }

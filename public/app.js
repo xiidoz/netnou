@@ -10,8 +10,8 @@
 
 import { parseAddress, stopPath, wordsOf } from './address.js';
 import { APP_NAME, dayOf, formatNumber, formatTime, languagePicker, loadLanguage, pageTexts, setTimeZone, t, translatePage } from './i18n.js';
-import { BOARD_MAX, BOARD_SHARE, boardQuery, boardShare, displayQuery, readBoard, readDisplay } from './display.js';
-import { mdiAlert, mdiArrowCollapse, mdiArrowExpand, mdiChevronRight, mdiCityVariantOutline, mdiEye, mdiEyeOff, mdiFullscreen, mdiFullscreenExit } from './vendor/material-design-icons/icons.js';
+import { BOARD_MAX, BOARD_SHARE, BOARD_STOPS, boardBlocks, boardQuery, boardShare, displayQuery, readBoard, readDisplay, readStops } from './display.js';
+import { mdiAlert, mdiArrowCollapse, mdiArrowExpand, mdiChevronRight, mdiCityVariantOutline, mdiEye, mdiEyeOff, mdiFullscreen, mdiFullscreenExit, mdiMinusCircleOutline, mdiPlaylistPlus, mdiPlus } from './vendor/material-design-icons/icons.js';
 import { AttributionControl, MapLibreMap, NavigationControl } from './vendor/maplibre-gl/maplibre-gl.mjs';
 
 // The modes, each with a chip where the timetable has it. Same ids as MODES in
@@ -238,6 +238,8 @@ const state = {
   times: 'both', // one of TIMES, see there
   clock: loadSetting('clock', true) !== false, // the board of a stop has a clock
   board: null, // the share of the screen in percent the open stop takes as a board, or null for its details (see "the board")
+  extra: [], // the further stops on the board of the open stop: [{ path, joined }], see "a board of several stops"
+  adding: null, // while the search is to add a stop to the board: { block } or { block: null } for a block of its own
   selection: null, // { type: 'trip' | 'station' | 'line', id, data }, see select()
   hits: [], // what can be pointed at on the map: { x, y, r, vehicle or station }, see draw()
   covers: [], // the boxes of the bubbles, which hide what is under them: [x, y, width, height]
@@ -693,15 +695,18 @@ function draw() {
     ctx.stroke();
     hits.push({ x, y, r: stationRadius + 5, station });
   }
-  // the station whose departures are open, at any zoom
+  // the station whose departures are open, at any zoom, and the further stops of its board
   if (selection?.type === 'station' && selection.data?.lat !== undefined) {
-    const [x, y] = project(selection.data.lat, selection.data.lon);
-    ctx.beginPath();
-    ctx.arc(x, y, stationRadius + 3, 0, 2 * Math.PI);
+    const further = state.board === null ? [] : state.extra.map((stop) => boardStopData.get(stop.path)).filter((place) => place && !place.gone);
     ctx.strokeStyle = colors.accent;
     ctx.lineWidth = 3;
-    ctx.fill();
-    ctx.stroke();
+    for (const place of [selection.data, ...further]) {
+      const [x, y] = project(place.lat, place.lon);
+      ctx.beginPath();
+      ctx.arc(x, y, stationRadius + 3, 0, 2 * Math.PI);
+      ctx.fill();
+      ctx.stroke();
+    }
   }
 
   // The route of the selected trip, or that of the selected line: where its
@@ -1122,8 +1127,11 @@ map.on('click', (event) => {
     showAddress('', null);
     select('trip', hit.vehicle.id);
   }
-  else if (hit?.station) select('station', hit.station.id);
-  else closePanel();
+  else if (hit?.station) {
+    // (the stop a board is of is open already, with the further stops of the board)
+    const open = state.selection?.type === 'station' && state.selection.data;
+    if (!(open && state.board !== null && stopPathOf(hit.station) === stopPathOf(open))) select('station', hit.station.id);
+  } else closePanel();
   // (what was tapped is not to end up under its own details)
   if (hit) clearOfSheet(hit.y);
 });
@@ -1309,7 +1317,9 @@ function ask(query) {
     : { lat: view.getCenter().lat, lon: view.getCenter().lng, km: view.getSouthWest().distanceTo(view.getNorthEast()) / 2000 };
   // (with the names of the modes as the visitor reads them: "bus 33" is a line of the buses)
   const modeNames = Object.fromEntries(DRAW_ORDER.map((mode) => [mode, t(`mode.${mode}`)]));
-  finder.postMessage({ turn: ++turn, query, near, limits: { towns: TOWN_LIMIT, lines: LINE_LIMIT, stops: SEARCH_LIMIT }, modeNames });
+  // (stops alone where one is added to a board)
+  const limits = state.adding ? { towns: 0, lines: 0, stops: SEARCH_LIMIT } : { towns: TOWN_LIMIT, lines: LINE_LIMIT, stops: SEARCH_LIMIT };
+  finder.postMessage({ turn: ++turn, query, near, limits, modeNames });
 }
 
 /** The list the thread has is not the server's any more: it loads it again with the next question. */
@@ -1371,7 +1381,8 @@ function listResults(towns, lines, stops, note = '') {
   searchResults.replaceChildren(...heading(towns, t('search.towns')), ...townRows, ...heading(lines, t('search.lines')), ...lineRows, ...heading(stops, t('search.stops')), ...stopRows);
   $('search-note').textContent = note;
   setActive(-1);
-  searchBox.classList.toggle('open', found.length > 0 || note !== '');
+  // (where a stop is added to a board, what it is added to is said above, also before anything is typed)
+  searchBox.classList.toggle('open', found.length > 0 || note !== '' || state.adding !== null);
   searchField.setAttribute('aria-expanded', String(found.length > 0));
 }
 
@@ -1394,6 +1405,7 @@ function answered({ turn: of, failed = false, towns = [], lines, stops }) {
 
 /** Shuts the list, and on a narrow screen the field with it. */
 function closeSearch() {
+  endAdding();
   // (an answer that is still to come would open it again)
   turn++;
   listResults([], [], []);
@@ -1429,6 +1441,12 @@ function chooseTown(town) {
 }
 
 function chooseStop(stop) {
+  if (state.adding) {
+    const { block } = state.adding;
+    leaveSearch('');
+    addBoardStop(stop, block);
+    return;
+  }
   leaveSearch(stop.name);
   // On a narrow screen the departures cover the lower half: the stop goes above the middle.
   map.flyTo({ center: [stop.lon, stop.lat], zoom: Math.max(map.getZoom(), SEARCH_ZOOM), offset: [0, narrowScreen.matches ? -0.12 * viewSize.y : 0] });
@@ -1449,15 +1467,23 @@ searchField.addEventListener('keydown', (event) => {
     const step = event.key === 'ArrowDown' ? 1 : -1;
     setActive(active < 0 && step < 0 ? found.length - 1 : (active + step + found.length) % found.length);
   } else if (event.key === 'Enter') {
-    // without the arrow keys it is the first one, the most likely
+    // without the arrow keys it is the first one, the most likely; and the key does nothing else (a button of a board that gets the focus would take it as a press)
+    event.preventDefault();
     found[Math.max(active, 0)]?.();
   } else if (event.key === 'Escape') {
     // (and not the details as well, which the same key closes otherwise)
     event.stopPropagation();
-    closeSearch();
-    searchField.blur();
+    cancelSearch();
   }
 });
+
+/** Shuts the search without choosing anything; where it was to add a stop to a board, the focus goes back to the button that opened it. */
+function cancelSearch() {
+  const adding = endAdding();
+  closeSearch();
+  searchField.blur();
+  if (adding) focusBoard(adding.block === null ? 'add' : `merge:${adding.block}`);
+}
 // A click on a result must not take the focus from the field first: the list
 // would be shut before the click arrives.
 searchResults.addEventListener('mousedown', (event) => event.preventDefault());
@@ -1468,7 +1494,7 @@ $('search-open').addEventListener('click', () => {
   $('controls').classList.add('searching');
   searchField.focus();
 });
-$('search-close').addEventListener('click', closeSearch);
+$('search-close').addEventListener('click', cancelSearch);
 
 // ---------- controls ----------
 
@@ -1792,10 +1818,12 @@ const panelBody = $('panel-body');
 let panelTimer = null;
 
 function closePanel() {
+  if (state.adding) closeSearch();
   // (a board closes with its details, and the address loses it)
   if (state.board !== null) setBoard(null);
   const picked = pickedQuery();
   state.selection = null;
+  state.extra = [];
   shareable(false);
   showAddress('', null);
   pickedChanged(picked);
@@ -1852,6 +1880,14 @@ function tripTitle({ line: name, mode, to }) {
 // (the address the page was sent for: the title the server gave it says more than this script knows, a line's ends, and is kept while the page is there)
 let servedAt = here();
 
+/**
+ * The address of a stop from what an answer says of it. The server keeps
+ * the places of its stops to 1e-5 degrees (timetable.js) and writes their
+ * addresses from that; api/departures answers the place as the timetable has
+ * it, which the fourth decimal of the address may round the other way.
+ */
+const stopPathOf = ({ name, lat, lon }) => stopPath(name, Math.round(lat * 1e5) / 1e5, Math.round(lon * 1e5) / 1e5);
+
 /** Puts the address of what is open into the address bar, as a new step back, and gives the page its title. */
 function showAddress(path, title) {
   if (path !== servedAt) {
@@ -1859,8 +1895,8 @@ function showAddress(path, title) {
     servedAt = null;
   }
   if (path === here()) return;
-  // (the settings of the page in its address stay)
-  history.pushState(null, '', new URL(`${path}${location.search}`, document.baseURI));
+  // (the settings of the page in its address stay; the further stops of a board stay with the board they were on)
+  history.pushState(null, '', new URL(`${path}${boardQuery(location.search, readBoard(location.search), state.extra)}`, document.baseURI));
 }
 
 /**
@@ -1877,7 +1913,8 @@ async function openAddress(loaded = false) {
   const res = await fetch(`api/address?path=${encodeURIComponent(path)}`);
   if (res.status === 503) return false;
   if (!res.ok) {
-    addressGone(path);
+    // (a board of several stops goes on with the others: see "a board of several stops")
+    if (!(await openNextStop(path))) addressGone(path);
     return true;
   }
   const found = await res.json();
@@ -1892,14 +1929,16 @@ async function openAddress(loaded = false) {
     select('trip', found.id, { counted: loaded, fit: !(loaded && state.viewAsked) });
     return true;
   }
-  // (the board of the stop, where the address has one: a line has none)
+  // (the board of the stop, where the address has one: a line has none; and its further stops, read before the board is written into the address again)
   const board = readBoard(location.search);
+  const stops = readStops(location.search, found.path.slice('stop/'.length));
+  state.extra = stops;
   if (board !== state.board) setBoard(board);
   // (as from the search: on a narrow screen the details cover the lower half, so the stop goes above the middle; a board does not.
   // A display whose address names a section of the map keeps that section: it was set up so.)
   const kept = loaded && state.viewAsked;
   if (!kept) map.easeTo({ center: [found.lon, found.lat], zoom: Math.max(map.getZoom(), SEARCH_ZOOM), offset: [0, narrowScreen.matches && board === null ? -0.12 * viewSize.y : 0], duration: 0 });
-  select('station', null, { at: found, counted: loaded, kept });
+  select('station', null, { at: found, counted: loaded, kept, stops });
   return true;
 }
 
@@ -1921,6 +1960,8 @@ function addressGone(path) {
 
 // Back and forward: what the address names now is opened, or what is open closed.
 addEventListener('popstate', () => {
+  // (what the search was to add a stop to is gone)
+  if (state.adding) closeSearch();
   if (here()) openAddress();
   else if (!panel.hidden) closePanel();
 });
@@ -1974,12 +2015,15 @@ shareButton.addEventListener('click', async () => {
  *   address of a display put it
  */
 function select(type, id, more = {}) {
+  // (the further stops of a board are those of the address it was opened with, else none: see "a board of several stops")
+  state.extra = type === 'station' ? (more.stops ?? []) : [];
   // (a board is of a stop: what else is opened is shown as details)
   if (type !== 'station' && state.board !== null) setBoard(null);
   // The row that was activated is about to go: keep the keyboard focus in the panel.
   if (panelBody.contains(document.activeElement) || panelHead.contains(document.activeElement)) panel.focus({ preventScroll: true });
   const picked = pickedQuery();
   state.selection = { type, id, data: null, ...more };
+  delete state.selection.stops;
   // (the ring around the chosen vehicle, or a line's vehicles alone, with the next frame: not with the server's answer)
   askDraw();
   pickedChanged(picked);
@@ -2009,18 +2053,21 @@ async function loadSelection(first = false) {
   const selection = state.selection;
   if (!selection) return;
   clearTimeout(panelTimer);
+  // (the further stops of a board alongside, so that it is drawn once with all of them)
+  const further = selection.type === 'station' && state.board !== null && state.extra.length ? loadBoardStops() : null;
   try {
     const res = await fetch(selectionUrl(selection, first && !selection.counted));
     const data = res.ok ? await res.json() : null;
+    await further;
     if (state.selection !== selection) return; // user moved on meanwhile
     if (data) {
       selection.data = data;
       if (data.route) selection.route = data.route;
       if (first && selection.type === 'station') {
-        showAddress(stopPath(data.name, data.lat, data.lon), stopTitle(data.name));
+        showAddress(stopPathOf(data), stopTitle(data.name));
         shareable(true, true);
-        // (a board keeps the stop it shows in the middle of the map, unless the address of a display says where the map is)
-        if (state.board !== null && !selection.kept) map.jumpTo({ center: [data.lon, data.lat] });
+        // (a board keeps the stop it shows in the middle of the map, or all of its stops in view, unless the address of a display says where the map is)
+        if (state.board !== null && !selection.kept) showBoardStops(data);
       }
       if (first && selection.type === 'line') {
         // (from now on asked for by the place the server has for it)
@@ -2069,6 +2116,9 @@ map.on('resize', () => showSelection());
 function fillPanel(head, ...nodes) {
   const focused = [...panelBody.querySelectorAll('.row')].indexOf(document.activeElement);
   const inHead = [...panelHead.querySelectorAll('button')].indexOf(document.activeElement);
+  // (a button of a board by what it does, where its place on the board changes: data-focus)
+  const keyed = focusNext ?? (panel.contains(document.activeElement) ? document.activeElement.dataset?.focus : undefined);
+  focusNext = null;
   panelHead.replaceChildren(...head);
   panelBody.replaceChildren(...nodes);
   fitNotes();
@@ -2078,9 +2128,14 @@ function fillPanel(head, ...nodes) {
     if (sign) showSaid(sign);
     else hideSaid();
   }
-  if (focused >= 0) panelBody.querySelectorAll('.row')[focused]?.focus({ preventScroll: true });
+  const again = keyed && [...panel.querySelectorAll('[data-focus]')].find((node) => node.dataset.focus === keyed);
+  if (again) again.focus({ preventScroll: true });
+  else if (focused >= 0) panelBody.querySelectorAll('.row')[focused]?.focus({ preventScroll: true });
   else if (inHead >= 0) (panelHead.querySelectorAll('button')[inHead] ?? panel).focus({ preventScroll: true });
 }
+
+// (what is to have the keyboard focus once the panel is filled anew, by its data-focus: see "a board of several stops")
+let focusNext = null;
 
 const platformText = (platform) => (platform ? t('stop.platform', { platform }) : '');
 
@@ -2709,7 +2764,11 @@ function setBoard(share, written = true) {
     setSheetHeight(null);
     showSelection();
     const at = state.selection?.data;
-    if (share !== null && state.selection?.type === 'station' && at) map.jumpTo({ center: [at.lon, at.lat] });
+    if (share !== null && state.selection?.type === 'station' && at) {
+      showBoardStops(at);
+      // (the further stops it had before it was made small, with their departures as they are now)
+      if (state.extra.length) loadSelection();
+    }
   }
   if (written) writeBoard();
 }
@@ -2717,7 +2776,7 @@ function setBoard(share, written = true) {
 /** Puts the board into the address of the page, or takes it out. */
 function writeBoard() {
   if (state.display) writeAddress();
-  else history.replaceState(null, '', `${location.pathname}${boardQuery(location.search, state.board)}`);
+  else history.replaceState(null, '', `${location.pathname}${boardQuery(location.search, state.board, state.extra)}`);
 }
 
 boardButton.addEventListener('click', () => setBoard(state.board === null ? boardWas : null));
@@ -2726,61 +2785,460 @@ boardButton.addEventListener('click', () => setBoard(state.board === null ? boar
  * The departures of a stop as a board: the line, where it goes and when it
  * leaves, in type that grows with the board (style.css), as many as there is
  * room for (fitBoard). A row is not a button: a board is read, not operated.
+ * A board of several stops has them in blocks, each one list (see "a board of
+ * several stops"): in one column the first block's heading is the head of the
+ * board, in columns each block has its own.
  */
 function renderBoard(board) {
   const times = state.times;
-  const rows = board.departures.map((dep) => {
-    // (a delay shows where there is one: on time the board says nothing)
-    const delay = Math.round((dep.delay ?? 0) / 60) === 0 ? null : dep.delay;
-    const late = delayCell(delayNode(delay), dep.warnings, dep.warnings.length > 0);
-    // (further off than an hour, the time of day stands where the minutes do, and with both not twice)
-    const far = minutesUntil(leavesAt(dep)) > MINUTES_MAX;
-    const at = (shown = true) => el('span', { class: 'at', text: shown ? formatTime(dep.planned) : '' });
-    const when = dep.cancelled ? [el('span', { class: 'gone', text: t('departures.cancelled') })]
-      : times === 'time' ? [at(), late]
-        : times === 'minutes' ? [late, minutesNode(dep, 'time')]
-          : [at(!far), late, minutesNode(dep, 'time')];
-    return el('li', { class: dep.cancelled ? 'cancelled' : '' }, [
-      badge(dep.line, dep.mode),
-      el('span', { class: 'name', text: dep.to }),
-      el('span', { class: 'platform', text: platformText(dep.platform) }),
-      el('span', { class: `when times-${times}` }, when),
-    ]);
-  });
-  // (where the next day begins, a line across the board says so)
-  const split = tomorrowAt(board.departures);
-  if (split >= 0) rows.splice(split, 0, el('li', { class: 'day' }, [el('span', { text: t('departures.tomorrow') })]));
-  const head = [el('h2', { text: board.name }), el('p', { class: 'sub', text: t('departures.title') })];
-  if (state.clock) head.push(el('p', { class: 'board-clock', text: formatTime(now()) }));
+  const entries = boardEntries(board);
+  const blocks = boardBlocks(entries[0], entries.slice(1));
+  const controls = !state.display;
+  const columns = boardColumns(blocks.length);
+  renderedColumns = columns;
+  const headings = blocks.map((block, i) => blockHeading(block, i, i ? 'h3' : 'h2', controls, entries.length));
+  const sub = () => el('p', { class: 'sub', text: t('departures.title') });
+  const clock = state.clock ? [el('p', { class: 'board-clock', text: formatTime(now()) })] : [];
+  // (the notes of the open stop in the head in either case: over the first column in columns)
+  const head = columns > 1 ? [...clock, notesList(board.notes)] : [headings[0], sub(), ...clock, notesList(board.notes)];
+  const sections = blocks.map((block, i) => el('section', { class: 'board-block' }, [
+    ...(columns > 1 ? [headings[i], sub()] : i ? [headings[i]] : []),
+    ...blockRows(block, times),
+  ]));
   const credits = el('p', { class: 'board-credits' });
   credits.innerHTML = [escapeHtml(siteName), boardCredits].filter(Boolean).join(' · ');
+  const blocksNode = el('div', { class: `board-blocks${columns > 1 ? ' columns' : ''}` }, sections);
+  blocksNode.style.setProperty('--columns', columns);
   fillPanel(
-    [el('div', { class: 'panel-head board-head' }, [...head, notesList(board.notes)])],
-    rows.length ? el('ul', { class: `board-rows times-${times}` }, rows) : el('p', { class: 'panel-empty', text: t('departures.none') }),
+    [el('div', { class: `panel-head board-head${columns > 1 ? ' columns' : ''}` }, head)],
+    blocksNode,
+    // (another stop, as a block of its own: up to BOARD_STOPS, and not on a wall)
+    ...(controls && entries.length < BOARD_STOPS ? [el('button', { type: 'button', class: 'board-add', data: { focus: 'add' }, onclick: () => startAdding(null) }, [icon(mdiPlus), el('span', { text: t('board.another') })])] : []),
     credits,
   );
   fitBoard();
 }
 
-/** Shows as many departures as the board has room for: whole rows, those that do not fit hidden. */
-function fitBoard() {
-  const list = panelBody.querySelector('.board-rows');
-  if (!list) return;
-  const rows = [...list.children];
-  for (const row of rows) row.hidden = false;
-  const room = list.getBoundingClientRect().bottom + 0.5;
-  // (all measured first, then hidden: from the first row that does not fit on)
-  const ends = rows.map((row) => row.getBoundingClientRect().bottom);
-  const over = ends.findIndex((end) => end > room);
-  if (over >= 0) for (const row of rows.slice(over)) row.hidden = true;
-  // (the line of the next day goes with the row it stands over)
-  const shown = rows.filter((row) => !row.hidden);
-  if (shown.at(-1)?.classList.contains('day')) shown.at(-1).hidden = true;
+/** One departure on a board; in a list of several stops, with the stop it leaves from under where it goes. */
+function boardRow(dep, times, from = null) {
+  // (a delay shows where there is one: on time the board says nothing)
+  const delay = Math.round((dep.delay ?? 0) / 60) === 0 ? null : dep.delay;
+  const late = delayCell(delayNode(delay), dep.warnings, dep.warnings.length > 0);
+  // (further off than an hour, the time of day stands where the minutes do, and with both not twice)
+  const far = minutesUntil(leavesAt(dep)) > MINUTES_MAX;
+  const at = (shown = true) => el('span', { class: 'at', text: shown ? formatTime(dep.planned) : '' });
+  const when = dep.cancelled ? [el('span', { class: 'gone', text: t('departures.cancelled') })]
+    : times === 'time' ? [at(), late]
+      : times === 'minutes' ? [late, minutesNode(dep, 'time')]
+        : [at(!far), late, minutesNode(dep, 'time')];
+  const name = from === null
+    ? el('span', { class: 'name', text: dep.to })
+    : el('span', { class: 'name from' }, [el('span', { class: 'to', text: dep.to }), el('span', { class: 'stop', text: t('board.from', { stop: from }) })]);
+  return el('li', { class: dep.cancelled ? 'cancelled' : '' }, [
+    badge(dep.line, dep.mode),
+    name,
+    el('span', { class: 'platform', text: platformText(dep.platform) }),
+    el('span', { class: `when times-${times}` }, when),
+  ]);
 }
-// (the board's room changes with its share of the screen, and with the screen)
+
+/** What a block of a board shows below its heading: the stops of it the timetable does not have, and its departures. */
+function blockRows(block, times) {
+  const gone = block.filter((entry) => entry.known?.gone).map((entry) => el('p', { class: 'board-gone', text: t('board.gone', { stop: nameOf(entry) }) }));
+  const shown = block.filter((entry) => entry.known?.departures);
+  // (not yet there: the block waits for them)
+  if (!shown.length) return gone;
+  const { rows: from } = namesOf(block);
+  const merged = shown.length > 1;
+  const departures = merged ? mergedDepartures(shown) : shown[0].known.departures.departures.map((dep) => ({ dep, from: null }));
+  const rows = departures.map((each) => boardRow(each.dep, times, merged ? from[block.indexOf(each.from)] : null));
+  // (where the next day begins, a line across the board says so)
+  const split = tomorrowAt(departures.map(({ dep }) => dep));
+  if (split >= 0) rows.splice(split, 0, el('li', { class: 'day' }, [el('span', { text: t('departures.tomorrow') })]));
+  return [...gone, rows.length ? el('ul', { class: `board-rows times-${times}` }, rows) : el('p', { class: 'panel-empty', text: t('departures.none') })];
+}
+
+/** Shows as many departures as each list of the board has room for: whole rows, those that do not fit hidden. */
+function fitBoard() {
+  const lists = [...panelBody.querySelectorAll('.board-rows')];
+  // (all shown first: the blocks are shared out by how much they have, then each list is cut where its block ends)
+  for (const list of lists) for (const row of list.children) row.hidden = false;
+  shareBoard();
+  const cuts = lists.map((list) => {
+    const room = list.getBoundingClientRect().bottom + 0.5;
+    const rows = [...list.children];
+    return { rows, over: rows.findIndex((row) => row.getBoundingClientRect().bottom > room) };
+  });
+  for (const { rows, over } of cuts) {
+    if (over >= 0) for (const row of rows.slice(over)) row.hidden = true;
+    // (the line of the next day goes with the row it stands over)
+    const shown = rows.filter((row) => !row.hidden);
+    if (shown.at(-1)?.classList.contains('day')) shown.at(-1).hidden = true;
+  }
+}
+/**
+ * Gives each block of a board in one column its share of the height: what
+ * it has, where that is less than an even share, and the rest evenly to the
+ * others. In columns they are even (style.css).
+ */
+function shareBoard() {
+  const node = panelBody.querySelector('.board-blocks');
+  if (!node) return;
+  const blocks = [...node.children];
+  for (const block of blocks) block.style.height = '';
+  if (node.classList.contains('columns') || blocks.length < 2) return;
+  // (without a height of their own they are as high as all they have: style.css)
+  const has = new Map(blocks.map((block) => [block, block.offsetHeight]));
+  let free = node.clientHeight - blocks.reduce((sum, block) => sum + Number.parseFloat(getComputedStyle(block).marginTop), 0);
+  let open = blocks;
+  while (open.length) {
+    const share = free / open.length;
+    const small = open.filter((block) => has.get(block) <= share);
+    if (!small.length) {
+      for (const block of open) block.style.height = `${share}px`;
+      break;
+    }
+    for (const block of small) {
+      block.style.height = `${has.get(block)}px`;
+      free -= has.get(block);
+    }
+    open = open.filter((block) => !small.includes(block));
+  }
+}
+// (the board's room changes with its share of the screen, and with the screen; and with it how many columns its blocks have)
 new ResizeObserver(() => {
-  if (state.board !== null) fitBoard();
+  if (state.board === null) return;
+  if (state.extra.length && boardColumns(boardBlocks({}, state.extra).length) !== renderedColumns) showSelection();
+  else fitBoard();
 }).observe(panel);
+
+// ---------- a board of several stops (#163) ----------
+
+// Besides the stop that is open, a board shows up to BOARD_STOPS - 1 more
+// (display.js): each in a block of its own, or in the list of the block
+// before it, their departures together in the order they leave. Where one is
+// added decides which: the button at the foot of the board adds a block, the
+// one at a block's heading adds to its list. The address says what is on the
+// board, so that it opens the same again and goes on a wall that way; a stop
+// the timetable does not have (any more) stays in it and says so.
+
+// A wide board puts its blocks side by side, in columns as wide as 22 of
+// the type of a column (style.css), which is less than the board's where
+// that is needed, but not less than BOARD_COLUMN_TYPE of it, nor 16 pixels.
+const BOARD_COLUMN_TYPE = 0.6;
+// (an answer of api/departures with fewer departures than this has all of the next 24 hours: departures() in server/lib/timetable.js, least)
+const BOARD_LEAST = 10;
+const STOP_RETRY_MS = 10 * 60_000; // a stop of an address the timetable does not have is asked for again after this
+// What is known of each further stop, by its path: { name, lat, lon, departures (the answer of api/departures), gone, askedAt }.
+const boardStopData = new Map();
+let renderedColumns = 1; // the columns of the board drawn last
+
+/** Asks for what is not yet known of a further stop of the board, and for its departures. */
+async function loadBoardStop(stop) {
+  let known = boardStopData.get(stop.path);
+  if (!known || known.lost || (known.gone && Date.now() - known.askedAt > STOP_RETRY_MS)) {
+    const res = await fetch(`api/address?path=${encodeURIComponent(`stop/${stop.path}`)}`);
+    // (no timetable yet: asked again with the next refresh)
+    if (res.status === 503) return;
+    if (!res.ok) {
+      boardStopData.set(stop.path, { gone: true, askedAt: Date.now() });
+      return;
+    }
+    const found = await res.json();
+    known = { name: found.name, lat: found.lat, lon: found.lon, departures: null, gone: false };
+    // (a stop that has moved a little, or has another name: the address says where it is now)
+    const path = found.path.slice('stop/'.length);
+    boardStopData.set(path, known);
+    if (path !== stop.path) {
+      // (and where that is a stop on the board already, it is there once)
+      const twice = path === boardList()[0].path || state.extra.some((other) => other !== stop && other.path === path);
+      if (twice) state.extra = state.extra.filter((other) => other !== stop);
+      else stop.path = path;
+      writeBoard();
+      if (twice) return;
+    }
+  }
+  if (known.gone) return;
+  const res = await fetch(`api/departures?at=${known.lat.toFixed(5)},${known.lon.toFixed(5)}`);
+  // (not found at its place: a timetable since has it elsewhere, or not; asked again where it is)
+  if (res.status === 404) {
+    known.departures = null;
+    known.lost = true;
+  } else if (res.ok) {
+    known.departures = await res.json();
+  }
+}
+
+/**
+ * Where the first stop of the address of a board is not in the timetable:
+ * opens the board at the first further stop that is, and keeps the one that
+ * is not as a block of its own after it, so that it comes back with a later
+ * timetable. False where the address has no further stop the timetable has.
+ */
+async function openNextStop(path) {
+  const named = parseAddress(path);
+  const board = readBoard(location.search);
+  if (named?.type !== 'stop' || board === null) return false;
+  const first = path.slice('stop/'.length);
+  const stops = readStops(location.search, first);
+  for (const stop of stops) {
+    const res = await fetch(`api/address?path=${encodeURIComponent(`stop/${stop.path}`)}`);
+    if (!res.ok) continue;
+    const found = await res.json();
+    const others = stops.filter((other) => other !== stop);
+    const rest = [{ path: first, joined: false }, ...others];
+    boardStopData.set(first, { gone: true, askedAt: Date.now() });
+    history.replaceState(null, '', new URL(`${found.path}${boardQuery(location.search, board, rest)}`, document.baseURI));
+    return openAddress();
+  }
+  return false;
+}
+
+/** Asks for the further stops of the board; a stop that does not answer keeps what it had. */
+const loadBoardStops = () => Promise.allSettled(state.extra.map(loadBoardStop));
+
+/** The stops of the board in its order, the open one first, each with what is known of it: [{ path, joined, known }]. */
+function boardEntries(board) {
+  return [
+    { path: stopPathOf(board).slice('stop/'.length), joined: false, known: { name: board.name, lat: board.lat, lon: board.lon, departures: board, gone: false } },
+    ...state.extra.map((stop) => ({ ...stop, known: boardStopData.get(stop.path) ?? null })),
+  ];
+}
+
+/** The name of a stop of the board; of one the timetable does not have, the words of its address. */
+function nameOf(entry) {
+  if (entry.known?.name) return entry.known.name;
+  return wordsOf(entry.path.split('@')[0]).replace(/(^|\s)\S/g, (letter) => letter.toUpperCase());
+}
+
+/**
+ * The names of the stops of a block, in full and as a list of several
+ * writes them after the first (shortNames): { full, short, rows }. Where two
+ * have the same name (a stop on each side of the street), the heading counts
+ * them, so that each minus says which; a row says where it leaves from, which
+ * is the same name for both: where it goes says which side.
+ */
+function namesOf(block) {
+  const names = block.map(nameOf);
+  const apart = [...new Set(names)];
+  const shorter = new Map(apart.map((name, i) => [name, apart.length > 1 ? shortNames(apart)[i] : name]));
+  const counted = (name, i) => (names.indexOf(name) === names.lastIndexOf(name) ? '' : ` (${names.slice(0, i + 1).filter((other) => other === name).length})`);
+  return {
+    full: names.map((name, i) => name + counted(name, i)),
+    short: names.map((name, i) => shorter.get(name) + counted(name, i)),
+    rows: names.map((name) => shorter.get(name)),
+  };
+}
+
+/**
+ * Names as a list of several stops writes them after the first: without the
+ * words they all begin with, but never without a word of their own, and
+ * only where they stay apart.
+ */
+function shortNames(names) {
+  const words = names.map((name) => name.split(' '));
+  let shared = 0;
+  while (words.every((each) => each.length > shared + 1 && each[shared] === words[0][shared])) shared++;
+  const apart = (cut) => new Set(words.map((each) => each.slice(cut).join(' '))).size === words.length;
+  while (shared > 0 && !apart(shared)) shared--;
+  return words.map((each) => each.slice(shared).join(' '));
+}
+
+/**
+ * The departures of the stops of one list in the order they leave: [{ dep, from }].
+ * Each stop's answer ends somewhere (departures() in server/lib/timetable.js
+ * sends only so many), so the list ends where the first of them does: past
+ * that, a busy stop would seem to have nothing more.
+ */
+function mergedDepartures(entries) {
+  const lists = entries.filter((entry) => entry.known.departures.departures.length);
+  // (an answer of fewer than BOARD_LEAST has all of the next 24 hours; one whose last departure has left is old, and is cut where it ends anyway)
+  const cut = lists.map((entry) => entry.known.departures.departures).filter((deps) => deps.length >= BOARD_LEAST).map((deps) => Math.max(...deps.map(leavesAt))).filter((last) => last >= now());
+  const until = Math.min(Infinity, ...cut);
+  return lists
+    .flatMap((entry, order) => entry.known.departures.departures.map((dep) => ({ dep, from: entry, order })))
+    .filter(({ dep }) => leavesAt(dep) <= until)
+    .sort((a, b) => leavesAt(a.dep) - leavesAt(b.dep) || a.order - b.order);
+}
+
+/**
+ * The heading of a block: the names of its stops, after the first without
+ * what they all begin with. With the controls, a minus after each name takes
+ * that stop away (once the board has several), and the list button adds a
+ * stop to the block. Its name for a screen reader is the names alone.
+ */
+function blockHeading(block, index, tag, controls, total) {
+  const { full: names, short } = namesOf(block);
+  const control = (shape, label, focus, onclick, name) => el('button', { type: 'button', class: `board-control ${name}`, title: label, 'aria-label': label, data: { focus }, onclick }, [icon(shape)]);
+  const parts = block.flatMap((entry, i) => [
+    // (after the first, a dot before each name: style.css)
+    el('span', { class: 'stop', text: i ? short[i] : names[i] }),
+    ...(controls && total > 1 ? [control(mdiMinusCircleOutline, t('board.remove', { stop: names[i] }), `remove:${entry.path}`, () => removeBoardStop(entry.path), 'remove')] : []),
+  ]);
+  if (controls && total < BOARD_STOPS) parts.push(control(mdiPlaylistPlus, t('board.merge', { stop: names[0] }), `merge:${index}`, () => startAdding(index), 'merge'));
+  const heading = el(tag, { class: 'board-heading' }, parts);
+  if (block.length > 1 || controls) heading.setAttribute('aria-label', new Intl.ListFormat(language, { type: 'conjunction' }).format(names));
+  return heading;
+}
+
+/** How many columns the blocks of a board stand in: as many as the board has room for, in type not too small (BOARD_COLUMN_TYPE). */
+function boardColumns(blocks) {
+  const size = Number.parseFloat(getComputedStyle(panelBody).fontSize) || 16;
+  // (as the column's type is worked out in style.css: the board's width less its edges and the gaps, shared out, and 22 of the type in each)
+  const type = (columns) => (panel.clientWidth - (0.6 + 1.2 * columns) * size) / columns / 22;
+  for (let columns = blocks; columns > 1; columns--) if (type(columns) >= Math.max(16, BOARD_COLUMN_TYPE * size)) return columns;
+  return 1;
+}
+
+/** Brings the stops of the board into view: the open one in the middle of the map, or all of them where there are several. */
+function showBoardStops(first) {
+  const places = [first, ...state.extra.map((stop) => boardStopData.get(stop.path))].filter((place) => place && !place.gone && Number.isFinite(place.lat));
+  if (places.length < 2) {
+    map.jumpTo({ center: [first.lon, first.lat] });
+    return;
+  }
+  const lats = places.map((place) => place.lat);
+  const lons = places.map((place) => place.lon);
+  const padding = clearOfCards();
+  // (on a narrow map the credits lie across its foot until it is touched: no stop under them)
+  const credits = map.getContainer().querySelector('.maplibregl-ctrl-attrib')?.getBoundingClientRect();
+  const view = map.getContainer().getBoundingClientRect();
+  if (credits && credits.width > view.width / 2) {
+    const below = view.bottom - credits.top + 8;
+    if (padding.top + below < 0.8 * view.height) padding.bottom = Math.max(padding.bottom, below);
+  }
+  map.fitBounds([[Math.min(...lons), Math.min(...lats)], [Math.max(...lons), Math.max(...lats)]], { padding, maxZoom: SEARCH_ZOOM, duration: 0 });
+}
+
+/** The stops of the board in its order, the open one first: [{ path, joined }]. */
+function boardList() {
+  const data = state.selection?.data;
+  const first = data ? stopPathOf(data).slice('stop/'.length) : here().slice('stop/'.length);
+  return [{ path: first, joined: false }, ...state.extra.map((stop) => ({ ...stop }))];
+}
+
+/** Takes a stop out of the list of a board: the stop after it begins its block where it did. */
+function without(list, at) {
+  const [gone] = list.splice(at, 1);
+  if (list[at] && !gone.joined) list[at].joined = false;
+  if (list.length) list[0].joined = false;
+  return list;
+}
+
+/**
+ * Adds a stop of the search to the board: to the list of a block, or (null)
+ * as a block of its own. One that is on the board already moves there.
+ */
+function addBoardStop(stop, block) {
+  const path = stopPathOf(stop).slice('stop/'.length);
+  // (what the search knows of it, until its departures are there)
+  if (!boardStopData.get(path)?.name) boardStopData.set(path, { name: stop.name, lat: stop.lat, lon: stop.lon, departures: null, gone: false });
+  const list = boardList();
+  const blocks = boardBlocks(list[0], list.slice(1));
+  const into = block === null ? null : blocks[block];
+  const at = list.findIndex((entry) => entry.path === path);
+  // (in that list already: nothing to do)
+  if (at >= 0 && into?.includes(list[at])) {
+    focusBoard(`remove:${path}`);
+    return;
+  }
+  const after = into?.at(-1) ?? null;
+  if (at >= 0) without(list, at);
+  if (after) list.splice(list.indexOf(after) + 1, 0, { path, joined: true });
+  else list.push({ path, joined: false });
+  usableFirst(list);
+  applyBoardList(list, `remove:${path}`);
+}
+
+/** Takes a stop off the board; the keyboard focus goes to the minus of the stop after it. */
+function removeBoardStop(path) {
+  const list = boardList();
+  const at = list.findIndex((entry) => entry.path === path);
+  if (at < 0) return;
+  const next = list[at + 1] ?? null;
+  without(list, at);
+  if (!usableFirst(list)) {
+    closePanel();
+    return;
+  }
+  // (one stop left: it has no minus, but the list button)
+  applyBoardList(list, list.length < 2 ? 'merge:0' : `remove:${(next ?? list.at(-1)).path}`);
+}
+
+/**
+ * Puts a stop the timetable has at the front of the list of a board, where
+ * the first is none: the board is at its first stop. False where it has none.
+ */
+function usableFirst(list) {
+  const current = boardList()[0].path;
+  const usable = list.findIndex((entry) => entry.path === current || boardStopData.get(entry.path)?.name);
+  if (usable < 0) return false;
+  if (usable === 0) return true;
+  // (its block goes first, with it at its head: the lists stay as they were)
+  const lead = list[usable];
+  const blocks = boardBlocks(list[0], list.slice(1));
+  const own = blocks.find((block) => block.includes(lead));
+  const ordered = [[lead, ...own.filter((entry) => entry !== lead)], ...blocks.filter((block) => block !== own)];
+  list.splice(0, list.length, ...ordered.flatMap((block) => block.map((entry, i) => ({ path: entry.path, joined: i > 0 }))));
+  return true;
+}
+
+/** Puts the board in this order: the address, the open stop where the first one has changed, and the board as it is now. */
+function applyBoardList(list, focus) {
+  const was = boardList()[0].path;
+  if (list[0].path !== was) {
+    // (the stop that was first stays known, if it is still on the board elsewhere)
+    const data = state.selection?.data;
+    if (data) boardStopData.set(was, { name: data.name, lat: data.lat, lon: data.lon, departures: data, gone: false });
+    const first = boardStopData.get(list[0].path);
+    state.selection = { type: 'station', id: null, data: first.departures ?? null, at: { name: first.name, lat: first.lat, lon: first.lon } };
+    // (in place of the address so far, not as a step back: then the title, which showAddress gives it without a step there)
+    history.replaceState(null, '', new URL(`stop/${list[0].path}${location.search}`, document.baseURI));
+    showAddress(`stop/${list[0].path}`, stopTitle(first.name));
+  }
+  state.extra = list.slice(1);
+  writeBoard();
+  focusNext = focus;
+  askDraw();
+  showSelection();
+  if (state.selection?.data) showBoardStops(state.selection.data);
+  // (with the departures of what is new on it, and of all others as they are now)
+  loadSelection();
+}
+
+/** Moves the keyboard focus to a button of the board, by what it does (data-focus). */
+function focusBoard(key) {
+  const node = [...panel.querySelectorAll('[data-focus]')].find((each) => each.dataset.focus === key);
+  (node ?? panel).focus({ preventScroll: true });
+}
+
+/** Opens the search to add a stop to the board: to the list of a block, or (null) as a block of its own. */
+function startAdding(block) {
+  const list = boardList();
+  const into = block === null ? null : boardBlocks(list[0], list.slice(1))[block];
+  const first = into && (block === 0 ? state.selection?.data?.name : nameOf({ ...into[0], known: boardStopData.get(into[0].path) ?? null }));
+  state.adding = { block };
+  const mode = $('search-mode');
+  mode.textContent = block === null ? t('board.addTitle') : t('board.mergeTitle', { stop: first });
+  mode.hidden = false;
+  searchResults.setAttribute('aria-labelledby', 'search-mode');
+  document.documentElement.dataset.adding = '';
+  $('controls').classList.add('searching');
+  searchField.value = '';
+  searchField.focus();
+  runSearch();
+}
+
+/** Ends adding to the board, if the search was doing that: what it was, or null. */
+function endAdding() {
+  const adding = state.adding;
+  if (!adding) return null;
+  state.adding = null;
+  $('search-mode').hidden = true;
+  searchResults.removeAttribute('aria-labelledby');
+  delete document.documentElement.dataset.adding;
+  return adding;
+}
 
 // The grip in the middle of the edge: dragged, the edge follows it; from
 // the keyboard the arrows move it. Where the board takes as much as it may
@@ -3048,7 +3506,7 @@ function writeAddress() {
     clock: state.clock,
   };
   // (with the path: the stop or the line that is open stays in it; a query alone would be taken from the base of the page, where the instance is)
-  history.replaceState(null, '', `${location.pathname}${displayQuery({ fixed: FIXED, language, board: state.board, settings }, MODES)}`);
+  history.replaceState(null, '', `${location.pathname}${displayQuery({ fixed: FIXED, language, board: state.board, stops: state.extra, settings }, MODES)}`);
 }
 
 /** Brings the page in line with whether it is a display. */
@@ -3068,7 +3526,7 @@ function setDisplay(on) {
   if (!on && OPENED_AS_DISPLAY) {
     // What is set came with the address and not from this browser: the page
     // with its controls starts afresh, with what is stored here.
-    location.search = boardQuery(ASKED.language ? `?lang=${encodeURIComponent(ASKED.language)}` : '', state.board);
+    location.search = boardQuery(ASKED.language ? `?lang=${encodeURIComponent(ASKED.language)}` : '', state.board, state.extra);
     return;
   }
   state.display = on;
@@ -3078,12 +3536,14 @@ function setDisplay(on) {
     closeSearch();
   }
   showDisplay();
+  // (the buttons of a board are part of the controls)
+  if (state.board !== null) showSelection();
   if (on) {
     writeAddress();
     return;
   }
   // (with the board that is open, which the page was perhaps opened with, or not)
-  history.replaceState(null, '', `${location.pathname}${boardQuery(OWN_SEARCH, state.board)}`);
+  history.replaceState(null, '', `${location.pathname}${boardQuery(OWN_SEARCH, state.board, state.extra)}`);
   // (where the map was moved to meanwhile is what the browser keeps again)
   const center = map.getCenter();
   saveSetting('view', { lat: center.lat, lon: center.lng, zoom: map.getZoom() });

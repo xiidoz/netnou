@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { BOARD_MAX, BOARD_MIN, BOARD_SHARE, boardQuery, boardShare, displayQuery, readBoard, readDisplay } from '../public/display.js';
+import { BOARD_MAX, BOARD_MIN, BOARD_SHARE, BOARD_STOPS, boardBlocks, boardQuery, boardShare, displayQuery, readBoard, readDisplay, readStops } from '../public/display.js';
 
 const MODES = ['subway', 'tram', 'bus', 'suburban', 'regional', 'longdistance'];
 
@@ -101,4 +101,52 @@ test('the board goes into the address and out of it, and what else it asks for s
   // (as written, not as URLSearchParams would write it again)
   assert.equal(boardQuery('?display&view=49.4478,11.0765,14.2', 50), '?display&view=49.4478,11.0765,14.2&board=50');
   assert.equal(readBoard(boardQuery('?lang=en', 35)), 35);
+});
+
+// A board of several stops (#163): the first is the stop the address is of,
+// the others follow its board= in the order of the board.
+const PLAERRER = 'nuernberg-plaerrer@49.4483,11.0638';
+const ROSENAU = 'nuernberg-rosenau@49.4466,11.0619';
+const GOSTENHOF = 'nuernberg-gostenhof@49.4494,11.0573';
+const WEISSER_TURM = 'nuernberg-weisser-turm@49.4513,11.0703';
+
+test('the further stops of a board are read in the order of the address, merged or a block of their own', () => {
+  assert.deepEqual(readStops(`?board=60&with=${ROSENAU}&block=${GOSTENHOF}`, PLAERRER), [{ path: ROSENAU, joined: true }, { path: GOSTENHOF, joined: false }]);
+  // (whatever else the address asks for, before them or between)
+  assert.deepEqual(readStops(`?lang=de&block=${GOSTENHOF}&times=minutes&board=60&with=${ROSENAU}`, PLAERRER), [{ path: GOSTENHOF, joined: false }, { path: ROSENAU, joined: true }]);
+  // (@ and , as a link may carry them, and in capitals)
+  assert.deepEqual(readStops(`?board=60&with=${ROSENAU.replace('@', '%40').replace(',', '%2C').toUpperCase()}`, PLAERRER), [{ path: ROSENAU, joined: true }]);
+  // without a board they mean nothing
+  assert.deepEqual(readStops(`?with=${ROSENAU}`, PLAERRER), []);
+  // what is no address of a stop, the first stop again and a stop twice are left out
+  assert.deepEqual(readStops(`?board=60&with=nuernberg+rosenau@49.4466,11.0619&block=line/vag/bus/36&with=${PLAERRER}&block=${ROSENAU}&with=${ROSENAU}&block=nowhere`, PLAERRER), [{ path: ROSENAU, joined: false }]);
+  // at most four stops in all
+  assert.equal(BOARD_STOPS, 4);
+  assert.deepEqual(readStops(`?board=60&with=${ROSENAU}&with=${GOSTENHOF}&block=${WEISSER_TURM}&block=nuernberg-opernhaus@49.4468,11.0749`, PLAERRER).map((stop) => stop.path), [ROSENAU, GOSTENHOF, WEISSER_TURM]);
+});
+
+test('the further stops go into the address after the board, and read as the same board again', () => {
+  const stops = [{ path: ROSENAU, joined: true }, { path: GOSTENHOF, joined: false }];
+  const query = boardQuery('?lang=de', 60, stops);
+  assert.equal(query, `?lang=de&board=60&with=${ROSENAU}&block=${GOSTENHOF}`);
+  assert.deepEqual(readStops(query, PLAERRER), stops);
+  // (written again, the old ones go, wherever they stood)
+  assert.equal(boardQuery(`?with=${GOSTENHOF}&lang=de&board=60&block=${ROSENAU}`, 35, [{ path: ROSENAU, joined: false }]), `?lang=de&board=35&block=${ROSENAU}`);
+  // without a board, without them
+  assert.equal(boardQuery(`?lang=de&board=60&with=${ROSENAU}`, null, stops), '?lang=de');
+  // a display names them after its board
+  const display = { fixed: true, language: 'de', board: 60, stops, settings: { view: { lat: 49.448, lon: 11.061, zoom: 15 }, theme: null, colorBy: null, flags: true, hiddenModes: [], times: 'minutes', clock: true } };
+  assert.equal(displayQuery(display, MODES), `?display=fixed&view=49.4480,11.0610,15.0&lang=de&times=minutes&board=60&with=${ROSENAU}&block=${GOSTENHOF}`);
+  assert.deepEqual(readStops(displayQuery(display, MODES), PLAERRER), stops);
+  assert.equal(displayQuery({ ...display, board: null }, MODES), '?display=fixed&view=49.4480,11.0610,15.0&lang=de&times=minutes');
+});
+
+test('the stops of a board stand in their blocks', () => {
+  const first = { path: PLAERRER, joined: false };
+  const rosenau = { path: ROSENAU, joined: true };
+  const gostenhof = { path: GOSTENHOF, joined: false };
+  const turm = { path: WEISSER_TURM, joined: true };
+  assert.deepEqual(boardBlocks(first, []), [[first]]);
+  assert.deepEqual(boardBlocks(first, [rosenau, gostenhof, turm]), [[first, rosenau], [gostenhof, turm]]);
+  assert.deepEqual(boardBlocks(first, [{ ...rosenau, joined: false }, { ...gostenhof, joined: false }]), [[first], [{ ...rosenau, joined: false }], [{ ...gostenhof, joined: false }]]);
 });

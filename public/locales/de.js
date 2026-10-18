@@ -113,6 +113,13 @@ export default {
   'panel.copied': 'Adresse kopiert',
   'panel.enlarge': 'Vergrößern',
   'panel.shrink': 'Verkleinern',
+  'board.another': 'Weitere Haltestelle',
+  'board.addTitle': 'Zur Tafel hinzufügen',
+  'board.merge': 'Weitere Haltestelle mit {stop} zusammen zeigen',
+  'board.mergeTitle': 'Mit {stop} zusammen zeigen',
+  'board.remove': '{stop} von der Tafel nehmen',
+  'board.from': 'ab {stop}',
+  'board.gone': '{stop} ist nicht im Fahrplan.',
 
   'trip.realtime': 'Echtzeitdaten',
   'trip.scheduleOnly': 'nur Fahrplandaten',

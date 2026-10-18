@@ -352,6 +352,28 @@ details. Drag the edge between map and board to where it should be, and set
 how the times show and whether the board has a clock behind the gear. Then
 press the eye and copy the address as above.
 
+A board can show up to four stops: the bus in front of the house and the
+U-Bahn around the corner. Each stop is in a block of its own, or in one list
+with others, their departures together in the order they leave and the stop
+under each. "Weitere Haltestelle" at the foot of the board adds a stop as a
+block of its own; the button with the list at the heading of a block adds one
+to that list; the minus after a name takes that stop away. On a wide board the
+blocks stand side by side. The address names the further stops after the
+board, in its order:
+
+```text
+https://example.org/stop/nuernberg-plaerrer@49.4481,11.0648?display=fixed&board=60&with=nuernberg-kohlenhof@49.4453,11.0688&block=nuernberg-gostenhof-ost@49.4501,11.0583
+```
+
+| In the address | Meaning |
+| --- | --- |
+| `with=<stop>` | this stop in the list of the stop before it |
+| `block=<stop>` | this stop in a block of its own |
+
+Each is named as its own address names it, without `stop/`. A stop that a
+later timetable does not have stays in the address, and the board says so in
+its place until it is back.
+
 What a fixed display does by itself:
 
 - It asks the server every five minutes which version runs, and loads the
