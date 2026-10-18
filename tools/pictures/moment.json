@@ -1,0 +1,21 @@
+{
+  "now": "2026-10-19T13:37:00+02:00",
+  "stop": "Nürnberg Plärrer",
+  "follow": "324096_20261019",
+  "kind": "bus",
+  "line": "36",
+  "to": "Doku-Zentrum ü. Hauptmarkt",
+  "leaves": "2026-10-19T11:32:00.000Z",
+  "late": 280,
+  "area": [
+    49.39,
+    10.92,
+    49.5,
+    11.17
+  ],
+  "feed": "gtfs-de-2026-10-17.zip",
+  "map": {
+    "file": "mittelfranken-latest.osm.pbf",
+    "date": "2026-10-17T20:20:51.000Z"
+  }
+}

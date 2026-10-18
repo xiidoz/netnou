@@ -136,12 +136,14 @@ it works inside, from the import to the positions:
 
 ## Data sources, licences and attribution
 
-The code is under the [MIT License](LICENSE). Three things in the repository
+The code is under the [MIT License](LICENSE). Four things in the repository
 are not: the vendored map library MapLibre GL JS
 (`public/vendor/maplibre-gl`, BSD-3-Clause), the icons taken from Material
-Design Icons (`public/vendor/material-design-icons`, Apache-2.0) and the
+Design Icons (`public/vendor/material-design-icons`, Apache-2.0), the
 outlines of the built-in areas (`server/areas/vgn.geojson` and
-`server/areas/germany.geojson`, © OpenStreetMap contributors, ODbL 1.0).
+`server/areas/germany.geojson`, © OpenStreetMap contributors, ODbL 1.0) and
+the data the pictures above are taken from (`tools/pictures`, a part of the
+timetable of gtfs.de under CC BY-SA 4.0 and of OpenStreetMap under ODbL 1.0).
 
 A running instance works with data that it fetches itself and that has its own
 terms:

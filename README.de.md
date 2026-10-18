@@ -147,12 +147,15 @@ Import bis zu den Positionen: [docs/architecture.md](docs/architecture.md).
 
 ## Datenquellen, Lizenzen und Quellenangaben
 
-Der Code steht unter der [MIT-Lizenz](LICENSE). Drei Dinge im Repository
+Der Code steht unter der [MIT-Lizenz](LICENSE). Vier Dinge im Repository
 stehen nicht darunter: die mitgelieferte Kartenbibliothek MapLibre GL JS
 (`public/vendor/maplibre-gl`, BSD-3-Clause), die Icons aus Material Design
-Icons (`public/vendor/material-design-icons`, Apache-2.0) und die Umrisse der
+Icons (`public/vendor/material-design-icons`, Apache-2.0), die Umrisse der
 eingebauten Gebiete (`server/areas/vgn.geojson` und
-`server/areas/germany.geojson`, © OpenStreetMap-Mitwirkende, ODbL 1.0).
+`server/areas/germany.geojson`, © OpenStreetMap-Mitwirkende, ODbL 1.0) und
+die Daten, aus denen die Bilder oben entstehen (`tools/pictures`, ein Teil
+des Fahrplans von gtfs.de unter CC BY-SA 4.0 und von OpenStreetMap unter
+ODbL 1.0).
 
 Eine laufende Instanz arbeitet mit Daten, die sie selbst abruft und für die
 eigene Bedingungen gelten:

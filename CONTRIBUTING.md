@@ -189,12 +189,14 @@ earlier ones.
   container). Run it after changing the favicon and commit the result.
 - **`docs/pictures/*.webp`**, the pictures of the page in the READMEs and the
   close-up of a map for link previews, are taken by `npm run build:pictures`
-  with the same browser, from a running
-  instance of the default area: `npm start` in another window, or the
-  address of one after `--`. Take them again after a change to the look of
-  the card, the details, the search or the board, at a time when much is
-  under way, best around midday on a weekday, and commit them. They show
-  the instance at that moment, so no two runs give the same pictures.
+  with the same browser. It starts a server of the checkout on the data in
+  `tools/pictures/`, with its clock held at a Monday at 13:37, so the
+  pictures come out the same at any hour and change only where the page
+  does. The map behind the vehicles comes from OpenFreeMap, so it needs the
+  internet. Take them again after a change to the look of the card, the
+  details, the search or the board, and commit them. The data is made by
+  `tools/build-picture-data.mjs`, only when the pictures need something it
+  does not have; see [tools/pictures/README.md](tools/pictures/README.md).
 - **`docs/social-preview.png`**, the image shown where the repository is
   linked in chats and on social media, is put together from
   `docs/pictures/map.webp` and the favicon by `npm run build:social`, with
