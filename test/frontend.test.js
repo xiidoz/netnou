@@ -7,7 +7,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import { test } from 'node:test';
 import vm from 'node:vm';
-import { ATTRIBUTES, LANGUAGES, formatNumber, formatTime, loadLanguage, pageTexts, pickLanguage, setTimeZone, t } from '../public/i18n.js';
+import { ATTRIBUTES, LANGUAGES, formatNumber, formatTime, loadLanguage, pageTexts, pickLanguage, sentInAnother, setTimeZone, t } from '../public/i18n.js';
 import en from '../public/locales/en.js';
 import { PAGE_INLINE, PAGE_MODULES } from '../server/lib/page.js';
 import { MODES } from '../server/lib/timetable.js';
@@ -497,6 +497,27 @@ test('an address that asks for a language gets it, unless the visitor chose one 
   assert.equal(pickLanguage(null, ['de-DE'], 'xx'), 'de');
   assert.equal(pickLanguage(null, ['de-DE'], ''), 'de');
   assert.equal(pickLanguage(null, ['xx'], null), 'en');
+});
+
+// The server writes the title and the description into the page in the
+// language it picks by the browser's languages or the address; a language
+// chosen with the picker is kept in the browser, and the server knows nothing
+// of it. Where that is another, the page writes its own (#195); else it keeps
+// the server's, which says more of a line, and is what a search engine reads.
+test('the page writes a title of its own where the visitor chose another language than the server wrote it in', async () => {
+  await loadLanguage('en', ['de-DE']);
+  assert.ok(sentInAnother('de'));
+  assert.ok(!sentInAnother('en'));
+  await loadLanguage('en', ['en-GB'], 'de');
+  assert.ok(sentInAnother('de'));
+  // without a choice, also where the page is in another language than the server's: a browser that names none gets the instance's main one from the server
+  await loadLanguage(null, ['de-DE']);
+  assert.ok(!sentInAnother('de'));
+  await loadLanguage(null, ['en-US']);
+  assert.ok(!sentInAnother('de'));
+  await loadLanguage('xx', ['en-US']);
+  assert.ok(!sentInAnother('de'));
+  assert.match(withoutComments(read('app.js')), /let servedAt = sentInAnother\(\) \? null : here\(\);/);
 });
 
 test('what the page is called and says about itself, with and without the name of its area', async () => {

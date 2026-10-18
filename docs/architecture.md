@@ -811,7 +811,10 @@ otherwise a server would load a file written by older code:
   their language; both take them from `pageTexts` in `i18n.js`. A title or
   a description of the operator's own (`NETNOU_SITE_TITLE`, `NETNOU_SITE_DESCRIPTION`)
   takes the place of the page's in both, as it is: one for every language,
-  or one for each. The
+  or one for each. At the address of a stop, a line or a trip the script
+  keeps the title and the description the server wrote of it, unless the
+  visitor chose another language in the settings, which the server knows
+  nothing of: then it writes its own, in that language. The
   manifest of the installed app gets the name, the language and the
   description of the instance the same way.
 - **The header card comes with the page.** The scripts are large, the map
