@@ -1,7 +1,7 @@
 // Renders docs/social-preview.png, the image shown where the repository is
 // linked in chats and on social media, with a headless Chrome. It is put
-// together from the pictures of the READMEs, the favicon and a few words, so
-// run it by hand after npm run build:pictures:
+// together from docs/pictures/map.webp, the favicon and a few words, so run it
+// by hand after npm run build:pictures:
 //
 //   node tools/build-social-preview.mjs   (CHROME=<path> if Chrome, Chromium or Edge is not found automatically)
 //
@@ -23,24 +23,13 @@ import { chromeArgs, findChrome } from './chrome.mjs';
 const WIDTH = 1280;
 const HEIGHT = 640;
 const MAX_BYTES = 1_000_000;
-// How much of the width the words take; two phones fill the rest.
+// How much of the width the words take; the map fills the rest, which is the
+// shape of docs/pictures/map.webp (build-pictures.mjs takes it so).
 const PANEL = 620;
 const MARGIN = 80;
-// docs/pictures/phone.webp as build-pictures.mjs lays it out, in CSS pixels:
-// three phones 390 px wide, 24 px apart, 20 px from the edges. The first two
-// show here, each SHOWN px wide, side by side in the middle, from TOP down.
-const PHONES = { width: 390, gap: 24, padding: 20, count: 3 };
-const SHOWN = 280;
-const TOP = 28;
-const ZOOM = SHOWN / PHONES.width;
-const phonesWidth = (PHONES.padding * 2 + PHONES.count * PHONES.width + (PHONES.count - 1) * PHONES.gap) * ZOOM;
-const phonesLeft = (WIDTH - PANEL - (2 * PHONES.width + PHONES.gap) * ZOOM) / 2 - PHONES.padding * ZOOM;
-const phonesTop = TOP - PHONES.padding * ZOOM;
-// (to the middle of the gap after the second phone: the third stays out)
-const phonesShown = (PHONES.padding + 2 * PHONES.width + 1.5 * PHONES.gap) * ZOOM;
 
 const root = fileURLToPath(new URL('../', import.meta.url));
-const phones = path.join(root, 'docs', 'pictures', 'phone.webp');
+const map = path.join(root, 'docs', 'pictures', 'map.webp');
 const favicon = path.join(root, 'public', 'favicon.svg');
 const out = path.join(root, 'docs', 'social-preview.png');
 
@@ -52,9 +41,8 @@ const html = `<!DOCTYPE html>
   * { box-sizing: border-box; margin: 0; }
   html, body { width: ${WIDTH}px; height: ${HEIGHT}px; overflow: hidden; background: #fff; }
   body { position: relative; font: 28px/1.35 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; color: #1b1f24; }
-  /* The departures of a stop and the trip of one of them, on a phone each. */
-  .shot { position: absolute; top: 0; right: 0; width: ${WIDTH - PANEL}px; height: ${HEIGHT}px; background: #e9edf1; }
-  .phones { position: absolute; top: 0; left: ${phonesLeft}px; width: ${phonesShown}px; height: ${HEIGHT}px; background: url("${pathToFileURL(phones).href}") 0 ${phonesTop}px / ${phonesWidth}px auto no-repeat; }
+  /* A bus a few minutes late, close up on the map: large enough where a preview is shown small. */
+  .shot { position: absolute; top: 0; right: 0; width: ${WIDTH - PANEL}px; height: ${HEIGHT}px; background: url("${pathToFileURL(map).href}") center / cover no-repeat; }
   .panel { position: absolute; inset: 0 auto 0 0; width: ${PANEL}px; padding: ${MARGIN}px 56px ${MARGIN}px ${MARGIN}px; background: #fff; box-shadow: 0 0 28px rgb(0 0 0 / 0.28); display: flex; flex-direction: column; }
   .name { display: flex; align-items: center; gap: 22px; }
   .name img { width: 96px; height: 96px; }
@@ -63,10 +51,10 @@ const html = `<!DOCTYPE html>
   .more { margin-top: 20px; color: #5c6670; }
   .modes { margin-top: auto; display: flex; gap: 14px; }
   .modes span { width: 26px; height: 26px; border-radius: 50%; }
-  /* Whose map and whose data the phones show: their own credits are under the details. */
+  /* Whose map and whose data it shows: the picture leaves out the credits of the page. */
   .credits { position: absolute; right: 0; bottom: 0; padding: 3px 10px; background: rgb(255 255 255 / 0.9); color: #5c6670; font-size: 12px; line-height: 1.5; white-space: nowrap; }
 </style>
-<div class="shot"><div class="phones"></div></div>
+<div class="shot"></div>
 <div class="credits">OpenFreeMap © OpenMapTiles Data from OpenStreetMap · Timetable data: GTFS.DE / DELFI e.V. (CC BY-SA 4.0)</div>
 <div class="panel">
   <div class="name"><img src="${pathToFileURL(favicon).href}" alt=""><h1>Netnou</h1></div>

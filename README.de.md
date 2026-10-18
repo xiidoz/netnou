@@ -20,7 +20,7 @@ Ein Fahrzeug kann also etwas vor oder hinter seiner Markierung sein.
 
 ![Drei Handys: die Abfahrten von Nürnberg Plärrer, die Fahrt einer davon mit ihrem Fahrzeug auf der Karte und die Suche, die Fürth findet](docs/pictures/phone.webp)
 
-![Ein breiter Bildschirm mit den Abfahrten von Nürnberg Hauptbahnhof als Tafel neben der Karte](docs/pictures/wide.webp)
+![Ein breiter Bildschirm, wie die Seite meist aussieht: die Fahrt einer der Abfahrten von Nürnberg Plärrer neben der Karte der Stadt](docs/pictures/wide.webp)
 
 ## Was die Karte kann
 
@@ -38,6 +38,8 @@ Ein Fahrzeug kann also etwas vor oder hinter seiner Markierung sein.
   jemandem zu zeigen, wo der Bus gerade ist.
 - **Als Tafel zeigen:** Abfahrten als große Tafel, zum Beispiel für ein
   Display an der Wand, mit bis zu vier Haltestellen.
+
+![Die Abfahrten von Nürnberg Hauptbahnhof als Tafel neben der Karte, auf einem breiten Bildschirm](docs/pictures/board.webp)
 
 Die Fahrzeuge lassen sich auch nach ihrer Verspätung einfärben. Die Karte kann
 den eigenen Standort zeigen; er bleibt im Browser. Die Seite gibt es auf

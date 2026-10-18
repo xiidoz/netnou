@@ -19,7 +19,7 @@ delay put it. It can be a little ahead of or behind its marker.
 
 ![Three phones: the departures of Nürnberg Plärrer, the trip of one of them with its vehicle on the map, and the search finding Fürth](docs/pictures/phone.webp)
 
-![A wide screen with the departures of Nürnberg Hauptbahnhof as a board beside the map](docs/pictures/wide.webp)
+![A wide screen as the page usually looks: the trip of one of the departures of Nürnberg Plärrer beside the map of the city](docs/pictures/wide.webp)
 
 ## What you can do
 
@@ -36,6 +36,8 @@ delay put it. It can be a little ahead of or behind its marker.
   bus is right now.
 - **Show the departures as a board**, in large type for a screen on the wall,
   with up to four stops.
+
+![The departures of Nürnberg Hauptbahnhof as a board beside the map, on a wide screen](docs/pictures/board.webp)
 
 The vehicles can also be coloured by their delay, the map can show your own
 location (it stays in your browser), and the page speaks German and

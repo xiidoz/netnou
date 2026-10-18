@@ -2,14 +2,19 @@
 // instance of the default area, with a headless Chrome:
 //
 //   docs/pictures/phone.webp   three phones: the departures of a stop, the trip
-//                              of one of them, and the search
-//   docs/pictures/wide.webp    a wide screen: the departures of a stop as a
+//                              of a bus that leaves there a few minutes late,
+//                              and the search
+//   docs/pictures/wide.webp    a wide screen as the page usually looks: the map
+//                              with the trip of that bus beside it
+//   docs/pictures/board.webp   a wide screen with the departures of a stop as a
 //                              board beside the map
+//   docs/pictures/map.webp     that bus close up on the map alone, for the image
+//                              of link previews (npm run build:social)
 //
 // Run it by hand after a change to the look of the card, the details, the
 // search or the board, while the server runs and much is under way, best
 // around midday on a weekday. Then npm run build:social, which makes the image
-// for link previews from the pictures:
+// for link previews from map.webp:
 //
 //   npm start                                 (in another window)
 //   npm run build:pictures                    (the instance at http://localhost:8080)
@@ -35,17 +40,31 @@ import { chromeArgs, findChrome } from './chrome.mjs';
 
 // What the pictures show in the default area: the stop of the phones and the
 // one of the board, by their names in the timetable, and what is typed into
-// the search.
+// the search. Of the departures at STOP, the pictures follow a bus a few
+// minutes late (LATE, in seconds) that leaves there no sooner than LEAVING
+// seconds from now, so that it is still on the list for the last of them.
 const STOP = 'Nürnberg Plärrer';
 const BOARD_STOP = 'Nürnberg Hbf';
 const SEARCH = 'Fürth';
+const LATE = { from: 120, to: 600 };
+const LEAVING = 180;
 // The screens, in CSS pixels, and how many pixels of the pictures make one of
 // them: sharp at the width the READMEs show them at, and not too heavy.
 const PHONE = { width: 390, height: 844, mobile: true };
 const WIDE = { width: 1280, height: 800, mobile: false };
 const SCALE = 1.5;
-// How the pictures are laid out, in CSS pixels: build-social-preview.mjs cuts
-// the first two phones out of phone.webp by the same numbers.
+// The map of the link preview: a small screen drawn at four times the pixels,
+// so that the vehicles come out large where a preview is shown small. Its
+// shape is that of the part of the preview it fills (build-social-preview.mjs).
+const CLOSE_UP = { width: 330, height: 320, mobile: false, scale: 4 };
+// The zoom of the map as the page usually shows a trip on a wide screen, and
+// as close as the map of the link preview comes.
+const USUAL_ZOOM = 14;
+const CLOSE_ZOOM = 16;
+// About how many seconds the close-up takes from asking where the vehicle is
+// to the picture: the map is put where it will be by then.
+const AHEAD = 6;
+// How the pictures are laid out, in CSS pixels.
 const PADDING = 20;
 const GAP = 24;
 
@@ -148,21 +167,50 @@ function station(name) {
 }
 const stop = station(STOP);
 const boardStop = station(BOARD_STOP);
+const stopAddress = `${stopPath(stop.name, stop.lat, stop.lon)}?lang=en`;
+
+// When a trip leaves or reaches one of its stops, by the timetable and the delay reported for it.
+const leaves = (stop) => stop.dep + (stop.depDelay ?? stop.arrDelay ?? 0);
+const reaches = (stop) => stop.arr + (stop.arrDelay ?? stop.depDelay ?? 0);
 
 /**
- * Which departure of a stop to tap for its trip: the first whose vehicle is
- * under way, so that the map goes to it, as the list shows them.
+ * The departure at the stop that the pictures follow: a bus a few minutes
+ * late, else any bus, else any departure, whose vehicle is under way and
+ * leaves the stop no sooner than LEAVING seconds from now.
  */
-async function departureUnderWay(id) {
-  const { departures } = await get(`api/departures?station=${encodeURIComponent(id)}`);
-  for (const [index, departure] of departures.entries()) {
-    if (departure.cancelled) continue;
+async function departureToFollow() {
+  const { now, departures } = await get(`api/departures?station=${encodeURIComponent(stop.id)}`);
+  const candidates = [];
+  for (const departure of departures) {
+    if (departure.cancelled || departure.planned + departure.delay - now < LEAVING) continue;
     const trip = await get(`api/trip?id=${encodeURIComponent(departure.trip)}`);
-    const [first, last] = [trip.stops[0], trip.stops.at(-1)];
-    if (first.dep + (first.depDelay ?? 0) < trip.now && last.arr + (last.arrDelay ?? 0) > trip.now) return index;
+    if (leaves(trip.stops[0]) >= trip.now || reaches(trip.stops.at(-1)) <= trip.now) continue;
+    const candidate = { departure, bus: departure.mode === 'bus', late: departure.delay >= LATE.from && departure.delay <= LATE.to };
+    if (candidate.bus && candidate.late) return departure;
+    candidates.push(candidate);
   }
-  return 0;
+  const found = candidates.find((candidate) => candidate.bus) ?? candidates[0];
+  if (!found) throw new Error(`no vehicle under way leaves ${STOP} in the next hours`);
+  console.warn(`No bus a few minutes late leaves ${STOP} now: the pictures follow the ${found.departure.mode} ${found.departure.line} to ${found.departure.to}.`);
+  return found.departure;
 }
+
+/**
+ * Where the vehicle of a trip is `ahead` seconds from now, as the server works
+ * it out for the page: in this form of the answer two knots, where it is now and
+ * where in a minute, between which it moves in a straight line.
+ */
+async function whereIn(tripId, ahead) {
+  const { vehicles } = await get(`api/vehicles?vehicle=${encodeURIComponent(tripId)}`);
+  const vehicle = vehicles.find((candidate) => candidate.id === tripId);
+  if (!vehicle) throw new Error(`the ${followed.mode} ${followed.line} to ${followed.to} is no longer under way: run it once more`);
+  const [from, lat, lon, to, nextLat, nextLon] = vehicle.knots;
+  const share = to > from ? Math.min(1, ahead / (to - from)) : 0;
+  return { lat: lat + share * ((nextLat ?? lat) - lat), lon: lon + share * ((nextLon ?? lon) - lon) };
+}
+
+const followed = await departureToFollow();
+console.log(`following: ${followed.mode} ${followed.line} to ${followed.to}, ${Math.round(followed.delay / 60)} min late`);
 
 // ---------- the pictures ----------
 
@@ -203,32 +251,52 @@ try {
     }
     await sleep(800);
   }
+  /** Opens an address of the instance, or a whole URL, and waits for the page to have loaded. */
   async function go(address) {
     const done = new Promise((resolve) => (loaded = resolve));
     loading.clear();
-    await send('Page.navigate', { url: `${base}/${address}` });
+    await send('Page.navigate', { url: /^[a-z]+:/.test(address) ? address : `${base}/${address}` });
     await done;
   }
-  async function screen({ width, height, mobile }) {
-    await send('Emulation.setDeviceMetricsOverride', { width, height, deviceScaleFactor: SCALE, mobile });
+  async function screen({ width, height, mobile, scale = SCALE }) {
+    await send('Emulation.setDeviceMetricsOverride', { width, height, deviceScaleFactor: scale, mobile });
     await send('Emulation.setTouchEmulationEnabled', mobile ? { enabled: true, maxTouchPoints: 5 } : { enabled: false });
   }
-  async function shoot(name) {
-    const { data } = await send('Page.captureScreenshot', { format: 'png' });
-    fs.writeFileSync(path.join(tmp, `${name}.png`), Buffer.from(data, 'base64'));
+  async function shoot(name, format = 'png') {
+    const { data } = await send('Page.captureScreenshot', format === 'png' ? { format } : { format, quality: 82 });
+    const file = path.join(format === 'png' ? tmp : out, `${name}.${format}`);
+    fs.writeFileSync(file, Buffer.from(data, 'base64'));
     console.log(`taken: ${name}`);
+  }
+  /** Taps the departure that the pictures follow, in the list of the stop that the page shows. */
+  async function tapFollowed() {
+    await waitFor("document.querySelectorAll('#panel-body .row.departure').length > 0", 'The departures');
+    const { departures } = await get(`api/departures?station=${encodeURIComponent(stop.id)}`);
+    const row = departures.findIndex((departure) => departure.trip === followed.trip);
+    if (row < 0) throw new Error(`the ${followed.mode} ${followed.line} to ${followed.to} has left ${STOP}: run it once more`);
+    await evaluate(`document.querySelectorAll('#panel-body .row.departure')[${row}].click()`);
+    await waitFor("document.querySelector('#panel-body .rail') !== null", 'The trip');
+  }
+  // The zoom the map is at, as the page keeps it: in the address of a display, else in the browser.
+  const zoomNow = () => evaluate("Number((new URL(location.href).searchParams.get('view') ?? JSON.parse(localStorage.getItem('netnou.view') ?? '{}').zoom ?? '').toString().split(',').at(-1)) || null");
+  /** Zooms the map with its own buttons until it is at about `zoom`, around the middle of the map. */
+  async function zoomTo(zoom) {
+    for (let step = 0; step < 8; step++) {
+      const now = await zoomNow();
+      if (now === null || Math.abs(now - zoom) < 0.5) return;
+      await evaluate(`document.querySelector('.maplibregl-ctrl-zoom-${now > zoom ? 'out' : 'in'}').click()`);
+      await sleep(700);
+    }
   }
 
   await screen(PHONE);
   // The departures of the stop, as somebody coming from a search engine sees them.
-  await go(`${stopPath(stop.name, stop.lat, stop.lon)}?lang=en`);
+  await go(stopAddress);
   await waitFor("document.querySelectorAll('#panel-body .row.departure').length > 0", 'The departures');
   await settle();
   await shoot('departures');
-  // The trip of one of them: a tap on a departure whose vehicle is under way, and the map goes to it.
-  const row = await departureUnderWay(stop.id);
-  await evaluate(`document.querySelectorAll('#panel-body .row.departure')[${row}].click()`);
-  await waitFor("document.querySelector('#panel-body .rail') !== null", 'The trip');
+  // The trip of the bus: a tap on its departure, and the map goes to it.
+  await tapFollowed();
   await settle();
   await shoot('trip');
   // The search, on the map of the whole area as the page opens.
@@ -241,20 +309,36 @@ try {
   await shoot('search');
 
   await screen(WIDE);
+  // The page as it usually looks on a wide screen: the trip of the bus beside the map of the city.
+  await go(stopAddress);
+  await tapFollowed();
+  await zoomTo(USUAL_ZOOM);
+  await settle();
+  await shoot('wide');
+  const tripUrl = new URL(await evaluate('location.href'));
   // The departures of a stop as a board beside the map, as on a screen on a wall.
   await go(`${stopPath(boardStop.name, boardStop.lat, boardStop.lon)}?lang=en&board=50`);
   await waitFor("document.querySelectorAll('.board-rows > li').length > 0", 'The board');
-  // (the map two steps further out than the stop opens it: more of the city, and still the names of lines and stops)
-  for (let step = 0; step < 2; step++) {
-    await evaluate("document.querySelector('.maplibregl-ctrl-zoom-out').click()");
-    await sleep(600);
-  }
+  // (the map further out than the stop opens it: more of the city, and still the names of lines and stops)
+  await zoomTo(USUAL_ZOOM);
   await settle();
   await shoot('board');
 
+  // The bus close up on the map alone, for the image of link previews: its trip
+  // at its address, as a display without controls, on the place it is at about now.
+  await screen(CLOSE_UP);
+  const { lat, lon } = await whereIn(followed.trip, AHEAD);
+  tripUrl.search = new URLSearchParams({ lang: 'en', display: 'fixed', view: `${lat.toFixed(5)},${lon.toFixed(5)},${CLOSE_ZOOM}` }).toString();
+  await go(tripUrl.href);
+  await waitFor("/\\d/.test(document.getElementById('status-text').textContent)", 'The vehicles');
+  // (what a display keeps of the card, the details and the credits too: the image of link previews has credits of its own)
+  await evaluate("for (const node of document.querySelectorAll('#controls, #panel, .maplibregl-control-container, #display-leave')) node.style.display = 'none'");
+  await settle();
+  fs.mkdirSync(out, { recursive: true });
+  await shoot('map', 'webp');
+
   // The pictures for the READMEs: on a transparent ground, so that they sit on
   // GitHub's light and dark pages alike, each with rounded corners and a shadow.
-  fs.mkdirSync(out, { recursive: true });
   async function compose(file, names, { width, height }, radius) {
     const html = `<!DOCTYPE html>
 <meta charset="utf-8">
@@ -270,19 +354,15 @@ ${names.map((name) => `<img src="${name}.png" alt="">`).join('\n')}
     const size = { width: PADDING * 2 + names.length * width + (names.length - 1) * GAP, height: PADDING * 2 + height };
     await send('Emulation.setDeviceMetricsOverride', { ...size, deviceScaleFactor: SCALE, mobile: false });
     await send('Emulation.setDefaultBackgroundColorOverride', { color: { r: 0, g: 0, b: 0, a: 0 } });
-    await openFile(page);
+    await go(pathToFileURL(page).href);
     const { data } = await send('Page.captureScreenshot', { format: 'webp', quality: 82, clip: { x: 0, y: 0, ...size, scale: 1 } });
     const target = path.join(out, `${file}.webp`);
     fs.writeFileSync(target, Buffer.from(data, 'base64'));
     console.log(`docs/pictures/${file}.webp: ${Math.round(size.width * SCALE)}x${Math.round(size.height * SCALE)}, ${Math.round(fs.statSync(target).size / 1024)} kB`);
   }
-  async function openFile(file) {
-    const done = new Promise((resolve) => (loaded = resolve));
-    await send('Page.navigate', { url: pathToFileURL(file).href });
-    await done;
-  }
   await compose('phone', ['departures', 'trip', 'search'], PHONE, 28);
-  await compose('wide', ['board'], WIDE, 12);
+  await compose('wide', ['wide'], WIDE, 12);
+  await compose('board', ['board'], WIDE, 12);
 } finally {
   await browser.close();
   fs.rmSync(tmp, { recursive: true, force: true });
