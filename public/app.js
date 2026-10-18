@@ -2621,6 +2621,46 @@ function clearOfSheet(y) {
   map.panBy([0, y - (bottom - margin)], { duration: 300 });
 }
 
+/**
+ * Keeps the map's buttons in its corner clear of the details (#187): beside
+ * them on a wide screen, above the sheet on a narrow one, moving with it and
+ * hidden while it leaves no map for them. A board has the map beside it, so
+ * the corner is free. The credits under the buttons stay where they are.
+ */
+let buttonsMoved = { x: 0, y: 0 };
+function clearMapButtons() {
+  const groups = [...map.getContainer().querySelectorAll('.maplibregl-ctrl-bottom-right > .maplibregl-ctrl-group')];
+  if (!groups.length) return;
+  // (where they are without being moved)
+  const rects = groups.map((group) => group.getBoundingClientRect());
+  const at = {
+    top: Math.min(...rects.map((r) => r.top)) - buttonsMoved.y,
+    bottom: Math.max(...rects.map((r) => r.bottom)) - buttonsMoved.y,
+    left: Math.min(...rects.map((r) => r.left)) - buttonsMoved.x,
+    right: Math.max(...rects.map((r) => r.right)) - buttonsMoved.x,
+  };
+  const moved = { x: 0, y: 0 };
+  let out = false;
+  if (!panel.hidden && state.board === null) {
+    const details = panel.getBoundingClientRect();
+    // (as far from the details as from the edge of the screen)
+    const gap = Math.max(0, window.innerWidth - at.right);
+    if (!narrowScreen.matches) {
+      if (details.bottom > at.top && details.left < at.right) moved.x = details.left - gap - at.right;
+    } else if (details.top < at.bottom) {
+      moved.y = details.top - gap - at.bottom;
+      out = at.top + moved.y < $('controls').getBoundingClientRect().bottom + gap;
+    }
+  }
+  buttonsMoved = moved;
+  for (const group of groups) {
+    group.style.transform = moved.x || moved.y ? `translate(${moved.x}px, ${moved.y}px)` : '';
+    group.style.visibility = out ? 'hidden' : '';
+  }
+}
+new ResizeObserver(clearMapButtons).observe(panel);
+map.on('resize', clearMapButtons);
+
 /** The sheet comes to rest at a height, and what is chosen on the map stays in sight above it. */
 function restSheet(height) {
   setSheetHeight(height);
@@ -3413,6 +3453,8 @@ async function loadArea() {
   if (window.isSecureContext && navigator.geolocation) map.addControl(locateControl, 'bottom-right');
   // (not every browser lets a page have the whole screen: an iPhone does not)
   if (document.fullscreenEnabled) map.addControl(fullscreenControl, 'bottom-right');
+  // (details may be open already, from the address)
+  clearMapButtons();
   state.outline = area.outline;
   state.bbox = area.bbox;
   askDraw();
