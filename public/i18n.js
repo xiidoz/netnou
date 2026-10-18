@@ -29,7 +29,14 @@ export const ATTRIBUTES = ['aria-label', 'title', 'content', 'placeholder'];
 
 const primary = (tag) => tag.toLowerCase().split('-')[0];
 
+// The language the server wrote the page in, as <html lang> says before
+// translatePage puts the visitor's there: picked by the browser's languages
+// or the address (server/lib/page.js), as the server knows nothing of a
+// language chosen with the picker, which is kept in the browser.
+const SENT = typeof document === 'undefined' ? null : document.documentElement.lang;
+
 let language = FALLBACK;
+let chosen = false; // whether it is the one chosen with the picker
 let messages = en;
 // What numbers and times are formatted for: the visitor's regional variant of
 // the language where the browser names one (en-GB: 14:05, en-US: 2:05 PM).
@@ -76,6 +83,7 @@ export function pickLanguage(stored, preferred, asked = null) {
 /** Loads the texts of the visitor's language and returns its code. Before that, t() answers in English. */
 export async function loadLanguage(stored = storedLanguage(), preferred = navigator.languages ?? [], asked = askedLanguage()) {
   language = pickLanguage(stored, preferred, asked);
+  chosen = language === stored;
   messages = en;
   if (language !== FALLBACK) {
     try {
@@ -89,6 +97,14 @@ export async function loadLanguage(stored = storedLanguage(), preferred = naviga
   setFormats();
   return language;
 }
+
+/**
+ * Whether the page is in a language chosen with the picker that the server
+ * did not write it in: then the title and the description the server gave
+ * it are in another language than the page.
+ * @param sent the language the server wrote the page in
+ */
+export const sentInAnother = (sent = SENT) => chosen && language !== sent;
 
 /**
  * The text for a key of locales/en.js. {name} in it is replaced by params.name,

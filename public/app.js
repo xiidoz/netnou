@@ -9,7 +9,7 @@
 // lines, stops and operators, and the notes of the feed.
 
 import { parseAddress, stopPath, wordsOf } from './address.js';
-import { APP_NAME, dayOf, formatNumber, formatTime, languagePicker, loadLanguage, pageTexts, setTimeZone, t, translatePage } from './i18n.js';
+import { APP_NAME, dayOf, formatNumber, formatTime, languagePicker, loadLanguage, pageTexts, sentInAnother, setTimeZone, t, translatePage } from './i18n.js';
 import { BOARD_MAX, BOARD_SHARE, BOARD_STOPS, boardBlocks, boardQuery, boardShare, displayQuery, ledBy, readBoard, readDisplay, readStops } from './display.js';
 import { mdiAlert, mdiArrowCollapse, mdiArrowExpand, mdiChevronRight, mdiCityVariantOutline, mdiEye, mdiEyeOff, mdiFullscreen, mdiFullscreenExit, mdiMinusCircleOutline, mdiPlaylistPlus, mdiPlus } from './vendor/material-design-icons/icons.js';
 import { AttributionControl, MapLibreMap, NavigationControl } from './vendor/maplibre-gl/maplibre-gl.mjs';
@@ -1901,8 +1901,9 @@ function tripTitle({ line: name, mode, to }) {
   return `${words.charAt(0).toUpperCase()}${words.slice(1)} – ${siteName}`;
 }
 
-// (the address the page was sent for: the title the server gave it says more than this script knows, a line's ends, and is kept while the page is there)
-let servedAt = here();
+// (the address the page was sent for: the title the server gave it says more than this script knows, a line's ends, and is kept while the page is there;
+// not where it is in another language than the one chosen here, which the server knows nothing of)
+let servedAt = sentInAnother() ? null : here();
 
 /**
  * The address of a stop from what an answer says of it. The server keeps
@@ -3445,8 +3446,9 @@ async function loadArea() {
   const page = pageTexts(area.name, undefined, area.siteName);
   pageTitle = area.siteTitle[language] ?? page.title;
   siteName = area.siteName;
-  // (at the address of a stop or a line, the page keeps the title and the description of what it names)
-  if (!here()) {
+  // (at the address of a stop or a line, the page keeps the title and the description of what it names, unless they are in
+  // another language than the one chosen here: then the page's own, and the title of what is open once it is there, see showAddress)
+  if (!here() || sentInAnother()) {
     document.title = pageTitle;
     document.querySelector('meta[name="description"]').content = area.siteDescription[language] ?? page.description;
   }
