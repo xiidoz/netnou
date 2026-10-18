@@ -1975,7 +1975,7 @@ function addressGone(path) {
   shareable(false);
   panel.hidden = false;
   panelHead.replaceChildren();
-  const gone = path.startsWith('line/') ? t('address.lineGone') : path.startsWith('trip/') ? t('address.tripGone') : t('address.stopGone');
+  const gone = path.startsWith('stop/') ? t('address.stopGone') : path.startsWith('line/') ? t('address.lineGone') : path.startsWith('trip/') ? t('address.tripGone') : t('address.gone');
   panelBody.replaceChildren(el('p', { class: 'panel-empty', text: gone }));
   const named = parseAddress(path);
   if (!named) return;

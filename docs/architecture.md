@@ -619,9 +619,13 @@ otherwise a server would load a file written by older code:
   its line that leaves its first stop then, from the stop of that name, else
   the only one that leaves then; it lives for its day, so its page is not
   for search engines. An address that names a stop or a line otherwise than its
-  own address does now sends the browser on to that (301); one that names
-  nothing is the page saying so, with 404, and with the search for the name
-  in it.
+  own address does now sends the browser on to that (301), and so does one
+  with a slash at its end; one that names nothing is the page saying so,
+  with 404, and with the search for the name in it. A browser that asks for
+  a page at any other path where there is no file gets the page saying so
+  as well (what asks for data gets JSON), and a path with a slash twice in
+  a row is sent on to its clean form
+  ([#198](https://github.com/xiidoz/netnou/issues/198)).
 - **The address in the page.** Opening a stop, a line or a trip puts its
   address into the address bar, back closes it again, and a reload keeps it.
   A trip opened at its address brings the map to it: between the stop it

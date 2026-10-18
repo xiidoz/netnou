@@ -211,6 +211,7 @@ export default {
   'address.tripTitle': '{line} to {to} live',
   'address.tripDescription': '{line} to {to}, from {from} at {time} on {day}: live on the map, with its delay at every stop.',
   'address.tripGone': 'This trip is not in the timetable.',
+  'address.gone': 'This page does not exist.',
   // (the kinds of transport within a sentence)
   'address.kind.subway': 'U-Bahn',
   'address.kind.tram': 'tram',

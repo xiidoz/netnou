@@ -342,6 +342,44 @@ function serveAddress(req, res, url) {
   return send(req, res, status, MIME['.html'], body, headers);
 }
 
+/**
+ * A path as it is answered (#198): without a slash twice in a row, and the
+ * address of a stop, a line or a trip without one at its end. One in
+ * another form is sent on to this one (moved).
+ */
+function cleanPath(pathname) {
+  const clean = pathname.replace(/\/{2,}/g, '/');
+  return /^\/(stop|line|trip)\/./i.test(clean) ? clean.replace(/\/$/, '') : clean;
+}
+
+/**
+ * Sends the browser on (301) from the path it asked for to another, given
+ * from where the instance is, by an address from where the browser is: an
+ * instance may be at a path of its own behind a proxy.
+ */
+function moved(res, from, to) {
+  res.writeHead(301, { ...SECURITY_HEADERS, Location: `${'../'.repeat(from.split('/').length - 2)}${to.slice(1)}`, 'Cache-Control': 'no-cache' });
+  res.end();
+}
+
+/** Whether a request is a browser's for a page: it takes HTML, which a script, a picture or a style sheet does not. */
+const asksForPage = (req) => /\btext\/html\b/.test(req.headers.accept ?? '');
+
+/**
+ * The page at an address that names nothing, for a browser that asks for a
+ * page there (#198): with 404, and what the page says at it (addressGone in
+ * app.js), as at the address of a stop that is not in the timetable. Not a
+ * visit of the page: such paths are tried by scanners above all.
+ */
+function serveMissing(req, res, url) {
+  const { asked: askedLanguage, language } = pageLanguage(req, url);
+  // (the page's own files are as many steps up as the browser sees the path deep: "%2F" is no step)
+  const address = { path: url.pathname.slice(1), depth: url.pathname.split('/').length - 2, gone: t('address.gone', {}, texts[language]) };
+  // (a script that asks for the same address gets JSON: whoever keeps answers is told to keep them apart)
+  const headers = { 'Cache-Control': 'no-cache', Vary: askedLanguage ? 'Accept' : 'Accept, Accept-Language', ...NOT_LISTED, ...pageInline().headers };
+  return send(req, res, 404, MIME['.html'], pageBody(language, askedLanguage, address), headers);
+}
+
 // The sitemap with the addresses of the stops and lines of the timetable
 // (lib/page.js): all its files put together at once for each timetable, and
 // kept as they are sent, without the addresses (which would take 65 MB in
@@ -376,19 +414,21 @@ function serveManifest(req, res) {
   return send(req, res, 200, MIME['.webmanifest'], manifest.body, headers);
 }
 
-function serveStatic(req, res, pathname) {
+/** @param url the address asked for, where a browser that asks for a page gets one if there is no file (serveMissing) */
+function serveStatic(req, res, pathname, url = null) {
+  const missing = () => (url && asksForPage(req) ? serveMissing(req, res, url) : sendJson(req, res, 404, { error: 'not found' }));
   const relative = pathname.endsWith('/') ? `${pathname}index.html` : pathname;
   // (a file of the operator's own takes the place of the built-in one of that address)
   const file = own.files.get(relative.slice(1)) ?? path.join(config.publicDir, path.normalize(relative));
   // path.join resolves "..", so anything outside publicDir is a traversal attempt.
-  if (!own.files.has(relative.slice(1)) && !file.startsWith(config.publicDir + path.sep)) return sendJson(req, res, 404, { error: 'not found' });
+  if (!own.files.has(relative.slice(1)) && !file.startsWith(config.publicDir + path.sep)) return missing();
   let stat;
   try {
     stat = fs.statSync(file);
   } catch {
     stat = null;
   }
-  if (!stat?.isFile()) return sendJson(req, res, 404, { error: 'not found' });
+  if (!stat?.isFile()) return missing();
 
   const type = MIME[path.extname(file).toLowerCase()] ?? 'application/octet-stream';
   const etag = `"${stat.size.toString(36)}-${Math.floor(stat.mtimeMs).toString(36)}"`;
@@ -686,7 +726,10 @@ const server = http.createServer((req, res) => {
       res.writeHead(405, { Allow: 'GET, HEAD' });
       return res.end();
     }
-    const url = new URL(req.url, 'http://localhost');
+    // (a path that begins with "//" is a path too, not the name of a host; any path is answered in its clean form)
+    const url = new URL(req.url.startsWith('/') ? `http://localhost${req.url}` : req.url, 'http://localhost');
+    const clean = cleanPath(url.pathname);
+    if (clean !== url.pathname) return moved(res, url.pathname, `${clean}${url.search}`);
     if (url.pathname.startsWith('/api/')) return handleApi(req, res, url);
     if (url.pathname === '/' || url.pathname === '/index.html') return servePage(req, res, url);
     if (url.pathname === '/manifest.webmanifest') return serveManifest(req, res);
@@ -697,8 +740,9 @@ const server = http.createServer((req, res) => {
     if (url.pathname === '/robots.txt') return send(req, res, 200, MIME['.txt'], Buffer.from(robotsTxt(sitemapAt)), { 'Cache-Control': 'no-cache' });
     const sitemap = /^\/sitemap(?:-(\d{1,4}))?\.xml$/.exec(url.pathname);
     if (sitemap && sitemapAt) return serveSitemap(req, res, Number(sitemap[1] ?? 0));
-    if (/^\/(stop|line|trip)\//.test(url.pathname)) return serveAddress(req, res, url);
-    return serveStatic(req, res, decodeURIComponent(url.pathname));
+    // (in capitals as well: the address is looked up in small letters, and sent on to its own)
+    if (/^\/(stop|line|trip)\//i.test(url.pathname)) return serveAddress(req, res, url);
+    return serveStatic(req, res, decodeURIComponent(url.pathname), url);
   } catch (err) {
     // A URL that cannot be decoded is the client's mistake and not worth a log
     // line: any scanner could fill the log with them.
