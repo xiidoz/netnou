@@ -2476,13 +2476,17 @@ function renderTrip(trip, scrollToNext) {
 
   // Once, when the trip is opened at its address (#178): the map on where it
   // is, between the stop it left last and the next one; where it is not
-  // under way, on all of its run.
+  // under way, on all of its run. Opened from a departure or from a vehicle
+  // of a line ("unseen"), only to bring a vehicle under way into view, where
+  // it is not in view already (#226).
   const selection = state.selection;
   if (!scrollToNext || !selection?.fit) return;
+  const unseen = selection.fit === 'unseen';
   selection.fit = false;
   const next = trip.stops.findIndex((stop, i) => (i === lastIndex ? stop.arr + (stop.arrDelay ?? 0) : stop.dep + (stop.depDelay ?? stop.arrDelay ?? 0)) >= trip.now);
+  if (unseen && next <= 0) return;
   const points = next > 0 ? [trip.stops[next - 1], trip.stops[next]].flatMap((stop) => [stop.lat, stop.lon]) : trip.path;
-  if (points.length < 2) return;
+  if (points.length < 2 || (unseen && inSight(points))) return;
   const lats = points.filter((_, i) => i % 2 === 0);
   const lons = points.filter((_, i) => i % 2 === 1);
   map.fitBounds([[Math.min(...lons), Math.min(...lats)], [Math.max(...lons), Math.max(...lats)]], { padding: clearOfCards(), maxZoom: LINE_ZOOM, duration: 0 });
@@ -2494,6 +2498,16 @@ function renderTrip(trip, scrollToNext) {
  */
 function selectLine(line, more = {}) {
   select('line', JSON.stringify([line.name, line.mode, line.agency, line.at ?? null]), { line, ...more });
+}
+
+/** Whether all the points (latitude, longitude, latitude, …) lie on the part of the map that the cards leave free. */
+function inSight(points) {
+  const room = clearOfCards();
+  for (let i = 0; i < points.length; i += 2) {
+    const { x, y } = map.project([points[i + 1], points[i]]);
+    if (x < room.left || x > viewSize.x - room.right || y < room.top || y > viewSize.y - room.bottom) return false;
+  }
+  return true;
 }
 
 /** What of each edge of the map is to stay free, so that the cards do not cover what is shown in between. */
@@ -2549,7 +2563,7 @@ function renderLine(line, first) {
   const lists = [...byDestination].flatMap(([destination, vehicles]) => [
     el('h3', { class: 'rows-head', text: t('line.to', { destination }) }),
     el('ul', { class: `rows${signed ? ' signed' : ''}` }, vehicles.map((v) => el('li', {}, [
-      el('button', { type: 'button', class: 'row vehicle', onclick: () => select('trip', v.id) }, [
+      el('button', { type: 'button', class: 'row vehicle', onclick: () => select('trip', v.id, { fit: 'unseen' }) }, [
         el('span', { class: 'name', text: t('line.next', { stop: v.next }), title: v.next }),
         delayCell(delayNode(v.delay), v.warnings, signed),
       ]),
@@ -2634,7 +2648,7 @@ function renderStation(board) {
   const times = state.times;
   const rows = board.departures.map((dep) =>
     el('li', {}, [
-      el('button', { type: 'button', class: `row departure times-${times}${dep.cancelled ? ' cancelled' : ''}`, onclick: () => select('trip', dep.trip) }, [
+      el('button', { type: 'button', class: `row departure times-${times}${dep.cancelled ? ' cancelled' : ''}`, onclick: () => select('trip', dep.trip, { fit: 'unseen' }) }, [
         times === 'minutes' ? minutesNode(dep, 'time') : el('span', { class: 'time', text: formatTime(dep.planned) }),
         delayCell(dep.cancelled ? el('span', { class: 'delay' }) : delayNode(dep.delay), dep.warnings, signed),
         badge(dep.line, dep.mode),
