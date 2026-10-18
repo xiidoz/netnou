@@ -2554,10 +2554,16 @@ function minutesNode(dep, far) {
   return el('span', { class: 'minutes', text: untilText(leaves, dep.planned, far), data: { leaves, planned: dep.planned, far } });
 }
 
-/** Where in a list of departures the next day begins, which a line says ("tomorrow"): the first that leaves on another date, or -1. */
+/**
+ * Where in a list of departures the next day begins, which a line says
+ * ("tomorrow"): the first planned for a later date, or -1. The list is in the
+ * order they leave, and one of the day before that leaves late, after
+ * midnight, is among those of today (#193).
+ */
 function tomorrowAt(departures) {
   const today = dayOf(now());
-  return departures.findIndex((dep) => dayOf(dep.planned) !== today);
+  // (dates as YYYY-MM-DD, which compare as the days do)
+  return departures.findIndex((dep) => dayOf(dep.planned) > today);
 }
 
 /** The minutes in the lists of departures and the clock of a board, as time goes on. */
