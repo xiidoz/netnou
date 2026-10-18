@@ -142,9 +142,9 @@ export default {
   'board.from': 'ab {stop}',
   'board.gone': '{stop} ist nicht im Fahrplan.',
 
-  'trip.realtime': 'mit Live-Verspätung',
+  'trip.realtime': 'mit Verspätungsdaten',
   'trip.scheduleOnly': 'nur nach Fahrplan',
-  'trip.source': 'Verspätungen von {source}',
+  'trip.source': 'Verspätungsdaten von {source}',
   'trip.cancelled': 'Fahrt fällt aus',
 
   'notes.more': { one: '{count} weiterer Hinweis', other: '{count} weitere Hinweise' },

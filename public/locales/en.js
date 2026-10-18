@@ -188,10 +188,10 @@ export default {
   // in place of a stop of the board the timetable does not have
   'board.gone': '{stop} is not in the timetable.',
 
-  'trip.realtime': 'with live delay',
+  'trip.realtime': 'with delay data',
   'trip.scheduleOnly': 'timetable only',
-  // {source} is the operator the delays of the trip come from
-  'trip.source': 'Delays from {source}',
+  // {source} is the operator the delay data of the trip comes from (not who caused the delay)
+  'trip.source': 'Delay data from {source}',
   'trip.cancelled': 'Trip cancelled',
 
   // The notes of the operator about a trip or a stop, in the head of the details. Past the first few, a button
