@@ -3477,6 +3477,9 @@ let stationSeq = 0;
 // change while the server runs, so it is asked for until it has answered once.
 const escapeHtml = (text) => String(text).replace(/[&<>"']/g, (char) => `&#${char.charCodeAt(0)};`);
 
+// Where the links to the software lead: to its README, which a phone shows only below a list of the files of the repository.
+const readmeOf = (homepage) => `${homepage}#readme`;
+
 /**
  * What is running, for the credits: the name with a link to where it comes
  * from and the version, "edge" together with its commit. If the server knows
@@ -3486,7 +3489,7 @@ const escapeHtml = (text) => String(text).replace(/[&<>"']/g, (char) => `&#${cha
 function versionCredit(about) {
   if (typeof about?.version !== 'string' || typeof about.homepage !== 'string') return '';
   const version = about.version === 'edge' && about.commit ? `edge · ${about.commit.slice(0, 7)}` : about.version;
-  const credit = `<a href="${escapeHtml(about.homepage)}" target="_blank" rel="noopener">${APP_NAME}</a> ${escapeHtml(version)}`;
+  const credit = `<a href="${escapeHtml(readmeOf(about.homepage))}" target="_blank" rel="noopener">${APP_NAME}</a> ${escapeHtml(version)}`;
   if (!about.update) return credit;
   const note = escapeHtml(t('update.available', { version: about.update.version }));
   return `${credit} <a class="update" href="${escapeHtml(about.update.url)}" title="${note}" target="_blank" rel="noopener">↑ ${escapeHtml(about.update.version)}</a>`;
@@ -3562,7 +3565,7 @@ async function loadArea() {
   // What "how it works" ends with: the software by its name, as in the credits, with the way to its source.
   if (typeof about?.homepage === 'string') {
     const [before, after] = t('about.source').split('{software}');
-    $('about-source').replaceChildren(before, el('a', { href: about.homepage, target: '_blank', rel: 'noopener', text: APP_NAME }), after);
+    $('about-source').replaceChildren(before, el('a', { href: readmeOf(about.homepage), target: '_blank', rel: 'noopener', text: APP_NAME }), after);
     $('about-source').hidden = false;
   }
   state.areaKnown = true;
