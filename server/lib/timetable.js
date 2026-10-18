@@ -1155,17 +1155,31 @@ export class Timetable extends Schedule {
 
   /**
    * Where line number `index` runs on the day of `now`, as its view draws it
-   * (#148): the routes of its trips of that day, each stretch between two
-   * stops once, as lines [lat, lon, …]; the places of the stations they call
-   * at, [lat, lon, …]; and the rectangle around those of them in the area,
-   * [south, west, north, east], or around all where none is.
+   * (#148): the routes of its trips of that day and of those of the day
+   * before that have not arrived yet, each stretch between two stops once,
+   * as lines [lat, lon, …]; the places of the stations they call at, [lat,
+   * lon, …]; and the rectangle around those of them in the area, [south,
+   * west, north, east], or around all where none is.
    */
   lineRoute(index, now) {
-    // the ways its trips of the day take: a pattern on the network of its route
+    // the ways its trips take: a pattern on the network of its route
     const ways = new Map();
-    for (const t of this.activeTrips(localDate(now))) {
+    const add = (t) => {
       const route = this.tripRoute[t];
       if (this.tripLine[t] === index) ways.set(`${this.tripPattern[t]} ${this.routeNets[route]}`, [this.tripPattern[t], this.routeNets[route]]);
+    };
+    const today = localDate(now);
+    for (const t of this.activeTrips(today)) add(t);
+    // Yesterday's service day is still running after midnight (times > 24:00),
+    // as for vehicles(): its trips that have not arrived yet, which are at the
+    // end of those in the order of their last arrivals (see underWay).
+    const yesterday = addDays(today, -1);
+    const rel = now - serviceDayStart(yesterday);
+    const { byEnd } = this.activeTrips(yesterday);
+    for (let k = byEnd.length - 1; k >= 0; k--) {
+      const t = byEnd[k];
+      if (this.tripStart[t] + this.profileRun[this.tripProfile[t]] + TRAIL_S < rel) break;
+      add(t);
     }
     const { lat, lon, region } = this.stops;
     const stopCount = this.stops.id.length;

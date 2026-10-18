@@ -884,6 +884,9 @@ li:last-child > .row.stop .rail::before { bottom: 50%; }
 @media (max-width: 720px) {
   :root { --gap: 8px; }
 
+  /* (the sheet that opens shows where the focus went: no ring around it, which the keys of a phone's own keyboard would show too) */
+  .panel:focus-visible { outline: none; }
+
   .controls {
     width: auto;
     right: calc(var(--gap) + var(--safe-right));

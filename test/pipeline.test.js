@@ -340,6 +340,23 @@ test('a line is the trips of a name, mode and operator that share stations: of o
   assert.equal(apart.searchList().list.lines.name.filter((name) => name === 'U1').length, 2);
 });
 
+test('a line that runs only at night has its route after midnight until its trips of the day before have arrived (#189)', async () => {
+  // a night bus from Gamma to Alpha, on Fridays only, after midnight
+  const night = await importFeed({
+    'routes.txt': `${FEED['routes.txt']},N1,1,3,R7,,\n`,
+    'trips.txt': `${FEED['trips.txt']}R7,FRI,T7\n`,
+    'stop_times.txt': `${FEED['stop_times.txt']}T7,24:40:00,24:40:00,C,0,,,\nT7,25:40:00,25:40:00,A,1,,,\n`,
+  }, 'night.zip');
+  const n1 = night.lineNumber({ name: 'N1', mode: 'bus', agency: 'Testbetrieb' });
+  const route = { paths: [[49.6, 11.1, 49.4, 11]], stations: [49.6, 11.1, 49.4, 11], bounds: [49.4, 11, 49.6, 11.1] };
+  const none = { paths: [], stations: [], bounds: null };
+  // on Friday evening, and on Saturday before it leaves (00:30), while it runs (01:15) and until it has arrived (01:40)
+  for (const hhmm of ['20:00', '24:30', '25:15', '25:40']) assert.deepEqual(night.lineRoute(n1, at(hhmm, '20261002')), route, hhmm);
+  assert.deepEqual(night.vehicles(at('25:15', '20261002'), null).map((v) => v.id), ['T4_20261002', 'T7_20261002']);
+  // then none: it runs neither on Saturday nor in the night before Sunday
+  for (const time of [at('25:41', '20261002'), at('12:00'), at('25:15')]) assert.deepEqual(night.lineRoute(n1, time), none);
+});
+
 test('calendar and calendar_dates decide which days a trip runs', () => {
   const t1 = timetable.tripIndex.get('T1');
   assert.ok(timetable.runsOn(t1, '20261003'));
