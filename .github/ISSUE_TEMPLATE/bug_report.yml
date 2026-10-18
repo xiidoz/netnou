@@ -18,7 +18,7 @@ body:
     attributes:
       label: How do you run Netnou?
       options:
-        - I use the public instance (netnou.xiidoz.com)
+        - I use a public instance (please give its address above)
         - Docker, published image (ghcr.io/xiidoz/netnou)
         - Docker, image built from a checkout
         - Node.js (npm start)
@@ -29,30 +29,28 @@ body:
     id: version
     attributes:
       label: Version
-      description: As the page shows it at the end of the credits in the corner of the map, for example 0.2.0 or edge · 479e29c. It is also the "version" field of /api/status.
-    validations:
-      required: true
+      description: As the page shows it at the end of the credits in the corner of the map, for example 0.16.1 or edge · 479e29c; on a phone the credits open with the (i). It is also the "version" field of /api/status. Leave empty if you cannot find it.
   - type: input
     id: environment
     attributes:
       label: Environment
-      description: Operating system, Node.js or Docker version, and the browser if the problem is in the page. For the public instance, the browser and the device are enough.
+      description: Operating system, Node.js or Docker version, and the browser if the problem is in the page. For a public instance, the browser and the device are enough.
       placeholder: Debian 13, Docker 29, Firefox 143
   - type: textarea
     id: settings
     attributes:
       label: Settings
-      description: The environment variables you have set (NETNOU_BBOX, NETNOU_AREA_FILE, NETNOU_OSM_PBF_URLS, ...). Leave empty for the defaults and for the public instance.
+      description: The environment variables you have set (NETNOU_BBOX, NETNOU_AREA_FILE, NETNOU_OSM_PBF_URLS, ...). Leave empty for the defaults and for a public instance.
       render: shell
   - type: textarea
     id: status
     attributes:
       label: Output of /api/status
-      description: Open /api/status on your instance, or https://netnou.xiidoz.com/api/status for the public one, and paste the answer.
+      description: Open /api/status on the instance, after its address (for example https://example.org/api/status), and paste the answer.
       render: json
   - type: textarea
     id: log
     attributes:
       label: Log output
-      description: The lines the server printed around the problem (docker compose logs netnou). Leave empty for the public instance.
+      description: The lines the server printed around the problem (docker compose logs netnou). Leave empty for a public instance.
       render: text
