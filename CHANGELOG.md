@@ -8,6 +8,13 @@ This file is written by
 messages when a release is made. Do not edit it by hand; see
 [Releases](CONTRIBUTING.md#releases).
 
+## [0.16.0](https://github.com/xiidoz/netnou/compare/v0.15.2...v0.16.0) (2026-10-18)
+
+
+### Features
+
+* **page:** up to four stops on one board, each in a block of its own or in one list ([#185](https://github.com/xiidoz/netnou/issues/185)) ([7e5210f](https://github.com/xiidoz/netnou/commit/7e5210f92e0212b8f430ca5d71e0f6342b0feb52)), closes [#163](https://github.com/xiidoz/netnou/issues/163)
+
 ## [0.15.2](https://github.com/xiidoz/netnou/compare/v0.15.1...v0.15.2) (2026-10-17)
 
 
