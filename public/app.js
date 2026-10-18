@@ -1454,10 +1454,12 @@ function chooseStop(stop) {
 }
 
 searchField.addEventListener('input', runSearch);
+// (true while the page gives the field the focus back: it does not open the results of last time then, see closePanel)
+let focusGivenBack = false;
 searchField.addEventListener('focus', () => {
   // what is in the field from last time is typed over, and found again until then
   searchField.select();
-  runSearch();
+  if (!focusGivenBack) runSearch();
 });
 searchField.addEventListener('keydown', (event) => {
   if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
@@ -1468,7 +1470,11 @@ searchField.addEventListener('keydown', (event) => {
   } else if (event.key === 'Enter') {
     // without the arrow keys it is the first one, the most likely; and the key does nothing else (a button of a board that gets the focus would take it as a press)
     event.preventDefault();
-    found[Math.max(active, 0)]?.();
+    const choose = found[Math.max(active, 0)];
+    if (!choose) return;
+    choose();
+    // (the details that open get the focus, and not the start of the page; a stop added to a board has it on the board already)
+    if (!panel.hidden && !panel.contains(document.activeElement)) panel.focus({ preventScroll: true });
   } else if (event.key === 'Escape') {
     // (and not the details as well, which the same key closes otherwise)
     event.stopPropagation();
@@ -1476,12 +1482,20 @@ searchField.addEventListener('keydown', (event) => {
   }
 });
 
-/** Shuts the search without choosing anything; where it was to add a stop to a board, the focus goes back to the button that opened it. */
+/**
+ * Shuts the search without choosing anything. The focus stays in the field;
+ * on a narrow screen, where the field goes with the search, it goes to the
+ * button that opens it. Where the search was to add a stop to a board, it
+ * goes back to the button that opened it.
+ */
 function cancelSearch() {
   const adding = endAdding();
   closeSearch();
-  searchField.blur();
   if (adding) focusBoard(adding.block === null ? 'add' : `merge:${adding.block}`);
+  else if (narrowScreen.matches) {
+    searchField.blur(); // a keyboard on the screen goes away
+    $('search-open').focus();
+  }
 }
 // A click on a result must not take the focus from the field first: the list
 // would be shut before the click arrives.
@@ -1815,8 +1829,12 @@ const panel = $('panel');
 const panelHead = $('panel-head');
 const panelBody = $('panel-body');
 let panelTimer = null;
+// (what had the keyboard focus when the details opened: see closePanel)
+let panelOpener = null;
 
 function closePanel() {
+  // (asked before a board that closes builds the details anew: see below)
+  const keyboard = panel.contains(document.activeElement) && document.activeElement.matches(':focus-visible');
   if (state.adding) closeSearch();
   // (a board closes with its details, and the address loses it)
   if (state.board !== null) setBoard(null);
@@ -1829,6 +1847,16 @@ function closePanel() {
   clearTimeout(panelTimer);
   hideSaid();
   panel.hidden = true;
+  // The keyboard focus goes back to what opened the details, or else to the
+  // search, and not to the start of the page (#194). After a click or a tap
+  // it is left where it falls: moved, it would show a ring.
+  if (keyboard) {
+    focusGivenBack = true;
+    panelOpener?.focus({ preventScroll: true });
+    if (document.activeElement !== panelOpener) (narrowScreen.matches ? $('search-open') : searchField).focus({ preventScroll: true });
+    focusGivenBack = false;
+  }
+  panelOpener = null;
   // (opened again, the sheet is as high as it is by itself)
   setSheetHeight(null);
   draw();
@@ -2020,6 +2048,8 @@ function select(type, id, more = {}) {
   if (type !== 'station' && state.board !== null) setBoard(null);
   // The row that was activated is about to go: keep the keyboard focus in the panel.
   if (panelBody.contains(document.activeElement) || panelHead.contains(document.activeElement)) panel.focus({ preventScroll: true });
+  // (what they are opened from, to have the focus back when they close)
+  if (panel.hidden) panelOpener = document.activeElement === document.body ? null : document.activeElement;
   const picked = pickedQuery();
   state.selection = { type, id, data: null, ...more };
   delete state.selection.stops;
