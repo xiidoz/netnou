@@ -34,10 +34,10 @@
     <div class="title">
       <h1>Netnou</h1>
       <p id="area-name"></p>
-      <button type="button" class="search-open" id="search-open" aria-label="Search" data-i18n-aria-label="search.open" data-icon="mdiMagnify"></button>
+      <button type="button" class="search-open" id="search-open" aria-label="Search" data-i18n-aria-label="search.open" title="Search" data-i18n-title="search.open" data-icon="mdiMagnify"></button>
       <!-- Takes the controls away and brings them back: of the card this row stays (see "display mode" in app.js, which opens the eye while they are away). -->
       <button type="button" class="display-toggle" id="display-toggle" aria-label="Hide the controls" data-i18n-aria-label="display.enter" data-icon="mdiEyeOff"></button>
-      <button type="button" class="settings-open" id="settings-open" aria-label="Settings" data-i18n-aria-label="settings.title" aria-expanded="false" aria-controls="settings" data-icon="mdiCog"></button>
+      <button type="button" class="settings-open" id="settings-open" aria-label="Settings" data-i18n-aria-label="settings.title" title="Settings" data-i18n-title="settings.title" aria-expanded="false" aria-controls="settings" data-icon="mdiCog"></button>
     </div>
     <!-- What a visitor can set for themselves, kept in their browser: the
          language (app.js fills in the list), whether the page is light or
@@ -86,7 +86,7 @@
     <div class="search" id="search" role="search">
       <span class="search-sign" data-icon="mdiMagnify"></span>
       <input type="search" id="search-field" role="combobox" aria-expanded="false" aria-controls="search-results" aria-autocomplete="list" autocomplete="off" autocapitalize="off" spellcheck="false" enterkeyhint="search" placeholder="Search for a town, a stop or a line" data-i18n-placeholder="search.label" aria-label="Search for a town, a stop or a line" data-i18n-aria-label="search.label">
-      <button type="button" class="search-close" id="search-close" aria-label="Close the search" data-i18n-aria-label="search.close" data-icon="mdiClose"></button>
+      <button type="button" class="search-close" id="search-close" aria-label="Close the search" data-i18n-aria-label="search.close" title="Close the search" data-i18n-title="search.close" data-icon="mdiClose"></button>
       <div class="search-drop">
         <!-- (what a stop picked is added to, where the search adds one to a board: see "a board of several stops" in app.js) -->
         <p class="search-mode" id="search-mode" hidden></p>
@@ -146,10 +146,10 @@
   <aside class="card panel" id="panel" hidden tabindex="-1" aria-label="Details" data-i18n-aria-label="panel.label">
     <button type="button" class="handle" id="panel-handle" aria-label="Make the details larger or smaller" data-i18n-aria-label="panel.resize"></button>
     <!-- the address of a stop or a line, for others (#37) -->
-    <button type="button" class="share" id="panel-share" hidden aria-label="Share" data-i18n-aria-label="panel.share" data-icon="mdiShareVariant"></button>
+    <button type="button" class="share" id="panel-share" hidden aria-label="Share" data-i18n-aria-label="panel.share" title="Share" data-i18n-title="panel.share" data-icon="mdiShareVariant"></button>
     <!-- enlarges the details of a stop into a board, and makes them the details again (#81, "the board" in app.js) -->
     <button type="button" class="enlarge" id="panel-board" hidden aria-label="Enlarge" data-i18n-aria-label="panel.enlarge" title="Enlarge" data-i18n-title="panel.enlarge" data-icon="mdiArrowExpand"></button>
-    <button type="button" class="close" id="panel-close" aria-label="Close" data-i18n-aria-label="panel.close" data-icon="mdiClose"></button>
+    <button type="button" class="close" id="panel-close" aria-label="Close" data-i18n-aria-label="panel.close" title="Close" data-i18n-title="panel.close" data-icon="mdiClose"></button>
     <p class="copied" id="panel-copied" role="status" hidden data-i18n="panel.copied">Address copied</p>
     <div id="panel-head"></div>
     <div id="panel-body"></div>
@@ -161,7 +161,7 @@
        (app.js fills it in). -->
   <dialog class="dialog" id="about" aria-labelledby="about-title">
     <div class="handle" id="about-handle"></div>
-    <button type="button" class="close" id="about-close" aria-label="Close" data-i18n-aria-label="panel.close" data-icon="mdiClose"></button>
+    <button type="button" class="close" id="about-close" aria-label="Close" data-i18n-aria-label="panel.close" title="Close" data-i18n-title="panel.close" data-icon="mdiClose"></button>
     <div class="dialog-body">
       <h2 id="about-title" data-i18n="about.title">How it works</h2>
       <h3 data-i18n="about.positions">Positions</h3>
@@ -185,7 +185,7 @@
        into it what the note that was pressed says. -->
   <dialog class="dialog" id="notes" aria-labelledby="notes-title">
     <div class="handle" id="notes-handle"></div>
-    <button type="button" class="close" id="notes-close" aria-label="Close" data-i18n-aria-label="panel.close" data-icon="mdiClose"></button>
+    <button type="button" class="close" id="notes-close" aria-label="Close" data-i18n-aria-label="panel.close" title="Close" data-i18n-title="panel.close" data-icon="mdiClose"></button>
     <div class="dialog-body">
       <h2 id="notes-title"></h2>
       <div id="notes-text"></div>
