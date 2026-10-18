@@ -46,14 +46,18 @@ server/
   areas/germany.geojson  border of Germany, drawn for NETNOU_AREA=Germany (generated)
 public/
   index.html, app.js, style.css   the page
-  search.js           finding stops and lines by name
+  first.js            light or dark, and the card, before anything is drawn
+  address.js          the addresses of stops, lines and trips
+  display.js          what the address of a board or a display on a wall says
+  search.js           finding towns, stops and lines by name
   search-worker.js    the thread it runs in
   i18n.js, locales/   texts per language
   sw.js, manifest.webmanifest, icons/   installable app
   vendor/maplibre-gl/ vendored map library
   vendor/material-design-icons/   the icons of the buttons
 test/                 tests and their fixtures (helpers.js)
-tools/                scripts run by hand: default area, app icons, measuring a feed
+tools/                scripts run by hand: default area, border of Germany, app icons,
+                      social preview, measuring a feed
 docs/                 documentation
 ```
 
