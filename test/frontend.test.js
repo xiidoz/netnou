@@ -334,9 +334,10 @@ test('the header card comes as most visitors get it', () => {
     assert.equal(key, mode);
     assert.ok(css.includes(`.chip[data-mode="${mode}"] { --chip-color: var(--mode-${mode}); }`), `the colour of the chip of ${mode}`);
   }
-  // coloured by mode, and so without the legend of the delays
-  assert.match(card, /<button type="button" data-color-by="mode" aria-pressed="true"/);
-  assert.match(card, /<button type="button" data-color-by="delay" aria-pressed="false"/);
+  // the delays as numbers on vehicles coloured by kind, as the settings have it first (#220), and so without the legend of the delays
+  assert.match(card, /<button type="button" data-delays-choice="number" aria-pressed="true"/);
+  assert.match(card, /<button type="button" data-delays-choice="color" aria-pressed="false"/);
+  assert.match(card, /<button type="button" data-delays-choice="off" aria-pressed="false"/);
   assert.match(card, /<ul class="legend" id="delay-legend" hidden><\/ul>/);
   // of the arrows of the row of chips the one at its end, where the row goes on
   assert.match(card, /<button type="button" class="chips-more back" id="modes-back" [^>]*\shidden>/);

@@ -91,7 +91,7 @@ otherwise. Use it in `public/app.js` through `t('some.key', { … })`, or in
 `public/index.html` through an attribute:
 
 ```html
-<span data-i18n="colorBy.title">Colour by</span>
+<span data-i18n="about.title">How it works</span>
 <button data-i18n-aria-label="panel.close" aria-label="Close">×</button>
 ```
 
