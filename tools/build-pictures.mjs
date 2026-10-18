@@ -262,7 +262,7 @@ try {
   // The search, on the map of Nürnberg and Fürth.
   await go('?lang=en');
   await waitFor("/\\d/.test(document.getElementById('status-text').textContent)", 'The vehicles');
-  await evaluate("document.getElementById('search-open').click(); document.getElementById('search-field').focus()");
+  await evaluate("document.getElementById('search-field').focus()");
   await page.send('Input.insertText', { text: SEARCH });
   await waitFor("document.querySelectorAll('#search-results li').length > 0", 'What the search finds');
   await settle();
