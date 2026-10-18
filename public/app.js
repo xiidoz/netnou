@@ -1123,10 +1123,7 @@ map.on('click', (event) => {
   if (FIXED) return;
   hideTooltip();
   const hit = hitTest(event.point);
-  if (hit?.vehicle) {
-    showAddress('', null);
-    select('trip', hit.vehicle.id);
-  }
+  if (hit?.vehicle) select('trip', hit.vehicle.id);
   else if (hit?.station) {
     // (the stops of a board are open already, the one it is of and its further stops)
     if (!onBoard(hit.station)) select('station', hit.station.id);
@@ -1836,8 +1833,8 @@ function closePanel() {
   // (asked before a board that closes builds the details anew: see below)
   const keyboard = panel.contains(document.activeElement) && document.activeElement.matches(':focus-visible');
   if (state.adding) closeSearch();
-  // (a board closes with its details, and the address loses it)
-  if (state.board !== null) setBoard(null);
+  // (a board closes with its details; its address stays as it was, the step back to it)
+  if (state.board !== null) setBoard(null, false);
   const picked = pickedQuery();
   state.selection = null;
   state.extra = [];
@@ -1922,8 +1919,8 @@ function showAddress(path, title) {
     servedAt = null;
   }
   if (path === here()) return;
-  // (the settings of the page in its address stay; the further stops of a board stay with the board they were on)
-  history.pushState(null, '', new URL(`${path}${boardQuery(location.search, readBoard(location.search), state.extra)}`, document.baseURI));
+  // (the settings of the page in its address stay; a board, with its further stops, only where one is shown)
+  history.pushState(null, '', new URL(`${path}${boardQuery(location.search, state.board, state.extra)}`, document.baseURI));
 }
 
 /**
@@ -1945,8 +1942,9 @@ async function openAddress(loaded = false) {
     return true;
   }
   const found = await res.json();
-  // (a stop that has moved a little, or has another name: the address it has now)
-  if (found.path !== path) history.replaceState(null, '', new URL(`${found.path}${location.search}`, document.baseURI));
+  // (a stop that has moved a little, or has another name: the address it has now; that of a line or a trip without a board, which only a stop has)
+  const search = found.type === 'stop' ? location.search : boardQuery(location.search, null);
+  if (found.path !== path || search !== location.search) history.replaceState(null, '', new URL(`${found.path}${search}`, document.baseURI));
   if (found.type === 'line') {
     selectLine(found, { counted: loaded });
     return true;
@@ -2044,8 +2042,8 @@ shareButton.addEventListener('click', async () => {
 function select(type, id, more = {}) {
   // (the further stops of a board are those of the address it was opened with, else none: see "a board of several stops")
   state.extra = type === 'station' ? (more.stops ?? []) : [];
-  // (a board is of a stop: what else is opened is shown as details)
-  if (type !== 'station' && state.board !== null) setBoard(null);
+  // (a board is of a stop: what else is opened is shown as details, at an address of its own; that of the board stays as it was, the step back to it)
+  if (type !== 'station' && state.board !== null) setBoard(null, false);
   // The row that was activated is about to go: keep the keyboard focus in the panel.
   if (panelBody.contains(document.activeElement) || panelHead.contains(document.activeElement)) panel.focus({ preventScroll: true });
   // (what they are opened from, to have the focus back when they close)
