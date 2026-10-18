@@ -185,12 +185,19 @@ earlier ones.
   regenerating it changes nothing that is stored.
 - **`public/icons/*.png`** are rendered from `public/favicon.svg` by
   `npm run build:icons`, which needs Chrome, Chromium or Edge (set `CHROME`
-  to its path if it is not found). Run it after changing the favicon and
-  commit the result.
+  to its path if it is not found, and `CHROME_ARGS=--no-sandbox` in a
+  container). Run it after changing the favicon and commit the result.
+- **`docs/pictures/*.webp`**, the pictures of the page in the READMEs, are
+  taken by `npm run build:pictures` with the same browser, from a running
+  instance of the default area: `npm start` in another window, or the
+  address of one after `--`. Take them again after a change to the look of
+  the card, the details, the search or the board, at a time when much is
+  under way, best around midday on a weekday, and commit them. They show
+  the instance at that moment, so no two runs give the same pictures.
 - **`docs/social-preview.png`**, the image shown where the repository is
   linked in chats and on social media, is put together from
-  `docs/screenshot.png` and the favicon by `npm run build:social`, with the
-  same browser. Run it after renewing the screenshot and commit the result.
+  `docs/pictures/phone.webp` and the favicon by `npm run build:social`, with
+  the same browser. Run it after taking the pictures and commit the result.
   GitHub does not take the image from the repository: a maintainer uploads it
   under Settings → General → Social preview.
 - **`public/vendor/maplibre-gl/`** holds unmodified files of the MapLibre GL

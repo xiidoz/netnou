@@ -1,7 +1,7 @@
 // Renders docs/social-preview.png, the image shown where the repository is
 // linked in chats and on social media, with a headless Chrome. It is put
-// together from the README screenshot, the favicon and a few words, so run it
-// by hand after renewing docs/screenshot.png:
+// together from the pictures of the READMEs, the favicon and a few words, so
+// run it by hand after npm run build:pictures:
 //
 //   node tools/build-social-preview.mjs   (CHROME=<path> if Chrome, Chromium or Edge is not found automatically)
 //
@@ -18,38 +18,29 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import { chromeArgs, findChrome } from './chrome.mjs';
 
 const WIDTH = 1280;
 const HEIGHT = 640;
 const MAX_BYTES = 1_000_000;
-// How much of the width the words take; the screenshot fills the rest.
+// How much of the width the words take; two phones fill the rest.
 const PANEL = 620;
 const MARGIN = 80;
-
-// Chrome, Chromium or Edge in the place each platform installs it; CHROME overrides the search.
-function findChrome() {
-  const env = process.env;
-  if (env.CHROME) return env.CHROME;
-  const candidates = {
-    win32: [env.PROGRAMFILES, env['PROGRAMFILES(X86)'], env.LOCALAPPDATA].filter(Boolean).flatMap((dir) => [
-      path.join(dir, 'Google/Chrome/Application/chrome.exe'),
-      path.join(dir, 'Chromium/Application/chrome.exe'),
-      path.join(dir, 'Microsoft/Edge/Application/msedge.exe'),
-    ]),
-    darwin: [
-      '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
-      '/Applications/Chromium.app/Contents/MacOS/Chromium',
-      '/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge',
-    ],
-  }[process.platform] ?? ['google-chrome', 'google-chrome-stable', 'chromium', 'chromium-browser', 'microsoft-edge']
-    .flatMap((name) => (env.PATH ?? '').split(path.delimiter).filter(Boolean).map((dir) => path.join(dir, name)));
-  const found = candidates.find((file) => fs.existsSync(file));
-  if (!found) throw new Error('No Chrome, Chromium or Edge found. Set CHROME to the path of the browser.');
-  return found;
-}
+// docs/pictures/phone.webp as build-pictures.mjs lays it out, in CSS pixels:
+// three phones 390 px wide, 24 px apart, 20 px from the edges. The first two
+// show here, each SHOWN px wide, side by side in the middle, from TOP down.
+const PHONES = { width: 390, gap: 24, padding: 20, count: 3 };
+const SHOWN = 280;
+const TOP = 28;
+const ZOOM = SHOWN / PHONES.width;
+const phonesWidth = (PHONES.padding * 2 + PHONES.count * PHONES.width + (PHONES.count - 1) * PHONES.gap) * ZOOM;
+const phonesLeft = (WIDTH - PANEL - (2 * PHONES.width + PHONES.gap) * ZOOM) / 2 - PHONES.padding * ZOOM;
+const phonesTop = TOP - PHONES.padding * ZOOM;
+// (to the middle of the gap after the second phone: the third stays out)
+const phonesShown = (PHONES.padding + 2 * PHONES.width + 1.5 * PHONES.gap) * ZOOM;
 
 const root = fileURLToPath(new URL('../', import.meta.url));
-const screenshot = path.join(root, 'docs', 'screenshot.png');
+const phones = path.join(root, 'docs', 'pictures', 'phone.webp');
 const favicon = path.join(root, 'public', 'favicon.svg');
 const out = path.join(root, 'docs', 'social-preview.png');
 
@@ -61,8 +52,9 @@ const html = `<!DOCTYPE html>
   * { box-sizing: border-box; margin: 0; }
   html, body { width: ${WIDTH}px; height: ${HEIGHT}px; overflow: hidden; background: #fff; }
   body { position: relative; font: 28px/1.35 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; color: #1b1f24; }
-  /* The right-hand part of the screenshot at its own size, from its top edge: the map and the stop list. */
-  .shot { position: absolute; top: 0; right: 0; width: ${WIDTH - PANEL}px; height: ${HEIGHT}px; background: url("${pathToFileURL(screenshot).href}") right top no-repeat; }
+  /* The departures of a stop and the trip of one of them, on a phone each. */
+  .shot { position: absolute; top: 0; right: 0; width: ${WIDTH - PANEL}px; height: ${HEIGHT}px; background: #e9edf1; }
+  .phones { position: absolute; top: 0; left: ${phonesLeft}px; width: ${phonesShown}px; height: ${HEIGHT}px; background: url("${pathToFileURL(phones).href}") 0 ${phonesTop}px / ${phonesWidth}px auto no-repeat; }
   .panel { position: absolute; inset: 0 auto 0 0; width: ${PANEL}px; padding: ${MARGIN}px 56px ${MARGIN}px ${MARGIN}px; background: #fff; box-shadow: 0 0 28px rgb(0 0 0 / 0.28); display: flex; flex-direction: column; }
   .name { display: flex; align-items: center; gap: 22px; }
   .name img { width: 96px; height: 96px; }
@@ -71,10 +63,10 @@ const html = `<!DOCTYPE html>
   .more { margin-top: 20px; color: #5c6670; }
   .modes { margin-top: auto; display: flex; gap: 14px; }
   .modes span { width: 26px; height: 26px; border-radius: 50%; }
-  /* Whose map and whose data the screenshot shows: its own credits are cut off at the bottom. */
+  /* Whose map and whose data the phones show: their own credits are under the details. */
   .credits { position: absolute; right: 0; bottom: 0; padding: 3px 10px; background: rgb(255 255 255 / 0.9); color: #5c6670; font-size: 12px; line-height: 1.5; white-space: nowrap; }
 </style>
-<div class="shot"></div>
+<div class="shot"><div class="phones"></div></div>
 <div class="credits">OpenFreeMap © OpenMapTiles Data from OpenStreetMap · Timetable data: GTFS.DE / DELFI e.V. (CC BY-SA 4.0)</div>
 <div class="panel">
   <div class="name"><img src="${pathToFileURL(favicon).href}" alt=""><h1>Netnou</h1></div>
@@ -90,7 +82,7 @@ try {
   fs.writeFileSync(source, html);
   execFileSync(findChrome(), [
     '--headless=new', '--hide-scrollbars', '--force-device-scale-factor=1', `--user-data-dir=${path.join(tmp, 'profile')}`,
-    `--window-size=${WIDTH},${HEIGHT}`, `--screenshot=${out}`, pathToFileURL(source).href,
+    `--window-size=${WIDTH},${HEIGHT}`, `--screenshot=${out}`, ...chromeArgs(), pathToFileURL(source).href,
   ], { stdio: 'ignore' });
   const png = fs.readFileSync(out);
   const [width, height] = [png.readUInt32BE(16), png.readUInt32BE(20)];

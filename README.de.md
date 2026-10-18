@@ -18,7 +18,9 @@ Verspätungen, aber keine Positionen. Deshalb wird jedes Fahrzeug dort
 gezeichnet, wo es laut Fahrplan und gemeldeter Verspätung gerade sein müsste.
 Ein Fahrzeug kann also etwas vor oder hinter seiner Markierung sein.
 
-![Karte der Nürnberger Innenstadt mit Bussen, Straßenbahnen und Zügen als farbigen Markierungen; ein Feld zeigt die Halte der Tram 4 mit ihren Verspätungen](docs/screenshot.png)
+![Drei Handys: die Abfahrten von Nürnberg Plärrer, die Fahrt einer davon mit ihrem Fahrzeug auf der Karte und die Suche, die Fürth findet](docs/pictures/phone.webp)
+
+![Ein breiter Bildschirm mit den Abfahrten von Nürnberg Hauptbahnhof als Tafel neben der Karte](docs/pictures/wide.webp)
 
 ## Was die Karte kann
 

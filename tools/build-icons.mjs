@@ -12,28 +12,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-
-// Chrome, Chromium or Edge in the place each platform installs it; CHROME overrides the search.
-function findChrome() {
-  const env = process.env;
-  if (env.CHROME) return env.CHROME;
-  const candidates = {
-    win32: [env.PROGRAMFILES, env['PROGRAMFILES(X86)'], env.LOCALAPPDATA].filter(Boolean).flatMap((dir) => [
-      path.join(dir, 'Google/Chrome/Application/chrome.exe'),
-      path.join(dir, 'Chromium/Application/chrome.exe'),
-      path.join(dir, 'Microsoft/Edge/Application/msedge.exe'),
-    ]),
-    darwin: [
-      '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
-      '/Applications/Chromium.app/Contents/MacOS/Chromium',
-      '/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge',
-    ],
-  }[process.platform] ?? ['google-chrome', 'google-chrome-stable', 'chromium', 'chromium-browser', 'microsoft-edge']
-    .flatMap((name) => (env.PATH ?? '').split(path.delimiter).filter(Boolean).map((dir) => path.join(dir, name)));
-  const found = candidates.find((file) => fs.existsSync(file));
-  if (!found) throw new Error('No Chrome, Chromium or Edge found. Set CHROME to the path of the browser.');
-  return found;
-}
+import { chromeArgs, findChrome } from './chrome.mjs';
 
 const chrome = findChrome();
 const publicDir = fileURLToPath(new URL('../public/', import.meta.url));
@@ -65,7 +44,7 @@ try {
     fs.writeFileSync(source, `<!DOCTYPE html><body style="margin:0"><img src="${name}.svg" style="display:block;width:${size}px;height:${size}px">`);
     execFileSync(chrome, [
       '--headless=new', '--hide-scrollbars', '--default-background-color=00000000', `--user-data-dir=${path.join(tmp, 'profile')}`,
-      `--window-size=${size},${size}`, `--screenshot=${out}`, pathToFileURL(source).href,
+      `--window-size=${size},${size}`, `--screenshot=${out}`, ...chromeArgs(), pathToFileURL(source).href,
     ], { stdio: 'ignore' });
     const png = fs.readFileSync(out);
     const [width, height] = [png.readUInt32BE(16), png.readUInt32BE(20)];

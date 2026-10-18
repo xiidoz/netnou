@@ -44,11 +44,12 @@ running instance fetches and passes on.
 - These files are not covered by the MIT License. Changed versions of them
   stay under the ODbL.
 
-### Screenshot
+### Pictures of the page
 
-`docs/screenshot.png` and `docs/social-preview.png`, which is made from it,
-show a map of OpenFreeMap (© OpenMapTiles, data from OpenStreetMap) and
-timetable data from gtfs.de / DELFI e.V., credited in the images.
+The pictures in `docs/pictures/` and `docs/social-preview.png`, which is made
+from them, show a map of OpenFreeMap (© OpenMapTiles, data from
+OpenStreetMap) and timetable and realtime data from gtfs.de / DELFI e.V.,
+credited in the images.
 
 ## Data fetched at run time
 

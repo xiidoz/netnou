@@ -128,12 +128,14 @@ Page (`public/`):
 | `vendor/maplibre-gl/` | the map library, vendored, see [its README](../public/vendor/maplibre-gl/README.md) |
 | `vendor/material-design-icons/` | the shapes of the icons on the page's own buttons, see [its README](../public/vendor/material-design-icons/README.md) |
 
-`tools/` holds four scripts that are run by hand: `measure-feed.mjs` imports a
+`tools/` holds six scripts that are run by hand: `measure-feed.mjs` imports a
 feed as the server does and prints what it comes to (trips, what repeats,
 size, the time to say which vehicles are under way); `build-vgn-area.mjs`
-regenerates the default area, `build-icons.mjs` renders the app icons from
-`favicon.svg`, and `build-social-preview.mjs` renders the image for link
-previews from the README screenshot.
+regenerates the default area and `build-germany-outline.mjs` the border of
+Germany; `build-icons.mjs` renders the app icons from `favicon.svg`,
+`build-pictures.mjs` takes the pictures of the page for the READMEs from a
+running instance, and `build-social-preview.mjs` renders the image for link
+previews from them. The last three find their browser with `chrome.mjs`.
 
 ## The area
 

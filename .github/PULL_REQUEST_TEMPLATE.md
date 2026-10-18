@@ -15,6 +15,7 @@ phone, and of how it looked before where that makes the difference clear.
 - [ ] `npm test` and `npm run lint` pass
 - [ ] Title and commit messages follow Conventional Commits and name a scope; a breaking change is marked with `!`
 - [ ] Pictures of the change are in the description if it shows in the page
+- [ ] The pictures of the READMEs taken again (`npm run build:pictures`, then `npm run build:social`) if the card, the details, the search or the board look different
 - [ ] No new runtime dependency (`package.json` has no `dependencies`)
 - [ ] Documentation updated if a setting or an API response changed
 - [ ] `DATASET_VERSION` / `NETWORKS_VERSION` bumped if the format of a cache file changed
