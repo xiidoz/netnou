@@ -474,7 +474,6 @@ button { font: inherit; color: inherit; }
   gap: 0;
   font-size: 13px;
 }
-.segmented-label { color: var(--text-muted); margin-right: 8px; }
 .segmented button {
   flex: 1;
   padding: 4px 8px;
@@ -930,15 +929,17 @@ li:last-child > .row.stop .rail::before { bottom: 50%; }
     gap: 7px;
   }
   .title h1 { font-size: 16px; }
-  /* The search is a button with a lens in the title row. Opened, the field
-     takes the place of that row, with a button to shut it again. */
-  .search-open, .search-close { display: grid; }
+  /* The search is a field under the title row, as on a wide screen (#220).
+     Above a board, where the card is its title row, it is a button with a
+     lens in that row; opened, the field takes the place of the row, with a
+     button to shut it again. */
+  :root[data-board] .search-open, :root[data-board] .search-close { display: grid; }
   .search-close { width: 34px; height: 34px; color: var(--text); }
-  .search { display: none; }
-  .controls.searching .title { display: none; }
-  .controls.searching .search { display: flex; }
-  /* (16 px: with less, Safari on a phone zooms the page in when the field gets the focus) */
-  .search input { padding-top: 5px; padding-bottom: 5px; font-size: 16px; }
+  :root[data-board] .search { display: none; }
+  :root[data-board] .controls.searching .title { display: none; }
+  :root[data-board] .controls.searching .search { display: flex; }
+  /* (as high as a chip, and 16 px: with less, Safari on a phone zooms the page in when the field gets the focus) */
+  .search input { height: 30px; padding-top: 0; padding-bottom: 0; font-size: 16px; }
   /* clear of the departures, which cover the lower half */
   .search-drop { max-height: min(40vh, 330px); }
   /* One row of chips that scrolls sideways, out to the edges of the card. */

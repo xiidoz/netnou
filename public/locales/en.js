@@ -23,9 +23,10 @@ export default {
   'theme.light': 'Light',
   'theme.dark': 'Dark',
   // the small flag on a vehicle on the map that says how many minutes it is early or late
-  'flags.label': 'Delay on the vehicles',
-  'flags.on': 'Show',
-  'flags.off': 'Hide',
+  'delays.label': 'Delay on the vehicles',
+  'delays.number': 'Number',
+  'delays.color': 'Colour',
+  'delays.off': 'Off',
   // how the departures of a stop give their times: the time of day, the minutes until they leave, or both
   'times.label': 'Departure times',
   'times.time': 'Time',
@@ -102,10 +103,6 @@ export default {
   'mode.cable': 'Cable car & monorail',
   'mode.other': 'Other',
 
-  'colorBy.label': 'Colour of the vehicles',
-  'colorBy.title': 'Colour by',
-  'colorBy.mode': 'Mode',
-  'colorBy.delay': 'Delay',
 
   // the button with the eye next to the settings: it takes the controls of the page away, and brings them back
   'display.enter': 'Hide the controls',
@@ -155,6 +152,8 @@ export default {
   'about.useModes': 'Tap a kind of transport:',
   'about.useModesMouse': 'Click a kind of transport:',
   'about.useModesText': 'hides it or shows it again, for example to see only trains.',
+  'about.useColor': 'Colour by delay:',
+  'about.useColorText': 'in the settings. Every vehicle in the colour of its delay, to see at a glance where things run late.',
   'about.useShare': 'Share:',
   'about.useShareText': 'a link to a stop, a line or a trip, for example to show someone where the bus is right now.',
   'about.useBoard': 'Show as a board:',

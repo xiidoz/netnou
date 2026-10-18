@@ -1478,9 +1478,12 @@ searchField.addEventListener('keydown', (event) => {
   }
 });
 
+/** Whether the search is behind the button with the lens: above a board on a narrow screen, as style.css has it. */
+const searchBehindLens = () => narrowScreen.matches && state.board !== null;
+
 /**
  * Shuts the search without choosing anything. The focus stays in the field;
- * on a narrow screen, where the field goes with the search, it goes to the
+ * where the field goes with the search (searchBehindLens), it goes to the
  * button that opens it. Where the search was to add a stop to a board, it
  * goes back to the button that opened it.
  */
@@ -1488,7 +1491,7 @@ function cancelSearch() {
   const adding = endAdding();
   closeSearch();
   if (adding) focusBoard(adding.block === null ? 'add' : `merge:${adding.block}`);
-  else if (narrowScreen.matches) {
+  else if (searchBehindLens()) {
     searchField.blur(); // a keyboard on the screen goes away
     $('search-open').focus();
   }
@@ -1607,20 +1610,6 @@ function buildControls() {
   const legend = [['early', t('delay.early')], ['ok', t('delay.onTime')], ['minor', from(DELAY_MINOR_S)], ['major', from(DELAY_MAJOR_S)], ['severe', from(DELAY_SEVERE_S)], ['none', t('delay.none')]];
   $('delay-legend').append(...legend.map(([delay, text]) => el('li', {}, [el('span', { class: 'swatch', data: { delay } }), text])));
 
-  const buttons = document.querySelectorAll('[data-color-by]');
-  const apply = () => {
-    for (const button of buttons) button.setAttribute('aria-pressed', String(button.dataset.colorBy === state.colorBy));
-    $('delay-legend').hidden = state.colorBy !== 'delay';
-  };
-  for (const button of buttons) {
-    button.addEventListener('click', () => {
-      state.colorBy = button.dataset.colorBy;
-      saveSetting('colorBy', state.colorBy);
-      apply();
-      draw();
-    });
-  }
-  apply();
 }
 
 let shownRealtime = null; // the realtime state the card showed last (updateStatus)
@@ -1807,15 +1796,25 @@ document.addEventListener('pointerdown', (event) => {
   applyTheme();
 }
 
-// The delay as a flag on the vehicles, or a calmer map without: chosen in the settings, kept in the browser.
+// How the vehicles show their delay (#220): as a number in a flag, coloured
+// by kind (state.flags); as their colour, with its key in the card
+// (state.colorBy); or not at all, for a calmer map. One setting, as together
+// the two the page keeps give no more than these three; chosen in the
+// settings, kept in the browser.
 {
-  const buttons = [...document.querySelectorAll('[data-flags-choice]')];
+  const buttons = [...document.querySelectorAll('[data-delays-choice]')];
+  const shown = () => (state.colorBy === 'delay' ? 'color' : state.flags ? 'number' : 'off');
   const show = () => {
-    for (const button of buttons) button.setAttribute('aria-pressed', String((button.dataset.flagsChoice === 'on') === state.flags));
+    for (const button of buttons) button.setAttribute('aria-pressed', String(button.dataset.delaysChoice === shown()));
+    $('delay-legend').hidden = state.colorBy !== 'delay';
   };
   for (const button of buttons) {
     button.addEventListener('click', () => {
-      state.flags = button.dataset.flagsChoice === 'on';
+      const choice = button.dataset.delaysChoice;
+      state.colorBy = choice === 'color' ? 'delay' : 'mode';
+      // (coloured by delay the flags are left out whatever this says: kept for the way back)
+      if (choice !== 'color') state.flags = choice === 'number';
+      saveSetting('colorBy', state.colorBy);
       saveSetting('flags', state.flags);
       show();
       draw();
@@ -1892,7 +1891,7 @@ function closePanel() {
   if (keyboard) {
     focusGivenBack = true;
     panelOpener?.focus({ preventScroll: true });
-    if (document.activeElement !== panelOpener) (narrowScreen.matches ? $('search-open') : searchField).focus({ preventScroll: true });
+    if (document.activeElement !== panelOpener) (searchBehindLens() ? $('search-open') : searchField).focus({ preventScroll: true });
     focusGivenBack = false;
   }
   panelOpener = null;

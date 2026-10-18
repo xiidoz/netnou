@@ -41,9 +41,10 @@
     </div>
     <!-- What a visitor can set for themselves, kept in their browser: the
          language (app.js fills in the list), whether the page is light or
-         dark, whether the vehicles carry their delay as a flag, how departure
-         times show and whether the board of a stop has a clock. A small box
-         that hangs at the gear, which opens and shuts it. -->
+         dark, how the vehicles show their delay (as a number in a flag, as
+         their colour, or not at all), how departure times show and whether
+         the board of a stop has a clock. A small box that hangs at the gear,
+         which opens and shuts it. -->
     <div class="bubble" id="settings" role="group" aria-label="Settings" data-i18n-aria-label="settings.title" hidden>
       <div class="setting">
         <label for="language" data-i18n="language.label">Language</label>
@@ -57,11 +58,12 @@
           <button type="button" data-theme-choice="dark" aria-pressed="false" data-i18n="theme.dark">Dark</button>
         </div>
       </div>
-      <div class="setting" role="group" aria-labelledby="flags-label">
-        <span id="flags-label" data-i18n="flags.label">Delay on the vehicles</span>
+      <div class="setting" role="group" aria-labelledby="delays-label">
+        <span id="delays-label" data-i18n="delays.label">Delay on the vehicles</span>
         <div class="segmented">
-          <button type="button" data-flags-choice="on" aria-pressed="true" data-i18n="flags.on">Show</button>
-          <button type="button" data-flags-choice="off" aria-pressed="false" data-i18n="flags.off">Hide</button>
+          <button type="button" data-delays-choice="number" aria-pressed="true" data-i18n="delays.number">Number</button>
+          <button type="button" data-delays-choice="color" aria-pressed="false" data-i18n="delays.color">Colour</button>
+          <button type="button" data-delays-choice="off" aria-pressed="false" data-i18n="delays.off">Off</button>
         </div>
       </div>
       <div class="setting" role="group" aria-labelledby="times-label">
@@ -80,9 +82,10 @@
         </div>
       </div>
     </div>
-    <!-- The search for stops and lines. On a narrow screen it is shut until the button
-         with the lens opens it, and then takes the place of the title. What
-         is found drops down below the field (app.js fills it in). -->
+    <!-- The search for stops and lines, under the title row. Above a board on
+         a narrow screen, where the card is its title row, it is shut until the
+         button with the lens opens it, and then takes the place of the title.
+         What is found drops down below the field (app.js fills it in). -->
     <div class="search" id="search" role="search">
       <span class="search-sign" data-icon="mdiMagnify"></span>
       <input type="search" id="search-field" role="combobox" aria-expanded="false" aria-controls="search-results" aria-autocomplete="list" autocomplete="off" autocapitalize="off" spellcheck="false" enterkeyhint="search" placeholder="Search for a town, a stop or a line" data-i18n-placeholder="search.label" aria-label="Search for a town, a stop or a line" data-i18n-aria-label="search.label">
@@ -124,11 +127,7 @@
       </div>
       <button type="button" class="chips-more" id="modes-on" tabindex="-1" aria-hidden="true"><span data-icon="mdiChevronRight"></span></button>
     </div>
-    <div class="segmented" role="group" aria-label="Colour of the vehicles" data-i18n-aria-label="colorBy.label">
-      <span class="segmented-label" data-i18n="colorBy.title">Colour by</span>
-      <button type="button" data-color-by="mode" aria-pressed="true" data-i18n="colorBy.mode">Mode</button>
-      <button type="button" data-color-by="delay" aria-pressed="false" data-i18n="colorBy.delay">Delay</button>
-    </div>
+    <!-- the key to the colours of the delays, while the vehicles have them (see the settings) -->
     <ul class="legend" id="delay-legend" hidden></ul>
     <!-- What everybody should know about the markers, and the way to how the
          page comes by them (the dialog below). -->
@@ -177,6 +176,7 @@
         <li><span class="sign departure"></span><p><b id="use-departure" data-i18n="about.useDeparture">Tap a departure:</b> <span data-i18n="about.useDepartureText">straight to its vehicle on the map, to see where it is now.</span></p></li>
         <li><span class="sign" data-icon="mdiMagnify"></span><p><b data-i18n="about.useSearch">Search:</b> <span data-i18n="about.useSearchText">a town, a stop or a line. A line then shows only its own vehicles.</span></p></li>
         <li><span class="sign modes"></span><p><b id="use-modes" data-i18n="about.useModes">Tap a kind of transport:</b> <span data-i18n="about.useModesText">hides it or shows it again, for example to see only trains.</span></p></li>
+        <li><span class="sign" data-icon="mdiCog"></span><p><b data-i18n="about.useColor">Colour by delay:</b> <span data-i18n="about.useColorText">in the settings. Every vehicle in the colour of its delay, to see at a glance where things run late.</span></p></li>
         <li><span class="sign" data-icon="mdiShareVariant"></span><p><b data-i18n="about.useShare">Share:</b> <span data-i18n="about.useShareText">a link to a stop, a line or a trip, for example to show someone where the bus is right now.</span></p></li>
         <li><span class="sign" data-icon="mdiArrowExpand"></span><p><b data-i18n="about.useBoard">Show as a board:</b> <span data-i18n="about.useBoardText">departures in large type, for example on a screen on the wall, for up to four stops.</span></p></li>
       </ul>
