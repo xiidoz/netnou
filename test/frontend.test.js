@@ -7,7 +7,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import { test } from 'node:test';
 import vm from 'node:vm';
-import { ATTRIBUTES, LANGUAGES, dayOf, formatNumber, formatTime, loadLanguage, pageTexts, pickLanguage, sentInAnother, setTimeZone, t } from '../public/i18n.js';
+import { ATTRIBUTES, LANGUAGES, READMES, dayOf, formatNumber, formatTime, loadLanguage, pageTexts, pickLanguage, sentInAnother, setTimeZone, t } from '../public/i18n.js';
 import en from '../public/locales/en.js';
 import { PAGE_INLINE, PAGE_MODULES } from '../server/lib/page.js';
 import { MODES } from '../server/lib/timetable.js';
@@ -142,6 +142,18 @@ test('a language is a file in locales/, an entry in LANGUAGES and one in the she
     // pickLanguage compares with the primary subtag of the browser's languages
     assert.match(code, /^[a-z]{2,3}$/, `${code}: a language code without region`);
     assert.ok(name.trim(), `${code}: the name of the language`);
+  }
+});
+
+test('every README names the languages of all of them at its top, its own as text and the others as links', () => {
+  // (English first, the main one; then the others of READMES, each in its own name as LANGUAGES has it)
+  const readmes = [['en', 'README.md'], ...READMES.map((code) => [code, `README.${code}.md`])];
+  const nameOf = (code) => LANGUAGES.find(([language]) => language === code)?.[1];
+  for (const [code, file] of readmes) {
+    assert.ok(nameOf(code), `${code} is not a language of the page`);
+    const row = readmes.map(([other, otherFile]) => (other === code ? nameOf(other) : `<a href="${otherFile}">${nameOf(other)}</a>`)).join(' • ');
+    const text = fs.readFileSync(new URL(`../${file}`, import.meta.url), 'utf8');
+    assert.ok(text.split('\n').some((line) => line.trim() === row), `${file} does not name the languages as: ${row}`);
   }
 });
 
