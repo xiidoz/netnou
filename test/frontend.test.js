@@ -145,13 +145,15 @@ test('a language is a file in locales/, an entry in LANGUAGES and one in the she
   }
 });
 
-test('a README in a language of its own is a file beside README.md, and the two link to each other', () => {
-  const main = fs.readFileSync(new URL('../README.md', import.meta.url), 'utf8');
-  for (const code of READMES) {
-    assert.ok(LANGUAGES.some(([language]) => language === code), `${code} is not a language of the page`);
-    const own = fs.readFileSync(new URL(`../README.${code}.md`, import.meta.url), 'utf8');
-    assert.ok(main.includes(`(README.${code}.md)`), `README.md does not link to README.${code}.md`);
-    assert.ok(own.includes('(README.md)'), `README.${code}.md does not link to README.md`);
+test('every README names the languages of all of them at its top, its own as text and the others as links', () => {
+  // (English first, the main one; then the others of READMES, each in its own name as LANGUAGES has it)
+  const readmes = [['en', 'README.md'], ...READMES.map((code) => [code, `README.${code}.md`])];
+  const nameOf = (code) => LANGUAGES.find(([language]) => language === code)?.[1];
+  for (const [code, file] of readmes) {
+    assert.ok(nameOf(code), `${code} is not a language of the page`);
+    const row = readmes.map(([other, otherFile]) => (other === code ? nameOf(other) : `<a href="${otherFile}">${nameOf(other)}</a>`)).join(' • ');
+    const text = fs.readFileSync(new URL(`../${file}`, import.meta.url), 'utf8');
+    assert.ok(text.split('\n').some((line) => line.trim() === row), `${file} does not name the languages as: ${row}`);
   }
 });
 

@@ -1,9 +1,21 @@
-# <img src="public/favicon.svg" alt="" width="40" height="40" align="top"> Netnou
+<p align="center">
+  <img src="public/favicon.svg" alt="" width="120" height="120">
+</p>
 
-Deutsch: [README.de.md](README.de.md)
+<h1 align="center">Netnou</h1>
 
-A live map of buses and trains: where each one is right now, how late it is,
-and the next departures at every stop.
+<p align="center">
+  <strong>A live map of buses and trains</strong>
+</p>
+
+<p align="center">
+  English • <a href="README.de.md">Deutsch</a>
+</p>
+
+---
+
+Netnou shows buses and trains where they are right now, with their delays and
+the next departures at every stop.
 
 **Try it:** [öpnv.live](https://xn--pnv-rna.live) runs Netnou for all of
 Germany.

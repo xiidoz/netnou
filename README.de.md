@@ -1,9 +1,21 @@
-# <img src="public/favicon.svg" alt="" width="40" height="40" align="top"> Netnou
+<p align="center">
+  <img src="public/favicon.svg" alt="" width="120" height="120">
+</p>
 
-English: [README.md](README.md)
+<h1 align="center">Netnou</h1>
 
-Eine Live-Karte für Busse und Bahnen: wo jedes Fahrzeug gerade ist, wie viel
-Verspätung es hat und die nächsten Abfahrten an jeder Haltestelle.
+<p align="center">
+  <strong>Eine Live-Karte für Busse und Bahnen</strong>
+</p>
+
+<p align="center">
+  <a href="README.md">English</a> • Deutsch
+</p>
+
+---
+
+Netnou zeigt Busse und Bahnen dort, wo sie gerade sind, mit ihrer Verspätung
+und den nächsten Abfahrten an jeder Haltestelle.
 
 **Ausprobieren:** Auf [öpnv.live](https://xn--pnv-rna.live) läuft Netnou für
 ganz Deutschland.

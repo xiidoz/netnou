@@ -18,7 +18,8 @@ export const LANGUAGES = [
 ];
 // The languages the repository has a README of its own in, README.<code>.md:
 // the page's links to the software lead to the one in the language of the
-// page, else to the main one in English, README.md.
+// page, else to the main one in English, README.md. Every README names all of
+// them at its top, English first (test/frontend.test.js).
 export const READMES = ['de'];
 const FALLBACK = 'en';
 const STORAGE_KEY = 'netnou.lang';

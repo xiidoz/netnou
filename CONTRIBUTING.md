@@ -229,7 +229,9 @@ running instances will load data written by older code:
 - `npm test` and `npm run lint` pass. CI runs both on Linux and Windows.
 - No new runtime dependency.
 - A change to `README.md` is made in `README.de.md` as well, and the other
-  way round: the page leads German visitors to the German one.
+  way round: the page leads German visitors to the German one. A README in a
+  further language is added to `READMES` in `public/i18n.js` and to the row
+  of languages at the top of every README.
 - The documentation is updated when a setting or an API answer changes
   ([docs/configuration.md](docs/configuration.md),
   [docs/api.md](docs/api.md)). `CHANGELOG.md` is not edited: it is written
