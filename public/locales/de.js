@@ -159,6 +159,7 @@ export default {
   'address.tripTitle': '{line} nach {to} live',
   'address.tripDescription': '{line} nach {to}, ab {from} um {time} am {day}: live auf der Karte, mit der Verspätung an jedem Halt.',
   'address.tripGone': 'Diese Fahrt ist nicht im Fahrplan.',
+  'address.gone': 'Diese Seite gibt es nicht.',
   // (the kinds of transport within a sentence)
   'address.kind.subway': 'U-Bahn',
   'address.kind.tram': 'Tram',
