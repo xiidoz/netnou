@@ -11,35 +11,35 @@
   --accent: #0b5cad;
   --shadow: 0 2px 12px rgb(0 0 0 / 0.18);
 
+  /* The letters on every colour below, in the markers and flags of the map and on the badges of the lines: white in
+     either theme, and every one of those colours dark enough for 4.5:1 to it (#215). */
+  --letters: #ffffff;
+
   /* one per mode id, see DRAW_ORDER in app.js */
   --mode-subway: #0b5cad;
   --mode-tram: #d42a2a;
   --mode-bus: #7b3fa0;
   --mode-suburban: #1d873a;
   --mode-regional: #4d5a66;
-  --mode-longdistance: #d97200;
-  --mode-ferry: #4cb8ea;
-  --mode-cable: #c4a484;
+  --mode-longdistance: #bd5900;
+  --mode-ferry: #007eae;
+  --mode-cable: #8e7052;
   --mode-other: #767676;
-  /* The names on a mode's colour, in badges and markers: white, else dark where white has less than 4.5:1 to it. */
-  --mode-longdistance-text: #1b1f24;
-  --mode-ferry-text: #1b1f24;
-  --mode-cable-text: #1b1f24;
 
   /* ahead of the timetable: a cool colour, apart from the scale of the delays and from every mode */
-  --delay-early: #008fae;
-  --delay-ok: #2a9d4b;
-  --delay-minor: #d9a400;
-  --delay-major: #e8710a;
+  --delay-early: #007e9a;
+  --delay-ok: #24853f;
+  --delay-minor: #937000;
+  --delay-major: #ba5a08;
   --delay-severe: #d32f2f;
-  --delay-none: #8a9099;
-  /* the same as text on the page's ground, where the colours above are too pale for it: 4.5:1 to it at least (#196) */
-  --delay-early-text: #007e9a;
-  --delay-ok-text: #24853f;
-  --delay-major-text: #ba5a08;
-  --delay-severe-text: #d32f2f;
-  /* the flag with the question mark on a vehicle without a reported delay: dark enough for the white mark on it, on either map */
-  --delay-unknown: #5c6670;
+  /* no delay reported: the vehicle coloured by delay, and its flag with the question mark */
+  --delay-none: #5c6670;
+  /* The delays as text on the page's ground (#196). On the white one the colours above: dark enough for white letters,
+     they are for that ground too. The dark theme has lighter ones. */
+  --delay-early-text: var(--delay-early);
+  --delay-ok-text: var(--delay-ok);
+  --delay-major-text: var(--delay-major);
+  --delay-severe-text: var(--delay-severe);
 
   /* the visitor's own position; lighter than the blue of the U-Bahn, which may be right under it */
   --location: #1a8ef0;
@@ -67,8 +67,8 @@
   --border: #39404a;
   --accent: #6fb1f2;
   --shadow: 0 2px 14px rgb(0 0 0 / 0.55);
-  --mode-regional: #7d8b99;
-  --mode-regional-text: #1b1f24;
+  /* (lighter for the dark map, as far as the white letters allow) */
+  --mode-regional: #6a7785;
   --veil: rgb(10 11 14 / 0.6);
   --veil-line: rgb(111 177 242 / 0.6);
   --delay-early-text: #0095b6;
@@ -338,8 +338,8 @@ button { font: inherit; color: inherit; }
 }
 .status[data-state="error"] .dot { background: var(--delay-severe); }
 /* No realtime data at all: the line is a warning that is not overlooked, with
-   a sign in place of the dot. (The ground is --delay-major, thinned.) */
-.status .warn { display: none; color: var(--delay-major); }
+   a sign in place of the dot. (The ground is the orange of the dark theme's signs, thinned.) */
+.status .warn { display: none; color: var(--delay-major-text); }
 .status .warn .icon { width: 18px; height: 18px; }
 /* (as wide as the search field and the row of filters, not wider) */
 .status[data-state="outage"] {
@@ -618,7 +618,7 @@ button:focus-visible, select:focus-visible, .row:focus-visible, .panel:focus-vis
 .panel-head .notes .warning::before { content: none; }
 .panel-head .notes .warning span { padding-left: 14px; text-indent: -14px; }
 .panel-head .notes .warning > span { display: block; }
-.panel-head .notes .warning .sign, .note-full .sign, .row .sign { display: inline-block; width: 0.96em; height: 0.96em; vertical-align: -0.12em; color: var(--delay-major); }
+.panel-head .notes .warning .sign, .note-full .sign, .row .sign { display: inline-block; width: 0.96em; height: 0.96em; vertical-align: -0.12em; color: var(--delay-major-text); }
 .panel-head .notes .warning .sign { margin-right: 2px; }
 /* (the page's own warning: that the trip is cancelled) */
 .panel-head .notes .alert { color: var(--delay-severe-text); font-weight: 600; }
@@ -658,7 +658,7 @@ button:focus-visible, select:focus-visible, .row:focus-visible, .panel:focus-vis
   padding: 1px 7px;
   border-radius: 6px;
   background: var(--badge-color, var(--mode-other));
-  color: var(--badge-text, #fff);
+  color: var(--letters);
   font-weight: 700;
   font-size: 13px;
   text-align: center;
@@ -1244,7 +1244,7 @@ li:last-child > .row.stop .rail::before { bottom: 50%; }
 .board-rows .minutes, .board-rows .times-time .at { font-size: 1.05em; font-weight: 700; }
 .board-rows .times-both .at { color: var(--text-muted); font-size: 0.8em; }
 .board-rows .delay { font-size: 0.75em; }
-.board-rows .sign { display: inline-block; width: 0.96em; height: 0.96em; margin-left: 0.2em; vertical-align: -0.12em; color: var(--delay-major); }
+.board-rows .sign { display: inline-block; width: 0.96em; height: 0.96em; margin-left: 0.2em; vertical-align: -0.12em; color: var(--delay-major-text); }
 .board-rows .gone { grid-column: 4 / -1; justify-self: end; color: var(--delay-severe-text); font-size: 0.85em; font-weight: 700; }
 @container (max-width: 520px) {
   .board-rows.times-both { grid-template-columns: auto minmax(0, 1fr) auto auto; }
