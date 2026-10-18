@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { BOARD_MAX, BOARD_MIN, BOARD_SHARE, BOARD_STOPS, boardBlocks, boardQuery, boardShare, displayQuery, readBoard, readDisplay, readStops } from '../public/display.js';
+import { BOARD_MAX, BOARD_MIN, BOARD_SHARE, BOARD_STOPS, boardBlocks, boardQuery, boardShare, displayQuery, ledBy, readBoard, readDisplay, readStops } from '../public/display.js';
 
 const MODES = ['subway', 'tram', 'bus', 'suburban', 'regional', 'longdistance'];
 
@@ -149,4 +149,20 @@ test('the stops of a board stand in their blocks', () => {
   assert.deepEqual(boardBlocks(first, []), [[first]]);
   assert.deepEqual(boardBlocks(first, [rosenau, gostenhof, turm]), [[first, rosenau], [gostenhof, turm]]);
   assert.deepEqual(boardBlocks(first, [{ ...rosenau, joined: false }, { ...gostenhof, joined: false }]), [[first], [{ ...rosenau, joined: false }], [{ ...gostenhof, joined: false }]]);
+});
+
+test('another stop leads a board with its block, and the lists stay as they were', () => {
+  const missing = { path: PLAERRER, joined: false };
+  const rosenau = { path: ROSENAU, joined: false };
+  const gostenhof = { path: GOSTENHOF, joined: true };
+  const turm = { path: WEISSER_TURM, joined: false };
+  // ([missing] | [Rosenau + Gostenhof] | [Weißer Turm], led by Rosenau: its list first, the missing stop's block after it)
+  assert.deepEqual(ledBy([missing, rosenau, gostenhof, turm], rosenau), [
+    { path: ROSENAU, joined: false }, { path: GOSTENHOF, joined: true }, { path: PLAERRER, joined: false }, { path: WEISSER_TURM, joined: false },
+  ]);
+  // (all in one list: the missing stop stays in it, after the one that leads)
+  assert.deepEqual(ledBy([missing, { ...rosenau, joined: true }, gostenhof], gostenhof), [
+    { path: GOSTENHOF, joined: false }, { path: PLAERRER, joined: true }, { path: ROSENAU, joined: true },
+  ]);
+  assert.deepEqual(ledBy([missing, rosenau], missing), [{ path: PLAERRER, joined: false }, { path: ROSENAU, joined: false }]);
 });

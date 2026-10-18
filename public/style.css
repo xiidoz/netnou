@@ -30,6 +30,11 @@
   --delay-major: #e8710a;
   --delay-severe: #d32f2f;
   --delay-none: #8a9099;
+  /* the same as text on the page's ground, where the colours above are too pale for it: 4.5:1 to it at least (#196) */
+  --delay-early-text: #007e9a;
+  --delay-ok-text: #24853f;
+  --delay-major-text: #ba5a08;
+  --delay-severe-text: #d32f2f;
   /* the flag with the question mark on a vehicle without a reported delay: dark enough for the white mark on it, on either map */
   --delay-unknown: #5c6670;
 
@@ -62,6 +67,10 @@
   --mode-regional: #7d8b99;
   --veil: rgb(10 11 14 / 0.6);
   --veil-line: rgb(111 177 242 / 0.6);
+  --delay-early-text: #0095b6;
+  --delay-ok-text: #2a9d4b;
+  --delay-major-text: #e8710a;
+  --delay-severe-text: #de6262;
   /* Light becomes dark and the hues stay: the map may be any style or set of tiles, and few come in a dark version. */
   --map-filter: invert(1) hue-rotate(180deg) saturate(0.45) brightness(0.92) contrast(0.92);
 }
@@ -608,7 +617,7 @@ button:focus-visible, select:focus-visible, .row:focus-visible, .panel:focus-vis
 .panel-head .notes .warning .sign, .note-full .sign, .row .sign { display: inline-block; width: 0.96em; height: 0.96em; vertical-align: -0.12em; color: var(--delay-major); }
 .panel-head .notes .warning .sign { margin-right: 2px; }
 /* (the page's own warning: that the trip is cancelled) */
-.panel-head .notes .alert { color: var(--delay-severe); font-weight: 600; }
+.panel-head .notes .alert { color: var(--delay-severe-text); font-weight: 600; }
 .panel-head .notes .alert .sign { color: inherit; }
 /* A note that says more than the head has room for: its headline or its
    first lines, two at most (one on a narrow screen, see there), on a button
@@ -757,10 +766,10 @@ li:last-child > .row.stop .rail::before { bottom: 50%; }
 
 /* As text a delay is one class "hotter" than as a dot: the yellow is too pale to read on the card. */
 .delay { font-size: 12.5px; font-weight: 650; font-variant-numeric: tabular-nums; white-space: nowrap; }
-.delay[data-delay="early"] { color: var(--delay-early); }
-.delay[data-delay="ok"] { color: var(--delay-ok); }
-.delay[data-delay="minor"] { color: var(--delay-major); }
-.delay[data-delay="major"], .delay[data-delay="severe"] { color: var(--delay-severe); }
+.delay[data-delay="early"] { color: var(--delay-early-text); }
+.delay[data-delay="ok"] { color: var(--delay-ok-text); }
+.delay[data-delay="minor"] { color: var(--delay-major-text); }
+.delay[data-delay="major"], .delay[data-delay="severe"] { color: var(--delay-severe-text); }
 
 /* ---------- tooltip & banner ---------- */
 
@@ -1197,7 +1206,7 @@ li:last-child > .row.stop .rail::before { bottom: 50%; }
 .board-rows .times-both .at { color: var(--text-muted); font-size: 0.8em; }
 .board-rows .delay { font-size: 0.75em; }
 .board-rows .sign { display: inline-block; width: 0.96em; height: 0.96em; margin-left: 0.2em; vertical-align: -0.12em; color: var(--delay-major); }
-.board-rows .gone { grid-column: 4 / -1; justify-self: end; color: var(--delay-severe); font-size: 0.85em; font-weight: 700; }
+.board-rows .gone { grid-column: 4 / -1; justify-self: end; color: var(--delay-severe-text); font-size: 0.85em; font-weight: 700; }
 @container (max-width: 520px) {
   .board-rows.times-both { grid-template-columns: auto minmax(0, 1fr) auto auto; }
   .board-rows.times-both .when { display: grid; grid-template-columns: auto auto; justify-content: end; justify-items: end; line-height: 1.15; }
@@ -1242,6 +1251,9 @@ li:last-child > .row.stop .rail::before { bottom: 50%; }
 /* (a long name wraps; the dot before a name stays with it, by a space that does not break) */
 .board-heading .stop { min-width: 0; overflow-wrap: anywhere; }
 .board-heading .stop ~ .stop::before { content: "·\00a0"; }
+/* (a minus goes with the last letter of its name: never on a line of its own, or in front of the next name) */
+.board-heading .end { white-space: nowrap; }
+.board-heading .end .board-control { margin-left: 0.2em; vertical-align: middle; }
 .board-control {
   flex: none;
   display: inline-grid;
