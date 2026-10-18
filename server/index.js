@@ -111,6 +111,25 @@ const gzip = (body) => zlib.gzipSync(body, { level: 6 });
 const brotli = (body, done) => zlib.brotliCompress(body, { params: { [zlib.constants.BROTLI_PARAM_QUALITY]: zlib.constants.BROTLI_MAX_QUALITY, [zlib.constants.BROTLI_PARAM_SIZE_HINT]: body.length } }, done);
 
 /**
+ * Whether a browser takes a content coding, by its Accept-Encoding ("gzip,
+ * deflate, br"): named with a weight above 0, or not named where "*" is
+ * (RFC 9110, 12.5.3). A weight of 0 says that it is not to be used.
+ */
+function takes(accepted, coding) {
+  let weight = null;
+  let others = 0;
+  for (const part of accepted.split(',')) {
+    const match = /^\s*([\w*-]+)\s*(?:;\s*q\s*=\s*([01](?:\.\d{0,3})?))?\s*$/i.exec(part);
+    if (!match) continue;
+    // (x-gzip is an old name of gzip)
+    const name = match[1].toLowerCase().replace(/^x-gzip$/, 'gzip');
+    if (name === coding) weight = Number(match[2] ?? 1);
+    else if (name === '*') others = Number(match[2] ?? 1);
+  }
+  return (weight ?? others) > 0;
+}
+
+/**
  * A body that is sent again and again, with its compressed forms, each made
  * once: gzip when it is first asked for, Brotli from then on beside the
  * requests. Until that is there, a browser that takes Brotli gets gzip.
@@ -122,7 +141,7 @@ function keep(body) {
     body,
     /** The smallest form a browser takes that accepts these encodings: [encoding, body]. */
     pick(accepted) {
-      if (/\bbr\b/.test(accepted)) {
+      if (takes(accepted, 'br')) {
         if (smallest) return ['br', smallest];
         if (smallest === null) {
           smallest = false;
@@ -131,7 +150,7 @@ function keep(body) {
           });
         }
       }
-      if (/\bgzip\b/.test(accepted)) return ['gzip', (gzipped ??= gzip(body))];
+      if (takes(accepted, 'gzip')) return ['gzip', (gzipped ??= gzip(body))];
       return [null, body];
     },
   };
@@ -149,7 +168,7 @@ function send(req, res, status, type, body, headers = {}, kept = null) {
       const accepted = req.headers['accept-encoding'] ?? '';
       let encoding = null;
       if (kept) [encoding, body] = kept.pick(accepted);
-      else if (/\bgzip\b/.test(accepted)) [encoding, body] = ['gzip', gzip(body)];
+      else if (takes(accepted, 'gzip')) [encoding, body] = ['gzip', gzip(body)];
       if (encoding) head['Content-Encoding'] = encoding;
     }
   }

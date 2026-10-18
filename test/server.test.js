@@ -505,6 +505,14 @@ test('static files: types, revalidation, HEAD, gzip and Brotli', async () => {
   assert.ok((await request('/app.js', { headers: { 'Accept-Encoding': 'gzip, deflate' } })).body.equals(packed.body));
   // the page itself likewise, asked for as a browser asks
   assert.ok(zlib.brotliDecompressSync((await withBrotli('/', 'gzip, deflate, br, zstd')).body).equals(page.body));
+  // A coding with the weight 0 is not to be used, and "*" is any coding not named (RFC 9110, 12.5.3, #199)
+  for (const [accepted, encoding] of [['gzip;q=0, identity', undefined], ['br;q=0, gzip;q=0', undefined], ['br;q=0, gzip', 'gzip'], ['BR; Q=0, *', 'gzip'], ['*', 'br'], ['*;q=0, deflate', undefined], ['gzip;q=0.000', undefined], ['gzip;q=0.001', 'gzip'], ['x-gzip', 'gzip']]) {
+    assert.equal((await request('/app.js', { headers: { 'Accept-Encoding': accepted } })).headers['content-encoding'], encoding, accepted);
+  }
+  // (and an answer compressed for itself alone, such as the page of a stop)
+  for (const [accepted, encoding] of [['gzip', 'gzip'], ['gzip;q=0', undefined]]) {
+    assert.equal((await request('/stop/alpha@49.4000,11.0000', { headers: { 'Accept-Encoding': accepted } })).headers['content-encoding'], encoding, accepted);
+  }
   // the map library is modules, which browsers only run with the type of a script
   assert.equal((await request('/vendor/maplibre-gl/maplibre-gl-worker.mjs')).headers['content-type'], 'text/javascript; charset=utf-8');
   const plain = await request('/app.js');
