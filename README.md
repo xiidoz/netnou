@@ -1,5 +1,7 @@
 # <img src="public/favicon.svg" alt="" width="40" height="40" align="top"> Netnou
 
+Deutsch: [README.de.md](README.de.md)
+
 A live map of buses and trains: where each one is right now, how late it is,
 and the next departures at every stop.
 

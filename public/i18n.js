@@ -16,6 +16,10 @@ export const LANGUAGES = [
   ['de', 'Deutsch'],
   ['en', 'English'],
 ];
+// The languages the repository has a README of its own in, README.<code>.md:
+// the page's links to the software lead to the one in the language of the
+// page, else to the main one in English, README.md.
+export const READMES = ['de'];
 const FALLBACK = 'en';
 const STORAGE_KEY = 'netnou.lang';
 // An address may ask for a language: ?lang=de. That is how a search engine

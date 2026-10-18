@@ -7,7 +7,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import { test } from 'node:test';
 import vm from 'node:vm';
-import { ATTRIBUTES, LANGUAGES, dayOf, formatNumber, formatTime, loadLanguage, pageTexts, pickLanguage, sentInAnother, setTimeZone, t } from '../public/i18n.js';
+import { ATTRIBUTES, LANGUAGES, READMES, dayOf, formatNumber, formatTime, loadLanguage, pageTexts, pickLanguage, sentInAnother, setTimeZone, t } from '../public/i18n.js';
 import en from '../public/locales/en.js';
 import { PAGE_INLINE, PAGE_MODULES } from '../server/lib/page.js';
 import { MODES } from '../server/lib/timetable.js';
@@ -142,6 +142,16 @@ test('a language is a file in locales/, an entry in LANGUAGES and one in the she
     // pickLanguage compares with the primary subtag of the browser's languages
     assert.match(code, /^[a-z]{2,3}$/, `${code}: a language code without region`);
     assert.ok(name.trim(), `${code}: the name of the language`);
+  }
+});
+
+test('a README in a language of its own is a file beside README.md, and the two link to each other', () => {
+  const main = fs.readFileSync(new URL('../README.md', import.meta.url), 'utf8');
+  for (const code of READMES) {
+    assert.ok(LANGUAGES.some(([language]) => language === code), `${code} is not a language of the page`);
+    const own = fs.readFileSync(new URL(`../README.${code}.md`, import.meta.url), 'utf8');
+    assert.ok(main.includes(`(README.${code}.md)`), `README.md does not link to README.${code}.md`);
+    assert.ok(own.includes('(README.md)'), `README.${code}.md does not link to README.md`);
   }
 });
 

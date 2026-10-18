@@ -9,7 +9,7 @@
 // lines, stops and operators, and the notes of the feed.
 
 import { parseAddress, stopPath, wordsOf } from './address.js';
-import { APP_NAME, dayOf, formatNumber, formatTime, languagePicker, loadLanguage, pageTexts, sentInAnother, setTimeZone, t, translatePage } from './i18n.js';
+import { APP_NAME, READMES, dayOf, formatNumber, formatTime, languagePicker, loadLanguage, pageTexts, sentInAnother, setTimeZone, t, translatePage } from './i18n.js';
 import { BOARD_MAX, BOARD_SHARE, BOARD_STOPS, boardBlocks, boardQuery, boardShare, displayQuery, ledBy, readBoard, readDisplay, readStops } from './display.js';
 import { mdiAlert, mdiArrowCollapse, mdiArrowExpand, mdiChevronRight, mdiCityVariantOutline, mdiEye, mdiEyeOff, mdiFullscreen, mdiFullscreenExit, mdiMinusCircleOutline, mdiPlaylistPlus, mdiPlus } from './vendor/material-design-icons/icons.js';
 import { AttributionControl, MapLibreMap, NavigationControl } from './vendor/maplibre-gl/maplibre-gl.mjs';
@@ -3477,8 +3477,14 @@ let stationSeq = 0;
 // change while the server runs, so it is asked for until it has answered once.
 const escapeHtml = (text) => String(text).replace(/[&<>"']/g, (char) => `&#${char.charCodeAt(0)};`);
 
-// Where the links to the software lead: to its README, which a phone shows only below a list of the files of the repository.
-const readmeOf = (homepage) => `${homepage}#readme`;
+// Where the links to the software lead: to its README in the language of the
+// page where there is one of its own (READMES), else to the main one, which a
+// phone shows only below a list of the files of the repository unless the
+// address asks for it.
+function readmeOf(homepage) {
+  const language = document.documentElement.lang;
+  return READMES.includes(language) ? `${homepage}/blob/main/README.${language}.md` : `${homepage}#readme`;
+}
 
 /**
  * What is running, for the credits: the name with a link to where it comes
