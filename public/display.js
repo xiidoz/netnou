@@ -162,3 +162,15 @@ export function boardBlocks(first, stops) {
   }
   return blocks;
 }
+
+/**
+ * The stops of a board ([{ path, joined }], the first stop first) with
+ * another one first: its block goes to the front with it at its head, and the
+ * lists stay as they were.
+ */
+export function ledBy(list, lead) {
+  const blocks = boardBlocks(list[0], list.slice(1));
+  const own = blocks.find((block) => block.includes(lead));
+  const ordered = [[lead, ...own.filter((entry) => entry !== lead)], ...blocks.filter((block) => block !== own)];
+  return ordered.flatMap((block) => block.map((entry, i) => ({ path: entry.path, joined: i > 0 })));
+}
