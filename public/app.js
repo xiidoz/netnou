@@ -10,7 +10,7 @@
 
 import { parseAddress, stopPath, wordsOf } from './address.js';
 import { APP_NAME, dayOf, formatNumber, formatTime, languagePicker, loadLanguage, pageTexts, setTimeZone, t, translatePage } from './i18n.js';
-import { BOARD_MAX, BOARD_SHARE, BOARD_STOPS, boardBlocks, boardQuery, boardShare, displayQuery, readBoard, readDisplay, readStops } from './display.js';
+import { BOARD_MAX, BOARD_SHARE, BOARD_STOPS, boardBlocks, boardQuery, boardShare, displayQuery, ledBy, readBoard, readDisplay, readStops } from './display.js';
 import { mdiAlert, mdiArrowCollapse, mdiArrowExpand, mdiChevronRight, mdiCityVariantOutline, mdiEye, mdiEyeOff, mdiFullscreen, mdiFullscreenExit, mdiMinusCircleOutline, mdiPlaylistPlus, mdiPlus } from './vendor/material-design-icons/icons.js';
 import { AttributionControl, MapLibreMap, NavigationControl } from './vendor/maplibre-gl/maplibre-gl.mjs';
 
@@ -1128,9 +1128,8 @@ map.on('click', (event) => {
     select('trip', hit.vehicle.id);
   }
   else if (hit?.station) {
-    // (the stop a board is of is open already, with the further stops of the board)
-    const open = state.selection?.type === 'station' && state.selection.data;
-    if (!(open && state.board !== null && stopPathOf(hit.station) === stopPathOf(open))) select('station', hit.station.id);
+    // (the stops of a board are open already, the one it is of and its further stops)
+    if (!onBoard(hit.station)) select('station', hit.station.id);
   } else closePanel();
   // (what was tapped is not to end up under its own details)
   if (hit) clearOfSheet(hit.y);
@@ -1449,7 +1448,7 @@ function chooseStop(stop) {
   }
   leaveSearch(stop.name);
   // On a narrow screen the departures cover the lower half: the stop goes above the middle.
-  map.flyTo({ center: [stop.lon, stop.lat], zoom: Math.max(map.getZoom(), SEARCH_ZOOM), offset: [0, narrowScreen.matches ? -0.12 * viewSize.y : 0] });
+  map.flyTo({ center: [stop.lon, stop.lat], zoom: Math.max(map.getZoom(), SEARCH_ZOOM), offset: stopOffset() });
   // (the list has no ids: a stop of it is asked for by its place)
   select('station', null, { at: stop });
 }
@@ -1937,7 +1936,7 @@ async function openAddress(loaded = false) {
   // (as from the search: on a narrow screen the details cover the lower half, so the stop goes above the middle; a board does not.
   // A display whose address names a section of the map keeps that section: it was set up so.)
   const kept = loaded && state.viewAsked;
-  if (!kept) map.easeTo({ center: [found.lon, found.lat], zoom: Math.max(map.getZoom(), SEARCH_ZOOM), offset: [0, narrowScreen.matches && board === null ? -0.12 * viewSize.y : 0], duration: 0 });
+  if (!kept) map.easeTo({ center: [found.lon, found.lat], zoom: Math.max(map.getZoom(), SEARCH_ZOOM), offset: board === null ? stopOffset() : [0, 0], duration: 0 });
   select('station', null, { at: found, counted: loaded, kept, stops });
   return true;
 }
@@ -2435,12 +2434,32 @@ function clearOfCards() {
   // (a board is beside the map, not on it)
   const over = !panel.hidden && state.board === null;
   const sheetTop = !over ? viewSize.y : panel.classList.contains('sized') ? details.top : Math.min(details.top, viewSize.y * (1 - SHEET_MIDDLE));
+  const right = !over ? margin : viewSize.x - details.left + margin;
+  const fits = (room) => room.left + room.right < 0.8 * viewSize.x && room.top + room.bottom < 0.8 * viewSize.y;
   const padding = narrowScreen.matches
     ? { top: card.bottom + margin, bottom: viewSize.y - sheetTop + margin, left: margin, right: margin }
-    : { top: margin, bottom: margin, left: card.right + margin, right: !over ? margin : viewSize.x - details.left + margin };
+    : { top: margin, bottom: margin, left: card.right + margin, right };
+  if (fits(padding)) return padding;
+  // (a map too narrow beside the card, such as beside a board: below the card then)
+  const below = { top: card.bottom + margin, bottom: margin, left: margin, right };
+  if (!narrowScreen.matches && fits(below)) return below;
   // (in a window too small for that, better covered in part than not shown)
-  const fits = padding.left + padding.right < 0.8 * viewSize.x && padding.top + padding.bottom < 0.8 * viewSize.y;
-  return fits ? padding : { top: margin, bottom: margin, left: margin, right: margin };
+  return { top: margin, bottom: margin, left: margin, right: margin };
+}
+
+/**
+ * How far from the middle of the map a stop chosen on a narrow screen goes,
+ * where the details are about to cover its lower half: above the middle,
+ * and clear of the header card where that is taller, as with the colours of
+ * the delays on a small phone.
+ */
+function stopOffset() {
+  if (!narrowScreen.matches) return [0, 0];
+  const margin = 24;
+  const top = $('controls').getBoundingClientRect().bottom + margin;
+  const bottom = viewSize.y * (1 - SHEET_MIDDLE) - margin;
+  const y = top <= bottom ? Math.min(Math.max(0.38 * viewSize.y, top), bottom) : (top + bottom) / 2;
+  return [0, y - viewSize.y / 2];
 }
 
 function renderLine(line, first) {
@@ -2864,8 +2883,10 @@ function fitBoard() {
   // (all shown first: the blocks are shared out by how much they have, then each list is cut where its block ends)
   for (const list of lists) for (const row of list.children) row.hidden = false;
   shareBoard();
+  // (where even the smallest type leaves too little room, the last blocks end below the board's)
+  const end = panelBody.querySelector('.board-blocks')?.getBoundingClientRect().bottom ?? Infinity;
   const cuts = lists.map((list) => {
-    const room = list.getBoundingClientRect().bottom + 0.5;
+    const room = Math.min(list.getBoundingClientRect().bottom, end) + 0.5;
     const rows = [...list.children];
     return { rows, over: rows.findIndex((row) => row.getBoundingClientRect().bottom > room) };
   });
@@ -2886,25 +2907,47 @@ function shareBoard() {
   if (!node) return;
   const blocks = [...node.children];
   for (const block of blocks) block.style.height = '';
+  node.style.fontSize = '';
   if (node.classList.contains('columns') || blocks.length < 2) return;
+  let free = node.clientHeight - blocks.reduce((sum, block) => sum + Number.parseFloat(getComputedStyle(block).marginTop), 0);
+  // Each block needs at least its heading and its next departure. Where the
+  // board has no room for that in each, its type gets smaller until it has.
+  let least = leastOfBlocks(blocks);
+  for (let fit = 1, tries = 0; tries < 4 && sumOf(least.values()) > free && fit > BOARD_LEAST_TYPE; tries++) {
+    fit = Math.max(BOARD_LEAST_TYPE, fit * free / sumOf(least.values()));
+    node.style.fontSize = `${fit}em`;
+    least = leastOfBlocks(blocks);
+  }
   // (without a height of their own they are as high as all they have: style.css)
   const has = new Map(blocks.map((block) => [block, block.offsetHeight]));
-  let free = node.clientHeight - blocks.reduce((sum, block) => sum + Number.parseFloat(getComputedStyle(block).marginTop), 0);
   let open = blocks;
   while (open.length) {
     const share = free / open.length;
-    const small = open.filter((block) => has.get(block) <= share);
-    if (!small.length) {
+    // (what has less than an even share keeps what it has, what needs more for its next departure gets that)
+    const set = open.filter((block) => has.get(block) <= share || least.get(block) >= share);
+    if (!set.length) {
       for (const block of open) block.style.height = `${share}px`;
       break;
     }
-    for (const block of small) {
-      block.style.height = `${has.get(block)}px`;
-      free -= has.get(block);
+    for (const block of set) {
+      const height = has.get(block) <= share ? has.get(block) : least.get(block);
+      block.style.height = `${height}px`;
+      free -= height;
     }
-    open = open.filter((block) => !small.includes(block));
+    open = open.filter((block) => !set.includes(block));
   }
 }
+
+/** How high each block of a board has to be for its heading and its next departure (all it has, where it has none). */
+function leastOfBlocks(blocks) {
+  return new Map(blocks.map((block) => {
+    const next = block.querySelector('.board-rows > li:not(.day)');
+    if (!next) return [block, block.offsetHeight];
+    return [block, next.getBoundingClientRect().bottom - block.getBoundingClientRect().top + Number.parseFloat(getComputedStyle(block).paddingBottom)];
+  }));
+}
+
+const sumOf = (values) => [...values].reduce((all, value) => all + value, 0);
 // (the board's room changes with its share of the screen, and with the screen; and with it how many columns its blocks have)
 new ResizeObserver(() => {
   if (state.board === null) return;
@@ -2926,6 +2969,8 @@ new ResizeObserver(() => {
 // the type of a column (style.css), which is less than the board's where
 // that is needed, but not less than BOARD_COLUMN_TYPE of it, nor 16 pixels.
 const BOARD_COLUMN_TYPE = 0.6;
+// (where its blocks have no room for their next departures, a board's type gets smaller, but not below this of its own: shareBoard)
+const BOARD_LEAST_TYPE = 0.6;
 // (an answer of api/departures with fewer departures than this has all of the next 24 hours: departures() in server/lib/timetable.js, least)
 const BOARD_LEAST = 10;
 const STOP_RETRY_MS = 10 * 60_000; // a stop of an address the timetable does not have is asked for again after this
@@ -2971,8 +3016,8 @@ async function loadBoardStop(stop) {
 
 /**
  * Where the first stop of the address of a board is not in the timetable:
- * opens the board at the first further stop that is, and keeps the one that
- * is not as a block of its own after it, so that it comes back with a later
+ * opens the board at the first further stop that is, its block first, and
+ * keeps the one that is not in its list, so that it comes back with a later
  * timetable. False where the address has no further stop the timetable has.
  */
 async function openNextStop(path) {
@@ -2985,8 +3030,8 @@ async function openNextStop(path) {
     const res = await fetch(`api/address?path=${encodeURIComponent(`stop/${stop.path}`)}`);
     if (!res.ok) continue;
     const found = await res.json();
-    const others = stops.filter((other) => other !== stop);
-    const rest = [{ path: first, joined: false }, ...others];
+    // (the lists stay as the address has them, for when it is back)
+    const rest = ledBy([{ path: first, joined: false }, ...stops], stop).slice(1);
     boardStopData.set(first, { gone: true, askedAt: Date.now() });
     history.replaceState(null, '', new URL(`${found.path}${boardQuery(location.search, board, rest)}`, document.baseURI));
     return openAddress();
@@ -3070,11 +3115,15 @@ function mergedDepartures(entries) {
 function blockHeading(block, index, tag, controls, total) {
   const { full: names, short } = namesOf(block);
   const control = (shape, label, focus, onclick, name) => el('button', { type: 'button', class: `board-control ${name}`, title: label, 'aria-label': label, data: { focus }, onclick }, [icon(shape)]);
-  const parts = block.flatMap((entry, i) => [
+  const parts = block.map((entry, i) => {
     // (after the first, a dot before each name: style.css)
-    el('span', { class: 'stop', text: i ? short[i] : names[i] }),
-    ...(controls && total > 1 ? [control(mdiMinusCircleOutline, t('board.remove', { stop: names[i] }), `remove:${entry.path}`, () => removeBoardStop(entry.path), 'remove')] : []),
-  ]);
+    const name = i ? short[i] : names[i];
+    if (!(controls && total > 1)) return el('span', { class: 'stop', text: name });
+    // (its minus goes with its last letter: it stays on the line of the name it takes away)
+    const letters = [...name];
+    const minus = control(mdiMinusCircleOutline, t('board.remove', { stop: names[i] }), `remove:${entry.path}`, () => removeBoardStop(entry.path), 'remove');
+    return el('span', { class: 'stop' }, [letters.slice(0, -1).join(''), el('span', { class: 'end' }, [letters.at(-1), minus])]);
+  });
   if (controls && total < BOARD_STOPS) parts.push(control(mdiPlaylistPlus, t('board.merge', { stop: names[0] }), `merge:${index}`, () => startAdding(index), 'merge'));
   const heading = el(tag, { class: 'board-heading' }, parts);
   if (block.length > 1 || controls) heading.setAttribute('aria-label', new Intl.ListFormat(language, { type: 'conjunction' }).format(names));
@@ -3115,6 +3164,14 @@ function boardList() {
   const data = state.selection?.data;
   const first = data ? stopPathOf(data).slice('stop/'.length) : here().slice('stop/'.length);
   return [{ path: first, joined: false }, ...state.extra.map((stop) => ({ ...stop }))];
+}
+
+/** Whether a stop on the map is one of the open board's: the one it is of, or a further one. */
+function onBoard(station) {
+  const open = state.selection?.type === 'station' && state.selection.data;
+  if (!open || state.board === null) return false;
+  const path = stopPathOf(station);
+  return [open, ...state.extra.map((stop) => boardStopData.get(stop.path))].some((place) => place?.name && stopPathOf(place) === path);
 }
 
 /** Takes a stop out of the list of a board: the stop after it begins its block where it did. */
@@ -3174,12 +3231,7 @@ function usableFirst(list) {
   const usable = list.findIndex((entry) => entry.path === current || boardStopData.get(entry.path)?.name);
   if (usable < 0) return false;
   if (usable === 0) return true;
-  // (its block goes first, with it at its head: the lists stay as they were)
-  const lead = list[usable];
-  const blocks = boardBlocks(list[0], list.slice(1));
-  const own = blocks.find((block) => block.includes(lead));
-  const ordered = [[lead, ...own.filter((entry) => entry !== lead)], ...blocks.filter((block) => block !== own)];
-  list.splice(0, list.length, ...ordered.flatMap((block) => block.map((entry, i) => ({ path: entry.path, joined: i > 0 }))));
+  list.splice(0, list.length, ...ledBy(list, list[usable]));
   return true;
 }
 

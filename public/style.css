@@ -1242,6 +1242,9 @@ li:last-child > .row.stop .rail::before { bottom: 50%; }
 /* (a long name wraps; the dot before a name stays with it, by a space that does not break) */
 .board-heading .stop { min-width: 0; overflow-wrap: anywhere; }
 .board-heading .stop ~ .stop::before { content: "·\00a0"; }
+/* (a minus goes with the last letter of its name: never on a line of its own, or in front of the next name) */
+.board-heading .end { white-space: nowrap; }
+.board-heading .end .board-control { margin-left: 0.2em; vertical-align: middle; }
 .board-control {
   flex: none;
   display: inline-grid;
