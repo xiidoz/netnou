@@ -15,13 +15,16 @@
   --mode-subway: #0b5cad;
   --mode-tram: #d42a2a;
   --mode-bus: #7b3fa0;
-  --mode-suburban: #1e8a3c;
+  --mode-suburban: #1d873a;
   --mode-regional: #4d5a66;
   --mode-longdistance: #d97200;
-  /* (light, both: names on them are dark, see DARK_LETTERS in app.js) */
   --mode-ferry: #4cb8ea;
   --mode-cable: #c4a484;
-  --mode-other: #7a7a7a;
+  --mode-other: #767676;
+  /* The names on a mode's colour, in badges and markers: white, else dark where white has less than 4.5:1 to it. */
+  --mode-longdistance-text: #1b1f24;
+  --mode-ferry-text: #1b1f24;
+  --mode-cable-text: #1b1f24;
 
   /* ahead of the timetable: a cool colour, apart from the scale of the delays and from every mode */
   --delay-early: #008fae;
@@ -65,6 +68,7 @@
   --accent: #6fb1f2;
   --shadow: 0 2px 14px rgb(0 0 0 / 0.55);
   --mode-regional: #7d8b99;
+  --mode-regional-text: #1b1f24;
   --veil: rgb(10 11 14 / 0.6);
   --veil-line: rgb(111 177 242 / 0.6);
   --delay-early-text: #0095b6;

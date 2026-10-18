@@ -20,8 +20,7 @@ import { AttributionControl, MapLibreMap, NavigationControl } from './vendor/map
 const MODES = ['subway', 'tram', 'bus', 'suburban', 'regional', 'longdistance', 'ferry', 'cable', 'other'];
 // Later entries are drawn on top: trains over trams over buses.
 const DRAW_ORDER = ['other', 'bus', 'ferry', 'cable', 'tram', 'subway', 'suburban', 'regional', 'longdistance'];
-// The modes whose colours are too light for white letters: names on them are dark.
-const DARK_LETTERS = new Set(['ferry', 'cable']);
+// The dark letters on the yellow of a minor delay, the colour of --mode-*-text in style.css.
 const LETTERS_DARK = '#1b1f24';
 const RAIL_MODES = ['subway', 'suburban', 'regional', 'longdistance'];
 
@@ -278,8 +277,11 @@ let colors = {};
 function readColors() {
   const style = getComputedStyle(document.documentElement);
   const get = (name) => style.getPropertyValue(name).trim();
-  colors = { mode: {}, delay: {}, unknown: get('--delay-unknown'), text: get('--text'), bg: get('--bg'), border: get('--border'), accent: get('--accent'), muted: get('--text-muted'), veil: get('--veil'), veilLine: get('--veil-line'), location: get('--location') };
-  for (const mode of DRAW_ORDER) colors.mode[mode] = get(`--mode-${mode}`);
+  colors = { mode: {}, letters: {}, delay: {}, unknown: get('--delay-unknown'), text: get('--text'), bg: get('--bg'), border: get('--border'), accent: get('--accent'), muted: get('--text-muted'), veil: get('--veil'), veilLine: get('--veil-line'), location: get('--location') };
+  for (const mode of DRAW_ORDER) {
+    colors.mode[mode] = get(`--mode-${mode}`);
+    colors.letters[mode] = get(`--mode-${mode}-text`) || '#fff';
+  }
   for (const cls of ['early', 'ok', 'minor', 'major', 'severe', 'none']) colors.delay[cls] = get(`--delay-${cls}`);
 }
 readColors();
@@ -525,8 +527,8 @@ function vehicleColor(v) {
   return state.colorBy === 'delay' ? colors.delay[delayClass(v.delay)] : colors.mode[v.mode] ?? colors.mode.other;
 }
 
-/** The names in a marker are white – except on light colours, which do not carry white text: the yellow of a minor delay, and those of DARK_LETTERS. */
-const labelColor = (v) => ((state.colorBy === 'delay' ? delayClass(v.delay) === 'minor' : DARK_LETTERS.has(v.mode)) ? LETTERS_DARK : '#fff');
+/** The names in a marker are white – except on light colours, which do not carry white text: the yellow of a minor delay, and the modes with --mode-*-text. */
+const labelColor = (v) => (state.colorBy === 'delay' ? (delayClass(v.delay) === 'minor' ? LETTERS_DARK : '#fff') : colors.letters[v.mode] ?? colors.letters.other);
 /** By name, numbers by their value: N2 before N10. For the order within a group, which must not change from frame to frame. */
 const byLabel = (a, b) => a.label.localeCompare(b.label, undefined, { numeric: true }) || (a.id < b.id ? -1 : 1);
 
@@ -2170,7 +2172,7 @@ const platformText = (platform) => (platform ? t('stop.platform', { platform }) 
 function badge(line, mode, ...more) {
   const node = el('span', { class: 'badge', text: line }, more);
   node.style.setProperty('--badge-color', `var(--mode-${mode})`);
-  if (DARK_LETTERS.has(mode)) node.style.setProperty('--badge-text', LETTERS_DARK);
+  node.style.setProperty('--badge-text', `var(--mode-${mode}-text, #fff)`);
   return node;
 }
 
@@ -2405,7 +2407,7 @@ function renderTrip(trip, scrollToNext) {
 
   const list = el('ul', { class: 'rows' }, rows);
   list.style.setProperty('--badge-color', `var(--mode-${trip.mode})`);
-  if (DARK_LETTERS.has(trip.mode)) list.style.setProperty('--badge-text', LETTERS_DARK);
+  list.style.setProperty('--badge-text', `var(--mode-${trip.mode}-text, #fff)`);
   const mode = t(`mode.${DRAW_ORDER.includes(trip.mode) ? trip.mode : 'other'}`);
   // Who provides the realtime data shown leads the notes, which are feed content and stay as they are.
   const source = trip.realtime && trip.source ? [t('trip.source', { source: trip.source })] : [];
