@@ -7,7 +7,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import { test } from 'node:test';
 import vm from 'node:vm';
-import { ATTRIBUTES, LANGUAGES, formatNumber, formatTime, loadLanguage, pageTexts, pickLanguage, sentInAnother, setTimeZone, t } from '../public/i18n.js';
+import { ATTRIBUTES, LANGUAGES, dayOf, formatNumber, formatTime, loadLanguage, pageTexts, pickLanguage, sentInAnother, setTimeZone, t } from '../public/i18n.js';
 import en from '../public/locales/en.js';
 import { PAGE_INLINE, PAGE_MODULES } from '../server/lib/page.js';
 import { MODES } from '../server/lib/timetable.js';
@@ -560,4 +560,23 @@ test('texts with placeholders and plural forms, numbers and times in the languag
   // the regional variant the browser asks for decides how times are written
   await loadLanguage('en', ['de', 'en-GB']);
   assert.equal(formatTime(0), '01:00');
+});
+
+// The line "tomorrow" in a list of departures, where tomorrowAt in app.js
+// puts it, run as it is written there. The list is in the order they leave:
+// after midnight a train of the day before that leaves late is among those
+// of today, and the next day begins with the first planned for it (#193).
+test('the next day begins with the first departure planned for it, not with a late one of the day before', () => {
+  const source = /^function tomorrowAt\(departures\) \{$[\s\S]*?^\}$/m.exec(read('app.js'))[0];
+  const at = (time) => Date.parse(time) / 1000;
+  const tomorrowAt = (time, planned) => vm.runInNewContext(`${source}\ntomorrowAt(departures);`, { dayOf, now: () => at(time), departures: planned.map((when) => ({ planned: at(when) })) });
+  setTimeZone('Europe/Berlin');
+  // Sunday, ten past midnight: 00:17, 00:17, 23:25 of Saturday 56 minutes late, 00:34, 00:46
+  const night = ['2026-10-18T00:17+02:00', '2026-10-18T00:17+02:00', '2026-10-17T23:25+02:00', '2026-10-18T00:34+02:00', '2026-10-18T00:46+02:00'];
+  assert.equal(tomorrowAt('2026-10-18T00:10+02:00', night), -1);
+  assert.equal(tomorrowAt('2026-10-18T00:10+02:00', [...night, '2026-10-19T00:05+02:00']), 5);
+  // before midnight
+  assert.equal(tomorrowAt('2026-10-17T23:50+02:00', ['2026-10-17T23:55+02:00', '2026-10-18T00:05+02:00']), 1);
+  assert.equal(tomorrowAt('2026-10-17T23:50+02:00', ['2026-10-18T00:05+02:00']), 0);
+  assert.equal(tomorrowAt('2026-10-17T23:50+02:00', ['2026-10-17T23:55+02:00']), -1);
 });
