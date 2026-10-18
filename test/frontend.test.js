@@ -244,6 +244,21 @@ test('every element app.js asks for by its id is in index.html', () => {
   for (const id of ids) assert.ok(html.includes(` id="${id}"`), `app.js asks for #${id}, which is not in index.html`);
 });
 
+// Back goes to what was open before, one step (#188, #190). What is opened
+// next gets an address of its own once the server has answered (showAddress
+// in loadSelection), and what closes a board, or opens a line or a trip after
+// it, leaves the board's address as it was: only a board that changes in
+// place (its button, its edge, its stops) writes it anew.
+test('what is opened or closed after a board or a vehicle on the map leaves a step back to what was open', () => {
+  const app = withoutComments(read('app.js'));
+  assert.deepEqual(app.match(/setBoard\(null\b[^)]*\)/g), ['setBoard(null, false)', 'setBoard(null, false)']);
+  // (the next address has a board where one is shown, not where the address before had one)
+  assert.match(app, /history\.pushState\(null, '', new URL\(`\$\{path\}\$\{boardQuery\(location\.search, state\.board, state\.extra\)\}`/);
+  // (a vehicle chosen on the map goes straight to its trip, not by the map alone)
+  const click = app.slice(app.indexOf("map.on('click'"));
+  assert.doesNotMatch(click.slice(0, click.indexOf('});')), /showAddress/);
+});
+
 test('the dialog that says how it works is named by its heading, in the words of the button that opens it', () => {
   const html = read('index.html');
   const heading = /<dialog [^>]*aria-labelledby="([^"]+)"/.exec(html)[1];
