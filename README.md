@@ -1,72 +1,50 @@
 # <img src="public/favicon.svg" alt="" width="40" height="40" align="top"> Netnou
 
-A live map of public transport, computed from a GTFS timetable, GTFS-Realtime
-delays and OpenStreetMap.
+A live map of buses and trains: where each one is right now, how late it is,
+and the next departures at every stop.
 
-[![CI](https://github.com/xiidoz/netnou/actions/workflows/ci.yml/badge.svg)](https://github.com/xiidoz/netnou/actions/workflows/ci.yml)
-[![Licence: MIT](https://img.shields.io/badge/licence-MIT-blue.svg)](LICENSE)
+**Try it:** [öpnv.live](https://xn--pnv-rna.live) runs Netnou for all of
+Germany.
 
-**Try it:** [öpnv.live](https://xn--pnv-rna.live) is a service for riders that
-runs the latest release of Netnou for the default area.
+**The positions are calculated, not tracked by GPS.** The data has delays but
+no positions, so each vehicle is drawn where the timetable and its reported
+delay put it. It can be a little ahead of or behind its marker.
 
 ![Map of central Nürnberg with buses, trams and trains as coloured markers; a panel lists the stops of tram 4 with its delays](docs/screenshot.png)
 
-Netnou shows buses, trams, underground, suburban, regional and long-distance
-trains moving on a map, with their current delays, the stop list of every trip
-and a departure board for every station. Out of the box it covers the VGN, the
-transit network around Nürnberg in Germany, using the nationwide feeds of
-[gtfs.de](https://gtfs.de); another area is a matter of
-[configuration](docs/configuration.md).
+## What you can do
 
-**The positions are computed, not measured.** The feeds carry delays but no
-vehicle positions, so each vehicle is placed where the timetable plus its
-reported delay says it should be.
+- **Tap a vehicle** to see its trip with every stop, time and delay, and when
+  it gets where.
+- **Zoom in and tap a stop** for its next departures with their delays: will
+  you still make it?
+- **Tap a departure** for its whole trip, with its vehicle marked on the map.
+- **Search** for a town, a stop or a line. A line then shows only its own
+  vehicles, all of them at a glance.
+- **Tap a kind of transport** in the row of chips to hide it or show it again,
+  for example to see only the trains.
+- **Share** a stop, a line or a trip, for example to show someone where the
+  bus is right now.
+- **Show the departures as a board**, in large type for a screen on the wall,
+  with up to four stops.
 
-The name is Afrikaans: *net nou* means "just now", which in South Africa
-notoriously means "later, eventually". That suits German public transport,
-the *ÖPNV*, rather well.
+The vehicles can also be coloured by their delay, the map can show your own
+location (it stays in your browser), and the page speaks German and
+English and installs as an app.
 
-**Status: early development (0.x).** Settings and the API can still change
-from one minor version to the next; the [changelog](CHANGELOG.md) marks such
-changes as breaking.
+## Something wrong?
 
-## Features
+- **A time, a delay or a cancellation is wrong?** It comes from the timetable
+  data. If the operator's own app shows the same, tell the operator; the data
+  reaches Netnou from them through [gtfs.de](https://gtfs.de).
+- **A vehicle takes a road or a track it never uses?** The routes come from
+  OpenStreetMap, where they can be [corrected](https://www.openstreetmap.org/fixthemap).
+- **A bug, or an idea for the map?** [Open an issue](https://github.com/xiidoz/netnou/issues/new/choose),
+  in English or German.
+- **A question about one public instance?** Whoever runs it is usually named
+  in its imprint, linked at the foot of its card.
 
-- Vehicles animated along roads and tracks, coloured by kind of transport or
-  by delay.
-- A vector map behind them that stays sharp at every zoom level and names
-  places in the visitor's language.
-- Stop list with delays, skipped stops and cancellations for every trip;
-  departure board for every station; notes from the feed.
-- Search for stops, lines and towns that runs in the browser. A stop is
-  found by its town as well as by its name, and the search forgives
-  abbreviations, missing umlauts and typing slips; a line shows its
-  vehicles under way, alone on the map, and a town all its stations.
-- Every stop and line has an address of its own, to share, keep and find
-  with a search engine, which finds it again in later timetables; a button
-  in its details shares it.
-- The visitor's own location on the map, if they ask for it; it stays in
-  their browser.
-- Visits can be counted by an analytics service of the operator's choice,
-  which the server tells of each one: no script in the page, no cookie
-  ([Counting visits](docs/configuration.md#counting-visits)).
-- A button hides the controls for more map, another gives the page the whole
-  screen. With `?display=fixed` in its address the page is a
-  [display for a screen on a wall](docs/deployment.md#a-screen-on-a-wall).
-- The departures of a stop enlarge into a board beside the map, or on the
-  whole screen, for a dashboard or a wall, with up to four stops, each in a
-  block of its own or together in one list; departure times show as the time
-  of day, as the minutes until they leave, or both.
-- User interface in German and English, chosen per visitor; further languages
-  are one file each.
-- Tells search engines and link previews what it shows and where, in the
-  instance's own language.
-- Installable as an app (PWA).
-- One Node.js process, no database, no npm dependencies at run time, no build
-  step.
-- The realtime feed is only fetched while somebody is looking at the map.
-
-## Quick start
+## Run your own
 
 With Docker:
 
@@ -78,62 +56,16 @@ This pulls the published image `ghcr.io/xiidoz/netnou`. `compose.yaml` needs
 nothing else from the repository, so it can also be downloaded on its own or
 pasted into Portainer as it is.
 
-With Node.js 22 or newer (nothing to install, `npm install` is not needed to
-run):
+With Node.js 22 or newer, with nothing to install:
 
 ```sh
 npm start
 ```
 
-Then open <http://localhost:8080>.
-
-### What the first start does
-
-The server downloads the timetable of all of Germany (about 300 MB) and cuts it
-down to the area, then downloads OpenStreetMap extracts (about 500 MB for the
-default area) to work out the paths between stops. On a fast connection that
-takes two to five minutes:
-
-- Until the timetable is read, the page shows a notice instead of vehicles.
-- After that the map works, with vehicles moving in straight lines between
-  stops.
-- A minute or two later the route geometry is ready and vehicles follow roads
-  and tracks.
-
-The import needs about 1.1 GB of memory for a minute. Afterwards the server
-runs with 150 to 600 MB, keeps four cache files of about 80 MB together in
-`./data` (the volume `data` in Docker) and starts from them in less than a
-second. The downloads are deleted when the import is done. A new timetable is
-downloaded and imported in the same way whenever gtfs.de publishes one, once
-a day, and the extracts again every 30 days. (Figures: approximate, default
-area, October 2026.)
-
-With `NETNOU_AREA=Germany` the extract is that of Germany, 4.9 GB, about
-seven minutes to download at 100 Mbit/s. Importing it takes about ten
-minutes more and up to 3.3 GB of memory, and the data directory needs 6 GB
-meanwhile and 1.1 GB afterwards. The server then runs with about 1 GB, and a
-new timetable takes about a minute.
-
-## Configuration
-
-Everything is set with environment variables and everything is optional. The
-ones most people touch:
-
-| Variable | Default | Meaning |
-| --- | --- | --- |
-| `NETNOU_PORT` | `8080` | HTTP port |
-| `NETNOU_DATA_DIR` | `./data` | where the caches are kept |
-| `NETNOU_BBOX` | – | area to cover as `south,west,north,east`, instead of the VGN |
-| `NETNOU_AREA_FILE` | built-in VGN | GeoJSON file with the polygons of the area |
-| `NETNOU_AREA` | `VGN` | `Germany` for all of Germany, with its extract: everything the feed has |
-| `NETNOU_AGENCIES` | all | only the trips of these operators, by their names in the feed |
-| `NETNOU_AREA_NAME` | `Großraum Nürnberg (VGN)` | shown next to the title |
-| `NETNOU_PUBLIC_URL` | – | the address visitors reach the instance under, for search engines and previews of links |
-| `NETNOU_OSM_PBF_URLS` | five Bavarian extracts | OpenStreetMap extracts covering the area |
-| `NETNOU_MAP_STYLE_URL` | OpenFreeMap, style `bright` | the map behind the vehicles, as a MapLibre style |
-
-For example, München (in a POSIX shell; for PowerShell and Docker see the
-configuration guide):
+Then open <http://localhost:8080>. Out of the box Netnou shows the VGN, the
+network around Nürnberg, from the nationwide feeds of [gtfs.de](https://gtfs.de).
+Another region is a matter of settings, for example München (in a POSIX
+shell; for PowerShell and Docker see the configuration guide):
 
 ```sh
 NETNOU_BBOX=48.06,11.36,48.25,11.72 \
@@ -142,69 +74,54 @@ NETNOU_OSM_PBF_URLS=https://download.geofabrik.de/europe/germany/bayern/oberbaye
 npm start
 ```
 
-All settings, how to describe an area, and what it takes to use other feeds
-or another country: [docs/configuration.md](docs/configuration.md).
+`NETNOU_AREA=Germany` shows all of Germany. Every setting, how to describe an
+area, and what feeds of another country need:
+[docs/configuration.md](docs/configuration.md). Docker, reverse proxies,
+monitoring and a public instance: [docs/deployment.md](docs/deployment.md).
 
-## Languages
+**Status: early development (0.x).** Settings and the API can still change
+from one minor version to the next; the [changelog](CHANGELOG.md) marks such
+changes as breaking.
 
-The page is available in German and English. A visitor gets the language of
-their browser, English if it is neither, and can switch in the page. Adding a
-language means adding one file:
-[docs/translating.md](docs/translating.md).
+### What the first start does
 
-## How it works
+The server downloads the timetable of all of Germany (about 300 MB) and cuts
+it down to the area, then OpenStreetMap extracts (about 500 MB for the default
+area) to work out the roads and tracks between stops. On a fast connection
+that takes two to five minutes. Until the timetable is read the page shows a
+notice; then vehicles move in straight lines; a minute or two later they
+follow roads and tracks. Afterwards the server runs with 150 to 600 MB of
+memory and starts from its cache in less than a second. The figures for all
+of Germany are in [docs/deployment.md](docs/deployment.md#requirements).
 
-- **Import.** A worker thread reads the nationwide GTFS feed straight out of
-  the zip and keeps the trips that serve at least one stop in the area. The
-  feed is checked for a new version every 15 minutes.
-- **Route geometry.** The feed has no route shapes. Every hop "stop A, then
-  stop B" is routed over OpenStreetMap: buses on roads, trams, underground and
-  trains on their tracks. Where no plausible route is found, the vehicle moves
-  in a straight line.
-- **Realtime.** The GTFS-Realtime feed is matched to the trips and turned into
-  per-stop delays, skipped stops and cancellations.
-- **Positions.** The server sends, for every vehicle, where it will be over
-  the next minute and a half; the browser animates along that.
-- **Outside the area.** A trip is followed along its whole run (a
-  long-distance train to Hamburg stays on the map), but it follows roads and
-  tracks only inside the area. The map greys out everything outside.
+## What an operator gets
 
-The details are in [docs/architecture.md](docs/architecture.md).
+- One Node.js process: no database, no npm dependencies at run time, no build
+  step. The realtime feed is fetched only while somebody is looking.
+- A name, a description, icons and links of its own, such as an imprint and a
+  privacy notice ([Being found](docs/configuration.md#being-found),
+  [Icons](docs/configuration.md#icons-of-your-own),
+  [Links](docs/configuration.md#links-of-your-own)).
+- An address for every stop, line and trip to share, and a sitemap of the
+  stops and lines for search engines.
+- A display for a screen on the wall, with boards of up to four stops
+  ([A screen on a wall](docs/deployment.md#a-screen-on-a-wall)).
+- Visits counted by an analytics service of your choice, which the server
+  tells of each one: no script in the page, no cookie
+  ([Counting visits](docs/configuration.md#counting-visits)).
+- An open JSON API for other clients ([docs/api.md](docs/api.md)).
+- German and English, chosen per visitor; a further language is one file
+  ([docs/translating.md](docs/translating.md)).
 
-## API
+## Take part
 
-The page uses a small JSON API, which is open to other clients too:
+[![CI](https://github.com/xiidoz/netnou/actions/workflows/ci.yml/badge.svg)](https://github.com/xiidoz/netnou/actions/workflows/ci.yml)
+[![Licence: MIT](https://img.shields.io/badge/licence-MIT-blue.svg)](LICENSE)
 
-| Endpoint | Answer |
-| --- | --- |
-| `GET /api/vehicles` | vehicles under way, optionally within `?bbox=` |
-| `GET /api/trip?id=…` | one trip: stops, delays, path |
-| `GET /api/stations` | stations, optionally within `?bbox=` |
-| `GET /api/departures?station=…` | departure board of a station |
-| `GET /api/address?path=…` | what the address of a stop, a line or a trip names |
-| `GET /api/area` | the configured area, map and attribution |
-| `GET /api/status` | state of the import and of the realtime feed |
-
-Reference: [docs/api.md](docs/api.md).
-
-## Deployment
-
-[docs/deployment.md](docs/deployment.md) covers Docker, running without it,
-reverse proxies, monitoring, what running a public instance involves, and
-troubleshooting.
-
-## Development
-
-```sh
-npm test         # no installation and no network needed
-npm ci           # only for the linter
-npm run lint
-```
-
-Running needs Node.js 22 or newer; linting needs 22.13 or newer. Commit
-messages follow [Conventional Commits](https://www.conventionalcommits.org/);
-versions, the [changelog](CHANGELOG.md) and releases are derived from them.
-See [CONTRIBUTING.md](CONTRIBUTING.md).
+`npm test` needs no installation and no network. How to work on Netnou, the
+commit messages and the pull requests: [CONTRIBUTING.md](CONTRIBUTING.md). How
+it works inside, from the import to the positions:
+[docs/architecture.md](docs/architecture.md).
 
 ## Data sources, licences and attribution
 
@@ -236,3 +153,7 @@ follows for operators: [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md).
 Netnou is not affiliated with or endorsed by VGN, VAG, DELFI e.V., gtfs.de or
 any transport operator. Positions are estimates computed from the timetable
 and the reported delays. Do not rely on them.
+
+The name is Afrikaans: *net nou* means "just now", which in South Africa
+notoriously means "later, eventually". That suits German public transport, the
+*ÖPNV*, rather well.
