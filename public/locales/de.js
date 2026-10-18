@@ -34,9 +34,9 @@ export default {
 
   'status.connecting': 'Verbinde …',
   'status.vehicles': { one: '{count} Fahrzeug', other: '{count} Fahrzeuge' },
-  'status.live': 'Echtzeit vor {seconds} s',
-  'status.waiting': 'Echtzeit wird geladen …',
-  'status.outage': 'zurzeit keine Echtzeitdaten, alles nach Fahrplan',
+  'status.live': 'Verspätungen: Stand vor {seconds} s',
+  'status.waiting': 'Verspätungen werden geladen …',
+  'status.outage': 'zurzeit keine Verspätungsdaten, alles nach Fahrplan',
   'status.loading': 'Fahrplandaten werden geladen',
   'status.noTimetable': 'Keine Fahrplandaten',
   'status.noConnection': 'Keine Verbindung zum Server',
@@ -91,7 +91,7 @@ export default {
 
   'links.label': 'Über dieses Angebot',
 
-  'about.fact': 'Positionen sind geschätzt, nicht gemessen.',
+  'about.fact': 'Positionen berechnet, nicht per GPS.',
   'about.title': 'So funktioniert’s',
   'about.positions': 'Positionen',
   'about.positionsText': 'Kein Fahrzeug meldet dieser Karte seinen Standort. Jedes wird dort gezeichnet, wo es laut Fahrplan gerade sein müsste, verschoben um die gemeldete Verspätung. Ein Fahrzeug kann deshalb etwas vor oder hinter seiner Markierung sein. Fahrzeuge ohne gemeldete Verspätung tragen ein Fragezeichen und fahren hier nach Fahrplan.',
@@ -142,9 +142,9 @@ export default {
   'board.from': 'ab {stop}',
   'board.gone': '{stop} ist nicht im Fahrplan.',
 
-  'trip.realtime': 'Echtzeitdaten',
-  'trip.scheduleOnly': 'nur Fahrplandaten',
-  'trip.source': 'Echtzeitdaten: {source}',
+  'trip.realtime': 'mit Verspätungsdaten',
+  'trip.scheduleOnly': 'nur nach Fahrplan',
+  'trip.source': 'Verspätungsdaten von {source}',
   'trip.cancelled': 'Fahrt fällt aus',
 
   'notes.more': { one: '{count} weiterer Hinweis', other: '{count} weitere Hinweise' },

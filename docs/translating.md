@@ -64,7 +64,7 @@ wrong.
 English is the reference. A locale file has exactly the keys of `en.js`.
 
 - **Placeholders** in braces are filled in by the page and must be kept:
-  `'realtime {seconds} s ago'` → `'Echtzeit vor {seconds} s'`. They may move
+  `'delays as of {seconds} s ago'` → `'Verspätungen: Stand vor {seconds} s'`. They may move
   within the sentence.
 - **Plural forms.** Where the wording depends on a number, the value is an
   object with one text per plural category of the language:

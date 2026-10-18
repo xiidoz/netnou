@@ -53,10 +53,11 @@ export default {
 
   'status.connecting': 'Connecting …',
   'status.vehicles': { one: '{count} vehicle', other: '{count} vehicles' },
-  'status.live': 'realtime {seconds} s ago',
+  // What is live is the delays, not the positions: the status line says so.
+  'status.live': 'delays as of {seconds} s ago',
   // Without any realtime data: while it may still be on its way, and once it is clear that there is none.
-  'status.waiting': 'loading realtime …',
-  'status.outage': 'no realtime data right now, all by timetable',
+  'status.waiting': 'loading delays …',
+  'status.outage': 'no delay data right now, all by timetable',
   'status.loading': 'Loading timetable data',
   'status.noTimetable': 'No timetable data',
   'status.noConnection': 'No connection to the server',
@@ -121,7 +122,7 @@ export default {
   'links.label': 'About this service',
 
   // The line at the foot of the card: what everybody should know about the markers …
-  'about.fact': 'Positions are estimated, not measured.',
+  'about.fact': 'Positions are calculated, not tracked by GPS.',
   // … and, on the button after it and as the heading of the dialog it opens, the way to how the page comes by them.
   'about.title': 'How it works',
   'about.positions': 'Positions',
@@ -187,10 +188,10 @@ export default {
   // in place of a stop of the board the timetable does not have
   'board.gone': '{stop} is not in the timetable.',
 
-  'trip.realtime': 'realtime data',
-  'trip.scheduleOnly': 'timetable data only',
-  // {source} is the operator the realtime data of the trip comes from
-  'trip.source': 'Realtime data: {source}',
+  'trip.realtime': 'with delay data',
+  'trip.scheduleOnly': 'timetable only',
+  // {source} is the operator the delay data of the trip comes from (not who caused the delay)
+  'trip.source': 'Delay data from {source}',
   'trip.cancelled': 'Trip cancelled',
 
   // The notes of the operator about a trip or a stop, in the head of the details. Past the first few, a button
