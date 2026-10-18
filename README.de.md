@@ -1,18 +1,11 @@
-<p align="center">
-  <img src="public/favicon.svg" alt="" width="120" height="120">
-</p>
-
-<h1 align="center">Netnou</h1>
-
-<p align="center">
-  <strong>Eine Live-Karte für Busse und Bahnen</strong>
-</p>
+<h1 align="center">
+  <img src="public/favicon.svg" alt="" width="40" height="40" align="top">&nbsp;Netnou<br>
+  <sub>Eine Live-Karte für Busse und Bahnen</sub>
+</h1>
 
 <p align="center">
   <a href="README.md">English</a> • Deutsch
 </p>
-
----
 
 Netnou zeigt Busse und Bahnen dort, wo sie gerade sind, mit ihrer Verspätung
 und den nächsten Abfahrten an jeder Haltestelle.
