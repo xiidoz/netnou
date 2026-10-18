@@ -23,6 +23,8 @@
 // kept, or given to another browser, and shows the same there – also in one
 // that has nothing stored, as on many a wall.
 
+import { parseAddress } from './address.js';
+
 /**
  * What an address asks for, or null if it does not ask for a display.
  * The settings have the names and the shapes the page keeps them by in the
@@ -58,7 +60,7 @@ export function readDisplay(search, modes) {
  * settings is named, but for the section of the map and the language.
  * @param modes the kinds of transport there are
  */
-export function displayQuery({ fixed, language, board = null, settings: { view, theme, colorBy, flags, hiddenModes, times, clock } }, modes) {
+export function displayQuery({ fixed, language, board = null, stops = [], settings: { view, theme, colorBy, flags, hiddenModes, times, clock } }, modes) {
   const asked = [fixed ? 'display=fixed' : 'display', `view=${view.lat.toFixed(4)},${view.lon.toFixed(4)},${view.zoom.toFixed(1)}`, `lang=${language}`];
   if (theme === 'light' || theme === 'dark') asked.push(`theme=${theme}`);
   if (colorBy === 'delay') asked.push('color=delay');
@@ -66,7 +68,7 @@ export function displayQuery({ fixed, language, board = null, settings: { view, 
   if (hiddenModes.length) asked.push(`modes=${modes.filter((mode) => !hiddenModes.includes(mode)).join(',')}`);
   if (times === 'time' || times === 'minutes') asked.push(`times=${times}`);
   if (clock === false) asked.push('clock=off');
-  if (board !== null) asked.push(`board=${board}`);
+  if (board !== null) asked.push(`board=${board}`, ...stopsQuery(stops));
   return `?${asked.join('&')}`;
 }
 
@@ -101,11 +103,62 @@ export function readBoard(search) {
 
 /**
  * The query of an address with a board that takes this share of the screen,
- * or with none (null); what else it asks for stays as it was written.
+ * or with none (null), and the further stops on it; what else it asks for
+ * stays as it was written.
  * @param search the query of the address so far, as location.search has it
+ * @param stops the further stops of the board (readStops): written with a board only
  */
-export function boardQuery(search, share) {
-  const kept = search.replace(/^\?/, '').split('&').filter((part) => part && !/^board(=|$)/.test(part));
-  if (share !== null) kept.push(`board=${share}`);
+export function boardQuery(search, share, stops = []) {
+  const kept = search.replace(/^\?/, '').split('&').filter((part) => part && !/^(board|with|block)(=|$)/.test(part));
+  if (share !== null) kept.push(`board=${share}`, ...stopsQuery(stops));
   return kept.length ? `?${kept.join('&')}` : '';
+}
+
+// A board shows up to BOARD_STOPS stops (#163): the one the address is of,
+// and after board= the others, in the order of the board:
+//   with=<stop>    one in the same list as the stop before it, its
+//                  departures and theirs together, in the order they leave
+//   block=<stop>   one that begins a block of its own
+// each named as its own address names it, without "stop/" (address.js), so
+// that it is found again in later timetables. Only the order of with= and
+// block= among each other says anything.
+export const BOARD_STOPS = 4;
+
+/**
+ * The further stops of the board an address asks for: [{ path, joined }],
+ * path as in the address, joined where it is in the list before it. None
+ * without a board; of the same stop twice, and of what is no address of a
+ * stop, nothing; at most BOARD_STOPS - 1.
+ * @param first the path of the stop the address is of, without "stop/"
+ */
+export function readStops(search, first = '') {
+  const address = new URLSearchParams(search);
+  if (!address.has('board')) return [];
+  const stops = [];
+  // (the entries in the order of the address: getAll() would lose how with and block take turns)
+  for (const [key, value] of address) {
+    if (key !== 'with' && key !== 'block') continue;
+    const path = value.toLowerCase();
+    // (a "+" in it reads as a space, which no address has)
+    if (parseAddress(`stop/${path}`)?.type !== 'stop' || path === first || stops.some((stop) => stop.path === path)) continue;
+    stops.push({ path, joined: key === 'with' });
+    if (stops.length === BOARD_STOPS - 1) break;
+  }
+  return stops;
+}
+
+/** The parts of a query that name the further stops of a board. Joined as text: URLSearchParams would write @ and , as %40 and %2C. */
+const stopsQuery = (stops) => stops.map(({ path, joined }) => `${joined ? 'with' : 'block'}=${path}`);
+
+/**
+ * The stops of a board in its blocks: the first stop and the further ones
+ * (readStops), each block a list of them in the order of the board.
+ */
+export function boardBlocks(first, stops) {
+  const blocks = [[first]];
+  for (const stop of stops) {
+    if (stop.joined) blocks.at(-1).push(stop);
+    else blocks.push([stop]);
+  }
+  return blocks;
 }

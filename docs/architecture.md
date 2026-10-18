@@ -687,7 +687,17 @@ otherwise a server would load a file written by older code:
   leaves and counting down between two answers of the server, or both; on
   the board a clock can be switched off. Minutes go up to an hour; a train
   further off shows its time of day in their place, and where the next day
-  begins, a line says "morgen".
+  begins, a line says "morgen". A board has up to four stops
+  ([#163](https://github.com/xiidoz/netnou/issues/163)), each in a block of
+  its own or merged into the list of the block before it, the address naming
+  them in the board's order (`with=`, `block=`). A merged list orders the
+  departures of its stops by when they leave and ends at the earliest last
+  departure of a stop whose answer the server's limit cut short, so that a
+  busy stop does not seem to stop running. The blocks share the board's
+  height, and stand side by side in columns where the board is wide enough
+  for type of a readable size. The map rings every stop of the board; a stop
+  a later timetable does not have stays in the address and says so in its
+  place.
 - **Search.** The field in the header card finds stops and lines by name.
   The list of all of them is fetched when the field is first used, and
   searched in the browser: what is typed stays there, and so do the
