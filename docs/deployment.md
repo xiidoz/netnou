@@ -280,11 +280,11 @@ Worth watching:
   browser and the site they came from, which it passes on, with the address
   and the title of the page, to the analytics service named there, and
   keeps nothing of either
-  ([Counting visits](configuration.md#counting-visits)). The page stores eight settings in the browser's
+  ([Counting visits](configuration.md#counting-visits)). The page stores nine settings in the browser's
   `localStorage` (`netnou.lang`, `netnou.theme`, `netnou.flags`,
   `netnou.hiddenModes`, `netnou.colorBy`, `netnou.view`, `netnou.times`,
-  `netnou.clock`) and its own files in the browser cache `netnou-shell-v3`
-  for the offline start. While its controls are hidden, and as a display on a
+  `netnou.clock`, `netnou.chipsOpen`) and its own files in a browser cache
+  whose name begins with `netnou-shell-`, for the offline start. While its controls are hidden, and as a display on a
   wall, it reads and writes none of the settings: its address says them
   ([A screen on a wall](#a-screen-on-a-wall)). The only requests a visitor's browser makes to a
   third party are those for the map: its style, tiles, fonts and icons. With
