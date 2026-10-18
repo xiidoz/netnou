@@ -211,7 +211,9 @@ at the same pace. The dataset holds what repeats once.
 - **A trip** is a row of numbers: its pattern, its profile, its first
   departure, its service, its route and its headsign. Its
   `stop_sequence` numbers are a third kind of shared list, kept only where
-  they do not count 0, 1, 2, ….
+  they do not count 0, 1, 2, …. The headsigns of its stops are a fourth,
+  kept only where they change before its last stop (#225): 10,861 such
+  lists for the 1.7 million trips of all of Germany, 246,000 numbers or 1 MB.
 
 For the default area that is 16,000 patterns and 19,000 profiles for 93,000
 trips with 1.8 million stop times; for the feed of all of Germany 241,000

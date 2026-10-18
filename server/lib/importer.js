@@ -127,9 +127,9 @@ async function findRegionStops(zip, area) {
 
 /**
  * Collects trips and stores what repeats among them once: the sequence of
- * stops of a trip, its running times and its stop sequence numbers are each
- * looked up among those of the trips before it. A trip itself is a row of
- * numbers.
+ * stops of a trip, its running times, its stop sequence numbers and, where
+ * its destination changes on the way, its destinations are each looked up
+ * among those of the trips before it. A trip itself is a row of numbers.
  */
 export class TripCollector {
   /** @param options.hash for tests, see SharedLists */
@@ -137,12 +137,15 @@ export class TripCollector {
     this.patterns = new SharedLists(options);
     this.profiles = new SharedLists(options);
     this.seqLists = new SharedLists(options);
+    this.signLists = new SharedLists(options);
     this.ids = [];
     this.index = new Map(); // trip id -> its number
     this.pattern = new Numbers(); // -1 once a trip was taken out again
     this.profile = new Numbers();
     this.start = new Numbers();
     this.seq = new Numbers();
+    // the index of its headsign, the same at every stop; -1 for none; -2 - k
+    // for a trip whose headsign changes on the way, k its list in signLists
     this.headsign = new Numbers();
     // Where a trip stands among all of them: the order in which the feed first names them.
     this.rank = new Numbers();
@@ -150,13 +153,13 @@ export class TripCollector {
   }
 
   /**
-   * @param rows of one trip in the order of its stops: { stops, arr, dep, seq },
-   *   the times whole seconds since the start of the service day
-   * @param headsign index of its headsign, or -1
+   * @param rows of one trip in the order of its stops: { stops, arr, dep, seq, signs },
+   *   the times whole seconds since the start of the service day, signs the
+   *   index of the headsign at each stop or -1
    * @param rank where it stands among the trips; after those before it unless given
    * @returns the number of the trip
    */
-  add(id, { stops, arr, dep, seq }, headsign = -1, rank = this.ids.length) {
+  add(id, { stops, arr, dep, seq, signs }, rank = this.ids.length) {
     const n = stops.length;
     if (this.times.length < 2 * n) this.times = new Int32Array(4 * n);
     // Arrival and departure at each stop, counted from the first departure.
@@ -172,9 +175,42 @@ export class TripCollector {
     this.start.push(dep[0]);
     // stop_sequence is almost always 0..n-1; only store it when it is not.
     this.seq.push(seq.every((value, i) => value === i) ? -1 : this.seqLists.add(seq, n));
-    this.headsign.push(headsign);
+    // So is the headsign the same at every stop; where it is not, the list of them.
+    this.headsign.push(signs.every((sign) => sign === signs[0]) ? signs[0] : -2 - this.signLists.add(signs, n));
     this.rank.push(rank);
     return t;
+  }
+
+  /** The number of stops of trip t. */
+  stopCount(t) {
+    const pattern = this.pattern.array[t];
+    return this.patterns.end(pattern) - this.patterns.start.array[pattern];
+  }
+
+  /** The headsign of trip t at its stop i, as add() got it. */
+  sign(t, i) {
+    const h = this.headsign.array[t];
+    return h < -1 ? this.signLists.values.array[this.signLists.start.array[-2 - h] + i] : h;
+  }
+
+  /**
+   * Gives trip t a headsign at the stops that have none: in GTFS
+   * trip_headsign is that of every stop, where stop_headsign gives no other.
+   * @param sign () => the index of that headsign; asked for only where a stop has none
+   */
+  fill(t, sign) {
+    const own = this.headsign.array[t];
+    if (own >= 0) return;
+    if (own === -1) {
+      this.headsign.array[t] = sign();
+      return;
+    }
+    const n = this.stopCount(t);
+    const signs = Array.from({ length: n }, (_, i) => this.sign(t, i));
+    if (!signs.includes(-1)) return;
+    const h = sign();
+    const filled = signs.map((s) => (s < 0 ? h : s));
+    this.headsign.array[t] = filled.every((s) => s === filled[0]) ? filled[0] : -2 - this.signLists.add(filled, n);
   }
 
   /** The rows of a trip again, as add() got them. */
@@ -184,12 +220,13 @@ export class TripCollector {
     const n = this.patterns.end(pattern) - from;
     const times = this.profiles.start.array[this.profile.array[t]];
     const numbers = this.seq.array[t] < 0 ? -1 : this.seqLists.start.array[this.seq.array[t]];
-    const rows = { stops: [], arr: [], dep: [], seq: [] };
+    const rows = { stops: [], arr: [], dep: [], seq: [], signs: [] };
     for (let i = 0; i < n; i++) {
       rows.stops.push(this.patterns.values.array[from + i]);
       rows.arr.push(this.start.array[t] + this.profiles.values.array[times + 2 * i]);
       rows.dep.push(this.start.array[t] + this.profiles.values.array[times + 2 * i + 1]);
       rows.seq.push(numbers < 0 ? i : this.seqLists.values.array[numbers + i]);
+      rows.signs.push(this.sign(t, i));
     }
     return rows;
   }
@@ -214,9 +251,12 @@ async function readStopTimes(zip, regionStops, wantedTrips, onProgress) {
   const collector = new TripCollector();
   // Trips that cannot be stored yet: a stop without times, or a single row.
   // More rows of them may follow, and what is still missing at the end is
-  // filled in or the trip is dropped. trip id -> { rows, headsign, rank }
+  // filled in or the trip is dropped. trip id -> { rows, rank }
   const waiting = new Map();
   let ranks = 0;
+  // (the headsign of the row before, which most rows have as well)
+  let lastSign = '';
+  let lastSignIndex = -1;
 
   let col = null;
   let iTrip = 0;
@@ -241,16 +281,14 @@ async function readStopTimes(zip, regionStops, wantedTrips, onProgress) {
   // in two runs, the rows of both are put together and sorted.
   const flush = () => {
     if (curHit) {
-      let rows = { stops: [], arr: [], dep: [], seq: [] };
-      let headsign = -1;
+      let rows = { stops: [], arr: [], dep: [], seq: [], signs: [] };
       let rank;
       const before = waiting.get(curId);
       const known = collector.index.get(curId);
       if (before) {
-        ({ rows, headsign, rank } = before);
+        ({ rows, rank } = before);
       } else if (known !== undefined) {
         rows = collector.rows(known);
-        headsign = collector.headsign.array[known];
         rank = collector.rank.array[known];
         collector.drop(known);
       } else {
@@ -262,15 +300,19 @@ async function readStopTimes(zip, regionStops, wantedTrips, onProgress) {
         rows.arr.push(parseTime(f[col.arrival_time]));
         rows.dep.push(parseTime(f[col.departure_time]));
         rows.seq.push(+f[col.stop_sequence]);
-        if (headsign === -1 && col.stop_headsign !== undefined && f[col.stop_headsign]) {
-          headsign = intern(f[col.stop_headsign], headsigns, headsignIndex);
+        // (where the trip is going as it leaves this stop: operators change it on the way, see headsignAt in timetable.js)
+        const sign = col.stop_headsign === undefined ? '' : f[col.stop_headsign];
+        if (sign !== lastSign) {
+          lastSign = sign;
+          lastSignIndex = sign ? intern(sign, headsigns, headsignIndex) : -1;
         }
+        rows.signs.push(lastSignIndex);
       }
       if (whole(rows)) {
         waiting.delete(curId);
-        collector.add(detach(curId), sorted(rows), headsign, rank);
+        collector.add(detach(curId), sorted(rows), rank);
       } else {
-        waiting.set(before ? curId : detach(curId), { rows, headsign, rank });
+        waiting.set(before ? curId : detach(curId), { rows, rank });
       }
     }
     curLines = [];
@@ -320,9 +362,9 @@ async function readStopTimes(zip, regionStops, wantedTrips, onProgress) {
 
   // GTFS allows empty times at non-timepoints: they are filled in, if that
   // can be done. A trip of a single stop goes nowhere.
-  for (const [id, { rows, headsign, rank }] of waiting) {
+  for (const [id, { rows, rank }] of waiting) {
     const filled = sorted(rows);
-    if (filled.stops.length >= 2 && fillTimes(filled.arr, filled.dep)) collector.add(id, filled, headsign, rank);
+    if (filled.stops.length >= 2 && fillTimes(filled.arr, filled.dep)) collector.add(id, filled, rank);
   }
 
   return { collector, stopIds, headsigns, headsignIndex, lines };
@@ -380,6 +422,18 @@ function assemble({ area, stops, towns = [], districts = [], routes, headsigns, 
   const patterns = collector.patterns.done();
   const profiles = collector.profiles.done();
   const seqLists = collector.seqLists.done();
+  // The headsigns of the trips kept: lists of them only where they change
+  // before the last stop, from which nothing leaves (headsignAt in
+  // timetable.js); each list once, of those still in use.
+  const lists = new SharedLists({ hash: collector.signLists.hash });
+  const headsign = Int32Array.from(kept, (t) => {
+    const h = collector.headsign.array[t];
+    if (h >= -1) return h;
+    const n = collector.stopCount(t);
+    const signs = Array.from({ length: n }, (_, i) => collector.sign(t, i));
+    return signs.every((sign, i) => sign === signs[0] || i === n - 1) ? signs[0] : -2 - lists.add(signs, n);
+  });
+  const signLists = lists.done();
   const data = {
     version: DATASET_VERSION,
     area,
@@ -404,6 +458,7 @@ function assemble({ area, stops, towns = [], districts = [], routes, headsigns, 
     patterns: { start: patterns.start, stops: patterns.values },
     profiles: { start: profiles.start, times: profiles.values },
     seqLists: { start: seqLists.start, seq: seqLists.values },
+    signLists: { start: signLists.start, signs: signLists.values },
     trips: {
       id: Texts.from(ids),
       byId,
@@ -413,7 +468,7 @@ function assemble({ area, stops, towns = [], districts = [], routes, headsigns, 
       seq: column(collector.seq.array),
       route: column(route),
       service: column(service),
-      headsign: column(collector.headsign.array),
+      headsign,
     },
     segments: null,
   };
@@ -428,13 +483,16 @@ function assemble({ area, stops, towns = [], districts = [], routes, headsigns, 
  * A dataset from trips given one by one, each with the arrays of its own:
  * what a test or a tool has at hand.
  * @param plain { area, stops: { id, name, lat, lon, parent, platform, region, town }, towns, districts, routes, headsigns, dates, services,
- *   trips: { id, route, service, headsign, stops: [[stop index]], arr, dep: [[seconds]], seq: [[number] or null] } }
+ *   trips: { id, route, service, headsign: [index, -1, or for each stop one of them], stops: [[stop index]], arr, dep: [[seconds]],
+ *   seq: [[number] or null] } }
  * @param options for the TripCollector
  */
 export function packDataset({ area = null, stops, towns = [], districts = [], routes, headsigns, dates, services, trips }, options) {
   const collector = new TripCollector(options);
   trips.id.forEach((id, t) => {
-    collector.add(id, { stops: trips.stops[t], arr: trips.arr[t], dep: trips.dep[t], seq: trips.seq[t] ?? trips.stops[t].map((_, i) => i) }, trips.headsign[t]);
+    const stops = trips.stops[t];
+    const signs = Array.isArray(trips.headsign[t]) ? trips.headsign[t] : stops.map(() => trips.headsign[t]);
+    collector.add(id, { stops, arr: trips.arr[t], dep: trips.dep[t], seq: trips.seq[t] ?? stops.map((_, i) => i), signs });
   });
   return assemble({ area, stops, towns, districts, routes, headsigns, dates, services, collector, route: trips.route, service: trips.service });
 }
@@ -470,11 +528,16 @@ export function packDataset({ area = null, stops, towns = [], districts = [], ro
 //              seconds counted from the first departure of the trip
 //   seqLists   the stop_sequence numbers of trips that do not count 0, 1, 2,
 //              …, each list once: { start, seq }
+//   signLists  the headsigns of the trips whose headsign changes on the way,
+//              for each stop an index into headsigns or -1, each list once:
+//              { start, signs }
 //   trips      { id: texts, byId: the trips in the order of their ids,
 //                pattern, profile, start: the first departure in seconds
 //                since the start of the service day (may exceed 86400),
 //                seq: index into seqLists or -1, route, service,
-//                headsign: index or -1 }
+//                headsign: index of the headsign at every stop, -1 for
+//                none, or -2 - k for a trip whose headsign changes on the
+//                way, k its list in signLists }
 //   sharedWays the ways from one stop to the next on which trains run
 //              coupled, see findSharedWays in timetable.js
 //   segments   route geometry per hop, or null; added by import-worker.js:
@@ -516,7 +579,7 @@ export async function buildDataset({ zipPath, area, agencies = null, onProgress 
     }
 
     // trips.txt: route and service of every kept trip, and its headsign for
-    // feeds that have none in stop_times.txt.
+    // the stops that have none in stop_times.txt.
     const tripCount = collector.ids.length;
     const route = new Int32Array(tripCount).fill(-1);
     const service = new Int32Array(tripCount).fill(-1);
@@ -533,9 +596,7 @@ export async function buildDataset({ zipPath, area, agencies = null, onProgress 
       if (s === undefined) { s = serviceIds.length; serviceIds.push(f[col.service_id]); serviceIndex.set(f[col.service_id], s); }
       route[t] = r;
       service[t] = s;
-      if (collector.headsign.array[t] === -1 && col.trip_headsign !== undefined && f[col.trip_headsign]) {
-        collector.headsign.array[t] = intern(f[col.trip_headsign], headsigns, headsignIndex);
-      }
+      if (col.trip_headsign !== undefined && f[col.trip_headsign]) collector.fill(t, () => intern(f[col.trip_headsign], headsigns, headsignIndex));
     });
 
     const agencyNames = new Map();

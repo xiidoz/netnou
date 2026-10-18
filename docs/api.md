@@ -224,7 +224,7 @@ form.
 | `vehicles[].id` | trip id | for `/api/trip` |
 | `vehicles[].line` | string | name of the line |
 | `vehicles[].mode` | string | see [Modes](#modes) |
-| `vehicles[].to` | string | destination |
+| `vehicles[].to` | string | where it goes from the stop ahead, as the operator gives it there. It can change on the way: once a "via" is behind it, round a ring line, for the last part of the way. On the way to its last stop it is the one it had at the stop before: what an operator gives at the last stop ("Fahrt endet hier") is no destination |
 | `vehicles[].delay` | delay or null | delay at the next stop; `null` if there is no realtime data for the trip. The portions of a coupled train have the same one on the way they share, whichever of them the feed reports it for |
 | `vehicles[].unit` | string | only for a train that runs coupled with others right now: the same value for each of them, and no meaning beyond that. Such trains are a trip each and are at the same place |
 | `vehicles[].knots` | array of numbers | where the vehicle is from now on, see [Knots](#knots) |
@@ -456,7 +456,7 @@ The vehicles of one line that are under way.
 | `at` | `[lat, lon]` | the place of the line, the middle of its stations: what asks for it among those of its name |
 | `path` | string | its address, see [`/api/address`](#get-apiaddress) |
 | `vehicles[].id` | string | for `/api/trip` |
-| `vehicles[].to` | string | where the vehicle goes |
+| `vehicles[].to` | string | where the vehicle goes from the stop ahead, as for [`/api/vehicles`](#get-apivehicles) |
 | `vehicles[].next` | string | the name of the stop ahead of it |
 | `vehicles[].delay` | integer or `null` | seconds at that stop; `null` without realtime data |
 | `vehicles[].lat`, `lon` | numbers | where it is at `now` |
@@ -513,9 +513,9 @@ address where visits are counted ([Counting visits](configuration.md#counting-vi
   "path": [49.49253, 11.05405, 49.49195, 11.0543, 49.49181, 11.05421, …],
   "stops": [
     { "station": "637231", "name": "Nürnberg Am Wegfeld", "platform": "", "lat": 49.492527, "lon": 11.05403,
-      "arr": 1791147960, "dep": 1791147960, "arrDelay": null, "depDelay": null, "skipped": false },
+      "arr": 1791147960, "dep": 1791147960, "arrDelay": null, "depDelay": null, "skipped": false, "to": "Dutzendteich" },
     { "station": "56536", "name": "Nürnberg Bamberger Str.", "platform": "", "lat": 49.483826, "lon": 11.059016,
-      "arr": 1791148080, "dep": 1791148080, "arrDelay": 41, "depDelay": 41, "skipped": false },
+      "arr": 1791148080, "dep": 1791148080, "arrDelay": 41, "depDelay": 41, "skipped": false, "to": "Dutzendteich" },
     …
   ]
 }
@@ -523,7 +523,8 @@ address where visits are counted ([Counting visits](configuration.md#counting-vi
 
 | Field | Type | Meaning |
 | --- | --- | --- |
-| `line`, `mode`, `to` | | as for a vehicle |
+| `line`, `mode` | | as for a vehicle |
+| `to` | string | where the trip sets out for: the destination at its first stop, which the title of its page has as well |
 | `agency` | string | operator, from the timetable |
 | `lineAt` | `[lat, lon]` | the place of its line: `at` for [`/api/line`](#get-apiline), which tells it from lines of its name in places apart |
 | `realtime` | boolean | whether there is realtime data for this run |
@@ -537,6 +538,7 @@ address where visits are counted ([Counting visits](configuration.md#counting-vi
 | `stops[].arr`, `dep` | time | arrival and departure according to the timetable |
 | `stops[].arrDelay`, `depDelay` | delay or null | reported delays; `null` where nothing is known. Where the trip runs coupled with others, the delays all of them share (see `unit` of [`/api/vehicles`](#get-apivehicles)) |
 | `stops[].skipped` | boolean | the run does not call here today |
+| `stops[].to` | string | where the trip goes from this stop, as the operator gives it there; at the last stop the one it arrives with. The page shows the one of the stop ahead |
 
 The expected time is the timetable time plus the delay.
 
@@ -596,6 +598,9 @@ the next ones up to ten, from the next 24 hours: a quiet stop late in the
 evening has its first departures of the morning. They are sorted by
 expected time (`planned` + `delay`). A
 departure stays on the board until 30 seconds after its expected time.
+`to` is where it goes from this station, as the operator gives it for this
+stop: it can be another place than where the trip set out for, such as
+where a "via" is behind it.
 `cancelled` is true when the run is cancelled or skips this station. `notes`
 are notes of the feed about the station, such as a lift out of order, each
 with a `title`, a `text` and a `severity` as for [a trip](#get-apitrip).

@@ -189,6 +189,26 @@ test('trips that run the same way share their stop sequence, and those with the 
   assert.ok(timetable.tripIndex.has('slow') && !timetable.tripIndex.has(''));
 });
 
+test('the headsigns of a trip whose headsign changes on the way are a list, each different one stored once', () => {
+  const headsigns = ['Gamma', 'Gamma über Beta', 'Fahrt endet hier'];
+  const data = packDataset({ ...PLAIN, headsigns, trips: { ...PLAIN.trips, headsign: [[1, 0, 2], [1, 0, 2], [0, 0, 0]] } });
+  // the same at every stop is no list
+  assert.deepEqual([...data.trips.headsign], [-2, -2, 0]);
+  assert.deepEqual([...data.signLists.start], [0, 3]);
+  const timetable = new Timetable(data);
+  // (the last stop has that of the one before: nothing leaves there)
+  assert.deepEqual([0, 1, 2].map((p) => timetable.headsignAt(0, p)), ['Gamma über Beta', 'Gamma', 'Gamma']);
+  assert.equal(timetable.headsign(1), 'Gamma über Beta');
+  assert.deepEqual([0, 1, 2].map((p) => timetable.headsignAt(2, p)), ['Gamma', 'Gamma', 'Gamma']);
+  // none at all: the trip goes to its last stop
+  const none = new Timetable(packDataset({ ...PLAIN, trips: { ...PLAIN.trips, headsign: [-1, -1, -1] } }));
+  assert.deepEqual([0, 1, 2].map((p) => none.headsignAt(0, p)), ['Gamma', 'Gamma', 'Gamma']);
+  // another at the last stop alone is no list either
+  const last = packDataset({ ...PLAIN, headsigns, trips: { ...PLAIN.trips, headsign: [[0, 0, 2], [-1, -1, 0], [1, 0, 2]] } });
+  assert.deepEqual([...last.trips.headsign], [0, -1, -2]);
+  assert.deepEqual([...last.signLists.start], [0, 3]);
+});
+
 test('with every hash the same the trips are still what they were', () => {
   const data = packDataset({ ...PLAIN, trips: { ...PLAIN.trips, stops: [[0, 1, 2], [0, 2, 1], [0, 1, 2]] } }, { hash: () => 1 });
   assert.equal(data.patterns.start.length - 1, 2);

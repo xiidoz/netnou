@@ -2421,6 +2421,8 @@ function renderTrip(trip, scrollToNext) {
   const lastIndex = trip.stops.length - 1;
   let nextFound = false;
   let nextRow = null;
+  // where it is going from the stop ahead, which may be another place than where it set out for (#225)
+  let to = trip.stops[lastIndex].to;
 
   const rows = trip.stops.map((stop, i) => {
     const isLast = i === lastIndex;
@@ -2428,7 +2430,10 @@ function renderTrip(trip, scrollToNext) {
     const delay = isLast ? stop.arrDelay : stop.depDelay ?? stop.arrDelay;
     const past = planned + (delay ?? 0) < trip.now;
     const isNext = !past && !nextFound && !stop.skipped;
-    if (isNext) nextFound = true;
+    if (isNext) {
+      nextFound = true;
+      to = stop.to;
+    }
 
     const classes = ['row', 'stop'];
     if (past) classes.push('past');
@@ -2459,7 +2464,7 @@ function renderTrip(trip, scrollToNext) {
   fillPanel(
     [
       el('div', { class: 'panel-head' }, [
-        el('h2', {}, [toLine, el('span', { text: `→ ${trip.to}` })]),
+        el('h2', {}, [toLine, el('span', { text: `→ ${to}` })]),
         el('p', { class: 'sub', text: [mode, trip.agency, trip.realtime ? t('trip.realtime') : t('trip.scheduleOnly')].filter(Boolean).join(' · ') }),
         notesList(trip.notes, source, trip.cancelled ? t('trip.cancelled') : null),
       ]),
