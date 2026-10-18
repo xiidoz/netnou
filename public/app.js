@@ -20,8 +20,6 @@ import { AttributionControl, MapLibreMap, NavigationControl } from './vendor/map
 const MODES = ['subway', 'tram', 'bus', 'suburban', 'regional', 'longdistance', 'ferry', 'cable', 'other'];
 // Later entries are drawn on top: trains over trams over buses.
 const DRAW_ORDER = ['other', 'bus', 'ferry', 'cable', 'tram', 'subway', 'suburban', 'regional', 'longdistance'];
-// The dark letters on the yellow of a minor delay, the colour of --mode-*-text in style.css.
-const LETTERS_DARK = '#1b1f24';
 const RAIL_MODES = ['subway', 'suburban', 'regional', 'longdistance'];
 
 // Display mode: the page without its controls, with what is shown in its
@@ -277,11 +275,8 @@ let colors = {};
 function readColors() {
   const style = getComputedStyle(document.documentElement);
   const get = (name) => style.getPropertyValue(name).trim();
-  colors = { mode: {}, letters: {}, delay: {}, unknown: get('--delay-unknown'), text: get('--text'), bg: get('--bg'), border: get('--border'), accent: get('--accent'), muted: get('--text-muted'), veil: get('--veil'), veilLine: get('--veil-line'), location: get('--location') };
-  for (const mode of DRAW_ORDER) {
-    colors.mode[mode] = get(`--mode-${mode}`);
-    colors.letters[mode] = get(`--mode-${mode}-text`) || '#fff';
-  }
+  colors = { mode: {}, delay: {}, letters: get('--letters'), text: get('--text'), bg: get('--bg'), border: get('--border'), accent: get('--accent'), muted: get('--text-muted'), veil: get('--veil'), veilLine: get('--veil-line'), location: get('--location') };
+  for (const mode of DRAW_ORDER) colors.mode[mode] = get(`--mode-${mode}`);
   for (const cls of ['early', 'ok', 'minor', 'major', 'severe', 'none']) colors.delay[cls] = get(`--delay-${cls}`);
 }
 readColors();
@@ -527,8 +522,6 @@ function vehicleColor(v) {
   return state.colorBy === 'delay' ? colors.delay[delayClass(v.delay)] : colors.mode[v.mode] ?? colors.mode.other;
 }
 
-/** The names in a marker are white – except on light colours, which do not carry white text: the yellow of a minor delay, and the modes with --mode-*-text. */
-const labelColor = (v) => (state.colorBy === 'delay' ? (delayClass(v.delay) === 'minor' ? LETTERS_DARK : '#fff') : colors.letters[v.mode] ?? colors.letters.other);
 /** By name, numbers by their value: N2 before N10. For the order within a group, which must not change from frame to frame. */
 const byLabel = (a, b) => a.label.localeCompare(b.label, undefined, { numeric: true }) || (a.id < b.id ? -1 : 1);
 
@@ -569,7 +562,7 @@ function drawDisc(x, y, r, v, labeled) {
   ctx.fill();
   ctx.stroke();
   if (!labeled) return;
-  ctx.fillStyle = labelColor(v);
+  ctx.fillStyle = colors.letters;
   setLabelFont(v.label);
   ctx.fillText(v.label, x, y + 0.5);
 }
@@ -606,7 +599,7 @@ function drawRing(x, y, r, w, color) {
  */
 function flagOf(v, live) {
   if (state.colorBy !== 'mode' || !state.flags) return null;
-  if (v.delay === null) return live ? { text: '?', color: colors.unknown } : null;
+  if (v.delay === null) return live ? { text: '?', color: colors.delay.none } : null;
   if (Math.round(v.delay / 60) === 0) return null;
   return { text: delayText(v.delay), color: colors.delay[FLAG_COLOR[delayClass(v.delay)]] };
 }
@@ -617,7 +610,11 @@ function drawFlag(x, y, flag) {
   ctx.fillStyle = flag.color;
   roundedBox(x, y, w, 12, 4);
   ctx.fill();
-  ctx.fillStyle = '#fff';
+  // (with the white edge of the markers: a flag may have about the colour of the one it sits on, green on an S-Bahn)
+  ctx.strokeStyle = '#fff';
+  ctx.lineWidth = 1;
+  ctx.stroke();
+  ctx.fillStyle = colors.letters;
   ctx.fillText(flag.text, x + w / 2, y + 6.5);
 }
 
@@ -910,7 +907,7 @@ function draw() {
     let left = x - w / 2 + 1;
     members.forEach((member, i) => {
       const middle = left + widths[i] / 2;
-      ctx.fillStyle = labelColor(member);
+      ctx.fillStyle = colors.letters;
       setLabelFont(member.label);
       ctx.fillText(member.label, middle, y + 0.5);
       // each name is its own to point at
@@ -2216,7 +2213,6 @@ const platformText = (platform) => (platform ? t('stop.platform', { platform }) 
 function badge(line, mode, ...more) {
   const node = el('span', { class: 'badge', text: line }, more);
   node.style.setProperty('--badge-color', `var(--mode-${mode})`);
-  node.style.setProperty('--badge-text', `var(--mode-${mode}-text, #fff)`);
   return node;
 }
 
@@ -2451,7 +2447,6 @@ function renderTrip(trip, scrollToNext) {
 
   const list = el('ul', { class: 'rows' }, rows);
   list.style.setProperty('--badge-color', `var(--mode-${trip.mode})`);
-  list.style.setProperty('--badge-text', `var(--mode-${trip.mode}-text, #fff)`);
   const mode = t(`mode.${DRAW_ORDER.includes(trip.mode) ? trip.mode : 'other'}`);
   // Who provides the realtime data shown leads the notes, which are feed content and stay as they are.
   const source = trip.realtime && trip.source ? [t('trip.source', { source: trip.source })] : [];
