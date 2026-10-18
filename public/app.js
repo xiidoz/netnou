@@ -1711,6 +1711,42 @@ function loadingText({ state: phase, step }) {
   return t('loading.timetable');
 }
 
+// ---------- the one tip ----------
+
+// Once per browser, on landing at the address of a stop, one line above its
+// departures says that a departure leads to its vehicle (#226): the thing a
+// visitor from a search engine cannot guess. Not in a display, on a board,
+// while a stop is added to one, or while a notice, a dialog or the settings
+// are up. It goes with the next tap, click or key, or after a while.
+const tip = $('tip');
+const TIP_MS = 9000;
+let tipTimer = null;
+
+function offerTip() {
+  if (ASKED || state.display || state.board !== null || state.adding || state.banner || state.note) return;
+  if (aboutDialog.open || notesDialog.open || settingsButton.getAttribute('aria-expanded') === 'true') return;
+  if (loadSetting('tipped', false) === true) return;
+  saveSetting('tipped', true);
+  tip.textContent = matchMedia('(pointer: coarse)').matches ? t('tip.departure') : t('tip.departureMouse');
+  tip.hidden = false;
+  // On a phone above the details, which may still be gliding up (as in clearOfCards); else at the foot of the map beside the details.
+  const details = panel.getBoundingClientRect();
+  if (narrowScreen.matches) {
+    const sheetTop = panel.classList.contains('sized') ? details.top : Math.min(details.top, viewSize.y * (1 - SHEET_MIDDLE));
+    tip.style.bottom = `${viewSize.y - sheetTop + 10}px`;
+  } else {
+    tip.style.left = `${details.left / 2}px`;
+  }
+  tipTimer = setTimeout(hideTip, TIP_MS);
+}
+
+function hideTip() {
+  clearTimeout(tipTimer);
+  tip.hidden = true;
+}
+for (const type of ['click', 'keydown']) document.addEventListener(type, () => tip.hidden || hideTip(), true);
+addEventListener('resize', () => tip.hidden || hideTip());
+
 // ---------- how it works ----------
 
 // How the page comes by what it shows, for whoever asks: a dialog over the
@@ -1720,6 +1756,13 @@ function loadingText({ state: phase, step }) {
 const aboutDialog = $('about');
 $('about-open').addEventListener('click', () => aboutDialog.showModal());
 closesByClick(aboutDialog, $('about-close'));
+// (what the map can do: with a mouse, what is tapped on a phone is clicked)
+if (!matchMedia('(pointer: coarse)').matches) {
+  $('use-vehicle').textContent = t('about.useVehicleMouse');
+  $('use-stop').textContent = t('about.useStopMouse');
+  $('use-departure').textContent = t('about.useDepartureMouse');
+  $('use-modes').textContent = t('about.useModesMouse');
+}
 
 /** A dialog closes with its button, and with a click beside it. */
 function closesByClick(dialog, button) {
@@ -1966,7 +2009,8 @@ async function openAddress(loaded = false) {
   // A display whose address names a section of the map keeps that section: it was set up so.)
   const kept = loaded && state.viewAsked;
   if (!kept) map.easeTo({ center: [found.lon, found.lat], zoom: Math.max(map.getZoom(), SEARCH_ZOOM), offset: board === null ? stopOffset() : [0, 0], duration: 0 });
-  select('station', null, { at: found, counted: loaded, kept, stops });
+  // (landing here, not on a board: the one tip may follow, once the departures are there)
+  select('station', null, { at: found, counted: loaded, kept, stops, tip: loaded && board === null });
   return true;
 }
 
@@ -2610,6 +2654,11 @@ function renderStation(board) {
     ...(rows.length ? lists : [el('p', { class: 'panel-empty', text: t('departures.none') })]),
   );
   panelBody.scrollTop = scrollTop;
+  // (the one tip, when there are departures to tap)
+  if (state.selection?.tip && rows.length) {
+    state.selection.tip = false;
+    offerTip();
+  }
 }
 
 // ---------- the details as a sheet ----------

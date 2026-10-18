@@ -166,6 +166,20 @@
       <h2 id="about-title" data-i18n="about.title">How it works</h2>
       <h3 data-i18n="about.positions">Positions</h3>
       <p data-i18n="about.positionsText">No vehicle reports its position to this map. Each one is drawn where the timetable says it should be right now, moved by the delay reported for it. So a vehicle can be somewhat ahead of or behind its marker. Vehicles without a reported delay carry a question mark and run by the timetable here.</p>
+      <!-- What a visitor can do, each with what it is good for (#226), after the
+           answer to "how does it know where the bus is". The signs are those
+           of the page; with a mouse, app.js has the four that say "tap" say
+           "click". -->
+      <h3 data-i18n="about.use">What the map can do</h3>
+      <ul class="use">
+        <li><span class="sign vehicle"></span><p><b id="use-vehicle" data-i18n="about.useVehicle">Tap a vehicle:</b> <span data-i18n="about.useVehicleText">its trip with every stop, time and delay, to see when it gets where.</span></p></li>
+        <li><span class="sign stop"></span><p><b id="use-stop" data-i18n="about.useStop">Zoom in, tap a stop:</b> <span data-i18n="about.useStopText">its next departures with delays, to see whether you will still make it.</span></p></li>
+        <li><span class="sign departure"></span><p><b id="use-departure" data-i18n="about.useDeparture">Tap a departure:</b> <span data-i18n="about.useDepartureText">straight to its vehicle on the map, to see where it is now.</span></p></li>
+        <li><span class="sign" data-icon="mdiMagnify"></span><p><b data-i18n="about.useSearch">Search:</b> <span data-i18n="about.useSearchText">a town, a stop or a line. A line then shows only its own vehicles.</span></p></li>
+        <li><span class="sign modes"></span><p><b id="use-modes" data-i18n="about.useModes">Tap a kind of transport:</b> <span data-i18n="about.useModesText">hides it or shows it again, for example to see only trains.</span></p></li>
+        <li><span class="sign" data-icon="mdiShareVariant"></span><p><b data-i18n="about.useShare">Share:</b> <span data-i18n="about.useShareText">a link to a stop, a line or a trip, for example to show someone where the bus is right now.</span></p></li>
+        <li><span class="sign" data-icon="mdiArrowExpand"></span><p><b data-i18n="about.useBoard">Show as a board:</b> <span data-i18n="about.useBoardText">departures in large type, for example on a screen on the wall, for up to four stops.</span></p></li>
+      </ul>
       <h3 data-i18n="about.routes">Routes</h3>
       <p data-i18n="about.routesText">The route between two stops is computed too: the shortest plausible way along the roads and tracks of OpenStreetMap, not the official one of the operator. Between stops close to each other it is almost always the same. Where it differs, a vehicle takes another way on the map than in reality; where none is found, it moves in a straight line.</p>
       <!-- Only on an instance with more vehicles than a zoomed-out map can
@@ -202,6 +216,9 @@
        pointer is on it (showSaid in app.js). -->
   <div class="tooltip said" id="said" hidden></div>
   <div class="banner" id="banner" hidden role="alert"></div>
+  <!-- The one tip, once per browser, on landing at the address of a stop: that
+       a departure leads to its vehicle (#226, "the one tip" in app.js). -->
+  <p class="tip" id="tip" hidden role="status"></p>
 
   <noscript><p class="banner">The live map needs JavaScript. <span lang="de">Die Live-Karte benötigt JavaScript.</span></p></noscript>
 

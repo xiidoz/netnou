@@ -136,6 +136,31 @@ export default {
   'about.outsideText': 'Grey: only lines that stop inside the area are shown there, on a straight line between their stops.',
   // {software} is the name of the software, as a link to where it comes from
   'about.source': 'The full details are in the open source code of {software}, the software behind this map.',
+  // What a visitor can do, in the dialog after the positions (#226): what to do, then what it does and what it is good for.
+  // With a mouse, the four that say "tap" say "click" (…Mouse).
+  'about.use': 'What the map can do',
+  'about.useVehicle': 'Tap a vehicle:',
+  'about.useVehicleMouse': 'Click a vehicle:',
+  'about.useVehicleText': 'its trip with every stop, time and delay, to see when it gets where.',
+  'about.useStop': 'Zoom in, tap a stop:',
+  'about.useStopMouse': 'Zoom in, click a stop:',
+  'about.useStopText': 'its next departures with delays, to see whether you will still make it.',
+  'about.useDeparture': 'Tap a departure:',
+  'about.useDepartureMouse': 'Click a departure:',
+  'about.useDepartureText': 'straight to its vehicle on the map, to see where it is now.',
+  'about.useSearch': 'Search:',
+  'about.useSearchText': 'a town, a stop or a line. A line then shows only its own vehicles.',
+  // (the chips with the kinds of transport and their numbers)
+  'about.useModes': 'Tap a kind of transport:',
+  'about.useModesMouse': 'Click a kind of transport:',
+  'about.useModesText': 'hides it or shows it again, for example to see only trains.',
+  'about.useShare': 'Share:',
+  'about.useShareText': 'a link to a stop, a line or a trip, for example to show someone where the bus is right now.',
+  'about.useBoard': 'Show as a board:',
+  'about.useBoardText': 'departures in large type, for example on a screen on the wall, for up to four stops.',
+  // The one tip, once, on landing at the address of a stop, above its departures; with a mouse the second.
+  'tip.departure': 'Tap a row to go straight to its vehicle on the map',
+  'tip.departureMouse': 'Click a row to go straight to its vehicle on the map',
 
   'panel.label': 'Details',
   'panel.close': 'Close',

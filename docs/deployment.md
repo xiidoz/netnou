@@ -283,8 +283,9 @@ Worth watching:
   ([Counting visits](configuration.md#counting-visits)). The page stores nine settings in the browser's
   `localStorage` (`netnou.lang`, `netnou.theme`, `netnou.flags`,
   `netnou.hiddenModes`, `netnou.colorBy`, `netnou.view`, `netnou.times`,
-  `netnou.clock`, `netnou.chipsOpen`) and its own files in a browser cache
-  whose name begins with `netnou-shell-`, for the offline start. While its controls are hidden, and as a display on a
+  `netnou.clock`, `netnou.chipsOpen`), whether it has shown its one tip
+  (`netnou.tipped`), and its own files in a browser cache whose name begins
+  with `netnou-shell-`, for the offline start. While its controls are hidden, and as a display on a
   wall, it reads and writes none of the settings: its address says them
   ([A screen on a wall](#a-screen-on-a-wall)). The only requests a visitor's browser makes to a
   third party are those for the map: its style, tiles, fonts and icons. With
