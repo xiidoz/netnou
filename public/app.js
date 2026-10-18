@@ -1123,10 +1123,7 @@ map.on('click', (event) => {
   if (FIXED) return;
   hideTooltip();
   const hit = hitTest(event.point);
-  if (hit?.vehicle) {
-    showAddress('', null);
-    select('trip', hit.vehicle.id);
-  }
+  if (hit?.vehicle) select('trip', hit.vehicle.id);
   else if (hit?.station) {
     // (the stops of a board are open already, the one it is of and its further stops)
     if (!onBoard(hit.station)) select('station', hit.station.id);
@@ -1454,10 +1451,12 @@ function chooseStop(stop) {
 }
 
 searchField.addEventListener('input', runSearch);
+// (true while the page gives the field the focus back: it does not open the results of last time then, see closePanel)
+let focusGivenBack = false;
 searchField.addEventListener('focus', () => {
   // what is in the field from last time is typed over, and found again until then
   searchField.select();
-  runSearch();
+  if (!focusGivenBack) runSearch();
 });
 searchField.addEventListener('keydown', (event) => {
   if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
@@ -1468,7 +1467,11 @@ searchField.addEventListener('keydown', (event) => {
   } else if (event.key === 'Enter') {
     // without the arrow keys it is the first one, the most likely; and the key does nothing else (a button of a board that gets the focus would take it as a press)
     event.preventDefault();
-    found[Math.max(active, 0)]?.();
+    const choose = found[Math.max(active, 0)];
+    if (!choose) return;
+    choose();
+    // (the details that open get the focus, and not the start of the page; a stop added to a board has it on the board already)
+    if (!panel.hidden && !panel.contains(document.activeElement)) panel.focus({ preventScroll: true });
   } else if (event.key === 'Escape') {
     // (and not the details as well, which the same key closes otherwise)
     event.stopPropagation();
@@ -1476,12 +1479,20 @@ searchField.addEventListener('keydown', (event) => {
   }
 });
 
-/** Shuts the search without choosing anything; where it was to add a stop to a board, the focus goes back to the button that opened it. */
+/**
+ * Shuts the search without choosing anything. The focus stays in the field;
+ * on a narrow screen, where the field goes with the search, it goes to the
+ * button that opens it. Where the search was to add a stop to a board, it
+ * goes back to the button that opened it.
+ */
 function cancelSearch() {
   const adding = endAdding();
   closeSearch();
-  searchField.blur();
   if (adding) focusBoard(adding.block === null ? 'add' : `merge:${adding.block}`);
+  else if (narrowScreen.matches) {
+    searchField.blur(); // a keyboard on the screen goes away
+    $('search-open').focus();
+  }
 }
 // A click on a result must not take the focus from the field first: the list
 // would be shut before the click arrives.
@@ -1815,11 +1826,15 @@ const panel = $('panel');
 const panelHead = $('panel-head');
 const panelBody = $('panel-body');
 let panelTimer = null;
+// (what had the keyboard focus when the details opened: see closePanel)
+let panelOpener = null;
 
 function closePanel() {
+  // (asked before a board that closes builds the details anew: see below)
+  const keyboard = panel.contains(document.activeElement) && document.activeElement.matches(':focus-visible');
   if (state.adding) closeSearch();
-  // (a board closes with its details, and the address loses it)
-  if (state.board !== null) setBoard(null);
+  // (a board closes with its details; its address stays as it was, the step back to it)
+  if (state.board !== null) setBoard(null, false);
   const picked = pickedQuery();
   state.selection = null;
   state.extra = [];
@@ -1829,6 +1844,16 @@ function closePanel() {
   clearTimeout(panelTimer);
   hideSaid();
   panel.hidden = true;
+  // The keyboard focus goes back to what opened the details, or else to the
+  // search, and not to the start of the page (#194). After a click or a tap
+  // it is left where it falls: moved, it would show a ring.
+  if (keyboard) {
+    focusGivenBack = true;
+    panelOpener?.focus({ preventScroll: true });
+    if (document.activeElement !== panelOpener) (narrowScreen.matches ? $('search-open') : searchField).focus({ preventScroll: true });
+    focusGivenBack = false;
+  }
+  panelOpener = null;
   // (opened again, the sheet is as high as it is by itself)
   setSheetHeight(null);
   draw();
@@ -1894,8 +1919,8 @@ function showAddress(path, title) {
     servedAt = null;
   }
   if (path === here()) return;
-  // (the settings of the page in its address stay; the further stops of a board stay with the board they were on)
-  history.pushState(null, '', new URL(`${path}${boardQuery(location.search, readBoard(location.search), state.extra)}`, document.baseURI));
+  // (the settings of the page in its address stay; a board, with its further stops, only where one is shown)
+  history.pushState(null, '', new URL(`${path}${boardQuery(location.search, state.board, state.extra)}`, document.baseURI));
 }
 
 /**
@@ -1917,8 +1942,9 @@ async function openAddress(loaded = false) {
     return true;
   }
   const found = await res.json();
-  // (a stop that has moved a little, or has another name: the address it has now)
-  if (found.path !== path) history.replaceState(null, '', new URL(`${found.path}${location.search}`, document.baseURI));
+  // (a stop that has moved a little, or has another name: the address it has now; that of a line or a trip without a board, which only a stop has)
+  const search = found.type === 'stop' ? location.search : boardQuery(location.search, null);
+  if (found.path !== path || search !== location.search) history.replaceState(null, '', new URL(`${found.path}${search}`, document.baseURI));
   if (found.type === 'line') {
     selectLine(found, { counted: loaded });
     return true;
@@ -2016,10 +2042,12 @@ shareButton.addEventListener('click', async () => {
 function select(type, id, more = {}) {
   // (the further stops of a board are those of the address it was opened with, else none: see "a board of several stops")
   state.extra = type === 'station' ? (more.stops ?? []) : [];
-  // (a board is of a stop: what else is opened is shown as details)
-  if (type !== 'station' && state.board !== null) setBoard(null);
+  // (a board is of a stop: what else is opened is shown as details, at an address of its own; that of the board stays as it was, the step back to it)
+  if (type !== 'station' && state.board !== null) setBoard(null, false);
   // The row that was activated is about to go: keep the keyboard focus in the panel.
   if (panelBody.contains(document.activeElement) || panelHead.contains(document.activeElement)) panel.focus({ preventScroll: true });
+  // (what they are opened from, to have the focus back when they close)
+  if (panel.hidden) panelOpener = document.activeElement === document.body ? null : document.activeElement;
   const picked = pickedQuery();
   state.selection = { type, id, data: null, ...more };
   delete state.selection.stops;
