@@ -8,6 +8,23 @@ This file is written by
 messages when a release is made. Do not edit it by hand; see
 [Releases](CONTRIBUTING.md#releases).
 
+## [0.16.1](https://github.com/xiidoz/netnou/compare/v0.16.0...v0.16.1) (2026-10-18)
+
+
+### Bug Fixes
+
+* **page:** "tomorrow" only before the next day's departures, not before a late train ([#207](https://github.com/xiidoz/netnou/issues/207)) ([5a6d514](https://github.com/xiidoz/netnou/commit/5a6d51486779776ad3eabb36111cbb354922a597)), closes [#193](https://github.com/xiidoz/netnou/issues/193)
+* **page:** a board of several stops shows a departure in every block and keeps its lists ([#200](https://github.com/xiidoz/netnou/issues/200)) ([92a532d](https://github.com/xiidoz/netnou/commit/92a532de35ebb63261d4143147272adc19ea88e7)), closes [#191](https://github.com/xiidoz/netnou/issues/191) [#192](https://github.com/xiidoz/netnou/issues/192)
+* **page:** draw the delays as text dark or light enough to read ([#202](https://github.com/xiidoz/netnou/issues/202)) ([27c3e33](https://github.com/xiidoz/netnou/commit/27c3e339f5445e3698de5c3eb711bee50badd45b)), closes [#196](https://github.com/xiidoz/netnou/issues/196)
+* **page:** give the keyboard focus back when details close or the search is left ([#208](https://github.com/xiidoz/netnou/issues/208)) ([5a1d5d9](https://github.com/xiidoz/netnou/commit/5a1d5d9856baf30c126d147b3b38ab69d7e97097)), closes [#194](https://github.com/xiidoz/netnou/issues/194)
+* **page:** give the map's zoom buttons and the board's button names of their own in German ([#201](https://github.com/xiidoz/netnou/issues/201)) ([3c14092](https://github.com/xiidoz/netnou/commit/3c140922ba6d8f57e2f3f45880d1b6277aecd2e7)), closes [#197](https://github.com/xiidoz/netnou/issues/197)
+* **page:** go back to what was open in one step, a board with all its stops ([#209](https://github.com/xiidoz/netnou/issues/209)) ([101ab2d](https://github.com/xiidoz/netnou/commit/101ab2d6c4534aad541d2bac6bf1519ea5b5791a)), closes [#188](https://github.com/xiidoz/netnou/issues/188) [#190](https://github.com/xiidoz/netnou/issues/190)
+* **page:** keep the map's buttons beside open details, and above the sheet on a phone ([#204](https://github.com/xiidoz/netnou/issues/204)) ([28a0152](https://github.com/xiidoz/netnou/commit/28a01525bfbddf45fb000a5d767121a4fea4f7f6)), closes [#187](https://github.com/xiidoz/netnou/issues/187)
+* **page:** no ring around the sheet that a result opens on a phone ([#211](https://github.com/xiidoz/netnou/issues/211)) ([fd6be9f](https://github.com/xiidoz/netnou/commit/fd6be9f76bd1eef14131e4c2968a341bceb48ba6))
+* **page:** title a stop, line or trip in the language chosen in the settings ([#212](https://github.com/xiidoz/netnou/issues/212)) ([2cc1d09](https://github.com/xiidoz/netnou/commit/2cc1d0995cddbebce0877cbf818d09042f7882c3)), closes [#195](https://github.com/xiidoz/netnou/issues/195)
+* **server:** leave out a compression the client refuses with q=0 ([#206](https://github.com/xiidoz/netnou/issues/206)) ([1d4cb4e](https://github.com/xiidoz/netnou/commit/1d4cb4eaa7b64b70674dd55a36523002c27a8331)), closes [#199](https://github.com/xiidoz/netnou/issues/199)
+* **timetable:** show where a night line runs after midnight as well ([#210](https://github.com/xiidoz/netnou/issues/210)) ([1ddd78e](https://github.com/xiidoz/netnou/commit/1ddd78e2dd47860899ff3c8efb07e92c52c42c69)), closes [#189](https://github.com/xiidoz/netnou/issues/189)
+
 ## [0.16.0](https://github.com/xiidoz/netnou/compare/v0.15.2...v0.16.0) (2026-10-18)
 
 
