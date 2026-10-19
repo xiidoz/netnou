@@ -8,6 +8,13 @@ This file is written by
 messages when a release is made. Do not edit it by hand; see
 [Releases](CONTRIBUTING.md#releases).
 
+## [0.17.1](https://github.com/xiidoz/netnou/compare/v0.17.0...v0.17.1) (2026-10-19)
+
+
+### Bug Fixes
+
+* **page:** no tooltip on a stop whose name is on the map ([#239](https://github.com/xiidoz/netnou/issues/239)) ([6d05ea7](https://github.com/xiidoz/netnou/commit/6d05ea7f2f7c5927a8cfbee249dd96a551b0eab1))
+
 ## [0.17.0](https://github.com/xiidoz/netnou/compare/v0.16.1...v0.17.0) (2026-10-19)
 
 
