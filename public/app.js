@@ -241,7 +241,7 @@ const state = {
   extra: [], // the further stops on the board of the open stop: [{ path, joined }], see "a board of several stops"
   adding: null, // while the search is to add a stop to the board: { block } or { block: null } for a block of its own
   selection: null, // { type: 'trip' | 'station' | 'line', id, data }, see select()
-  hits: [], // what can be pointed at on the map: { x, y, r, vehicle or station }, see draw()
+  hits: [], // what can be pointed at on the map: { x, y, r, vehicle or station; named: a stop with its name on the map }, see draw()
   covers: [], // the boxes of the bubbles, which hide what is under them: [x, y, width, height]
   chosenAt: null, // where on the screen the chosen vehicle is drawn, if it is in view: { x, y, … }
   position: null, // the visitor's own while they have it shown: { lat, lon, accuracy in metres, stale }
@@ -738,8 +738,9 @@ function draw() {
     if (!stationShown(station, zoom)) continue;
     const [x, y] = project(station.lat, station.lon);
     if (!onScreen(x, y)) continue;
-    marks.push({ x, y, ...drawStop(x, y, station.modes, big), id: station.id, name: station.name, modes: station.modes });
-    hits.push({ x, y, r: STOP_HIT_PX, station });
+    const hit = { x, y, r: STOP_HIT_PX, station };
+    hits.push(hit);
+    marks.push({ x, y, ...drawStop(x, y, station.modes, big), id: station.id, name: station.name, modes: station.modes, hit });
   }
   // The station whose departures are open, at any zoom, and the further stops
   // of its board: on top of the others, with a ring in the accent colour, as
@@ -780,12 +781,16 @@ function draw() {
     ctx.lineWidth = 3.5;
     ctx.strokeStyle = colors.bg;
     ctx.fillStyle = colors.text;
+    const named = new Set();
     stopNames.forEach((mark, i) => {
       if (lefts[i] === null) return;
       // (a halo in the colour of the ground, so that the name reads on any map)
       ctx.strokeText(mark.name, lefts[i], mark.y + 0.5);
       ctx.fillText(mark.name, lefts[i], mark.y + 0.5);
+      named.add(mark.id);
     });
+    // (a stop whose name is on the map needs no tooltip to say it again)
+    for (const mark of marks) if (named.has(mark.id)) mark.hit.named = true;
   }
 
   // The route of the selected trip, or that of the selected line: where its
@@ -1187,7 +1192,7 @@ map.on('mousemove', (event) => {
   if (FIXED) return;
   const hit = hitTest(event.point);
   map.getContainer().classList.toggle('clickable', !!hit);
-  tooltip.hidden = !hit || !hovering.matches;
+  tooltip.hidden = !hit || !hovering.matches || Boolean(hit.named);
   if (tooltip.hidden) return;
   tooltip.textContent = hit.vehicle ? vehicleSummary(hit.vehicle) : hit.station.name;
   tooltip.style.transform = `translate(${event.point.x + 14}px, ${event.point.y + 14}px)`;
