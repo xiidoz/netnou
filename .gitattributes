@@ -1,6 +1,12 @@
 # LF in the repository and in every checkout, whatever core.autocrlf says.
 * text=auto eol=lf
 *.png binary
+*.webp binary
+
+# Written by tools/build-picture-data.mjs: what the pictures of the READMEs are taken from.
+tools/pictures/*.zip binary linguist-generated
+tools/pictures/*.pbf binary linguist-generated
+tools/pictures/*.pb binary linguist-generated
 
 # Vendored files stay byte-identical to upstream.
 public/vendor/** -text linguist-vendored

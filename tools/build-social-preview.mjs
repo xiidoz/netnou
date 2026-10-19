@@ -1,7 +1,7 @@
 // Renders docs/social-preview.png, the image shown where the repository is
 // linked in chats and on social media, with a headless Chrome. It is put
-// together from the README screenshot, the favicon and a few words, so run it
-// by hand after renewing docs/screenshot.png:
+// together from docs/pictures/map.webp, the favicon and a few words, so run it
+// by hand after npm run build:pictures:
 //
 //   node tools/build-social-preview.mjs   (CHROME=<path> if Chrome, Chromium or Edge is not found automatically)
 //
@@ -18,38 +18,18 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import { chromeArgs, findChrome } from './chrome.mjs';
 
 const WIDTH = 1280;
 const HEIGHT = 640;
 const MAX_BYTES = 1_000_000;
-// How much of the width the words take; the screenshot fills the rest.
+// How much of the width the words take; the map fills the rest, which is the
+// shape of docs/pictures/map.webp (build-pictures.mjs takes it so).
 const PANEL = 620;
 const MARGIN = 80;
 
-// Chrome, Chromium or Edge in the place each platform installs it; CHROME overrides the search.
-function findChrome() {
-  const env = process.env;
-  if (env.CHROME) return env.CHROME;
-  const candidates = {
-    win32: [env.PROGRAMFILES, env['PROGRAMFILES(X86)'], env.LOCALAPPDATA].filter(Boolean).flatMap((dir) => [
-      path.join(dir, 'Google/Chrome/Application/chrome.exe'),
-      path.join(dir, 'Chromium/Application/chrome.exe'),
-      path.join(dir, 'Microsoft/Edge/Application/msedge.exe'),
-    ]),
-    darwin: [
-      '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
-      '/Applications/Chromium.app/Contents/MacOS/Chromium',
-      '/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge',
-    ],
-  }[process.platform] ?? ['google-chrome', 'google-chrome-stable', 'chromium', 'chromium-browser', 'microsoft-edge']
-    .flatMap((name) => (env.PATH ?? '').split(path.delimiter).filter(Boolean).map((dir) => path.join(dir, name)));
-  const found = candidates.find((file) => fs.existsSync(file));
-  if (!found) throw new Error('No Chrome, Chromium or Edge found. Set CHROME to the path of the browser.');
-  return found;
-}
-
 const root = fileURLToPath(new URL('../', import.meta.url));
-const screenshot = path.join(root, 'docs', 'screenshot.png');
+const map = path.join(root, 'docs', 'pictures', 'map.webp');
 const favicon = path.join(root, 'public', 'favicon.svg');
 const out = path.join(root, 'docs', 'social-preview.png');
 
@@ -61,8 +41,8 @@ const html = `<!DOCTYPE html>
   * { box-sizing: border-box; margin: 0; }
   html, body { width: ${WIDTH}px; height: ${HEIGHT}px; overflow: hidden; background: #fff; }
   body { position: relative; font: 28px/1.35 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; color: #1b1f24; }
-  /* The right-hand part of the screenshot at its own size, from its top edge: the map and the stop list. */
-  .shot { position: absolute; top: 0; right: 0; width: ${WIDTH - PANEL}px; height: ${HEIGHT}px; background: url("${pathToFileURL(screenshot).href}") right top no-repeat; }
+  /* A bus a few minutes late, close up on the map: large enough where a preview is shown small. */
+  .shot { position: absolute; top: 0; right: 0; width: ${WIDTH - PANEL}px; height: ${HEIGHT}px; background: url("${pathToFileURL(map).href}") center / cover no-repeat; }
   .panel { position: absolute; inset: 0 auto 0 0; width: ${PANEL}px; padding: ${MARGIN}px 56px ${MARGIN}px ${MARGIN}px; background: #fff; box-shadow: 0 0 28px rgb(0 0 0 / 0.28); display: flex; flex-direction: column; }
   .name { display: flex; align-items: center; gap: 22px; }
   .name img { width: 96px; height: 96px; }
@@ -71,7 +51,7 @@ const html = `<!DOCTYPE html>
   .more { margin-top: 20px; color: #5c6670; }
   .modes { margin-top: auto; display: flex; gap: 14px; }
   .modes span { width: 26px; height: 26px; border-radius: 50%; }
-  /* Whose map and whose data the screenshot shows: its own credits are cut off at the bottom. */
+  /* Whose map and whose data it shows: the picture leaves out the credits of the page. */
   .credits { position: absolute; right: 0; bottom: 0; padding: 3px 10px; background: rgb(255 255 255 / 0.9); color: #5c6670; font-size: 12px; line-height: 1.5; white-space: nowrap; }
 </style>
 <div class="shot"></div>
@@ -90,7 +70,7 @@ try {
   fs.writeFileSync(source, html);
   execFileSync(findChrome(), [
     '--headless=new', '--hide-scrollbars', '--force-device-scale-factor=1', `--user-data-dir=${path.join(tmp, 'profile')}`,
-    `--window-size=${WIDTH},${HEIGHT}`, `--screenshot=${out}`, pathToFileURL(source).href,
+    `--window-size=${WIDTH},${HEIGHT}`, `--screenshot=${out}`, ...chromeArgs(), pathToFileURL(source).href,
   ], { stdio: 'ignore' });
   const png = fs.readFileSync(out);
   const [width, height] = [png.readUInt32BE(16), png.readUInt32BE(20)];

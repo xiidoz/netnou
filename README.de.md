@@ -18,7 +18,9 @@ Verspätungen, aber keine Positionen. Deshalb wird jedes Fahrzeug dort
 gezeichnet, wo es laut Fahrplan und gemeldeter Verspätung gerade sein müsste.
 Ein Fahrzeug kann also etwas vor oder hinter seiner Markierung sein.
 
-![Karte der Nürnberger Innenstadt mit Bussen, Straßenbahnen und Zügen als farbigen Markierungen; ein Feld zeigt die Halte der Tram 4 mit ihren Verspätungen](docs/screenshot.png)
+![Drei Handys: die Abfahrten von Nürnberg Plärrer, die Fahrt eines Busses von dort mit dem Bus auf der Karte in der Altstadt und die Suche, die Fürth findet](docs/pictures/phone.webp)
+
+![Ein breiter Bildschirm, wie die Seite meist aussieht: die Fahrt eines Busses ab Nürnberg Plärrer neben der Karte der Stadt](docs/pictures/wide.webp)
 
 ## Was die Karte kann
 
@@ -36,6 +38,8 @@ Ein Fahrzeug kann also etwas vor oder hinter seiner Markierung sein.
   jemandem zu zeigen, wo der Bus gerade ist.
 - **Als Tafel zeigen:** Abfahrten als große Tafel, zum Beispiel für ein
   Display an der Wand, mit bis zu vier Haltestellen.
+
+![Die Abfahrten von Nürnberg Hauptbahnhof als Tafel neben der Karte, auf einem breiten Bildschirm](docs/pictures/board.webp)
 
 Die Fahrzeuge lassen sich auch nach ihrer Verspätung einfärben. Die Karte kann
 den eigenen Standort zeigen; er bleibt im Browser. Die Seite gibt es auf
@@ -143,12 +147,15 @@ Import bis zu den Positionen: [docs/architecture.md](docs/architecture.md).
 
 ## Datenquellen, Lizenzen und Quellenangaben
 
-Der Code steht unter der [MIT-Lizenz](LICENSE). Drei Dinge im Repository
+Der Code steht unter der [MIT-Lizenz](LICENSE). Vier Dinge im Repository
 stehen nicht darunter: die mitgelieferte Kartenbibliothek MapLibre GL JS
 (`public/vendor/maplibre-gl`, BSD-3-Clause), die Icons aus Material Design
-Icons (`public/vendor/material-design-icons`, Apache-2.0) und die Umrisse der
+Icons (`public/vendor/material-design-icons`, Apache-2.0), die Umrisse der
 eingebauten Gebiete (`server/areas/vgn.geojson` und
-`server/areas/germany.geojson`, © OpenStreetMap-Mitwirkende, ODbL 1.0).
+`server/areas/germany.geojson`, © OpenStreetMap-Mitwirkende, ODbL 1.0) und
+die Daten, aus denen die Bilder oben entstehen (`tools/pictures`, ein Teil
+des Fahrplans von gtfs.de unter CC BY-SA 4.0 und von OpenStreetMap unter
+ODbL 1.0).
 
 Eine laufende Instanz arbeitet mit Daten, die sie selbst abruft und für die
 eigene Bedingungen gelten:

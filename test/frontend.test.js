@@ -157,6 +157,15 @@ test('every README names the languages of all of them at its top, its own as tex
   }
 });
 
+test('every picture the READMEs show is a file of the repository', () => {
+  for (const file of ['README.md', ...READMES.map((code) => `README.${code}.md`)]) {
+    const text = fs.readFileSync(new URL(`../${file}`, import.meta.url), 'utf8');
+    const pictures = [...text.matchAll(/!\[[^\]]*\]\(([^)\s]+)\)|<img\s[^>]*src="([^"]+)"/g)].map(([, markdown, html]) => markdown ?? html);
+    assert.ok(pictures.length > 0, `${file} shows no pictures`);
+    for (const picture of pictures.filter((src) => !/^https?:/.test(src))) assert.ok(fs.existsSync(new URL(`../${picture}`, import.meta.url)), `${file} shows ${picture}, which is not there`);
+  }
+});
+
 test('every language has the texts of English, with the same placeholders and its own plural forms', async () => {
   for (const code of codes) {
     const messages = (await import(new URL(`locales/${code}.js`, publicDir))).default;

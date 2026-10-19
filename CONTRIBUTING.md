@@ -185,12 +185,22 @@ earlier ones.
   regenerating it changes nothing that is stored.
 - **`public/icons/*.png`** are rendered from `public/favicon.svg` by
   `npm run build:icons`, which needs Chrome, Chromium or Edge (set `CHROME`
-  to its path if it is not found). Run it after changing the favicon and
-  commit the result.
+  to its path if it is not found, and `CHROME_ARGS=--no-sandbox` in a
+  container). Run it after changing the favicon and commit the result.
+- **`docs/pictures/*.webp`**, the pictures of the page in the READMEs and the
+  close-up of a map for link previews, are taken by `npm run build:pictures`
+  with the same browser. It starts a server of the checkout on the data in
+  `tools/pictures/`, with its clock held at a Monday at 13:37, so the
+  pictures come out the same at any hour and change only where the page
+  does. The map behind the vehicles comes from OpenFreeMap, so it needs the
+  internet. Take them again after a change to the look of the card, the
+  details, the search or the board, and commit them. The data is made by
+  `tools/build-picture-data.mjs`, only when the pictures need something it
+  does not have; see [tools/pictures/README.md](tools/pictures/README.md).
 - **`docs/social-preview.png`**, the image shown where the repository is
   linked in chats and on social media, is put together from
-  `docs/screenshot.png` and the favicon by `npm run build:social`, with the
-  same browser. Run it after renewing the screenshot and commit the result.
+  `docs/pictures/map.webp` and the favicon by `npm run build:social`, with
+  the same browser. Run it after taking the pictures and commit the result.
   GitHub does not take the image from the repository: a maintainer uploads it
   under Settings → General → Social preview.
 - **`public/vendor/maplibre-gl/`** holds unmodified files of the MapLibre GL

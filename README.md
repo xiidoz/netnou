@@ -17,7 +17,9 @@ Germany.
 no positions, so each vehicle is drawn where the timetable and its reported
 delay put it. It can be a little ahead of or behind its marker.
 
-![Map of central Nürnberg with buses, trams and trains as coloured markers; a panel lists the stops of tram 4 with its delays](docs/screenshot.png)
+![Three phones: the departures of Nürnberg Plärrer, the trip of a bus from there with the bus on the map in the old town, and the search finding Fürth](docs/pictures/phone.webp)
+
+![A wide screen as the page usually looks: the trip of a bus from Nürnberg Plärrer beside the map of the city](docs/pictures/wide.webp)
 
 ## What you can do
 
@@ -34,6 +36,8 @@ delay put it. It can be a little ahead of or behind its marker.
   bus is right now.
 - **Show the departures as a board**, in large type for a screen on the wall,
   with up to four stops.
+
+![The departures of Nürnberg Hauptbahnhof as a board beside the map, on a wide screen](docs/pictures/board.webp)
 
 The vehicles can also be coloured by their delay, the map can show your own
 location (it stays in your browser), and the page speaks German and
@@ -132,12 +136,14 @@ it works inside, from the import to the positions:
 
 ## Data sources, licences and attribution
 
-The code is under the [MIT License](LICENSE). Three things in the repository
+The code is under the [MIT License](LICENSE). Four things in the repository
 are not: the vendored map library MapLibre GL JS
 (`public/vendor/maplibre-gl`, BSD-3-Clause), the icons taken from Material
-Design Icons (`public/vendor/material-design-icons`, Apache-2.0) and the
+Design Icons (`public/vendor/material-design-icons`, Apache-2.0), the
 outlines of the built-in areas (`server/areas/vgn.geojson` and
-`server/areas/germany.geojson`, © OpenStreetMap contributors, ODbL 1.0).
+`server/areas/germany.geojson`, © OpenStreetMap contributors, ODbL 1.0) and
+the data the pictures above are taken from (`tools/pictures`, a part of the
+timetable of gtfs.de under CC BY-SA 4.0 and of OpenStreetMap under ODbL 1.0).
 
 A running instance works with data that it fetches itself and that has its own
 terms:

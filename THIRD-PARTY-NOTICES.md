@@ -44,11 +44,28 @@ running instance fetches and passes on.
 - These files are not covered by the MIT License. Changed versions of them
   stay under the ODbL.
 
-### Screenshot
+### Data of the pictures
 
-`docs/screenshot.png` and `docs/social-preview.png`, which is made from it,
-show a map of OpenFreeMap (© OpenMapTiles, data from OpenStreetMap) and
-timetable data from gtfs.de / DELFI e.V., credited in the images.
+- Where: `tools/pictures/`, the data that the pictures of the page are taken
+  from (see [tools/pictures/README.md](tools/pictures/README.md)).
+- `feed.zip`: a part of the GTFS timetable of [gtfs.de](https://gtfs.de),
+  provided by DELFI e.V., of 17 October 2026: the trips around Nürnberg and
+  Fürth on one afternoon, their service changed to run on that day alone.
+  `realtime.pb`: delays made up for those trips, naming them and their
+  operators. Both under
+  [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/).
+- `osm.pbf`: the roads, tracks and borders of that area, from the
+  OpenStreetMap extract of Middle Franconia of
+  [Geofabrik](https://download.geofabrik.de/). © OpenStreetMap contributors,
+  [Open Database License 1.0](https://opendatacommons.org/licenses/odbl/1-0/).
+- These files are not covered by the MIT License.
+
+### Pictures of the page
+
+The pictures in `docs/pictures/` and `docs/social-preview.png`, which is made
+from them, show a map of OpenFreeMap (© OpenMapTiles, data from
+OpenStreetMap) and the data in `tools/pictures/`, credited in the images. The
+delays in them are made up.
 
 ## Data fetched at run time
 
