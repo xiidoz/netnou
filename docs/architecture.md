@@ -205,6 +205,13 @@ of all of Germany to about 98,000 trips and 13,500 stations.
    (`findSharedWays`), the result is written to `dataset.bin` and the main
    thread loads it.
 
+Destinations and stop names are kept as the operators wrote them, but for
+the marks their signs turn into a line break or a gap (`tidyName`, #223): a
+word broken at the end of a line is one word again ("Meistersinger- _halle"),
+with its hyphen where a capital goes on; `_` and a written `\n` or `\t` are a
+gap; spaces count once. Nothing is mended for one operator: such fixes would
+never end, and would go wrong once the operator corrects the text.
+
 ## The dataset
 
 A timetable repeats itself: most trips run the same way as others, and many

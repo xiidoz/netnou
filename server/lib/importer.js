@@ -30,6 +30,22 @@ function intern(value, list, index) {
   return i;
 }
 
+/**
+ * A destination or a stop name as a rider reads it (#223). Netnou shows them
+ * as the operators wrote them, but for the marks that their signs turn into
+ * a line break or a gap, which no rider sees there: a word broken at the end
+ * of a line is one word again ("Meistersinger- _halle"), with its hyphen
+ * where a capital goes on ("Hammerstatt-\nIndustriegebiet"); "_" and a
+ * written "\n" or "\t" are a gap; spaces count once.
+ */
+export function tidyName(text) {
+  return text
+    .replace(/(\p{L})-[ ]*(?:_|\\n)[ ]*(?=(\p{Ll})|\S)/gu, (_, before, small) => (small ? before : `${before}-`))
+    .replace(/_|\\[nt]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
 /** Column name -> position, from the first line of a table. */
 function headerIndex(line, file, required) {
   const col = {};
@@ -304,7 +320,8 @@ async function readStopTimes(zip, regionStops, wantedTrips, onProgress) {
         const sign = col.stop_headsign === undefined ? '' : f[col.stop_headsign];
         if (sign !== lastSign) {
           lastSign = sign;
-          lastSignIndex = sign ? intern(sign, headsigns, headsignIndex) : -1;
+          const tidy = tidyName(sign);
+          lastSignIndex = tidy ? intern(tidy, headsigns, headsignIndex) : -1;
         }
         rows.signs.push(lastSignIndex);
       }
@@ -596,7 +613,8 @@ export async function buildDataset({ zipPath, area, agencies = null, onProgress 
       if (s === undefined) { s = serviceIds.length; serviceIds.push(f[col.service_id]); serviceIndex.set(f[col.service_id], s); }
       route[t] = r;
       service[t] = s;
-      if (col.trip_headsign !== undefined && f[col.trip_headsign]) collector.fill(t, () => intern(f[col.trip_headsign], headsigns, headsignIndex));
+      const sign = col.trip_headsign === undefined ? '' : tidyName(f[col.trip_headsign]);
+      if (sign) collector.fill(t, () => intern(sign, headsigns, headsignIndex));
     });
 
     const agencyNames = new Map();
@@ -634,7 +652,7 @@ export async function buildDataset({ zipPath, area, agencies = null, onProgress 
       await readTable(zip, 'stops.txt', ['stop_id', 'stop_name', 'stop_lat', 'stop_lon'], (f, col) => {
         const i = stopIndex.get(f[col.stop_id]);
         if (i === undefined || i < from) return;
-        stops.name[i] = f[col.stop_name];
+        stops.name[i] = tidyName(f[col.stop_name]);
         stops.lat[i] = +f[col.stop_lat];
         stops.lon[i] = +f[col.stop_lon];
         stops.platform[i] = col.platform_code === undefined ? '' : f[col.platform_code];
