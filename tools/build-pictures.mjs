@@ -5,8 +5,8 @@
 // at whatever hour they are taken, and show what the page looks like now:
 //
 //   docs/pictures/phone.webp   three phones: the departures of Nürnberg Plärrer,
-//                              the trip of a bus that has just left there a few
-//                              minutes late, and the search
+//                              the trip of a bus from there, a few minutes late
+//                              in the old town, and the search
 //   docs/pictures/wide.webp    a wide screen as the page usually looks: the map
 //                              with the trip of that bus beside it
 //   docs/pictures/board.webp   a wide screen with the departures of a stop as a
@@ -51,10 +51,11 @@ const SCALE = 1.5;
 // shape is that of the part of the preview it fills (build-social-preview.mjs).
 const CLOSE_UP = { width: 330, height: 320, mobile: false, scale: 4 };
 // The map as the page usually shows a trip on a wide screen; as close as the
-// map of the link preview comes; and where the search is opened: Nürnberg and
+// map of the link preview comes, near enough for the size of the vehicles and
+// far enough for the ones around; and where the search is opened: Nürnberg and
 // Fürth, as the page keeps the last view of a visitor.
 const USUAL_ZOOM = 14;
-const CLOSE_ZOOM = 16;
+const CLOSE_ZOOM = 15;
 const SEARCH_VIEW = { lat: 49.462, lon: 11.03, zoom: 11.6 };
 // How the pictures are laid out, in CSS pixels.
 const PADDING = 20;
@@ -186,7 +187,7 @@ try {
   // The trip of the bus, at its address.
   const trip = await get(`api/trip?id=${encodeURIComponent(moment.follow)}`);
   const tripAddress = `${trip.address}?lang=en`;
-  console.log(`following the ${moment.kind} ${trip.line} to ${trip.to}, ${moment.late} s late at ${moment.stop}`);
+  console.log(`following the ${moment.kind} ${trip.line} to ${trip.to}, ${moment.late} s late at ${moment.at}`);
 
   page = await openPage();
 
@@ -219,14 +220,45 @@ try {
     await page.send('Emulation.setDeviceMetricsOverride', { width, height, deviceScaleFactor: scale, mobile });
     await page.send('Emulation.setTouchEmulationEnabled', mobile ? { enabled: true, maxTouchPoints: 5 } : { enabled: false });
   }
+  /**
+   * The vehicles in the order the server gives them for the view the map is on.
+   * The page draws them in the order they first came, which depends on how the
+   * map got there: answers without vehicles take them all away, and the next
+   * answer brings them back in its order. (The page asks again when it comes online.)
+   */
+  async function vehiclesAnew() {
+    await page.send('Fetch.enable', { patterns: [{ urlPattern: '*/api/vehicles*', requestStage: 'Response' }] });
+    const emptied = new Promise((resolve) => {
+      page.paused = async ({ requestId }) => {
+        const { body, base64Encoded } = await page.send('Fetch.getResponseBody', { requestId });
+        const answer = JSON.parse(Buffer.from(body, base64Encoded ? 'base64' : 'utf8').toString());
+        // (a list, or columns of the same length where the page asked for the smallest form)
+        if (Array.isArray(answer.vehicles)) answer.vehicles = [];
+        else for (const column of Object.keys(answer.vehicles)) answer.vehicles[column] = [];
+        await page.send('Fetch.fulfillRequest', { requestId, responseCode: 200, responseHeaders: [{ name: 'Content-Type', value: 'application/json' }], body: Buffer.from(JSON.stringify(answer)).toString('base64') });
+        resolve();
+      };
+    });
+    await evaluate("window.dispatchEvent(new Event('online')); 0");
+    await emptied;
+    // (one that was on its way already is emptied too)
+    await sleep(500);
+    await page.send('Fetch.disable');
+    page.paused = null;
+    await evaluate("window.dispatchEvent(new Event('online')); 0");
+    await settle();
+  }
   async function shoot(name, format = 'png') {
+    await vehiclesAnew();
     // The fonts looked up anew, as when the page gets one more: the canvas of the
     // vehicles keeps the font it found first, and its letters came out in one of
     // two forms from run to run. A face that loads nothing does it.
     await evaluate("document.fonts.add(new FontFace('netnou-pictures', 'local(netnou-pictures)')); 0");
     await sleep(600);
-    // What moves by itself held still: the pulse of the status dot, from the next frame on.
+    // What moves by itself held still: the pulse of the status dot, from the next
+    // frame on; and the text cursor of a field, which blinks, not shown.
     await evaluate(`for (const animation of document.getAnimations()) { animation.pause(); animation.currentTime = ${PULSE_MS}; }`);
+    await evaluate("document.documentElement.style.caretColor = 'transparent'");
     await evaluate('new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)))');
     const { data: picture } = await page.send('Page.captureScreenshot', format === 'png' ? { format } : { format, quality: 82 });
     fs.writeFileSync(path.join(format === 'png' ? tmp : out, `${name}.${format}`), Buffer.from(picture, 'base64'));
@@ -340,11 +372,12 @@ ${names.map((name) => `<img src="${name}.png" alt="">`).join('\n')}
  */
 async function openPage() {
   const browser = await openBrowser();
-  const page = { send: browser.send, loading: new Set(), loaded: null, close: () => browser.close() };
+  const page = { send: browser.send, loading: new Set(), loaded: null, paused: null, close: () => browser.close() };
   browser.on(({ method, params }) => {
     if (method === 'Network.requestWillBeSent') page.loading.add(params.requestId);
     if (method === 'Network.loadingFinished' || method === 'Network.loadingFailed') page.loading.delete(params.requestId);
     if (method === 'Page.loadEventFired') page.loaded?.();
+    if (method === 'Fetch.requestPaused') page.paused?.(params);
   });
   try {
     await page.send('Page.enable');

@@ -18,9 +18,9 @@ Verspätungen, aber keine Positionen. Deshalb wird jedes Fahrzeug dort
 gezeichnet, wo es laut Fahrplan und gemeldeter Verspätung gerade sein müsste.
 Ein Fahrzeug kann also etwas vor oder hinter seiner Markierung sein.
 
-![Drei Handys: die Abfahrten von Nürnberg Plärrer, die Fahrt einer davon mit ihrem Fahrzeug auf der Karte und die Suche, die Fürth findet](docs/pictures/phone.webp)
+![Drei Handys: die Abfahrten von Nürnberg Plärrer, die Fahrt eines Busses von dort mit dem Bus auf der Karte in der Altstadt und die Suche, die Fürth findet](docs/pictures/phone.webp)
 
-![Ein breiter Bildschirm, wie die Seite meist aussieht: die Fahrt einer der Abfahrten von Nürnberg Plärrer neben der Karte der Stadt](docs/pictures/wide.webp)
+![Ein breiter Bildschirm, wie die Seite meist aussieht: die Fahrt eines Busses ab Nürnberg Plärrer neben der Karte der Stadt](docs/pictures/wide.webp)
 
 ## Was die Karte kann
 

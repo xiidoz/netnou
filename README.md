@@ -17,9 +17,9 @@ Germany.
 no positions, so each vehicle is drawn where the timetable and its reported
 delay put it. It can be a little ahead of or behind its marker.
 
-![Three phones: the departures of Nürnberg Plärrer, the trip of one of them with its vehicle on the map, and the search finding Fürth](docs/pictures/phone.webp)
+![Three phones: the departures of Nürnberg Plärrer, the trip of a bus from there with the bus on the map in the old town, and the search finding Fürth](docs/pictures/phone.webp)
 
-![A wide screen as the page usually looks: the trip of one of the departures of Nürnberg Plärrer beside the map of the city](docs/pictures/wide.webp)
+![A wide screen as the page usually looks: the trip of a bus from Nürnberg Plärrer beside the map of the city](docs/pictures/wide.webp)
 
 ## What you can do
 

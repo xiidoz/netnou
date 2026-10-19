@@ -10,7 +10,7 @@
 //                 towns, cut out of an OpenStreetMap extract of Geofabrik
 //   realtime.pb   delays for those trips, made up, as a GTFS-Realtime feed of
 //                 the kind gtfs.de publishes; the bus the pictures follow has
-//                 just left the stop of the pictures, a few minutes late
+//                 just left a stop, a few minutes late
 //   moment.json   the moment, the bus that the pictures follow, and what the
 //                 data was made from
 //
@@ -46,11 +46,13 @@ const TO = 15 * 3600 + 45 * 60;
 const MARGIN = 0.02;
 // The borders kept, by their admin_level: of the towns and of the districts (towns.js).
 const BORDER_LEVELS = ['8', '6'];
-// The stop the pictures are about, and the vehicle they follow: one that has left it SINCE seconds
-// before the moment, LATE.min to LATE.max seconds late, with AHEAD stops or more still ahead of it.
+// The stop whose departures the pictures show, and the vehicle they follow: one that has left the stop
+// AT SINCE seconds before the moment, LATE.min to LATE.max seconds late, with AHEAD stops or more still
+// ahead of it.
 const STOP = 'Nürnberg Plärrer';
+const AT = 'Nürnberg Hallertor';
 const SINCE = 20;
-const LATE = { min: 180, max: 360 };
+const LATE = { min: 60, max: 180 };
 const AHEAD = 5;
 
 const [feedFile, extractFile] = process.argv.slice(2);
@@ -265,10 +267,9 @@ await table('stop_times.txt', (row, line, c) => {
 for (const trip of trips.values()) trip.rows.sort((a, b) => a.sequence - b.sequence);
 console.log(`${trips.size} trips call in the area between ${FROM / 3600} h and ${TO / 3600} h`);
 
-// The vehicle the pictures follow: a bus if one is such, else a tram, else any (at Nürnberg Plärrer
-// buses only begin and end, and one that begins there counts); of them, the least late. Its delay is
-// made up so that it is where it is at the moment.
-const atStop = (id) => stops.get(id)?.name === STOP || stops.get(stops.get(id)?.parent)?.name === STOP;
+// The vehicle the pictures follow: a bus if one is such, else a tram, else any; of them, the least late.
+// Its delay is made up so that it is where it is at the moment.
+const atStop = (id) => stops.get(id)?.name === AT || stops.get(stops.get(id)?.parent)?.name === AT;
 const KINDS = [['bus', (type) => type === 3 || (type >= 700 && type < 800)], ['tram', (type) => type === 0 || (type >= 900 && type < 1000)], ['vehicle', () => true]];
 let followed = null;
 for (const [kind, isKind] of KINDS) {
@@ -282,7 +283,7 @@ for (const [kind, isKind] of KINDS) {
   }
   if (followed) break;
 }
-if (!followed) throw new Error(`nothing leaves ${STOP} ${LATE.min / 60} to ${LATE.max / 60} min before the moment by the timetable`);
+if (!followed) throw new Error(`nothing leaves ${AT} ${LATE.min / 60} to ${LATE.max / 60} min before the moment by the timetable`);
 
 // ---------- the delays, made up ----------
 
@@ -565,6 +566,7 @@ fs.writeFileSync(path.join(out, 'realtime.pb'), feed.done());
 fs.writeFileSync(path.join(out, 'moment.json'), `${JSON.stringify({
   now: MOMENT,
   stop: STOP,
+  at: AT,
   follow: `${followed.id}_${DAY}`,
   kind: followed.kind,
   line: routes.get(followed.trip.route).name,
@@ -577,4 +579,4 @@ fs.writeFileSync(path.join(out, 'moment.json'), `${JSON.stringify({
 }, null, 2)}\n`);
 for (const name of ['feed.zip', 'osm.pbf', 'realtime.pb', 'moment.json']) console.log(`tools/pictures/${name}: ${Math.round(fs.statSync(path.join(out, name)).size / 1024)} kB`);
 const clock = (time) => `${Math.floor(time / 3600)}:${String(Math.floor(time / 60) % 60).padStart(2, '0')}`;
-console.log(`follows the ${followed.kind} ${routes.get(followed.trip.route).name} (${followed.id}), leaving ${STOP} by the timetable at ${clock(at.dep)}, ${followed.late} s late`);
+console.log(`follows the ${followed.kind} ${routes.get(followed.trip.route).name} (${followed.id}), leaving ${AT} by the timetable at ${clock(at.dep)}, ${followed.late} s late`);

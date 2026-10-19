@@ -1,12 +1,13 @@
 {
   "now": "2026-10-19T13:37:00+02:00",
   "stop": "Nürnberg Plärrer",
+  "at": "Nürnberg Hallertor",
   "follow": "324096_20261019",
   "kind": "bus",
   "line": "36",
   "to": "Doku-Zentrum ü. Hauptmarkt",
-  "leaves": "2026-10-19T11:32:00.000Z",
-  "late": 280,
+  "leaves": "2026-10-19T11:35:00.000Z",
+  "late": 100,
   "area": [
     49.39,
     10.92,

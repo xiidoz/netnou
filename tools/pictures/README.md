@@ -11,7 +11,7 @@ comes from OpenFreeMap.
 | --- | --- | --- |
 | `feed.zip` | the timetable: the trips that call around Nürnberg and Fürth on that day between 12:30 and 15:45, with their stops, lines and operators as the feed has them; their service runs on that day alone | the GTFS feed of Germany of [gtfs.de](https://gtfs.de), provided by DELFI e.V., as published on 17 October 2026 |
 | `osm.pbf` | the roads and tracks of that area and a little around it, and the borders of its towns and districts | the extract of Middle Franconia of [Geofabrik](https://download.geofabrik.de/europe/germany/bayern/mittelfranken.html), OpenStreetMap data of 17 October 2026 |
-| `realtime.pb` | delays for those trips as a GTFS-Realtime feed like that of gtfs.de, with its notes on who provides the delay data of each operator | made up: each trip's delay comes from its id. Bus 36, which leaves Nürnberg Plärrer at 13:32, is 4 min 40 s late, so that it has just left at 13:37 |
+| `realtime.pb` | delays for those trips as a GTFS-Realtime feed like that of gtfs.de, with its notes on who provides the delay data of each operator | made up: each trip's delay comes from its id. Bus 36, which leaves Nürnberg Plärrer at 13:32, is 1 min 40 s late, so that at 13:37 it has just left Hallertor |
 | `moment.json` | the moment, the stop and the bus that the pictures follow, and what the data was made from | |
 
 ## Licences
