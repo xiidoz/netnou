@@ -10,6 +10,7 @@
 
 import { parseAddress, stopPath, wordsOf } from './address.js';
 import { APP_NAME, READMES, dayOf, formatNumber, formatTime, languagePicker, loadLanguage, pageTexts, sentInAnother, setTimeZone, t, translatePage } from './i18n.js';
+import { RAIL_MODES, namePrecedence, namedAt, placeNames, stopMark, withoutStyleStops } from './stops.js';
 import { BOARD_MAX, BOARD_SHARE, BOARD_STOPS, boardBlocks, boardQuery, boardShare, displayQuery, ledBy, readBoard, readDisplay, readStops } from './display.js';
 import { mdiAlert, mdiArrowCollapse, mdiArrowExpand, mdiChevronRight, mdiCityVariantOutline, mdiEye, mdiEyeOff, mdiFullscreen, mdiFullscreenExit, mdiMinusCircleOutline, mdiPlaylistPlus, mdiPlus } from './vendor/material-design-icons/icons.js';
 import { AttributionControl, MapLibreMap, NavigationControl } from './vendor/maplibre-gl/maplibre-gl.mjs';
@@ -20,7 +21,6 @@ import { AttributionControl, MapLibreMap, NavigationControl } from './vendor/map
 const MODES = ['subway', 'tram', 'bus', 'suburban', 'regional', 'longdistance', 'ferry', 'cable', 'other'];
 // Later entries are drawn on top: trains over trams over buses.
 const DRAW_ORDER = ['other', 'bus', 'ferry', 'cable', 'tram', 'subway', 'suburban', 'regional', 'longdistance'];
-const RAIL_MODES = ['subway', 'suburban', 'regional', 'longdistance'];
 
 // Display mode: the page without its controls, with what is shown in its
 // address (see display.js for what an address says). ASKED is what the
@@ -71,6 +71,9 @@ const LABEL_ZOOM = 12;
 // Stations appear from STATION_ZOOM (rail only) and from ALL_STATIONS_ZOOM (all).
 const STATION_ZOOM = 12;
 const ALL_STATIONS_ZOOM = 14;
+// A tap this near a stop opens it (#222): 28 px across, which a finger finds.
+// Where it hits a vehicle as well, the vehicle wins (hitTest).
+const STOP_HIT_PX = 14;
 // Delay classes in seconds; the legend is made from them. A delay belongs to
 // the class of the whole minutes it is shown as: what reads "+2" is "from 2 min".
 const DELAY_EARLY_S = -60; // ahead of the timetable
@@ -275,7 +278,7 @@ let colors = {};
 function readColors() {
   const style = getComputedStyle(document.documentElement);
   const get = (name) => style.getPropertyValue(name).trim();
-  colors = { mode: {}, delay: {}, letters: get('--letters'), text: get('--text'), bg: get('--bg'), border: get('--border'), accent: get('--accent'), muted: get('--text-muted'), veil: get('--veil'), veilLine: get('--veil-line'), location: get('--location') };
+  colors = { mode: {}, delay: {}, letters: get('--letters'), stopEdge: get('--stop-edge'), text: get('--text'), bg: get('--bg'), border: get('--border'), accent: get('--accent'), muted: get('--text-muted'), veil: get('--veil'), veilLine: get('--veil-line'), location: get('--location') };
   for (const mode of DRAW_ORDER) colors.mode[mode] = get(`--mode-${mode}`);
   for (const cls of ['early', 'ok', 'minor', 'major', 'severe', 'none']) colors.delay[cls] = get(`--delay-${cls}`);
 }
@@ -618,6 +621,53 @@ function drawFlag(x, y, flag) {
   ctx.fillText(flag.text, x + w / 2, y + 6.5);
 }
 
+/**
+ * The mark of a stop: a white pill with a dot in the colour of each kind that
+ * calls there (stopMark), the same in both themes, as the vehicles keep their
+ * colours. Its size, as stopMark gives it.
+ */
+function drawStop(x, y, modes, big) {
+  const kinds = MODES.filter((mode) => modes.includes(mode));
+  const mark = stopMark(kinds.length, big);
+  roundedBox(x - mark.w / 2, y - mark.h / 2, mark.w, mark.h, mark.corner);
+  ctx.fillStyle = '#fff';
+  ctx.fill();
+  ctx.strokeStyle = colors.stopEdge;
+  ctx.lineWidth = 1.5;
+  ctx.stroke();
+  kinds.forEach((mode, i) => {
+    ctx.beginPath();
+    ctx.arc(x + mark.dots[i][0], y + mark.dots[i][1], mark.dot, 0, 2 * Math.PI);
+    ctx.fillStyle = colors.mode[mode] ?? colors.mode.other;
+    ctx.fill();
+  });
+  return mark;
+}
+
+/**
+ * An open stop: its departures as they came (the answer of api/departures, or
+ * what a board keeps of a further stop), its id and the kinds that call
+ * there – as its station on the map has them, else as its departures say.
+ */
+function openStop(place) {
+  const data = place.departures && !Array.isArray(place.departures) ? place.departures : place;
+  const station = state.stations.find((each) => each.id === data.id);
+  if (station) return { id: data.id, modes: station.modes };
+  const seen = new Set((data.departures ?? []).map((departure) => departure.mode));
+  return { id: data.id, modes: MODES.filter((mode) => seen.has(mode)) };
+}
+
+// The widths of the names of stops, in the font they are drawn in (draw), measured once each.
+const nameWidths = new Map();
+function nameWidth(name) {
+  let width = nameWidths.get(name);
+  if (width === undefined) {
+    width = ctx.measureText(name).width;
+    nameWidths.set(name, width);
+  }
+  return width;
+}
+
 function stationShown(station, zoom) {
   if (zoom >= ALL_STATIONS_ZOOM) return station.modes.some((mode) => state.enabled.has(mode));
   if (zoom >= STATION_ZOOM) return station.modes.some((mode) => RAIL_MODES.includes(mode) && state.enabled.has(mode));
@@ -679,33 +729,63 @@ function draw() {
     ctx.stroke(edge);
   }
 
-  // stations
-  const stationRadius = zoom >= 15 ? 4 : 3;
-  ctx.fillStyle = colors.bg;
-  ctx.strokeStyle = colors.muted;
-  ctx.lineWidth = 1.5;
+  // Stops (#222): each a pill with the dots of its kinds (drawStop), and its
+  // name beside it from the zoom namedAt says, where there is room. Under the
+  // vehicles, which may stand on them.
+  const big = zoom >= 15;
+  const marks = [];
   for (const station of state.stations) {
     if (!stationShown(station, zoom)) continue;
     const [x, y] = project(station.lat, station.lon);
     if (!onScreen(x, y)) continue;
-    ctx.beginPath();
-    ctx.arc(x, y, stationRadius, 0, 2 * Math.PI);
-    ctx.fill();
-    ctx.stroke();
-    hits.push({ x, y, r: stationRadius + 5, station });
+    marks.push({ x, y, ...drawStop(x, y, station.modes, big), id: station.id, name: station.name, modes: station.modes });
+    hits.push({ x, y, r: STOP_HIT_PX, station });
   }
-  // the station whose departures are open, at any zoom, and the further stops of its board
+  // The station whose departures are open, at any zoom, and the further stops
+  // of its board: on top of the others, with a ring in the accent colour, as
+  // the chosen vehicle has one in its own colour, and with their names.
+  const open = [];
   if (selection?.type === 'station' && selection.data?.lat !== undefined) {
     const further = state.board === null ? [] : state.extra.map((stop) => boardStopData.get(stop.path)).filter((place) => place && !place.gone);
-    ctx.strokeStyle = colors.accent;
-    ctx.lineWidth = 3;
     for (const place of [selection.data, ...further]) {
       const [x, y] = project(place.lat, place.lon);
-      ctx.beginPath();
-      ctx.arc(x, y, stationRadius + 3, 0, 2 * Math.PI);
-      ctx.fill();
+      const { id, modes } = openStop(place);
+      const mark = stopMark(MODES.filter((mode) => modes.includes(mode)).length, big);
+      // (the outline of the pill moved out by RING_GAP, with white edges, as drawRing has it)
+      roundedBox(x - mark.w / 2 - RING_GAP, y - mark.h / 2 - RING_GAP, mark.w + 2 * RING_GAP, mark.h + 2 * RING_GAP, mark.corner + RING_GAP);
+      ctx.strokeStyle = '#fff';
+      ctx.lineWidth = RING_WIDTH + 2 * RING_EDGE;
       ctx.stroke();
+      ctx.strokeStyle = colors.accent;
+      ctx.lineWidth = RING_WIDTH;
+      ctx.stroke();
+      drawStop(x, y, modes, big);
+      open.push({ x, y, ...mark, id, name: place.name, modes, open: true, space: RING_GAP + RING_WIDTH + 4 });
     }
+  }
+  const openIds = new Set(open.map((mark) => mark.id));
+  const stopNames = [...open, ...marks.filter((mark) => !openIds.has(mark.id) && namedAt(mark.modes, zoom))].sort(namePrecedence);
+  if (stopNames.length) {
+    ctx.font = '600 12px system-ui, sans-serif';
+    for (const mark of stopNames) mark.width = nameWidth(mark.name);
+    // (clear of every mark, an open one with its ring)
+    const obstacles = [...marks, ...open].map(({ x, y, w, h, open: ringed }) => {
+      const out = ringed ? RING_GAP + RING_WIDTH : 0;
+      return [x - w / 2 - out, y - h / 2 - out, w + 2 * out, h + 2 * out];
+    });
+    const lefts = placeNames(stopNames, obstacles);
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'middle';
+    ctx.lineJoin = 'round';
+    ctx.lineWidth = 3.5;
+    ctx.strokeStyle = colors.bg;
+    ctx.fillStyle = colors.text;
+    stopNames.forEach((mark, i) => {
+      if (lefts[i] === null) return;
+      // (a halo in the colour of the ground, so that the name reads on any map)
+      ctx.strokeText(mark.name, lefts[i], mark.y + 0.5);
+      ctx.fillText(mark.name, lefts[i], mark.y + 0.5);
+    });
   }
 
   // The route of the selected trip, or that of the selected line: where its
@@ -3547,7 +3627,7 @@ async function loadArea() {
   // Which map, and whom to name for the data, are settings of the server. A
   // style names its sources itself; what the server adds for the map and for
   // the data is HTML and may contain links.
-  map.setStyle(area.styleUrl ?? rasterStyle(area.tileUrl), { transformStyle: (previous, next) => localizedStyle(next) });
+  map.setStyle(area.styleUrl ?? rasterStyle(area.tileUrl), { transformStyle: (previous, next) => withoutStyleStops(localizedStyle(next)) });
   // The version goes into one credit with the data: MapLibre puts the credits
   // in the order of their length, and this way the version is always the last
   // thing in the corner, with a marker or without.

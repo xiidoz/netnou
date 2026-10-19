@@ -21,6 +21,7 @@ const SHELL = [
   'i18n.js',
   'search.js',
   'search-worker.js',
+  'stops.js',
   'locales/de.js',
   'locales/en.js',
   'favicon.svg',

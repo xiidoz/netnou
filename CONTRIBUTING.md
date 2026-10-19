@@ -49,6 +49,7 @@ public/
   first.js            light or dark, and the card, before anything is drawn
   address.js          the addresses of stops, lines and trips
   display.js          what the address of a board or a display on a wall says
+  stops.js            the stops on the map: their marks, their names, the style without its own
   search.js           finding towns, stops and lines by name
   search-worker.js    the thread it runs in
   i18n.js, locales/   texts per language

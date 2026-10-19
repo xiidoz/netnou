@@ -462,6 +462,11 @@ What to know when choosing one:
   and most other providers use, prefer the English name of a place. The page
   replaces it by the name in the visitor's language where OpenStreetMap knows
   one, and by the local name otherwise. Other styles are shown as they are.
+- **Stops.** The page draws every stop of the timetable itself, with its
+  name. In styles for tiles in the OpenMapTiles scheme it leaves out the
+  style's own stops (the places of classes `bus` and `railway`): they would
+  lie beside the page's and could not be tapped. Other styles, and raster
+  tiles, keep theirs.
 - **A key in the URL** is sent to every visitor's browser, like the style
   itself. Providers let you restrict such a key to your domain.
 
