@@ -41,6 +41,9 @@
   --delay-major-text: var(--delay-major);
   --delay-severe-text: var(--delay-severe);
 
+  /* the edge of a stop on the map, a white pill: the same in both themes, as the vehicles keep their colours (#222) */
+  --stop-edge: #1b1f24;
+
   /* the visitor's own position; lighter than the blue of the U-Bahn, which may be right under it */
   --location: #1a8ef0;
 

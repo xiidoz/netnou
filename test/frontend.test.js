@@ -453,7 +453,8 @@ test('the mode ids of the server, the page, the style sheet and the texts are th
   assert.deepEqual(arrayIn(app, 'DRAW_ORDER').sort(), expected, 'DRAW_ORDER in app.js');
   assert.deepEqual([...new Set([...read('style.css').matchAll(/^\s*--mode-([a-z]+):/gm)].map((match) => match[1]))].sort(), expected, '--mode-* in style.css');
   assert.deepEqual(Object.keys(en).filter((key) => key.startsWith('mode.')).map((key) => key.slice('mode.'.length)).sort(), expected, 'mode.* in locales/en.js');
-  for (const name of ['MODES', 'RAIL_MODES']) for (const mode of arrayIn(app, name)) assert.ok(MODES.includes(mode), `${mode} in ${name} of app.js`);
+  for (const mode of arrayIn(app, 'MODES')) assert.ok(MODES.includes(mode), `${mode} in MODES of app.js`);
+  for (const mode of arrayIn(read('stops.js'), 'RAIL_MODES')) assert.ok(MODES.includes(mode), `${mode} in RAIL_MODES of stops.js`);
 });
 
 // The button for the visitor's own position is the page's, its icons are the

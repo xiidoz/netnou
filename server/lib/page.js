@@ -51,6 +51,7 @@ export const PAGE_MODULES = [
   'locales/en.js',
   'display.js',
   'address.js',
+  'stops.js',
   'vendor/material-design-icons/icons.js',
   'vendor/maplibre-gl/maplibre-gl.mjs',
   'vendor/maplibre-gl/maplibre-gl-shared.mjs',
