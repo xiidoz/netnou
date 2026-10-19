@@ -33,8 +33,16 @@ const map = path.join(root, 'docs', 'pictures', 'map.webp');
 const favicon = path.join(root, 'public', 'favicon.svg');
 const out = path.join(root, 'docs', 'social-preview.png');
 
-// The colours of the page (public/style.css); the dots are those of the modes of transport.
-const MODES = ['#0b5cad', '#d42a2a', '#7b3fa0', '#1e8a3c', '#4d5a66', '#d97200'];
+// The dots are the modes of transport of the default area, in the colours the
+// page has for them in the light scheme: read from public/style.css, so that
+// they follow it.
+const css = fs.readFileSync(path.join(root, 'public', 'style.css'), 'utf8');
+const light = css.slice(0, css.indexOf(':root[data-theme="dark"]'));
+const MODES = ['subway', 'tram', 'bus', 'suburban', 'regional', 'longdistance'].map((mode) => {
+  const color = new RegExp(`--mode-${mode}: (#[0-9a-f]{6});`).exec(light)?.[1];
+  if (!color) throw new Error(`public/style.css has no colour --mode-${mode}`);
+  return color;
+});
 const html = `<!DOCTYPE html>
 <meta charset="utf-8">
 <style>
