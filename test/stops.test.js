@@ -22,16 +22,16 @@ test('a stop is a pill with a dot for each kind, in rows of three', () => {
   assert.deepEqual([stopMark(0, true).w, stopMark(0, true).dots.length], [13, 0]);
 });
 
-test('stations of rail carry their names from zoom 14, all stops from 16', () => {
+test('stations of rail carry their names from zoom 14, all stops from 15', () => {
   assert.equal(RAIL_NAME_ZOOM, 14);
-  assert.equal(NAME_ZOOM, 16);
+  assert.equal(NAME_ZOOM, 15);
   for (const modes of [['subway'], ['tram', 'suburban'], ['regional'], ['bus', 'longdistance']]) {
     assert.ok(!namedAt(modes, 13.9), modes.join());
     assert.ok(namedAt(modes, 14), modes.join());
   }
   for (const modes of [['bus'], ['tram', 'bus'], ['ferry']]) {
-    assert.ok(!namedAt(modes, 15.9), modes.join());
-    assert.ok(namedAt(modes, 16), modes.join());
+    assert.ok(!namedAt(modes, 14.9), modes.join());
+    assert.ok(namedAt(modes, 15), modes.join());
   }
 });
 

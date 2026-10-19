@@ -9,7 +9,7 @@ export const RAIL_MODES = ['subway', 'suburban', 'regional', 'longdistance'];
 // From these zooms stops carry their names: stations of rail from the first,
 // all from the second.
 export const RAIL_NAME_ZOOM = 14;
-export const NAME_ZOOM = 16;
+export const NAME_ZOOM = 15;
 // How high a name is taken to be, and how far it is from its stop.
 const NAME_HEIGHT = 16;
 const NAME_SPACE = 5;
