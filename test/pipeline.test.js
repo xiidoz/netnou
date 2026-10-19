@@ -6,7 +6,7 @@ import { after, before, test } from 'node:test';
 import { Area, scopeId } from '../server/lib/area.js';
 import { eachLine, parseCsvLine } from '../server/lib/csv.js';
 import { readDataset, writeDataset } from '../server/lib/dataset.js';
-import { buildDataset } from '../server/lib/importer.js';
+import { buildDataset, tidyName } from '../server/lib/importer.js';
 import { decodeFeed } from '../server/lib/pb.js';
 import { agreedDelay, buildRealtime } from '../server/lib/realtime.js';
 import { addDays, localDate, serviceDayStart, setTimeZone, weekday } from '../server/lib/time.js';
@@ -223,6 +223,43 @@ test('importer copes with a byte order mark, rows out of order, missing times an
   // realtime updates are matched by stop_sequence, not by position
   const rt = buildRealtime(other, decodeFeed(encodeFeed({ timestamp: 1, tripUpdates: [{ tripId: 'T1', startDate: DAY, stops: [{ seq: 20, stopId: 'B', arr: { delay: 60 } }] }] })));
   assert.deepEqual(rt.byDate.get(DAY).get(t1).arrDelay, [null, 60, 60]);
+});
+
+test('destinations and stop names lose the marks a sign turns into a line break or a gap, and nothing else (#223)', () => {
+  const tidied = [
+    // a word broken at the end of a line: one again, with its hyphen where a capital goes on
+    ['Meistersinger- _halle', 'Meistersingerhalle'],
+    ['Kriegsopfer- _siedlung', 'Kriegsopfersiedlung'],
+    ['Hammerstatt-\\nIndustriegebiet Nord', 'Hammerstatt-Industriegebiet Nord'],
+    ['Ernst- _Reuter-Platz', 'Ernst-Reuter-Platz'],
+    // a dash with a space before it parts names
+    ['Z O H - Hbf. -\\nHohe Warte', 'Z O H - Hbf. - Hohe Warte'],
+    // "_", a written "\n" or "\t": a gap, and spaces count once
+    ['Großreuth _bei Schweinau', 'Großreuth bei Schweinau'],
+    ['Limburg ZOB, Süd Bussteig_A', 'Limburg ZOB, Süd Bussteig A'],
+    ['Fahrt_endet_hier', 'Fahrt endet hier'],
+    ['Forchheim ZOB/Bhf.\\nüber Heroldsbach', 'Forchheim ZOB/Bhf. über Heroldsbach'],
+    ['First\\nBahnhof\\tLotzenäcker', 'First Bahnhof Lotzenäcker'],
+    ['Erlangen Hauptbahnhof             29', 'Erlangen Hauptbahnhof 29'],
+    ['_', ''],
+    // what is no such mark stays as the operator wrote it
+    ['Bretzenheim, Lindenm.\\Natursch', 'Bretzenheim, Lindenm.\\Natursch'],
+    ['Kranichstein Bahnhof | Haltestelle 0 | WendeschleifeRechtesG', 'Kranichstein Bahnhof | Haltestelle 0 | WendeschleifeRechtesG'],
+    ['Spalt- Fünfbronn', 'Spalt- Fünfbronn'],
+  ];
+  for (const [text, tidy] of tidied) assert.equal(tidyName(text), tidy, text);
+});
+
+test('the import keeps destinations and stop names so (#223)', async () => {
+  const tidy = await importFeed({
+    'stops.txt': FEED['stops.txt'].replace('Gamma,,C', 'Gamma_Nord,,C'),
+    'trips.txt': 'route_id,service_id,trip_id,trip_headsign\nR1,DAILY,T1,\nR2,DAILY,T2,Fern  Süd\nR3,DAILY,T3,\nR1,FRI,T4,\n',
+    'stop_times.txt': FEED['stop_times.txt'].replaceAll('"Gamma, Endstation"', 'Gamma End- _station').replaceAll(',Fern Süd,', ',,'),
+  }, 'tidy.zip');
+  assert.equal(tidy.stops.name[tidy.stopIndex.get('C')], 'Gamma Nord');
+  assert.equal(tidy.trip('T1', DAY, null).to, 'Gamma Endstation');
+  assert.equal(tidy.trip('T1', DAY, null).stops[2].name, 'Gamma Nord');
+  assert.deepEqual(tidy.departures('B', at('09:59'), null).departures.map((d) => d.to), ['Fern Süd', 'Gamma Endstation']);
 });
 
 test('a trip goes where its operator says at each stop, and what is said at its last stop is no destination (#225)', async () => {
