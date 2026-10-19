@@ -8,6 +8,29 @@ This file is written by
 messages when a release is made. Do not edit it by hand; see
 [Releases](CONTRIBUTING.md#releases).
 
+## [0.17.0](https://github.com/xiidoz/netnou/compare/v0.16.1...v0.17.0) (2026-10-19)
+
+
+### Features
+
+* **page:** bring the vehicle of a tapped departure into view ([#228](https://github.com/xiidoz/netnou/issues/228)) ([7f7aa7c](https://github.com/xiidoz/netnou/commit/7f7aa7cf0826174ffedf51738ce0e981d13902bc))
+* **page:** lead the links to the software to its README, in German for a German page ([#218](https://github.com/xiidoz/netnou/issues/218)) ([a6c281b](https://github.com/xiidoz/netnou/commit/a6c281b182bfacb4274f9fae4a909834425c03c0))
+* **page:** name every stop on the map from zoom 15 ([#236](https://github.com/xiidoz/netnou/issues/236)) ([b326b24](https://github.com/xiidoz/netnou/commit/b326b245b3f07fd133735a6859a16d91ee2ac771))
+* **page:** say what the map can do, and give one tip on landing at a stop ([#229](https://github.com/xiidoz/netnou/issues/229)) ([53bbf3f](https://github.com/xiidoz/netnou/commit/53bbf3fbe0fd0058f6ea4cf87bea584fd3af01e6)), closes [#226](https://github.com/xiidoz/netnou/issues/226)
+* **page:** stops on the map as pills with the dots of their kinds, named, easier to tap ([#235](https://github.com/xiidoz/netnou/issues/235)) ([60e1d52](https://github.com/xiidoz/netnou/commit/60e1d52bf5ac7cd8272838126fc8cbc2841bfc87)), closes [#222](https://github.com/xiidoz/netnou/issues/222)
+* **page:** the search in sight on a phone, and one setting for the delays on the map ([#233](https://github.com/xiidoz/netnou/issues/233)) ([04c287f](https://github.com/xiidoz/netnou/commit/04c287f0d1c06a6fa818f37afa0c39b5eb09d3f7)), closes [#220](https://github.com/xiidoz/netnou/issues/220)
+
+
+### Bug Fixes
+
+* **page:** every line's name at 4.5:1 to its badge, in the details and on the map ([#214](https://github.com/xiidoz/netnou/issues/214)) ([ed749b1](https://github.com/xiidoz/netnou/commit/ed749b1eec55114b8f2c33e25f703a7e51862b09)), closes [#203](https://github.com/xiidoz/netnou/issues/203)
+* **page:** name every icon button in a tooltip as well ([#217](https://github.com/xiidoz/netnou/issues/217)) ([5b4c126](https://github.com/xiidoz/netnou/commit/5b4c12689be655051f32120e9b6964e467a5c7ef))
+* **page:** say that the positions come without GPS, and that the delays are what is live ([#227](https://github.com/xiidoz/netnou/issues/227)) ([6978b61](https://github.com/xiidoz/netnou/commit/6978b6181f951d367371ba364620911a26d77e89))
+* **page:** white letters on every colour of the map, each colour dark enough for them ([#230](https://github.com/xiidoz/netnou/issues/230)) ([59a552f](https://github.com/xiidoz/netnou/commit/59a552fe39a4aa5e589d57f7c1134c1c13b873da)), closes [#215](https://github.com/xiidoz/netnou/issues/215)
+* **server:** send odd forms of an address on, and show a page where nothing is ([#213](https://github.com/xiidoz/netnou/issues/213)) ([b8ce283](https://github.com/xiidoz/netnou/commit/b8ce283a59f9f9f0cffcacf509f04edb1bf116d9)), closes [#198](https://github.com/xiidoz/netnou/issues/198)
+* **timetable:** destinations and stop names without the line-break marks of signs ([#237](https://github.com/xiidoz/netnou/issues/237)) ([ee84626](https://github.com/xiidoz/netnou/commit/ee8462679545f8a499bcbd58473f076a9343308d)), closes [#223](https://github.com/xiidoz/netnou/issues/223)
+* **timetable:** the destination of a trip as the operator gives it at each stop ([#231](https://github.com/xiidoz/netnou/issues/231)) ([f312dac](https://github.com/xiidoz/netnou/commit/f312dacfe9b8f0e7c39be1cae86adf3161695a5b)), closes [#225](https://github.com/xiidoz/netnou/issues/225)
+
 ## [0.16.1](https://github.com/xiidoz/netnou/compare/v0.16.0...v0.16.1) (2026-10-18)
 
 
