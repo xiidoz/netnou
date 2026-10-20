@@ -10,7 +10,7 @@ export const NETS = ['road', 'rail', 'subway', 'tram', 'ferry', 'cable'];
 // change: the cached networks are then built again from a fresh OSM download
 // instead of being used for up to NETNOU_OSM_MAX_AGE_DAYS more, and routes
 // found on older ones are found anew (shapes.js, feed.js).
-export const NETWORKS_VERSION = 6;
+export const NETWORKS_VERSION = 7;
 
 const M_PER_DEG = 111_320;
 
@@ -70,16 +70,20 @@ export function classifyWay(tags) {
   // Germany all of them have the route type of a funicular. Narrow gauge is
   // theirs whole, as the parts of a rack railway without a rack (rack=no)
   // are; a rack on the track of a tram or a train makes that track theirs.
+  // Narrow gauge without a rack is a train's as well, of the route type of
+  // rail, as the Harzer Schmalspurbahnen are in the feed (#248).
   const rack = tags.rack !== undefined && tags.rack !== 'no';
   if (railway === 'monorail' || railway === 'funicular' || railway === 'narrow_gauge' || AERIALWAYS.includes(tags.aerialway)
     || (rack && (railway === 'rail' || railway === 'light_rail' || railway === 'tram'))) {
-    return { net: 'cable', factor: SERVICE_FACTOR[tags.service] ?? 1, dir: BOTH };
+    const kind = { net: 'cable', factor: SERVICE_FACTOR[tags.service] ?? 1, dir: BOTH };
+    return railway === 'narrow_gauge' && !rack ? { ...kind, shared: ['rail'] } : kind;
   }
 
   if (railway === 'rail' || railway === 'light_rail' || railway === 'subway' || railway === 'tram') {
     const factor = SERVICE_FACTOR[tags.service] ?? 1;
     if (railway === 'subway') return { net: 'subway', factor, dir: onewayDirection(tags, false), shared: ['tram'] };
-    if (railway === 'tram') return { net: 'tram', factor, dir: onewayDirection(tags, false), shared: ['subway'] };
+    // (the tracks of trams carry tram-trains too, whose lines are of the route type of rail: Karlsruhe, Kassel, #248)
+    if (railway === 'tram') return { net: 'tram', factor, dir: onewayDirection(tags, false), shared: ['subway', 'rail'] };
     // Mainline tracks are signalled for a usual direction but can be used both ways.
     if (railway === 'light_rail') return { net: 'rail', factor, dir: BOTH, shared: ['subway', 'tram'] };
     return { net: 'rail', factor, dir: BOTH };
@@ -460,6 +464,10 @@ export class Network {
    *   nearest, up to maxCandidates of them, and on the nearest shared ones:
    *   in a large station the track a train takes need not be among the
    *   nearest few edges. Null: the nearest maxCandidates
+   * @param options.sharedLast for trains (#248): a route keeps to tracks of
+   *   the network's own kind where it can (route with `own`); tracks it shares
+   *   (those of trams, narrow gauge) are for where it cannot, as the street
+   *   tracks of tram-trains are, and are no short cut for every other train
    * @param options.maxTurn for tracks (#243): how many degrees a route may
    *   turn at a node between two stops. A train goes through a switch only in
    *   the direction it faces; going into it on one branch and out on the other
@@ -467,7 +475,7 @@ export class Network {
    *   edge to edge and knows which way it came. Null: any way that meets a
    *   node may come next, as on roads
    */
-  constructor(graph, { originLat, snapRadius, snapPenalty, maxCandidates = 6, snapSpread = null, snapAt = null, maxTurn = null }) {
+  constructor(graph, { originLat, snapRadius, snapPenalty, maxCandidates = 6, snapSpread = null, snapAt = null, maxTurn = null, sharedLast = false }) {
     this.snapRadius = snapRadius;
     this.snapPenalty = snapPenalty;
     this.maxCandidates = maxCandidates;
@@ -504,6 +512,7 @@ export class Network {
     // Adjacency in both orientations: `out` to search forwards from a stop,
     // `in` to search backwards from the stop a vehicle arrives at.
     this.turnCos = maxTurn === null ? null : Math.cos((maxTurn * Math.PI) / 180);
+    this.sharedLast = sharedLast;
     this.out = this.adjacency(FORWARD, BACKWARD);
     this.in = this.adjacency(BACKWARD, FORWARD);
 
@@ -569,6 +578,7 @@ export class Network {
   // allows `viaA`, and at `b` if it allows `viaB`. Where turns are limited,
   // also the node each arc leaves (`from`) and the arc of each edge from a to
   // b and from b to a (`ab`, `ba`; -1 where it may not be used that way).
+  // Where shared tracks come last, whether each arc is on one (`shared`).
   adjacency(viaA, viaB) {
     const { a, b, dir, cost, nodeCount } = this;
     const arcs = this.turnCos !== null;
@@ -582,21 +592,24 @@ export class Network {
     const to = new Int32Array(start[nodeCount]);
     const arcCost = new Float64Array(start[nodeCount]);
     const from = arcs ? new Int32Array(start[nodeCount]) : null;
+    const shared = this.sharedLast ? new Uint8Array(start[nodeCount]) : null;
     const ab = arcs ? new Int32Array(a.length).fill(-1) : null;
     const ba = arcs ? new Int32Array(a.length).fill(-1) : null;
     for (let e = 0; e < a.length; e++) {
       if (dir[e] & viaA) {
         if (arcs) { from[fill[a[e]]] = a[e]; ab[e] = fill[a[e]]; }
+        if (shared && dir[e] & SHARED) shared[fill[a[e]]] = 1;
         to[fill[a[e]]] = b[e];
         arcCost[fill[a[e]]++] = cost[e];
       }
       if (dir[e] & viaB) {
         if (arcs) { from[fill[b[e]]] = b[e]; ba[e] = fill[b[e]]; }
+        if (shared && dir[e] & SHARED) shared[fill[b[e]]] = 1;
         to[fill[b[e]]] = a[e];
         arcCost[fill[b[e]]++] = cost[e];
       }
     }
-    return { start, to, cost: arcCost, from, ab, ba };
+    return { start, to, cost: arcCost, from, ab, ba, shared };
   }
 
   toXY(lat, lon) {
@@ -643,7 +656,7 @@ export class Network {
     const ofOwn = spread === null ? own.slice(0, this.maxCandidates) : own.filter((c) => c.penalty <= spread).slice(0, this.maxCandidates);
     const shared = found.filter((c) => c.shared);
     if (!shared.length) return ofOwn;
-    return [...ofOwn, ...shared.slice(0, spread === null ? this.maxCandidates : SHARED_CANDIDATES)].sort((p, q) => p.penalty - q.penalty);
+    return [...ofOwn, ...shared.slice(0, this.snapSpread === null ? this.maxCandidates : SHARED_CANDIDATES)].sort((p, q) => p.penalty - q.penalty);
   }
 
   // Seeds for a search leaving (forwards) or reaching (backwards) a candidate:
@@ -659,6 +672,19 @@ export class Network {
       if (this.dir[e] & toA) seeds.push({ node: this.a[e], cost: c.penalty + t * this.cost[e], candidate: i, edge: e, ab: false });
     });
     return seeds;
+  }
+
+  /**
+   * Whether a stop, by its candidates, is one on tracks of the network's own
+   * kind: the nearest of those no more than snapSpread further away than the
+   * nearest it shares (sharedLast). A station of trains is, with the tracks of
+   * trams before it or not; a stop of tram-trains in a street is not, even with
+   * a railway some hundred metres away.
+   */
+  onOwn(candidates) {
+    const own = candidates.find((c) => !c.shared);
+    const shared = candidates.find((c) => c.shared);
+    return Boolean(own) && (!shared || own.penalty <= shared.penalty + (this.snapSpread ?? 0) * this.snapPenalty);
   }
 
   /** Whether a route may go on from arc k1 of `adj` to arc k2, which leaves the node k1 reaches (maxTurn). */
@@ -678,7 +704,7 @@ export class Network {
    * those that it may turn into. `visit(node, g, arc)` is called with the arc
    * the node is reached on; afterwards `traceArcs` follows that arc back.
    */
-  searchArcs(adj, seeds, heuristic, maxCost, visit) {
+  searchArcs(adj, seeds, heuristic, maxCost, visit, own = false) {
     const { arcDist: dist, arcPrev: prev, arcStamp: stamp, heap } = this;
     const q = ++this.query;
     heap.size = 0;
@@ -698,7 +724,7 @@ export class Network {
       if (heap.topKey > g + (heuristic ? heuristic(u) : 0) + 1e-6) continue;
       if (g > maxCost || visit(u, g, k)) return;
       for (let k2 = adj.start[u]; k2 < adj.start[u + 1]; k2++) {
-        if (!this.turns(adj, k, k2)) continue;
+        if ((own && adj.shared[k2]) || !this.turns(adj, k, k2)) continue;
         const ng = g + adj.cost[k2];
         if (stamp[k2] !== q || ng < dist[k2]) {
           stamp[k2] = q;
@@ -726,7 +752,7 @@ export class Network {
    * node and ends the search by returning true. Afterwards `trace` follows the
    * found path back to its seed.
    */
-  search(adj, seeds, heuristic, maxCost, visit) {
+  search(adj, seeds, heuristic, maxCost, visit, own = false) {
     const { dist, prev, stamp, heap } = this;
     const q = ++this.query;
     heap.size = 0;
@@ -745,6 +771,7 @@ export class Network {
       if (heap.topKey > g + (heuristic ? heuristic(u) : 0) + 1e-6) continue;
       if (g > maxCost || visit(u, g)) return;
       for (let k = adj.start[u]; k < adj.start[u + 1]; k++) {
+        if (own && adj.shared[k]) continue;
         const v = adj.to[k];
         const ng = g + adj.cost[k];
         if (stamp[v] !== q || ng < dist[v]) {
@@ -812,10 +839,17 @@ export class Network {
    *   the network that A is not connected to.
    * @param turning false: any way that meets a node may come next, also where
    *   the network limits its turns (maxTurn)
+   * @param own on tracks of the network's own kind alone, where shared ones
+   *   come last (sharedLast)
    * @returns flat [x0, y0, x1, y1, …] in metres, or null if there is no route
    *   shorter than maxLength.
    */
-  route(from, to, maxLength, towards = null, turning = true) {
+  route(from, to, maxLength, towards = null, turning = true, own = false) {
+    own &&= this.sharedLast;
+    if (own) {
+      from = from.filter((c) => !c.shared);
+      to = to.filter((c) => !c.shared);
+    }
     let best = Infinity;
     let bestPath = null;
 
@@ -860,8 +894,8 @@ export class Network {
       }
       return false;
     };
-    if (turning) this.searchArcs(this.out, this.seeds(from, false), least, maxLength * 2, visit);
-    else this.search(this.out, this.seeds(from, false), least, maxLength * 2, visit);
+    if (turning) this.searchArcs(this.out, this.seeds(from, false), least, maxLength * 2, visit, own);
+    else this.search(this.out, this.seeds(from, false), least, maxLength * 2, visit, own);
 
     if (bestNode >= 0) {
       const { nodes, candidate } = turning ? this.traceArcs(this.out, bestArc) : this.trace(bestNode);
@@ -884,9 +918,12 @@ export class Network {
    * best for it (see AHEAD), out of those on a way that, with the straight
    * line after it, is no longer than maxLength.
    * @param arriving true if the vehicle comes from the far stop
-   * @param turning as for route
+   * @param turning, own as for route
    */
-  routeBeyond(candidates, farX, farY, inside, arriving, maxLength, turning = true) {
+  routeBeyond(candidates, farX, farY, inside, arriving, maxLength, turning = true, own = false) {
+    own &&= this.sharedLast;
+    if (own) candidates = candidates.filter((c) => !c.shared);
+    if (!candidates.length) return null;
     const { x, y } = this;
     const toFar = (u) => Math.hypot(x[u] - farX, y[u] - farY);
     let exit = -1;
@@ -907,8 +944,8 @@ export class Network {
       }
       return --budget === 0;
     };
-    if (turning) this.searchArcs(adj, this.seeds(candidates, arriving), toFar, Infinity, visit);
-    else this.search(adj, this.seeds(candidates, arriving), toFar, Infinity, visit);
+    if (turning) this.searchArcs(adj, this.seeds(candidates, arriving), toFar, Infinity, visit, own);
+    else this.search(adj, this.seeds(candidates, arriving), toFar, Infinity, visit, own);
     if (exit < 0) return null;
 
     const { nodes, candidate } = turning ? this.traceArcs(adj, exit) : this.trace(exit);

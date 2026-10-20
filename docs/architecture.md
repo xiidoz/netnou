@@ -308,7 +308,16 @@ the default area that is about 60,000 distinct hops, for all of Germany
   Stuttgart, Frankfurt, Düsseldorf and the Ruhr is U-Bahn in the feed, that of
   Cologne, Bonn and Bielefeld is tram, and both run on tracks that
   OpenStreetMap has as light rail, subway and tram
-  ([#128](https://github.com/xiidoz/netnou/issues/128)). Roads carry a
+  ([#128](https://github.com/xiidoz/netnou/issues/128)). Trains share the
+  tracks of trams and narrow gauge without a rack in the same way, and take
+  them only where a hop has no route on tracks of rail, or no stop on them:
+  the tram-trains in the streets of Karlsruhe, Kassel and Chemnitz, and the
+  narrow gauge of the Harz and of Saxony, whose lines the feed gives the
+  route type of rail ([#248](https://github.com/xiidoz/netnou/issues/248)).
+  A stop is on tracks of rail where the nearest of them is no more than
+  100 m further away than the nearest track it shares: a station of trains
+  with the tracks of trams before it is, a stop of tram-trains in a street
+  with a railway some hundred metres away is not. Roads carry a
   cost factor so that buses prefer main roads, and respect one-way streets,
   access restrictions and the exemptions for buses. The networks are kept in
   `osm-networks.bin`, as columns that are read again in a second, and built
@@ -366,9 +375,9 @@ the default area that is about 60,000 distinct hops, for all of Germany
   ([#243](https://github.com/xiidoz/netnou/issues/243)). Where no route keeps
   to that, the train does turn back between two stops, at a station it
   passes without a stop, or a corner is mapped sharper than it is: the route
-  is then found as on roads. In all of Germany the routes of 22 of the
-  19,331 hops of trains with a route still turn back, and of 7 of trams,
-  where 486 and 24 did before.
+  is then found as on roads. In all of Germany (feed of 20 October 2026)
+  the routes of 11 of the 20,294 hops of trains with a route still turn
+  back, and of 7 of trams, where 484 and 19 did before.
 - **Plausibility.** A path much longer than the straight line (more than 2 to
   2.5 times plus a few hundred metres, depending on the network; for trains
   3 km, as they leave a terminus the way they face and come round: München
@@ -386,14 +395,12 @@ the default area that is about 60,000 distinct hops, for all of Germany
   tunnel of the U-Bahn.
 - **Fallback.** A hop without a path is a straight line. In October 2026 that
   was the case for about 1 % of the hops inside the default area. For all of
-  Germany it was 1.1 % of the hops on roads, 15 % on rail, 2 % of trams and
-  4 of the 2,908 hops of the U-Bahn. Of the 3,425 on rail (feed of 20 October
-  2026), 2,640 have a stop with no track of rail within 5 km: abroad, beyond
-  the extract of Germany (in Poland and the Czech Republic, Austria), and on
-  the narrow gauge of the Harz, whose tracks are of the network `cable`; 749
-  have a stop more than 400 m from one: the Harz again, and the tram-trains
-  of Karlsruhe and Kassel on the tracks of trams, which rail does not share;
-  36 have none within the limit on the length, or none at all.
+  Germany it was 1.1 % of the hops on roads, 11 % on rail, 2 % of trams and
+  4 of the 2,908 hops of the U-Bahn. Of the 2,529 on rail (feed of 20 October
+  2026), 2,346 have a stop with no track of rail within 5 km, abroad, beyond
+  the extract of Germany (in Poland and the Czech Republic, Austria, France);
+  149 have a stop more than 400 m from one, most of them near the border too;
+  34 have none within the limit on the length, or none at all.
   `tools/check-routes.mjs` counts them, with the routes that turn back and
   those far longer than the straight line, and lists the worst.
 - **Storage.** Paths are simplified to 1.5 m accuracy and stored once per
@@ -410,8 +417,8 @@ the default area that is about 60,000 distinct hops, for all of Germany
   memory. For all of Germany it takes 8 minutes, 3 to read the extract and 5
   to route, when none of the routes are kept, and the server at most 3.3 GB:
   it holds the timetable it serves meanwhile. Routing the tracks from edge to
-  edge takes 37 seconds of that where it took 27, and 50 MB more while they
-  are routed.
+  edge, with the tracks that trains share, takes 38 seconds of that where it
+  took 27, and 0.1 GB more while they are routed.
 - **Kept from one import to the next.** A route is found again by its
   network and the places of its two stops (`KeptRoutes`), and only the hops
   that are new are routed; a hop without a route is kept as such, so that it
