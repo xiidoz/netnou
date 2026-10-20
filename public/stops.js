@@ -1,5 +1,6 @@
 // Stops on the map (#222): how large the mark of a stop is, which stops carry
-// their name at a zoom, where the names go so that none lies on another, and
+// their name at a zoom, where the names go so that none lies on another, the
+// marks of a station at its places and the lines that join them (#234), and
 // the map style without stops of its own. Without the page around it, so that
 // it can be tested as it is (test/stops.test.js); app.js draws.
 
@@ -10,6 +11,9 @@ export const RAIL_MODES = ['subway', 'suburban', 'regional', 'longdistance'];
 // all from the second.
 export const RAIL_NAME_ZOOM = 14;
 export const NAME_ZOOM = 15;
+// From this zoom a station whose modes stop at places apart (`places` in
+// api/stations) has a mark at each; below it, one at its own point.
+export const PLACES_ZOOM = 15;
 // How high a name is taken to be, and how far it is from its stop.
 const NAME_HEIGHT = 16;
 const NAME_SPACE = 5;
@@ -46,6 +50,60 @@ export function namedAt(modes, zoom) {
 export function namePrecedence(a, b) {
   const weight = (mark) => (mark.open ? 1000 : 0) + (mark.modes.some((mode) => RAIL_MODES.includes(mode)) ? 100 : 0) + mark.modes.length;
   return weight(b) - weight(a);
+}
+
+// How far apart the marks of a station's places have to be on the screen, not to be one.
+const PLACE_GAP = 6;
+
+/**
+ * The marks of a station's places on the screen: those that would touch are
+ * one, in the middle between them, with the modes of both.
+ * @param places [{ x, y, modes }] on the screen, the busiest first
+ * @param big as for stopMark
+ * @param order the modes in the order their dots have (MODES in app.js)
+ * @returns [{ x, y, modes }]
+ */
+export function mergePlaces(places, big, order) {
+  const marks = places.map((place) => ({ ...place }));
+  for (let merged = true; merged;) {
+    merged = false;
+    for (let i = 0; i < marks.length && !merged; i++) {
+      for (let j = i + 1; j < marks.length && !merged; j++) {
+        const [a, b] = [marks[i], marks[j]];
+        const [ma, mb] = [stopMark(a.modes.length, big), stopMark(b.modes.length, big)];
+        if (Math.abs(a.x - b.x) >= (ma.w + mb.w) / 2 + PLACE_GAP || Math.abs(a.y - b.y) >= (ma.h + mb.h) / 2 + PLACE_GAP) continue;
+        marks[i] = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2, modes: order.filter((mode) => a.modes.includes(mode) || b.modes.includes(mode)) };
+        marks.splice(j, 1);
+        merged = true;
+      }
+    }
+  }
+  return marks;
+}
+
+/**
+ * The lines that join the marks of one station: the shortest way that links
+ * them all (a minimum spanning tree), as pairs of their numbers.
+ * @param points [{ x, y }]
+ */
+export function joiningLines(points) {
+  const lines = [];
+  if (points.length < 2) return lines;
+  const joined = [0];
+  const rest = points.map((_, i) => i).slice(1);
+  while (rest.length) {
+    let best = null;
+    for (const a of joined) {
+      for (const b of rest) {
+        const length = Math.hypot(points[a].x - points[b].x, points[a].y - points[b].y);
+        if (!best || length < best.length) best = { a, b, length };
+      }
+    }
+    lines.push([best.a, best.b]);
+    joined.push(best.b);
+    rest.splice(rest.indexOf(best.b), 1);
+  }
+  return lines;
 }
 
 const overlaps = (a, b) => a[0] < b[0] + b[2] && b[0] < a[0] + a[2] && a[1] < b[1] + b[3] && b[1] < a[1] + a[3];

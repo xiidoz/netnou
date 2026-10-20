@@ -325,7 +325,16 @@ platforms of one stop. Does not touch the realtime feed.
 ```json
 [
   { "id": "258216", "name": "Nürnberg Tiergärtnertor", "lat": 49.45812, "lon": 11.07301, "modes": ["tram", "bus"] },
-  { "id": "435287", "name": "Nürnberg Hallertor", "lat": 49.45518, "lon": 11.07032, "modes": ["tram", "bus"] },
+  {
+    "id": "451556", "name": "Nürnberg Hbf", "lat": 49.44561, "lon": 11.08299,
+    "modes": ["subway", "tram", "bus", "suburban", "regional", "longdistance"],
+    "places": [
+      { "lat": 49.44675, "lon": 11.08206, "modes": ["subway"] },
+      { "lat": 49.44737, "lon": 11.08284, "modes": ["tram"] },
+      { "lat": 49.44562, "lon": 11.08299, "modes": ["suburban", "regional", "longdistance"] },
+      { "lat": 49.44733, "lon": 11.08204, "modes": ["bus"] }
+    ]
+  },
   …
 ]
 ```
@@ -333,6 +342,13 @@ platforms of one stop. Does not touch the realtime feed.
 The answer is a plain array. `id` is for `/api/departures`; `modes` lists the
 modes that call at the station. Like the ids of trips, those of stations
 change when the feed is republished.
+
+`places` is there only for a station whose modes stop at places apart, such
+as a main station with the U-Bahn under the square in front: each mode at the
+middle of the stops it calls at, weighted by how often its trips call there,
+and modes within 25 m of each other at one place; the busiest place first. A
+station whose modes stop at one place has none, and its `lat` and `lon` are
+where it is.
 
 ## `GET /api/search`
 

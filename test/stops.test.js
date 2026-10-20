@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { NAME_ZOOM, RAIL_NAME_ZOOM, isExpressionFilter, namePrecedence, namedAt, placeNames, stopMark, withoutStyleStops } from '../public/stops.js';
+import { NAME_ZOOM, PLACES_ZOOM, RAIL_NAME_ZOOM, isExpressionFilter, joiningLines, mergePlaces, namePrecedence, namedAt, placeNames, stopMark, withoutStyleStops } from '../public/stops.js';
 
 test('a stop is a pill with a dot for each kind, in rows of three', () => {
   // a bus stop: one dot, as round as it is high
@@ -96,4 +96,29 @@ test('the style keeps its places but its stops, where it follows the OpenMapTile
   // a raster map has nothing of the kind
   const raster = { version: 8, sources: { tiles: { type: 'raster' } }, layers: [{ id: 'tiles', type: 'raster', source: 'tiles' }] };
   assert.deepEqual(withoutStyleStops(raster), raster);
+});
+
+const ORDER = ['subway', 'tram', 'bus', 'suburban', 'regional', 'longdistance', 'ferry', 'cable', 'other'];
+
+test('the marks of a station at its places: those that would touch on the screen are one (#234)', () => {
+  assert.equal(PLACES_ZOOM, 15);
+  // Nürnberg Hbf at zoom 16: trains, U-Bahn, tram and bus far enough apart
+  const apart = [{ x: 300, y: 500, modes: ['suburban', 'regional', 'longdistance'] }, { x: 200, y: 290, modes: ['subway'] }, { x: 280, y: 180, modes: ['tram'] }, { x: 190, y: 190, modes: ['bus'] }];
+  assert.deepEqual(mergePlaces(apart, true, ORDER), apart);
+  // closer: the U-Bahn (13 px wide) and the tram 18 px apart across, within 13 / 2 + 13 / 2 + 6: one, in the middle, the modes in their order
+  const close = [{ x: 100, y: 100, modes: ['tram'] }, { x: 118, y: 104, modes: ['subway'] }, { x: 100, y: 200, modes: ['bus'] }];
+  assert.deepEqual(mergePlaces(close, true, ORDER), [{ x: 109, y: 102, modes: ['subway', 'tram'] }, { x: 100, y: 200, modes: ['bus'] }]);
+  // what was merged may touch another one: all three are one
+  const chain = [{ x: 100, y: 100, modes: ['tram'] }, { x: 118, y: 100, modes: ['subway'] }, { x: 130, y: 100, modes: ['bus'] }];
+  assert.deepEqual(mergePlaces(chain, true, ORDER).map((mark) => mark.modes), [['subway', 'tram', 'bus']]);
+  // (the places as they came are left as they are)
+  assert.deepEqual(close[0], { x: 100, y: 100, modes: ['tram'] });
+});
+
+test('the lines that join the marks of a station go the shortest way through all of them (#234)', () => {
+  assert.deepEqual(joiningLines([{ x: 0, y: 0 }]), []);
+  assert.deepEqual(joiningLines([{ x: 0, y: 0 }, { x: 10, y: 0 }]), [[0, 1]]);
+  // trains far south, the U-Bahn between, tram and bus side by side in the north: a chain, no line from the trains to the north
+  const hbf = [{ x: 300, y: 500 }, { x: 200, y: 290 }, { x: 280, y: 180 }, { x: 190, y: 190 }];
+  assert.deepEqual(joiningLines(hbf), [[0, 1], [1, 3], [3, 2]]);
 });

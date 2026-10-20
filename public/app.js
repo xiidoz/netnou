@@ -10,7 +10,7 @@
 
 import { parseAddress, stopPath, wordsOf } from './address.js';
 import { APP_NAME, READMES, dayOf, formatNumber, formatTime, languagePicker, loadLanguage, pageTexts, sentInAnother, setTimeZone, t, translatePage } from './i18n.js';
-import { RAIL_MODES, namePrecedence, namedAt, placeNames, stopMark, withoutStyleStops } from './stops.js';
+import { PLACES_ZOOM, RAIL_MODES, joiningLines, mergePlaces, namePrecedence, namedAt, placeNames, stopMark, withoutStyleStops } from './stops.js';
 import { BOARD_MAX, BOARD_SHARE, BOARD_STOPS, boardBlocks, boardQuery, boardShare, displayQuery, ledBy, readBoard, readDisplay, readStops } from './display.js';
 import { mdiAlert, mdiArrowCollapse, mdiArrowExpand, mdiChevronRight, mdiCityVariantOutline, mdiEye, mdiEyeOff, mdiFullscreen, mdiFullscreenExit, mdiMinusCircleOutline, mdiPlaylistPlus, mdiPlus } from './vendor/material-design-icons/icons.js';
 import { AttributionControl, MapLibreMap, NavigationControl } from './vendor/maplibre-gl/maplibre-gl.mjs';
@@ -652,9 +652,59 @@ function drawStop(x, y, modes, big) {
 function openStop(place) {
   const data = place.departures && !Array.isArray(place.departures) ? place.departures : place;
   const station = state.stations.find((each) => each.id === data.id);
-  if (station) return { id: data.id, modes: station.modes };
+  if (station) return { id: data.id, modes: station.modes, places: station.places ?? null };
   const seen = new Set((data.departures ?? []).map((departure) => departure.mode));
-  return { id: data.id, modes: MODES.filter((mode) => seen.has(mode)) };
+  return { id: data.id, modes: MODES.filter((mode) => seen.has(mode)), places: null };
+}
+
+/**
+ * Where the marks of a station are on the screen: from PLACES_ZOOM one at
+ * each of its places, where its modes stop apart (#234), those that would
+ * touch as one (mergePlaces); else one at its own point.
+ * @param station { lat, lon, modes }
+ * @param places its places as api/stations has them, or null
+ * @returns [{ x, y, modes }]
+ */
+function marksOf(station, places, zoom, big, project) {
+  if (zoom < PLACES_ZOOM || !places) {
+    const [x, y] = project(station.lat, station.lon);
+    return [{ x, y, modes: station.modes }];
+  }
+  return mergePlaces(places.map((place) => {
+    const [x, y] = project(place.lat, place.lon);
+    return { x, y, modes: place.modes };
+  }), big, MODES);
+}
+
+/** The dashed lines that join the marks of a station (#234): dark on the light map, light on the dark one. */
+function drawJoins(pairs) {
+  if (!pairs.length) return;
+  ctx.beginPath();
+  for (const [a, b] of pairs) {
+    ctx.moveTo(a.x, a.y);
+    ctx.lineTo(b.x, b.y);
+  }
+  ctx.strokeStyle = colors.text;
+  ctx.lineWidth = 2;
+  ctx.setLineDash([3, 4]);
+  ctx.stroke();
+  ctx.setLineDash([]);
+}
+
+/**
+ * The colour of the ring around an open stop (#234): those of its kinds in
+ * turn around it, as the dot under a bubble shows those of the vehicles in it,
+ * and as a chosen vehicle has a ring in its own colour.
+ */
+function kindsRing(x, y, modes) {
+  const kinds = MODES.filter((mode) => modes.includes(mode)).map((mode) => colors.mode[mode]);
+  if (kinds.length < 2 || !ctx.createConicGradient) return kinds[0] ?? colors.mode.other;
+  const ring = ctx.createConicGradient(-Math.PI / 2, x, y);
+  kinds.forEach((color, i) => {
+    ring.addColorStop(i / kinds.length, color);
+    ring.addColorStop((i + 1) / kinds.length, color);
+  });
+  return ring;
 }
 
 // The widths of the names of stops, in the font they are drawn in (draw), measured once each.
@@ -730,38 +780,57 @@ function draw() {
   }
 
   // Stops (#222): each a pill with the dots of its kinds (drawStop), and its
-  // name beside it from the zoom namedAt says, where there is room. Under the
-  // vehicles, which may stand on them.
+  // name beside it from the zoom namedAt says, where there is room. A station
+  // whose modes stop at places apart has a mark at each from PLACES_ZOOM
+  // (marksOf), every one with its name, and dashed lines join them, so that
+  // they show as one station (#234). Under the vehicles, which may stand on
+  // them; the lines under the marks.
   const big = zoom >= 15;
   const marks = [];
+  const joins = [];
+  const drawn = new Set(); // (the stations whose marks are on the map)
   for (const station of state.stations) {
     if (!stationShown(station, zoom)) continue;
-    const [x, y] = project(station.lat, station.lon);
-    if (!onScreen(x, y)) continue;
-    const hit = { x, y, r: STOP_HIT_PX, station };
-    hits.push(hit);
-    marks.push({ x, y, ...drawStop(x, y, station.modes, big), id: station.id, name: station.name, modes: station.modes, hit });
+    const parts = marksOf(station, station.places, zoom, big, project);
+    if (!parts.some(({ x, y }) => onScreen(x, y))) continue;
+    drawn.add(station.id);
+    for (const [a, b] of joiningLines(parts)) joins.push([parts[a], parts[b]]);
+    for (const part of parts) {
+      const hit = { x: part.x, y: part.y, r: STOP_HIT_PX, station };
+      hits.push(hit);
+      marks.push({ x: part.x, y: part.y, kinds: part.modes, id: station.id, name: station.name, modes: station.modes, hit });
+    }
   }
+  drawJoins(joins);
+  for (const mark of marks) Object.assign(mark, drawStop(mark.x, mark.y, mark.kinds, big));
   // The station whose departures are open, at any zoom, and the further stops
-  // of its board: on top of the others, with a ring in the accent colour, as
-  // the chosen vehicle has one in its own colour, and with their names.
+  // of its board: on top of the others, each of their marks in a ring in the
+  // colours of its kinds (kindsRing), as the chosen vehicle has one in its
+  // own, and with their names.
   const open = [];
   if (selection?.type === 'station' && selection.data?.lat !== undefined) {
     const further = state.board === null ? [] : state.extra.map((stop) => boardStopData.get(stop.path)).filter((place) => place && !place.gone);
     for (const place of [selection.data, ...further]) {
-      const [x, y] = project(place.lat, place.lon);
-      const { id, modes } = openStop(place);
-      const mark = stopMark(MODES.filter((mode) => modes.includes(mode)).length, big);
-      // (the outline of the pill moved out by RING_GAP, with white edges, as drawRing has it)
-      roundedBox(x - mark.w / 2 - RING_GAP, y - mark.h / 2 - RING_GAP, mark.w + 2 * RING_GAP, mark.h + 2 * RING_GAP, mark.corner + RING_GAP);
-      ctx.strokeStyle = '#fff';
-      ctx.lineWidth = RING_WIDTH + 2 * RING_EDGE;
-      ctx.stroke();
-      ctx.strokeStyle = colors.accent;
-      ctx.lineWidth = RING_WIDTH;
-      ctx.stroke();
-      drawStop(x, y, modes, big);
-      open.push({ x, y, ...mark, id, name: place.name, modes, open: true, space: RING_GAP + RING_WIDTH + 4 });
+      const { id, modes, places } = openStop(place);
+      const parts = marksOf({ lat: place.lat, lon: place.lon, modes }, places, zoom, big, project);
+      // (its lines, where its marks are not on the map with the others)
+      if (!drawn.has(id)) drawJoins(joiningLines(parts).map(([a, b]) => [parts[a], parts[b]]));
+      // (the name of the mark nearest the station's own point goes wherever it falls, as an open stop's does)
+      const [px, py] = project(place.lat, place.lon);
+      const nearest = parts.reduce((best, part) => (Math.hypot(part.x - px, part.y - py) < Math.hypot(best.x - px, best.y - py) ? part : best));
+      for (const { x, y, modes: kinds } of parts) {
+        const mark = stopMark(kinds.length, big);
+        // (the outline of the pill moved out by RING_GAP, with white edges, as drawRing has it)
+        roundedBox(x - mark.w / 2 - RING_GAP, y - mark.h / 2 - RING_GAP, mark.w + 2 * RING_GAP, mark.h + 2 * RING_GAP, mark.corner + RING_GAP);
+        ctx.strokeStyle = '#fff';
+        ctx.lineWidth = RING_WIDTH + 2 * RING_EDGE;
+        ctx.stroke();
+        ctx.strokeStyle = kindsRing(x, y, kinds);
+        ctx.lineWidth = RING_WIDTH;
+        ctx.stroke();
+        drawStop(x, y, kinds, big);
+        open.push({ x, y, ...mark, id, name: place.name, modes, open: x === nearest.x && y === nearest.y, ringed: true, space: RING_GAP + RING_WIDTH + 4 });
+      }
     }
   }
   const openIds = new Set(open.map((mark) => mark.id));
@@ -770,7 +839,7 @@ function draw() {
     ctx.font = '600 12px system-ui, sans-serif';
     for (const mark of stopNames) mark.width = nameWidth(mark.name);
     // (clear of every mark, an open one with its ring)
-    const obstacles = [...marks, ...open].map(({ x, y, w, h, open: ringed }) => {
+    const obstacles = [...marks, ...open].map(({ x, y, w, h, ringed }) => {
       const out = ringed ? RING_GAP + RING_WIDTH : 0;
       return [x - w / 2 - out, y - h / 2 - out, w + 2 * out, h + 2 * out];
     });
@@ -781,16 +850,19 @@ function draw() {
     ctx.lineWidth = 3.5;
     ctx.strokeStyle = colors.bg;
     ctx.fillStyle = colors.text;
-    const named = new Set();
+    const named = [];
     stopNames.forEach((mark, i) => {
       if (lefts[i] === null) return;
       // (a halo in the colour of the ground, so that the name reads on any map)
       ctx.strokeText(mark.name, lefts[i], mark.y + 0.5);
       ctx.fillText(mark.name, lefts[i], mark.y + 0.5);
-      named.add(mark.id);
+      named.push(mark);
     });
-    // (a stop whose name is on the map needs no tooltip to say it again)
-    for (const mark of marks) if (named.has(mark.id)) mark.hit.named = true;
+    // (a mark whose name is on the map needs no tooltip to say it again; that of an open one is its own)
+    for (const mark of named) {
+      if (mark.hit) mark.hit.named = true;
+      else for (const other of marks) if (other.id === mark.id && Math.abs(other.x - mark.x) < 4 && Math.abs(other.y - mark.y) < 4) other.hit.named = true;
+    }
   }
 
   // The route of the selected trip, or that of the selected line: where its
