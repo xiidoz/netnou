@@ -363,6 +363,79 @@ test('routing follows the network, respects one-way streets and the detour limit
   assert.equal(road.routeBeyond(snap('mainWest'), nearX, nearY, southOnly, false, 100), null);
 });
 
+test('a train does not turn back at a switch between two stops, but may leave a stop either way (#243)', () => {
+  // A track from the west forks at a switch (node 1) into a northern and a
+  // southern branch to the east; the two meet again 3 km further east, by a
+  // loop round which a train can turn.
+  const LAT0 = 48;
+  const east = 111320 * Math.cos((LAT0 * Math.PI) / 180);
+  const at = (x, y) => [LAT0 + y / 111320, 11 + x / east];
+  const points = [[-1000, 0], [0, 0], [1000, 100], [1000, -100]];
+  for (let i = 0; i <= 8; i++) points.push([3000 + 120 * Math.sin((i * Math.PI) / 8), 120 * Math.cos((i * Math.PI) / 8)]);
+  const edges = [[0, 1], [1, 2], [1, 3], [2, 4], ...Array.from({ length: 8 }, (_, i) => [4 + i, 5 + i]), [12, 3]];
+  const graph = {
+    lat: Int32Array.from(points, ([x, y]) => Math.round(at(x, y)[0] * 1e7)),
+    lon: Int32Array.from(points, ([x, y]) => Math.round(at(x, y)[1] * 1e7)),
+    a: Int32Array.from(edges, ([a]) => a),
+    b: Int32Array.from(edges, ([, b]) => b),
+    f: Uint16Array.from(edges, () => 100),
+    d: Uint8Array.from(edges, () => 3),
+  };
+  const options = { originLat: LAT0, snapRadius: 50, snapPenalty: 1 };
+  const free = new Network(graph, options);
+  const rail = new Network(graph, { ...options, maxTurn: 90 });
+  const STOPS = { north: at(900, 90), south: at(900, -90), west: at(-900, 0) };
+  const route = (network, from, to) => network.route(network.candidates(...STOPS[from]), network.candidates(...STOPS[to]), 10000);
+
+  // from the northern branch to the southern one: through the switch, turning back there …
+  assert.ok(Math.abs(lengthOf(route(free, 'north', 'south')) - 1810) < 10, `${lengthOf(route(free, 'north', 'south'))} m`);
+  // … where a train goes round the loop
+  const round = lengthOf(route(rail, 'north', 'south'));
+  assert.ok(round > 4500 && round < 4700, `${round} m`);
+  assert.equal(rail.route(rail.candidates(...STOPS.north), rail.candidates(...STOPS.south), 3000), null);
+  // … unless asked for any route, where a train does turn back between two stops
+  assert.equal(lengthOf(rail.route(rail.candidates(...STOPS.north), rail.candidates(...STOPS.south), 3000, null, false)), lengthOf(route(free, 'north', 'south')));
+  // through the switch the way it faces, and back from a stop the way it came
+  assert.ok(Math.abs(lengthOf(route(rail, 'west', 'north')) - 1805) < 10, `${lengthOf(route(rail, 'west', 'north'))} m`);
+  assert.ok(Math.abs(lengthOf(route(rail, 'north', 'west')) - 1805) < 10, `${lengthOf(route(rail, 'north', 'west'))} m`);
+  // towards a stop far to the west, off the network
+  const [farX, farY] = rail.toXY(LAT0, 10);
+  const [limitX] = rail.toXY(LAT0, 11 - 500 / east);
+  const leaving = rail.routeBeyond(rail.candidates(...STOPS.south), farX, farY, (x) => x > limitX, false, 200000);
+  close(leaving.slice(-4), [...rail.toXY(...at(-1000, 0)), farX, farY], 0.5, 'leaves at the west end');
+});
+
+test('a stop of trains may be on any track a little further away than the nearest, as in a large station (#243)', () => {
+  // ten tracks of a station from west to east, 10 m apart, each of five edges
+  const LAT0 = 48;
+  const east = 111320 * Math.cos((LAT0 * Math.PI) / 180);
+  const points = [];
+  const edges = [];
+  for (let track = 0; track < 10; track++) {
+    for (let i = 0; i <= 5; i++) points.push([i * 100, track * 10]);
+    for (let i = 0; i < 5; i++) edges.push([track * 6 + i, track * 6 + i + 1]);
+  }
+  const graph = {
+    lat: Int32Array.from(points, ([, y]) => Math.round((LAT0 + y / 111320) * 1e7)),
+    lon: Int32Array.from(points, ([x]) => Math.round((11 + x / east) * 1e7)),
+    a: Int32Array.from(edges, ([a]) => a),
+    b: Int32Array.from(edges, ([, b]) => b),
+    f: Uint16Array.from(edges, () => 100),
+    d: Uint8Array.from(edges, () => 3),
+  };
+  const stop = [LAT0 + 2 / 111320, 11 + 250 / east]; // 2 m north of the first track, in the middle of the platforms
+  const options = { originLat: LAT0, snapRadius: 400, snapPenalty: 1.5 };
+  // (which tracks the candidates are on, counted from the first; each lies on the one it was snapped to)
+  const tracksOf = (list) => [...new Set(list.map((c) => Math.round((c.y - list[0].y) / 10)))].sort((p, q) => p - q);
+  // the six nearest edges: the middle ones of the first tracks
+  assert.deepEqual(tracksOf(new Network(graph, options).candidates(...stop)), [0, 1, 2, 3, 4, 5]);
+  // within 50 m of the nearest: the tracks up to 52 m away
+  const spread = new Network(graph, { ...options, snapSpread: 50, maxCandidates: 64 }).candidates(...stop);
+  assert.deepEqual(tracksOf(spread), [0, 1, 2, 3, 4, 5]);
+  assert.ok(spread.length > 6, `${spread.length} candidates`);
+  assert.deepEqual(tracksOf(new Network(graph, { ...options, snapSpread: 100, maxCandidates: 64 }).candidates(...stop)), [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]);
+});
+
 test('a network measures lengths and the distances of stops at their own latitude, wherever its plane is right', () => {
   // an edge of 0.01 degrees from west to east at 55 degrees north, on a network whose plane is right at 47
   const graph = { lat: Int32Array.of(550000000, 550000000), lon: Int32Array.of(100000000, 100100000), a: Int32Array.of(0), b: Int32Array.of(1), f: Uint16Array.of(100), d: Uint8Array.of(3) };

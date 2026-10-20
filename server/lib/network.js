@@ -436,6 +436,8 @@ class MinHeap {
 }
 
 const CELL_M = 120;
+// How many candidates a stop has on shared tracks where its own are spread (snapSpread).
+const SHARED_CANDIDATES = 6;
 // An edge whose rectangle has more cells than this is put into those along it.
 const LONG_EDGE_CELLS = 64;
 // routeBeyond stops searching once it is this close to the stop it heads for.
@@ -453,11 +455,23 @@ export class Network {
    * @param options.snapPenalty cost per metre of that distance, to prefer the nearest way
    * @param options.snapAt where stops will be snapped, if only at some places
    *   ([[lat, lon], …]): the grid for snapping then has only the edges there
+   * @param options.snapSpread for tracks (#243): a stop may be on any edge of
+   *   the network's own kind up to this many metres further away than the
+   *   nearest, up to maxCandidates of them, and on the nearest shared ones:
+   *   in a large station the track a train takes need not be among the
+   *   nearest few edges. Null: the nearest maxCandidates
+   * @param options.maxTurn for tracks (#243): how many degrees a route may
+   *   turn at a node between two stops. A train goes through a switch only in
+   *   the direction it faces; going into it on one branch and out on the other
+   *   would be turning back, which it does at a stop. The search then goes from
+   *   edge to edge and knows which way it came. Null: any way that meets a
+   *   node may come next, as on roads
    */
-  constructor(graph, { originLat, snapRadius, snapPenalty, maxCandidates = 6, snapAt = null }) {
+  constructor(graph, { originLat, snapRadius, snapPenalty, maxCandidates = 6, snapSpread = null, snapAt = null, maxTurn = null }) {
     this.snapRadius = snapRadius;
     this.snapPenalty = snapPenalty;
     this.maxCandidates = maxCandidates;
+    this.snapSpread = snapSpread;
     this.kx = M_PER_DEG * Math.cos((originLat * Math.PI) / 180);
     this.ky = M_PER_DEG;
     // The places are on a plane that is right at originLat. A metre from west
@@ -489,6 +503,7 @@ export class Network {
 
     // Adjacency in both orientations: `out` to search forwards from a stop,
     // `in` to search backwards from the stop a vehicle arrives at.
+    this.turnCos = maxTurn === null ? null : Math.cos((maxTurn * Math.PI) / 180);
     this.out = this.adjacency(FORWARD, BACKWARD);
     this.in = this.adjacency(BACKWARD, FORWARD);
 
@@ -541,12 +556,22 @@ export class Network {
     this.stamp = new Int32Array(n);
     this.query = 0;
     this.heap = new MinHeap();
+    if (this.turnCos !== null) {
+      // (the same for every arc of the search from edge to edge: there are as many in `in` as in `out`)
+      const arcs = this.out.to.length;
+      this.arcDist = new Float64Array(arcs);
+      this.arcPrev = new Int32Array(arcs);
+      this.arcStamp = new Int32Array(arcs);
+    }
   }
 
   // Compressed adjacency lists: arcs leaving a→b edges at `a` if the edge
-  // allows `viaA`, and at `b` if it allows `viaB`.
+  // allows `viaA`, and at `b` if it allows `viaB`. Where turns are limited,
+  // also the node each arc leaves (`from`) and the arc of each edge from a to
+  // b and from b to a (`ab`, `ba`; -1 where it may not be used that way).
   adjacency(viaA, viaB) {
     const { a, b, dir, cost, nodeCount } = this;
+    const arcs = this.turnCos !== null;
     const start = new Int32Array(nodeCount + 1);
     for (let e = 0; e < a.length; e++) {
       if (dir[e] & viaA) start[a[e] + 1]++;
@@ -556,11 +581,22 @@ export class Network {
     const fill = start.slice(0, nodeCount);
     const to = new Int32Array(start[nodeCount]);
     const arcCost = new Float64Array(start[nodeCount]);
+    const from = arcs ? new Int32Array(start[nodeCount]) : null;
+    const ab = arcs ? new Int32Array(a.length).fill(-1) : null;
+    const ba = arcs ? new Int32Array(a.length).fill(-1) : null;
     for (let e = 0; e < a.length; e++) {
-      if (dir[e] & viaA) { to[fill[a[e]]] = b[e]; arcCost[fill[a[e]]++] = cost[e]; }
-      if (dir[e] & viaB) { to[fill[b[e]]] = a[e]; arcCost[fill[b[e]]++] = cost[e]; }
+      if (dir[e] & viaA) {
+        if (arcs) { from[fill[a[e]]] = a[e]; ab[e] = fill[a[e]]; }
+        to[fill[a[e]]] = b[e];
+        arcCost[fill[a[e]]++] = cost[e];
+      }
+      if (dir[e] & viaB) {
+        if (arcs) { from[fill[b[e]]] = b[e]; ba[e] = fill[b[e]]; }
+        to[fill[b[e]]] = a[e];
+        arcCost[fill[b[e]]++] = cost[e];
+      }
     }
-    return { start, to, cost: arcCost };
+    return { start, to, cost: arcCost, from, ab, ba };
   }
 
   toXY(lat, lon) {
@@ -601,23 +637,88 @@ export class Network {
       }
     }
     found.sort((p, q) => p.penalty - q.penalty);
+    const own = found.filter((c) => !c.shared);
+    // (on tracks of its own kind, those within snapSpread of the nearest; on shared ones, as without it)
+    const spread = this.snapSpread === null || !own.length ? null : own[0].penalty + this.snapSpread * this.snapPenalty;
+    const ofOwn = spread === null ? own.slice(0, this.maxCandidates) : own.filter((c) => c.penalty <= spread).slice(0, this.maxCandidates);
     const shared = found.filter((c) => c.shared);
-    if (!shared.length) return found.slice(0, this.maxCandidates);
-    return [...found.filter((c) => !c.shared).slice(0, this.maxCandidates), ...shared.slice(0, this.maxCandidates)].sort((p, q) => p.penalty - q.penalty);
+    if (!shared.length) return ofOwn;
+    return [...ofOwn, ...shared.slice(0, spread === null ? this.maxCandidates : SHARED_CANDIDATES)].sort((p, q) => p.penalty - q.penalty);
   }
 
   // Seeds for a search leaving (forwards) or reaching (backwards) a candidate:
-  // the edge end the vehicle gets to first and what that costs.
+  // the edge end the vehicle gets to first and what that costs; the search
+  // goes along the edge from a to b to get there (`ab`), or from b to a.
   seeds(candidates, backwards) {
     const seeds = [];
     candidates.forEach((c, i) => {
       const { edge: e, t } = c;
       const toB = backwards ? BACKWARD : FORWARD;
       const toA = backwards ? FORWARD : BACKWARD;
-      if (this.dir[e] & toB) seeds.push({ node: this.b[e], cost: c.penalty + (1 - t) * this.cost[e], candidate: i });
-      if (this.dir[e] & toA) seeds.push({ node: this.a[e], cost: c.penalty + t * this.cost[e], candidate: i });
+      if (this.dir[e] & toB) seeds.push({ node: this.b[e], cost: c.penalty + (1 - t) * this.cost[e], candidate: i, edge: e, ab: true });
+      if (this.dir[e] & toA) seeds.push({ node: this.a[e], cost: c.penalty + t * this.cost[e], candidate: i, edge: e, ab: false });
     });
     return seeds;
+  }
+
+  /** Whether a route may go on from arc k1 of `adj` to arc k2, which leaves the node k1 reaches (maxTurn). */
+  turns(adj, k1, k2) {
+    const { x, y, turnCos: cos } = this;
+    const [u, v, w] = [adj.from[k1], adj.to[k1], adj.to[k2]];
+    const [dx1, dy1, dx2, dy2] = [x[v] - x[u], y[v] - y[u], x[w] - x[v], y[w] - y[v]];
+    const dot = dx1 * dx2 + dy1 * dy2;
+    // (the cosine of the turn against that of maxTurn, squared: most turns are slight and need no more than the sign)
+    if ((dot >= 0) !== (cos >= 0)) return dot >= 0;
+    return (dot * dot >= cos * cos * (dx1 * dx1 + dy1 * dy1) * (dx2 * dx2 + dy2 * dy2)) === (cos >= 0);
+  }
+
+  /**
+   * As search, from arc to arc of `adj` for a network whose turns are
+   * limited (maxTurn): a route that reaches a node on one arc goes on only on
+   * those that it may turn into. `visit(node, g, arc)` is called with the arc
+   * the node is reached on; afterwards `traceArcs` follows that arc back.
+   */
+  searchArcs(adj, seeds, heuristic, maxCost, visit) {
+    const { arcDist: dist, arcPrev: prev, arcStamp: stamp, heap } = this;
+    const q = ++this.query;
+    heap.size = 0;
+    for (const seed of seeds) {
+      const k = seed.ab ? adj.ab[seed.edge] : adj.ba[seed.edge];
+      if (k < 0 || (stamp[k] === q && dist[k] <= seed.cost)) continue;
+      stamp[k] = q;
+      dist[k] = seed.cost;
+      prev[k] = -1 - seed.candidate;
+      heap.push(seed.cost + (heuristic ? heuristic(seed.node) : 0), k);
+    }
+    while (heap.size) {
+      heap.pop();
+      const k = heap.topValue;
+      const u = adj.to[k];
+      const g = dist[k];
+      if (heap.topKey > g + (heuristic ? heuristic(u) : 0) + 1e-6) continue;
+      if (g > maxCost || visit(u, g, k)) return;
+      for (let k2 = adj.start[u]; k2 < adj.start[u + 1]; k2++) {
+        if (!this.turns(adj, k, k2)) continue;
+        const ng = g + adj.cost[k2];
+        if (stamp[k2] !== q || ng < dist[k2]) {
+          stamp[k2] = q;
+          dist[k2] = ng;
+          prev[k2] = k;
+          heap.push(ng + (heuristic ? heuristic(adj.to[k2]) : 0), k2);
+        }
+      }
+    }
+  }
+
+  /** As trace, for a search from arc to arc: the nodes up to where `arc` of `adj` leads. */
+  traceArcs(adj, arc) {
+    const nodes = [];
+    let k = arc;
+    while (k >= 0) {
+      nodes.push(adj.to[k]);
+      k = this.arcPrev[k];
+    }
+    return { nodes: nodes.reverse(), candidate: -1 - k };
   }
 
   /**
@@ -709,10 +810,12 @@ export class Network {
    * @param towards for a long hop: where stop B is, [x, y] in metres. The
    *   search then heads for it (A*), and is not begun where B is on a part of
    *   the network that A is not connected to.
+   * @param turning false: any way that meets a node may come next, also where
+   *   the network limits its turns (maxTurn)
    * @returns flat [x0, y0, x1, y1, …] in metres, or null if there is no route
    *   shorter than maxLength.
    */
-  route(from, to, maxLength, towards = null) {
+  route(from, to, maxLength, towards = null, turning = true) {
     let best = Infinity;
     let bestPath = null;
 
@@ -730,31 +833,38 @@ export class Network {
 
     if (towards && !bestPath && !from.some((ca) => to.some((cb) => this.component(this.a[ca.edge]) === this.component(this.a[cb.edge])))) return null;
 
-    // node -> ways to finish at a candidate of B from there
+    // node -> ways to finish at a candidate of B from there; where turns are
+    // limited, with the arc that leaves the node towards the candidate (the
+    // search that found the way came along the edge the other way)
+    turning &&= this.turnCos !== null;
     const finish = new Map();
-    for (const { node, cost, candidate } of this.seeds(to, true)) {
+    for (const { node, cost, candidate, edge, ab } of this.seeds(to, true)) {
       if (!finish.has(node)) finish.set(node, []);
-      finish.get(node).push({ cost, candidate });
+      finish.get(node).push({ cost, candidate, arc: turning ? (ab ? this.out.ba[edge] : this.out.ab[edge]) : -1 });
     }
     let bestNode = -1;
+    let bestArc = -1;
     let bestTarget = -1;
     const least = towards ? this.leastTo(towards, to) : null;
-    this.search(this.out, this.seeds(from, false), least, maxLength * 2, (u, g) => {
+    const visit = (u, g, k) => {
       // (heading for B, nodes come in the order of what a route through them costs at the least)
       const through = least ? g + least(u) : g;
       if (through >= best || through > maxLength * 2) return true;
       for (const end of finish.get(u) ?? []) {
-        if (g + end.cost < best) {
+        if (g + end.cost < best && (!turning || this.turns(this.out, k, end.arc))) {
           best = g + end.cost;
           bestNode = u;
+          bestArc = k;
           bestTarget = end.candidate;
         }
       }
       return false;
-    });
+    };
+    if (turning) this.searchArcs(this.out, this.seeds(from, false), least, maxLength * 2, visit);
+    else this.search(this.out, this.seeds(from, false), least, maxLength * 2, visit);
 
     if (bestNode >= 0) {
-      const { nodes, candidate } = this.trace(bestNode);
+      const { nodes, candidate } = turning ? this.traceArcs(this.out, bestArc) : this.trace(bestNode);
       bestPath = [from[candidate].x, from[candidate].y];
       for (const u of nodes) bestPath.push(this.x[u], this.y[u]);
       bestPath.push(to[bestTarget].x, to[bestTarget].y);
@@ -774,28 +884,34 @@ export class Network {
    * best for it (see AHEAD), out of those on a way that, with the straight
    * line after it, is no longer than maxLength.
    * @param arriving true if the vehicle comes from the far stop
+   * @param turning as for route
    */
-  routeBeyond(candidates, farX, farY, inside, arriving, maxLength) {
+  routeBeyond(candidates, farX, farY, inside, arriving, maxLength, turning = true) {
     const { x, y } = this;
     const toFar = (u) => Math.hypot(x[u] - farX, y[u] - farY);
     let exit = -1;
     let best = Infinity;
     let budget = 300_000;
-    this.search(arriving ? this.in : this.out, this.seeds(candidates, arriving), toFar, Infinity, (u, g) => {
+    const adj = arriving ? this.in : this.out;
+    turning &&= this.turnCos !== null;
+    // (where turns are limited, the exit is the arc the node is reached on)
+    const visit = (u, g, k) => {
       const distance = toFar(u);
       // (the nodes come in the order of this sum: every later one is too far as well)
       if (g + distance > maxLength) return true;
       if (g + AHEAD * distance < best) {
         best = g + AHEAD * distance;
-        exit = u;
+        exit = turning ? k : u;
         // (out of the area on the best way there is: no need to follow it any further)
         if (!inside(x[u], y[u]) || distance < CLOSE_ENOUGH_M) return true;
       }
       return --budget === 0;
-    });
+    };
+    if (turning) this.searchArcs(adj, this.seeds(candidates, arriving), toFar, Infinity, visit);
+    else this.search(adj, this.seeds(candidates, arriving), toFar, Infinity, visit);
     if (exit < 0) return null;
 
-    const { nodes, candidate } = this.trace(exit);
+    const { nodes, candidate } = turning ? this.traceArcs(adj, exit) : this.trace(exit);
     const path = [candidates[candidate].x, candidates[candidate].y];
     for (const u of nodes) path.push(x[u], y[u]);
     path.push(farX, farY);

@@ -346,13 +346,31 @@ the default area that is about 60,000 distinct hops, for all of Germany
   ferries (whose pier can be far from where the line of their route ends),
   with a penalty per metre of offset. A stop keeps the six nearest on tracks
   of the network's own kind and as many on tracks it shares, so that where
-  those are nearer they do not crowd out its own. An edge is found by the
+  those are nearer they do not crowd out its own. A stop of trains keeps
+  every edge of rail up to 100 m further away than the nearest, at most 64:
+  in a large station the track a train takes need not be among the nearest
+  few (at Frankfurt (Main) Hbf the 30th, 61 m away, for the line to
+  Niederrad). Of the two stops of a hop, each keeps those nearer to it than
+  to the other, or two stops close together would meet on one. An edge is found by the
   cells of a grid it lies in; a long one, as a ferry across the sea has, by
   the cells along it rather than all those of its rectangle.
 - **Search.** A search from the candidates of stop A finds the cheapest path
-  to one of stop B (Dijkstra's).
+  to one of stop B (Dijkstra's). On tracks it goes from edge to edge and knows
+  which way it came: at a node a route turns at most 120°, so that a train
+  does not go into a switch on one branch and out on the other, as if it
+  could turn there like a car at a crossroads; it turns back at a stop, which
+  every hop begins and ends at. No track that only goes on turns so much at a
+  node (on rail 99.99 % of them less than 71°), and that turn is some 170°
+  ([#243](https://github.com/xiidoz/netnou/issues/243)). Where no route keeps
+  to that, the train does turn back between two stops, at a station it
+  passes without a stop, or a corner is mapped sharper than it is: the route
+  is then found as on roads. In all of Germany the routes of 22 of the
+  19,331 hops of trains with a route still turn back, and of 7 of trams,
+  where 486 and 24 did before.
 - **Plausibility.** A path much longer than the straight line (more than 2 to
-  2.5 times plus a few hundred metres, depending on the network) is thrown
+  2.5 times plus a few hundred metres, depending on the network; for trains
+  3 km, as they leave a terminus the way they face and come round: München
+  Hbf to München Ost is 9.5 km for 4 km as the crow flies) is thrown
   away. This is a shortest-path guess, not the operator's official route;
   between stops a few hundred metres apart it is almost always the same.
 - **Beyond the area.** Where one stop of a hop is outside the area, the path
@@ -381,7 +399,9 @@ the default area that is about 60,000 distinct hops, for all of Germany
   takes the test machine about 40 seconds, the server at most 1 GB of
   memory. For all of Germany it takes 8 minutes, 3 to read the extract and 5
   to route, when none of the routes are kept, and the server at most 3.3 GB:
-  it holds the timetable it serves meanwhile.
+  it holds the timetable it serves meanwhile. Routing the tracks from edge to
+  edge takes 37 seconds of that where it took 27, and 50 MB more while they
+  are routed.
 - **Kept from one import to the next.** A route is found again by its
   network and the places of its two stops (`KeptRoutes`), and only the hops
   that are new are routed; a hop without a route is kept as such, so that it
