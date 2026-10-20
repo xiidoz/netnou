@@ -19,7 +19,7 @@ import { Numbers } from './dataset.js';
 
 // Bump when the rules of routing change (network.js, shapes.js): the kept
 // routes are then found anew.
-const KEPT_VERSION = 1;
+const KEPT_VERSION = 2;
 
 const FILE = 'osm-routes.bin';
 // A record: the network (1 byte), the places of the two stops (4 × 4 bytes),

@@ -17,11 +17,20 @@ import { BORDER_LEVELS, readTowns, townsAmong, writeTowns } from './towns.js';
 // snapRadius: how far a stop may be from its road/track (rail stops are often
 // the station centre). snapPenalty: cost per metre of that offset.
 // detour: a route longer than straight × factor + slack metres is discarded.
+// maxTurn: on tracks a route does not turn back between two stops (#243): at a
+// node it turns at most this many degrees, as no track that only goes on does
+// (99.99 % of them less than 71° on rail, 107° on the U-Bahn and trams); going
+// into a switch on one branch and out on the other is a turn of some 170°.
+// snapSpread, maxCandidates: a stop of a train may be on any track up to 100 m
+// further away than the nearest: in a large station the one a train takes,
+// with no turn back to reach it, need not be among the nearest few edges.
+// The slack of trains lets them leave a terminus the way they face and come
+// round (München Hbf to München Ost: 9.5 km for 4 km as the crow flies).
 const SETTINGS = {
   road: { snapRadius: 70, snapPenalty: 4, detour: [2.5, 400] },
-  tram: { snapRadius: 60, snapPenalty: 3, detour: [2, 300] },
-  subway: { snapRadius: 250, snapPenalty: 2, detour: [2, 500] },
-  rail: { snapRadius: 400, snapPenalty: 1.5, detour: [2, 1000] },
+  tram: { snapRadius: 60, snapPenalty: 3, detour: [2, 300], maxTurn: 120 },
+  subway: { snapRadius: 250, snapPenalty: 2, detour: [2, 500], maxTurn: 120 },
+  rail: { snapRadius: 400, snapPenalty: 1.5, detour: [2, 3000], maxTurn: 120, snapSpread: 100, maxCandidates: 64 },
   // (a pier can be far from where the line of its ferry ends, and a fairway
   // winds; snapping costs three times a metre of the way, or a short crossing
   // would have both its stops on the far bank and no route)
@@ -210,15 +219,17 @@ export function buildSegments(data, graphs, area, onProgress = () => {}, { roads
       const { from, to, n } = apart(key);
       if (++done % 10000 === 0) onProgress(`${done} of ${fresh.length} hops done`);
 
-      const a = candidatesOf(from);
-      const b = candidatesOf(to);
       const [ax, ay] = network.toXY(stops.lat[from], stops.lon[from]);
       const [bx, by] = network.toXY(stops.lat[to], stops.lon[to]);
-      let route = null;
+      // (where candidates are spread, a stop is on a track nearer to it than to
+      // the other stop: two stops close together would meet on one otherwise)
+      const east = network.eastAt((stops.lat[from] + stops.lat[to]) / 2);
+      const nearer = (list, [x, y], [ox, oy]) => (network.snapSpread === null ? list : list.filter((c) => Math.hypot((c.x - x) * east, c.y - y) <= Math.hypot((c.x - ox) * east, c.y - oy)));
+      const a = nearer(candidatesOf(from), [ax, ay], [bx, by]);
+      const b = nearer(candidatesOf(to), [bx, by], [ax, ay]);
       const far = (stop) => area.distance(stops.lat[stop], stops.lon[stop]) > NEAR.exit;
       const [factor, slack] = SETTINGS[NETS[n]].detour;
       const maxLength = Math.hypot(bx - ax, by - ay) * factor + slack;
-      if (a.length && b.length) route = network.route(a, b, maxLength, long ? [bx, by] : null);
       // One end is not on the network, or only on tracks of another kind that
       // need not lead there (a tunnel under a stop of trams), or it lies beyond
       // the area on a part of the network that is not connected to the rest
@@ -227,8 +238,15 @@ export function buildSegments(data, graphs, area, onProgress = () => {}, { roads
       // way.
       const inside = (x, y) => area.distance(...network.toLatLon(x, y)) <= NEAR.exit;
       const off = (candidates) => candidates.every((c) => c.shared);
-      if (!route && a.length && (off(b) || far(to))) route = network.routeBeyond(a, bx, by, inside, false, maxLength);
-      if (!route && b.length && (off(a) || far(from))) route = network.routeBeyond(b, ax, ay, inside, true, maxLength);
+      const find = (turning) => {
+        let found = a.length && b.length ? network.route(a, b, maxLength, long ? [bx, by] : null, turning) : null;
+        if (!found && a.length && (off(b) || far(to))) found = network.routeBeyond(a, bx, by, inside, false, maxLength, turning);
+        if (!found && b.length && (off(a) || far(from))) found = network.routeBeyond(b, ax, ay, inside, true, maxLength, turning);
+        return found;
+      };
+      // (where no route keeps the turns of a track, the train does turn back between two stops, at a station it
+      // passes without a stop or where the tracks are mapped with a corner sharper than they are: the route as ever)
+      let route = find(true) ?? (network.turnCos !== null ? find(false) : null);
       if (!route) {
         kept?.add(n, placeOf(from), placeOf(to), null);
         continue;
