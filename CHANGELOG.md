@@ -8,6 +8,18 @@ This file is written by
 messages when a release is made. Do not edit it by hand; see
 [Releases](CONTRIBUTING.md#releases).
 
+## [0.18.0](https://github.com/xiidoz/netnou/compare/v0.17.1...v0.18.0) (2026-10-20)
+
+
+### Features
+
+* **page:** a large station marked where each kind of transport stops, its marks joined ([#241](https://github.com/xiidoz/netnou/issues/241)) ([eefc6b7](https://github.com/xiidoz/netnou/commit/eefc6b7fbc5381868b3d7a65395641dfe590f662)), closes [#234](https://github.com/xiidoz/netnou/issues/234)
+
+
+### Bug Fixes
+
+* **routes:** trains do not turn back at a switch between two stops ([#244](https://github.com/xiidoz/netnou/issues/244)) ([3cb747f](https://github.com/xiidoz/netnou/commit/3cb747f87e24e9e83b35aaacd941b0105d11ec6c)), closes [#243](https://github.com/xiidoz/netnou/issues/243)
+
 ## [0.17.1](https://github.com/xiidoz/netnou/compare/v0.17.0...v0.17.1) (2026-10-19)
 
 
