@@ -129,9 +129,11 @@ Page (`public/`):
 | `vendor/maplibre-gl/` | the map library, vendored, see [its README](../public/vendor/maplibre-gl/README.md) |
 | `vendor/material-design-icons/` | the shapes of the icons on the page's own buttons, see [its README](../public/vendor/material-design-icons/README.md) |
 
-`tools/` holds seven scripts that are run by hand: `measure-feed.mjs` imports a
+`tools/` holds eight scripts that are run by hand: `measure-feed.mjs` imports a
 feed as the server does and prints what it comes to (trips, what repeats,
-size, the time to say which vehicles are under way); `build-vgn-area.mjs`
+size, the time to say which vehicles are under way); `check-routes.mjs`
+checks the routes of an import, or of two side by side (see [Route
+geometry](#route-geometry)); `build-vgn-area.mjs`
 regenerates the default area and `build-germany-outline.mjs` the border of
 Germany; `build-icons.mjs` renders the app icons from `favicon.svg`,
 `build-pictures.mjs` takes the pictures of the page for the READMEs, and
@@ -385,7 +387,15 @@ the default area that is about 60,000 distinct hops, for all of Germany
 - **Fallback.** A hop without a path is a straight line. In October 2026 that
   was the case for about 1 % of the hops inside the default area. For all of
   Germany it was 1.1 % of the hops on roads, 15 % on rail, 2 % of trams and
-  4 of the 2,496 hops of the U-Bahn.
+  4 of the 2,908 hops of the U-Bahn. Of the 3,425 on rail (feed of 20 October
+  2026), 2,640 have a stop with no track of rail within 5 km: abroad, beyond
+  the extract of Germany (in Poland and the Czech Republic, Austria), and on
+  the narrow gauge of the Harz, whose tracks are of the network `cable`; 749
+  have a stop more than 400 m from one: the Harz again, and the tram-trains
+  of Karlsruhe and Kassel on the tracks of trams, which rail does not share;
+  36 have none within the limit on the length, or none at all.
+  `tools/check-routes.mjs` counts them, with the routes that turn back and
+  those far longer than the straight line, and lists the worst.
 - **Storage.** Paths are simplified to 1.5 m accuracy and stored once per
   hop, shared by all trips that use it. A hop is gone through from its
   first point on, so that point is stored as it is and each of the others as
