@@ -10,7 +10,7 @@ import { buildDataset, tidyName } from '../server/lib/importer.js';
 import { decodeFeed } from '../server/lib/pb.js';
 import { agreedDelay, buildRealtime } from '../server/lib/realtime.js';
 import { addDays, localDate, serviceDayStart, setTimeZone, weekday } from '../server/lib/time.js';
-import { Timetable, lite, positionAt, routeMode } from '../server/lib/timetable.js';
+import { Timetable, lite, placesOf, positionAt, routeMode } from '../server/lib/timetable.js';
 import { openZip } from '../server/lib/zip.js';
 import { encodeFeed, makeZip } from './helpers.js';
 
@@ -176,6 +176,35 @@ test('importer keeps exactly the trips that touch the box', () => {
   // platform A is grouped under its parent station SA
   assert.deepEqual(timetable.stations.map((s) => s.id).sort(), ['B', 'C', 'SA']);
   assert.deepEqual(timetable.stations.find((s) => s.id === 'B').modes, ['subway', 'longdistance']);
+});
+
+test('a station whose modes stop apart has their places, where they stop together it has none (#234)', async () => {
+  // a bus of line 99 from a stop of Alpha 222 m north of its U-Bahn to Beta
+  const apart = await importFeed({
+    'stops.txt': `${FEED['stops.txt']}Alpha Busbahnhof,SA,A2,49.402,11.00,,\r\n`,
+    'trips.txt': `${FEED['trips.txt']}R3,DAILY,T5\n`,
+    'stop_times.txt': `${FEED['stop_times.txt']}T5,10:30:00,10:30:00,A2,0,Beta,,\nT5,10:40:00,10:40:00,B,1,Beta,,\n`,
+  }, 'apart.zip');
+  const alpha = apart.stations.find((s) => s.id === 'SA');
+  assert.deepEqual(alpha.modes, ['subway', 'bus']);
+  // (the U-Bahn first: two trips call at its stop, one at the bus's)
+  assert.deepEqual(alpha.places, [{ lat: 49.4, lon: 11, modes: ['subway'] }, { lat: 49.402, lon: 11, modes: ['bus'] }]);
+  // U-Bahn, ICE and bus at one stop of Beta: one place, and none listed
+  assert.deepEqual(apart.stations.find((s) => s.id === 'B').modes, ['subway', 'bus', 'longdistance']);
+  assert.equal(apart.stations.find((s) => s.id === 'B').places, undefined);
+  assert.equal(timetable.stations.find((s) => s.id === 'SA').places, undefined);
+});
+
+test('the modes of a station within 25 m of each other are one of its places', () => {
+  // about 11 m and 33 m north of the U-Bahn
+  const near = { mode: 'tram', lat: 49.4001, lon: 11, weight: 5 };
+  const far = { mode: 'bus', lat: 49.4003, lon: 11, weight: 1 };
+  const subway = { mode: 'subway', lat: 49.4, lon: 11, weight: 9 };
+  assert.deepEqual(placesOf([far, near, subway]), [{ lat: 49.4, lon: 11, modes: ['subway', 'tram'] }, { lat: 49.4003, lon: 11, modes: ['bus'] }]);
+  // all within 25 m: one place, so none
+  assert.equal(placesOf([subway, near]), null);
+  // the busiest place first, its modes in the order of MODES
+  assert.deepEqual(placesOf([{ ...far, weight: 20 }, subway]).map((place) => place.modes), [['bus'], ['subway']]);
 });
 
 test('importer copes with a byte order mark, rows out of order, missing times and trip_headsign', async () => {

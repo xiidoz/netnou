@@ -118,6 +118,28 @@ const HORIZON_S = 90;
 export const LITE_AHEAD_S = 60;
 
 const round5 = (x) => Math.round(x * 1e5) / 1e5;
+// Modes of a station whose stops are this near each other are at one of its
+// places (placesOf).
+const PLACE_MERGE_M = 25;
+const metres = (lat1, lon1, lat2, lon2) => Math.hypot((lon2 - lon1) * Math.cos((((lat1 + lat2) / 2) * Math.PI) / 180), lat2 - lat1) * 111_320;
+
+/**
+ * The places of a station where its modes stop apart (#234): each mode at the
+ * middle of the stops it calls at, weighted by its trips there, and modes
+ * within PLACE_MERGE_M of each other at one place, the busiest first. Null
+ * where they are all at one place.
+ * @param middles for each mode of the station: { mode, lat, lon, weight }
+ */
+export function placesOf(middles) {
+  const places = [];
+  for (const middle of [...middles].sort((a, b) => b.weight - a.weight)) {
+    const near = places.find((place) => metres(place.lat, place.lon, middle.lat, middle.lon) <= PLACE_MERGE_M);
+    if (near) near.modes.push(middle.mode);
+    else places.push({ lat: middle.lat, lon: middle.lon, modes: [middle.mode] });
+  }
+  if (places.length < 2) return null;
+  return places.map(({ lat, lon, modes }) => ({ lat: round5(lat), lon: round5(lon), modes: MODES.filter((mode) => modes.includes(mode)) }));
+}
 /**
  * Spreads the bits of a whole number (the last step of MurmurHash3): numbers
  * that follow each other come out far apart, as whole numbers below 2^32.
@@ -675,6 +697,8 @@ export class Timetable extends Schedule {
     const latSum = new Float64Array(patternCount);
     const lonSum = new Float64Array(patternCount);
     const seen = new Uint8Array(patternCount);
+    // where each mode stops at a station: [latitude, longitude, weight] summed up by station * 16 + mode, for placesOf
+    const modeSums = new Map();
     const eachVisit = (pattern, visit) => {
       for (let k = patterns.start[pattern]; k < patterns.start[pattern + 1]; k++) {
         const stop = patterns.stops[k];
@@ -689,6 +713,16 @@ export class Timetable extends Schedule {
         if (!visits[station + 1]++) order.push(station);
         stationModes[station] |= patternModes[pattern];
         stationService[station] += patternTrips[pattern];
+        for (let bits = patternModes[pattern], mode = 0; bits; bits >>= 1, mode++) {
+          if (!(bits & 1)) continue;
+          const weight = patternTrips[pattern];
+          const sum = modeSums.get(station * 16 + mode);
+          if (sum) {
+            sum[0] += this.stops.lat[stop] * weight;
+            sum[1] += this.stops.lon[stop] * weight;
+            sum[2] += weight;
+          } else modeSums.set(station * 16 + mode, [this.stops.lat[stop] * weight, this.stops.lon[stop] * weight, weight]);
+        }
         inArea[pattern]++;
         latSum[pattern] += this.stops.lat[stop];
         lonSum[pattern] += this.stops.lon[stop];
@@ -720,13 +754,24 @@ export class Timetable extends Schedule {
     // (of the lines of a name the busiest first: the one meant where nothing says which)
     for (const numbers of this.lineIndex.values()) numbers.sort((a, b) => this.lines[b].trips - this.lines[a].trips || a - b);
 
-    this.stations = order.map((s) => ({
-      id: this.stops.id.get(s),
-      name: this.stops.name[s],
-      lat: round5(this.stops.lat[s]),
-      lon: round5(this.stops.lon[s]),
-      modes: MODES.filter((_, bit) => stationModes[s] & (1 << bit)),
-    }));
+    this.stations = order.map((s) => {
+      const station = {
+        id: this.stops.id.get(s),
+        name: this.stops.name[s],
+        lat: round5(this.stops.lat[s]),
+        lon: round5(this.stops.lon[s]),
+        modes: MODES.filter((_, bit) => stationModes[s] & (1 << bit)),
+      };
+      const middles = [];
+      for (let mode = 0; mode < MODES.length; mode++) {
+        const sum = modeSums.get(s * 16 + mode);
+        if (sum) middles.push({ mode: MODES[mode], lat: sum[0] / sum[2], lon: sum[1] / sum[2], weight: sum[2] });
+      }
+      // (only where its modes stop apart: most stations are one place)
+      const places = middles.length > 1 ? placesOf(middles) : null;
+      if (places) station.places = places;
+      return station;
+    });
     // How often a trip stops at each station, over the whole timetable: it
     // says how much is going on there compared with the others.
     this.stationService = order.map((s) => stationService[s]);
