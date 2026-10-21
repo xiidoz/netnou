@@ -10,9 +10,10 @@
 
 import { parseAddress, stopPath, wordsOf } from './address.js';
 import { APP_NAME, READMES, dayOf, formatNumber, formatTime, languagePicker, loadLanguage, pageTexts, sentInAnother, setTimeZone, t, translatePage } from './i18n.js';
-import { PLACES_ZOOM, RAIL_MODES, joiningLines, mergePlaces, namePrecedence, namedAt, placeNames, stopMark, townsAlong, withoutStyleStops } from './stops.js';
+import { FAVOURITE_NAME_ZOOM, HEART_MIDDLE, PLACES_ZOOM, RAIL_MODES, heartMark, joiningLines, mergePlaces, namePrecedence, namedAt, placeNames, stopMark, townsAlong, withoutStyleStops } from './stops.js';
+import { favouritesFrom, isFavourite, lineFavourite, sameStop, stopFavourite, withFavourite } from './favourites.js';
 import { BOARD_MAX, BOARD_SHARE, BOARD_STOPS, boardBlocks, boardQuery, boardShare, displayQuery, ledBy, readBoard, readDisplay, readStops } from './display.js';
-import { mdiAlert, mdiArrowCollapse, mdiArrowExpand, mdiChevronRight, mdiCityVariantOutline, mdiEye, mdiEyeOff, mdiFullscreen, mdiFullscreenExit, mdiMinusCircleOutline, mdiPlaylistPlus, mdiPlus } from './vendor/material-design-icons/icons.js';
+import { mdiAlert, mdiArrowCollapse, mdiArrowExpand, mdiChevronRight, mdiCityVariantOutline, mdiEye, mdiEyeOff, mdiFullscreen, mdiFullscreenExit, mdiHeart, mdiHeartOutline, mdiMinusCircleOutline, mdiPlaylistPlus, mdiPlus } from './vendor/material-design-icons/icons.js';
 import { AttributionControl, MapLibreMap, NavigationControl } from './vendor/maplibre-gl/maplibre-gl.mjs';
 
 // The modes, each with a chip where the timetable has it. Same ids as MODES in
@@ -198,6 +199,28 @@ function saveSetting(key, value) {
     // private mode or blocked storage: the setting just does not persist
   }
 }
+
+// The favourites (#245, favourites.js) are kept in the browser beside the
+// settings, but are none of them: the address of a display does not carry
+// them, and the page reads them whatever it was opened as.
+const FAVOURITES_KEY = 'netnou.favourites';
+let favourites = (() => {
+  try {
+    return favouritesFrom(JSON.parse(localStorage.getItem(FAVOURITES_KEY)));
+  } catch {
+    return favouritesFrom(null);
+  }
+})();
+
+function keepFavourites() {
+  try {
+    localStorage.setItem(FAVOURITES_KEY, JSON.stringify(favourites));
+  } catch {
+    // private mode or blocked storage: they last as long as the page
+  }
+}
+
+const hasFavourites = () => favourites.stops.length > 0 || favourites.lines.length > 0;
 
 // The texts come first: the map takes those of its controls when it is created.
 // (The page came in its own language, which is the visitor's in most cases:
@@ -645,6 +668,95 @@ function drawStop(x, y, modes, big) {
 }
 
 /**
+ * The mark of a favourite stop (#245): a white heart with the dots of its
+ * kinds (heartMark), its edge as the pill has it. Its size, as heartMark gives it.
+ */
+function drawHeartStop(x, y, modes, big) {
+  const kinds = MODES.filter((mode) => modes.includes(mode));
+  const mark = heartMark(kinds.length, big);
+  const shape = heartShape(x, y, mark.size);
+  ctx.fillStyle = '#fff';
+  ctx.fill(shape);
+  ctx.strokeStyle = colors.stopEdge;
+  ctx.lineWidth = 1.5;
+  ctx.lineJoin = 'round';
+  ctx.stroke(shape);
+  kinds.forEach((mode, i) => {
+    ctx.beginPath();
+    ctx.arc(x + mark.dots[i][0], y + mark.dots[i][1], mark.dot, 0, 2 * Math.PI);
+    ctx.fillStyle = colors.mode[mode] ?? colors.mode.other;
+    ctx.fill();
+  });
+  return mark;
+}
+
+const HEART = new Path2D(mdiHeart);
+/** The outline of the heart of mdiHeart, with the middle of the mark at x, y and its box of 24 this many px. */
+function heartShape(x, y, size) {
+  const shape = new Path2D();
+  shape.addPath(HEART, new DOMMatrix().translate(x - (HEART_MIDDLE[0] / 24) * size, y - (HEART_MIDDLE[1] / 24) * size).scale(size / 24));
+  return shape;
+}
+
+// The ring of an open favourite follows its heart at the same distance all
+// round, RING_GAP as the ring of a pill: the outline grown by a wide stroke,
+// less the outline grown by a narrower one, which a path alone cannot say.
+// So it is cut on a canvas of its own, once for each heart and set of
+// colours, and laid on the map from there.
+const heartRings = new Map();
+function heartRing(x, y, modes, big) {
+  const kinds = MODES.filter((mode) => modes.includes(mode)).map((mode) => colors.mode[mode] ?? colors.mode.other);
+  const dpr = ctx.getTransform().a;
+  const key = `${kinds.join()} ${big} ${dpr}`;
+  if (!heartRings.has(key)) heartRings.set(key, cutHeartRing(kinds, big, dpr));
+  const ring = heartRings.get(key);
+  ctx.save();
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.drawImage(ring, Math.round(x * dpr - ring.width / 2), Math.round(y * dpr - ring.height / 2));
+  ctx.restore();
+}
+
+function cutHeartRing(kinds, big, dpr) {
+  const { size } = heartMark(kinds.length, big);
+  const side = Math.ceil((size + 2 * (RING_GAP + RING_WIDTH + RING_EDGE + 2)) * dpr);
+  const canvasOf = () => (typeof OffscreenCanvas === 'function' ? new OffscreenCanvas(side, side) : Object.assign(document.createElement('canvas'), { width: side, height: side }));
+  // (what lies from `from` to `to` px outside the heart, in one style)
+  const band = (canvas, from, to, style) => {
+    const c = canvas.getContext('2d');
+    c.setTransform(dpr, 0, 0, dpr, 0, 0);
+    const shape = heartShape(side / dpr / 2, side / dpr / 2, size);
+    c.lineJoin = 'round';
+    c.fillStyle = style;
+    c.strokeStyle = style;
+    c.lineWidth = 2 * to;
+    c.fill(shape);
+    c.stroke(shape);
+    c.globalCompositeOperation = 'destination-out';
+    c.lineWidth = 2 * from;
+    c.fill(shape);
+    c.stroke(shape);
+    return c;
+  };
+  // (the colours of the kinds round it as kindsRing has them, on white edges)
+  const colour = canvasOf();
+  let style = kinds[0] ?? colors.mode.other;
+  if (kinds.length > 1) {
+    style = colour.getContext('2d').createConicGradient(-Math.PI / 2, side / dpr / 2, side / dpr / 2);
+    kinds.forEach((kind, i) => {
+      style.addColorStop(i / kinds.length, kind);
+      style.addColorStop((i + 1) / kinds.length, kind);
+    });
+  }
+  band(colour, RING_GAP, RING_GAP + RING_WIDTH, style);
+  const ring = canvasOf();
+  const c = band(ring, RING_GAP - RING_EDGE, RING_GAP + RING_WIDTH + RING_EDGE, '#fff');
+  c.globalCompositeOperation = 'source-over';
+  c.setTransform(1, 0, 0, 1, 0, 0);
+  c.drawImage(colour, 0, 0);
+  return ring;
+}
+
+/**
  * An open stop: its departures as they came (the answer of api/departures, or
  * what a board keeps of a further stop), its id and the kinds that call
  * there – as its station on the map has them, else as its departures say.
@@ -784,13 +896,22 @@ function draw() {
   // whose modes stop at places apart has a mark at each from PLACES_ZOOM
   // (marksOf), every one with its name, and dashed lines join them, so that
   // they show as one station (#234). Under the vehicles, which may stand on
-  // them; the lines under the marks.
+  // them; the lines under the marks. A favourite stop is a heart
+  // (drawHeartStop), at every zoom and with its name from FAVOURITE_NAME_ZOOM
+  // (#245). Below ALL_STATIONS_ZOOM, where the map has no stops of its own,
+  // it lies above the vehicles, which would hide it there (`lifted`, drawn
+  // after them); from there with the other stops, under them.
   const big = zoom >= 15;
+  const above = zoom < ALL_STATIONS_ZOOM;
+  const shownFavourites = FIXED ? [] : favourites.stops; // (a screen on a wall shows what its address says)
+  const isFavouriteStop = (stop) => shownFavourites.some((kept) => sameStop(kept, stop));
   const marks = [];
   const joins = [];
   const drawn = new Set(); // (the stations whose marks are on the map)
   for (const station of state.stations) {
     if (!stationShown(station, zoom)) continue;
+    const favourite = isFavouriteStop(station);
+    if (favourite && above) continue;
     const parts = marksOf(station, station.places, zoom, big, project);
     if (!parts.some(({ x, y }) => onScreen(x, y))) continue;
     drawn.add(station.id);
@@ -798,11 +919,11 @@ function draw() {
     for (const part of parts) {
       const hit = { x: part.x, y: part.y, r: STOP_HIT_PX, station };
       hits.push(hit);
-      marks.push({ x: part.x, y: part.y, kinds: part.modes, id: station.id, name: station.name, modes: station.modes, hit });
+      marks.push({ x: part.x, y: part.y, kinds: part.modes, id: station.id, name: station.name, modes: station.modes, favourite, hit });
     }
   }
   drawJoins(joins);
-  for (const mark of marks) Object.assign(mark, drawStop(mark.x, mark.y, mark.kinds, big));
+  for (const mark of marks) Object.assign(mark, (mark.favourite ? drawHeartStop : drawStop)(mark.x, mark.y, mark.kinds, big));
   // The station whose departures are open, at any zoom, and the further stops
   // of its board: on top of the others, each of their marks in a ring in the
   // colours of its kinds (kindsRing), as the chosen vehicle has one in its
@@ -818,7 +939,15 @@ function draw() {
       // (the name of the mark nearest the station's own point goes wherever it falls, as an open stop's does)
       const [px, py] = project(place.lat, place.lon);
       const nearest = parts.reduce((best, part) => (Math.hypot(part.x - px, part.y - py) < Math.hypot(best.x - px, best.y - py) ? part : best));
+      // (an open favourite has its hearts in rings of their shape, above the vehicles where the others are, see "Stops")
+      const loved = isFavouriteStop(place);
       for (const { x, y, modes: kinds } of parts) {
+        if (loved) {
+          if (!above) heartRing(x, y, kinds, big);
+          const mark = above ? heartMark(kinds.length, big) : drawHeartStop(x, y, kinds, big);
+          open.push({ x, y, ...mark, kinds, id, name: place.name, modes, open: x === nearest.x && y === nearest.y, ringed: true, space: RING_GAP + RING_WIDTH + 4, favourite: true, lifted: above });
+          continue;
+        }
         const mark = stopMark(kinds.length, big);
         // (the outline of the pill moved out by RING_GAP, with white edges, as drawRing has it)
         roundedBox(x - mark.w / 2 - RING_GAP, y - mark.h / 2 - RING_GAP, mark.w + 2 * RING_GAP, mark.h + 2 * RING_GAP, mark.corner + RING_GAP);
@@ -834,32 +963,54 @@ function draw() {
     }
   }
   const openIds = new Set(open.map((mark) => mark.id));
-  const stopNames = [...open, ...marks.filter((mark) => !openIds.has(mark.id) && namedAt(mark.modes, zoom))].sort(namePrecedence);
-  if (stopNames.length) {
+  // (the favourites above the vehicles, but for an open one: as the station on
+  // the map has them, else as they were kept, where the map has no station)
+  const lifted = [];
+  if (above) {
+    for (const kept of shownFavourites) {
+      const station = state.stations.find((each) => sameStop(kept, each)) ?? { ...kept, modes: kept.modes ?? [] };
+      if (openIds.has(station.id) || !station.modes.some((mode) => state.enabled.has(mode))) continue;
+      const [x, y] = project(station.lat, station.lon);
+      if (!onScreen(x, y)) continue;
+      lifted.push({ x, y, ...heartMark(station.modes.length, big), kinds: station.modes, id: station.id, name: station.name, modes: station.modes, favourite: true, lifted: true, station });
+    }
+  }
+  const hasName = (mark) => namedAt(mark.modes, zoom) || (mark.favourite && zoom >= FAVOURITE_NAME_ZOOM);
+  const stopNames = [...open, ...marks.filter((mark) => !openIds.has(mark.id) && hasName(mark)), ...lifted.filter(hasName)].sort(namePrecedence);
+  // (the lifted ones get theirs after the vehicles, with them)
+  const liftedNames = [];
+  const writeName = (mark, left) => {
     ctx.font = '600 12px system-ui, sans-serif';
-    for (const mark of stopNames) mark.width = nameWidth(mark.name);
-    // (clear of every mark, an open one with its ring)
-    const obstacles = [...marks, ...open].map(({ x, y, w, h, ringed }) => {
-      const out = ringed ? RING_GAP + RING_WIDTH : 0;
-      return [x - w / 2 - out, y - h / 2 - out, w + 2 * out, h + 2 * out];
-    });
-    const lefts = placeNames(stopNames, obstacles);
     ctx.textAlign = 'left';
     ctx.textBaseline = 'middle';
     ctx.lineJoin = 'round';
     ctx.lineWidth = 3.5;
     ctx.strokeStyle = colors.bg;
     ctx.fillStyle = colors.text;
-    const named = [];
+    // (a halo in the colour of the ground, so that the name reads on any map)
+    ctx.strokeText(mark.name, left, mark.y + 0.5);
+    ctx.fillText(mark.name, left, mark.y + 0.5);
+  };
+  if (stopNames.length) {
+    ctx.font = '600 12px system-ui, sans-serif';
+    for (const mark of stopNames) mark.width = nameWidth(mark.name);
+    // (clear of every mark, an open one with its ring)
+    const obstacles = [...marks, ...open, ...lifted].map(({ x, y, w, h, ringed }) => {
+      const out = ringed ? RING_GAP + RING_WIDTH : 0;
+      return [x - w / 2 - out, y - h / 2 - out, w + 2 * out, h + 2 * out];
+    });
+    const lefts = placeNames(stopNames, obstacles);
+    const withNames = [];
     stopNames.forEach((mark, i) => {
       if (lefts[i] === null) return;
-      // (a halo in the colour of the ground, so that the name reads on any map)
-      ctx.strokeText(mark.name, lefts[i], mark.y + 0.5);
-      ctx.fillText(mark.name, lefts[i], mark.y + 0.5);
-      named.push(mark);
+      if (mark.lifted) liftedNames.push([mark, lefts[i]]);
+      else {
+        writeName(mark, lefts[i]);
+        withNames.push(mark);
+      }
     });
     // (a mark whose name is on the map needs no tooltip to say it again; that of an open one is its own)
-    for (const mark of named) {
+    for (const mark of withNames) {
       if (mark.hit) mark.hit.named = true;
       else for (const other of marks) if (other.id === mark.id && Math.abs(other.x - mark.x) < 4 && Math.abs(other.y - mark.y) < 4) other.hit.named = true;
     }
@@ -1083,6 +1234,19 @@ function draw() {
     if (flag) drawFlag(x + w / 2 - r * 0.45, y - r - 5, flag);
   }
 
+  // The favourites lifted above the vehicles (see "Stops" above), with their
+  // names. A tap finds them before the vehicles under them.
+  for (const mark of open) {
+    if (!mark.lifted) continue;
+    heartRing(mark.x, mark.y, mark.kinds, big);
+    drawHeartStop(mark.x, mark.y, mark.kinds, big);
+  }
+  for (const mark of lifted) {
+    drawHeartStop(mark.x, mark.y, mark.kinds, big);
+    hits.push({ x: mark.x, y: mark.y, r: Math.max(STOP_HIT_PX, mark.w / 2), station: mark.station, above: true, named: liftedNames.some(([withName]) => withName === mark) });
+  }
+  for (const [mark, left] of liftedNames) writeName(mark, left);
+
   // What a bubble covers cannot be pointed at through it (hitTest).
   const covers = [];
   for (const group of bubbles) {
@@ -1234,8 +1398,8 @@ function hitTest(point) {
     if (covered && !hit.top) continue;
     const d = Math.hypot(hit.x - point.x, hit.y - point.y);
     if (d > hit.r) continue;
-    // vehicles win over the station they are standing at
-    const score = d + (hit.station ? 1000 : 0);
+    // vehicles win over the station they are standing at; a favourite drawn above them over the vehicles
+    const score = d + (hit.above ? -1000 : hit.station ? 1000 : 0);
     if (score < bestScore) {
       best = hit;
       bestScore = score;
@@ -1282,7 +1446,9 @@ map.on('click', (event) => {
   if (hit?.vehicle) select('trip', hit.vehicle.id);
   else if (hit?.station) {
     // (the stops of a board are open already, the one it is of and its further stops)
-    if (!onBoard(hit.station)) select('station', hit.station.id);
+    if (onBoard(hit.station)) return;
+    if (hit.station.id) select('station', hit.station.id);
+    else openFavouriteStop(hit.station);
   } else closePanel();
   // (what was tapped is not to end up under its own details)
   if (hit) clearOfSheet(hit.y);
@@ -1471,7 +1637,8 @@ function ask(query) {
   const modeNames = Object.fromEntries(DRAW_ORDER.map((mode) => [mode, t(`mode.${mode}`)]));
   // (stops alone where one is added to a board)
   const limits = state.adding ? { towns: 0, lines: 0, stops: SEARCH_LIMIT } : { towns: TOWN_LIMIT, lines: LINE_LIMIT, stops: SEARCH_LIMIT };
-  finder.postMessage({ turn: ++turn, query, near, limits, modeNames });
+  // (and the favourites, which come first, and are what it lists with nothing typed)
+  finder.postMessage({ turn: ++turn, query, near, limits, modeNames, favourites });
 }
 
 /** The list the thread has is not the server's any more: it loads it again with the next question. */
@@ -1517,9 +1684,12 @@ function listResults(towns, lines, stops, note = '') {
     nameInTown(town.name, town.district),
   ]));
   // A line begins with its name on the colour of its mode, as in the departures.
+  // A favourite has a heart at the end of its row: a mark, not a button (#245).
+  const heart = (item) => (item.favourite ? [el('span', { class: 'favourite', role: 'img', 'aria-label': t('search.favourite'), title: t('search.favourite') }, [icon(mdiHeart)])] : []);
   const lineRows = lines.map((line) => option(() => chooseLine(line), { class: 'line' }, [
     badge(line.name, line.mode),
     el('span', { class: 'name' }, [el('span', { class: 'to', text: line.to.join(' – ') }), el('span', { class: 'agency', text: line.agency })]),
+    ...heart(line),
   ]));
   const stopRows = stops.map((stop) => {
     // The dots say what stops there, as the chips do.
@@ -1529,7 +1699,7 @@ function listResults(towns, lines, stops, note = '') {
       return dot;
     });
     // Below its name the town it is in, where the name does not say that: in small print, as a line has who runs it.
-    return option(() => chooseStop(stop), { class: stop.town ? 'in-town' : '', title: stop.modes.map((mode) => t(`mode.${mode}`)).join(', ') }, [el('span', { class: 'dots' }, dots), nameInTown(stop.name, stop.town)]);
+    return option(() => chooseStop(stop), { class: stop.town ? 'in-town' : '', title: stop.modes.map((mode) => t(`mode.${mode}`)).join(', ') }, [el('span', { class: 'dots' }, dots), nameInTown(stop.name, stop.town), ...heart(stop)]);
   });
   // (each kind under its heading where more than one kind was found)
   const kinds = [towns, lines, stops].filter((list) => list.length).length;
@@ -1545,18 +1715,21 @@ function listResults(towns, lines, stops, note = '') {
 function runSearch() {
   const query = searchField.value;
   ask(query);
-  if (!query.trim()) listResults([], [], []);
-  else if (!finderHasList) listResults([], [], [], t('search.loading'));
+  // (with nothing typed the thread answers with the favourites, if there are any)
+  if (!query.trim()) {
+    if (!hasFavourites()) listResults([], [], []);
+  } else if (!finderHasList) listResults([], [], [], t('search.loading'));
 }
 
 /** Shows what the thread found, unless something else has been typed since. */
 function answered({ turn: of, failed = false, towns = [], lines, stops }) {
   // (whatever it was asked: it has the list now, or has not)
   finderHasList = !failed;
-  // (asked for the list alone, or typed on meanwhile)
-  if (of !== turn || !searchField.value.trim()) return;
-  if (failed) listResults([], [], [], t('search.failed'));
-  else listResults(towns, lines, stops, towns.length || lines.length || stops.length ? '' : t('search.none'));
+  // (typed on meanwhile, or asked for the list alone, where there are no favourites to list)
+  const typed = searchField.value.trim() !== '';
+  if (of !== turn || (!typed && !hasFavourites())) return;
+  if (failed) listResults([], [], [], typed ? t('search.failed') : '');
+  else listResults(towns, lines, stops, !typed || towns.length || lines.length || stops.length ? '' : t('search.none'));
 }
 
 /** Shuts the list, and on a narrow screen the field with it. */
@@ -1909,6 +2082,7 @@ if (!matchMedia('(pointer: coarse)').matches) {
   $('use-stop').textContent = t('about.useStopMouse');
   $('use-departure').textContent = t('about.useDepartureMouse');
   $('use-modes').textContent = t('about.useModesMouse');
+  $('use-favourite').textContent = t('about.useFavouriteMouse');
 }
 
 /** A dialog closes with its button, and with a click beside it. */
@@ -2171,6 +2345,20 @@ async function openAddress(loaded = false) {
   return true;
 }
 
+/**
+ * Opens a favourite stop that was tapped where the map has no station of it
+ * (#245), by its address: that finds it also where a new timetable has moved
+ * it a little, as the address of the page does.
+ */
+async function openFavouriteStop(stop) {
+  const path = stopPathOf(stop);
+  const res = await fetch(`api/address?path=${encodeURIComponent(path)}`).catch(() => null);
+  if (res?.status === 404) addressGone(path);
+  if (!res?.ok) return;
+  const found = await res.json();
+  if (found.type === 'stop') select('station', null, { at: found });
+}
+
 /** Says that the address names nothing now, and looks for the name in it. */
 function addressGone(path) {
   state.selection = null;
@@ -2213,7 +2401,54 @@ function shareable(yes, board = false) {
   if (!yes) copiedNote.hidden = true;
   panel.classList.toggle('shareable', yes);
   panel.classList.toggle('boardable', board);
+  showFavourite();
 }
+
+// The heart before the share button (#245): a stop or a line is made a
+// favourite with it, and is one no longer. A note says where a favourite is
+// to be found, for a moment, as the one of the share button does.
+const favouriteButton = $('panel-favourite');
+const favouriteNote = $('panel-favourited');
+
+/** What is open as it is kept as a favourite: { kind, item } of a stop or a line, else null. */
+function openFavourite() {
+  const selection = state.selection;
+  if (!selection?.data) return null;
+  if (selection.type === 'station') return { kind: 'stops', item: stopFavourite(selection.data, openStop(selection.data).modes) };
+  if (selection.type === 'line') return { kind: 'lines', item: lineFavourite(selection.data) };
+  return null;
+}
+
+/** Shows the heart where a stop or a line is open: filled where it is a favourite. */
+function showFavourite() {
+  const open = shareButton.hidden ? null : openFavourite();
+  favouriteButton.hidden = !open;
+  panel.classList.toggle('favourable', open !== null);
+  if (!open) {
+    favouriteNote.hidden = true;
+    return;
+  }
+  const yes = isFavourite(favourites, open.kind, open.item);
+  const label = yes ? t('panel.unfavourite') : t('panel.favourite');
+  favouriteButton.title = label;
+  favouriteButton.setAttribute('aria-label', label);
+  favouriteButton.classList.toggle('on', yes);
+  favouriteButton.replaceChildren(icon(yes ? mdiHeart : mdiHeartOutline));
+}
+
+favouriteButton.addEventListener('click', () => {
+  const open = openFavourite();
+  if (!open) return;
+  const yes = !isFavourite(favourites, open.kind, open.item);
+  favourites = withFavourite(favourites, open.kind, open.item, yes);
+  keepFavourites();
+  showFavourite();
+  // (one note at a time under the buttons; none where the heart goes empty, which says it)
+  copiedNote.hidden = true;
+  favouriteNote.hidden = !yes;
+  clearTimeout(copiedTimer);
+  if (yes) copiedTimer = setTimeout(() => { favouriteNote.hidden = true; }, 2000);
+});
 
 shareButton.addEventListener('click', async () => {
   // (the address alone, without the settings of this page)
@@ -2228,6 +2463,7 @@ shareButton.addEventListener('click', async () => {
     return;
   }
   copiedNote.hidden = false;
+  favouriteNote.hidden = true;
   clearTimeout(copiedTimer);
   copiedTimer = setTimeout(() => {
     copiedNote.hidden = true;

@@ -5,7 +5,7 @@
 
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { buildIndex, search, searchLines, searchTowns, wordsOf } from '../public/search.js';
+import { buildIndex, favouritesIn, search, searchLines, searchTowns, wordsOf } from '../public/search.js';
 import { fold } from '../public/stops.js';
 import { searchList } from '../server/lib/search-list.js';
 import { MODES } from '../server/lib/timetable.js';
@@ -502,4 +502,81 @@ test('a town found has the rectangle around its stations, to be shown in', () =>
   assert.deepEqual(searchTowns(twins, 'schwerin')[0].box, [53.6288, 11.4127, 53.6288, 11.4127]);
   // a list without towns, as without OpenStreetMap extracts
   assert.deepEqual(searchTowns(index, 'nürnberg'), []);
+});
+
+// Favourites (#245): as the page keeps them, by name and place, and where they are in the list
+const keptStops = (...wanted) => wanted.map((name) => {
+  const [, lat, lon] = STOPS.find(([own]) => own === name);
+  return { name, lat, lon };
+});
+const keptLine = (name, agency) => {
+  const [, mode, , , lat, lon] = LINES.find(([own, , own2]) => own === name && own2 === agency);
+  return { name, mode, agency, lat, lon };
+};
+const favourites = (...wanted) => favouritesIn(index, { stops: keptStops(...wanted) }).stops;
+
+test('a favourite is the stop of its name nearest its place, as the list has it now, and the line of its name, mode and operator (#245)', () => {
+  const found = favouritesIn(index, {
+    stops: [
+      // (a new timetable may have moved it a little)
+      { name: 'Nürnberg Plärrer', lat: 49.4485, lon: 11.0652 },
+      { name: 'Hersbruck Plärrer', lat: 49.50526, lon: 11.43553 },
+      // (the same once more, and one of the name 2 km away, which is another)
+      { name: 'Nürnberg Plärrer', lat: 49.44809, lon: 11.0648 },
+      { name: 'Nürnberg Plärrer', lat: 49.466, lon: 11.0648 },
+      // (one the timetable does not have any more)
+      { name: 'Nürnberg Westring', lat: 49.46, lon: 11.05 },
+    ],
+    lines: [
+      keptLine('490', 'Landkreis Neuburg-Schrobenhausen'),
+      // (the U1 of Nuremberg kept in Munich: not this one)
+      { name: 'U1', mode: 'subway', agency: 'VerkehrsAG Nürnberg', lat: 48.14, lon: 11.56 },
+      { name: '5', mode: 'bus', agency: 'VerkehrsAG Nürnberg', lat: 49.44298, lon: 11.10032 },
+    ],
+  });
+  assert.deepEqual(search(index, '', { favourites: found.stops }).map((stop) => stop.name), ['Nürnberg Plärrer', 'Hersbruck Plärrer']);
+  assert.deepEqual(searchLines(index, '', { favourites: found.lines }).map((line) => `${line.name} ${line.agency}`), ['490 Landkreis Neuburg-Schrobenhausen']);
+  assert.deepEqual(favouritesIn(index), { stops: [], lines: [] });
+});
+
+test('with nothing typed, the favourites are what is listed, in the order they were marked (#245)', () => {
+  const marked = favourites('Hersbruck Plärrer', 'Nürnberg Hbf');
+  assert.deepEqual(search(index, '', { favourites: marked }).map((stop) => [stop.name, stop.favourite]), [['Hersbruck Plärrer', true], ['Nürnberg Hbf', true]]);
+  assert.deepEqual(search(index, ' , ', { favourites: marked }).length, 2);
+  // (none where no stops are wanted, as where a stop is added to a board no lines are)
+  assert.deepEqual(search(index, '', { favourites: marked, limit: 0 }), []);
+  const line = favouritesIn(index, { lines: [keptLine('U1', 'VerkehrsAG Nürnberg')] }).lines;
+  assert.deepEqual(searchLines(index, '', { favourites: line }), [{ name: 'U1', mode: 'subway', agency: 'VerkehrsAG Nürnberg', to: ['Fürth Hardhöhe', 'Langwasser Süd'], at: [49.44428, 11.05986], favourite: true }]);
+  assert.deepEqual(searchLines(index, '', { favourites: line, limit: 0 }), []);
+  assert.deepEqual(names(''), []);
+});
+
+test('a favourite that matches comes first among the stops, the others after it in their order (#245)', () => {
+  const before = names('nürnberg', { limit: 4 });
+  assert.notEqual(before[0], 'Nürnberg Hauptmarkt');
+  const after = search(index, 'nürnberg', { limit: 4, favourites: favourites('Nürnberg Hauptmarkt', 'Erlangen') });
+  assert.deepEqual(after.map((stop) => stop.name), ['Nürnberg Hauptmarkt', ...before.filter((name) => name !== 'Nürnberg Hauptmarkt')].slice(0, 4));
+  assert.deepEqual(after.map((stop) => stop.favourite ?? false), [true, false, false, false]);
+  // (a favourite that does not match is not listed)
+  assert.ok(!after.some((stop) => stop.name === 'Erlangen'));
+  // (all favourites that match, even more than are asked for, among them in the order of the search)
+  assert.deepEqual(names('nürnberg', { limit: 1, favourites: favourites('Nürnberg Hauptmarkt', 'Nürnberg Rathaus') }), ['Nürnberg Rathaus', 'Nürnberg Hauptmarkt']);
+});
+
+test('a favourite comes first only as far as the search went: a single letter at the beginning of a word (#245)', () => {
+  // ("e" is inside "Hersbruck", but begins the words of four stops, as many as are asked for)
+  assert.deepEqual(names('e', { limit: 4, favourites: favourites('Hersbruck Plärrer', 'Erlangen Berliner Pl.') }), ['Erlangen Berliner Pl.', ...names('e', { limit: 4 }).filter((name) => name !== 'Erlangen Berliner Pl.')].slice(0, 4));
+  assert.ok(!names('e', { limit: 4, favourites: favourites('Hersbruck Plärrer') }).includes('Hersbruck Plärrer'));
+  // (where they are too few, what has it inside is found, and so is the favourite)
+  assert.equal(names('e', { favourites: favourites('Hersbruck Plärrer') })[0], 'Hersbruck Plärrer');
+  // (and by a close spelling where nothing else is found)
+  assert.deepEqual(names('hersbrück', { favourites: favourites('Hersbruck Plärrer') }), ['Hersbruck Plärrer']);
+});
+
+test('a favourite line comes first among the lines found, before one of exactly the name typed (#245)', () => {
+  const agencies = (query, kept) => searchLines(index, query, { favourites: favouritesIn(index, { lines: kept }).lines }).map((line) => `${line.name} ${line.agency}${line.favourite ? ' ♥' : ''}`);
+  assert.deepEqual(agencies('490', [keptLine('490', 'Landkreis Neuburg-Schrobenhausen')])[0], '490 Landkreis Neuburg-Schrobenhausen ♥');
+  assert.deepEqual(agencies('33', [keptLine('331', 'Kraus Reisen Gmbh')]).slice(0, 2), ['331 Kraus Reisen Gmbh ♥', '33 Stadtverkehr Fürth']);
+  // (one that does not match is not listed)
+  assert.ok(!agencies('33', [keptLine('U1', 'VerkehrsAG Nürnberg')]).some((line) => line.startsWith('U1')));
 });
