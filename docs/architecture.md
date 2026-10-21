@@ -120,7 +120,7 @@ Page (`public/`):
 | `app.js` | map, polling, animation, drawing on a canvas, detail panel |
 | `display.js` | display mode and the board of a stop in the address of the page: what an address asks for, and the address for what is shown |
 | `address.js` | the addresses of stops, lines and trips, for the page and the server: how a name is written in one, and what an address names (`stopPath`, `linePath`, `tripPath`, `parseAddress`) |
-| `stops.js` | the stops on the map: how large the mark of one is, from which zoom which stops carry their names and where those go so that none lies on another, the marks of a station at its places and the lines that join them, and the style of the map without stops of its own |
+| `stops.js` | the stops on the map: how large the mark of one is, from which zoom which stops carry their names and where those go so that none lies on another, the marks of a station at its places and the lines that join them, the style of the map without stops of its own, and whether the name of a stop says its town |
 | `search.js` | finding stops, lines and towns by name: matching and order, without the page around it |
 | `search-worker.js` | the thread that loads the list of stops, lines and towns and searches it |
 | `i18n.js`, `locales/` | texts in the visitor's language, see [translating.md](translating.md) |
@@ -791,7 +791,13 @@ otherwise a server would load a file written by older code:
   result has its town below its name where the name does not say it, which
   is where a word of the name is the town, or the first long word of it:
   "Marienplatz" has "München" below it, "Nürnberg Plärrer" has nothing, and
-  "Nürnberger Straße" has its town, since many towns have one.
+  "Nürnberger Straße" has its town, since many towns have one; so has
+  "D-Froschenteich", whose D says Düsseldorf only to whoever knows it. The
+  stops of a trip through more than one town have their towns below their
+  names by the same rule
+  ([#246](https://github.com/xiidoz/netnou/issues/246)): Erfurt's
+  "Hauptbahnhof" on the way from Berlin to München. Those of a trip within
+  one town have none.
 - **The list of the search.** All of Germany is a quarter of a million
   stations, and every visitor who searches loads the list of them. It is
   therefore as small as it gets (`lib/search-list.js`,

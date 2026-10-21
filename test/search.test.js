@@ -5,7 +5,8 @@
 
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { buildIndex, fold, search, searchLines, searchTowns, wordsOf } from '../public/search.js';
+import { buildIndex, search, searchLines, searchTowns, wordsOf } from '../public/search.js';
+import { fold } from '../public/stops.js';
 import { searchList } from '../server/lib/search-list.js';
 import { MODES } from '../server/lib/timetable.js';
 

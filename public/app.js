@@ -10,7 +10,7 @@
 
 import { parseAddress, stopPath, wordsOf } from './address.js';
 import { APP_NAME, READMES, dayOf, formatNumber, formatTime, languagePicker, loadLanguage, pageTexts, sentInAnother, setTimeZone, t, translatePage } from './i18n.js';
-import { PLACES_ZOOM, RAIL_MODES, joiningLines, mergePlaces, namePrecedence, namedAt, placeNames, stopMark, withoutStyleStops } from './stops.js';
+import { PLACES_ZOOM, RAIL_MODES, joiningLines, mergePlaces, namePrecedence, namedAt, placeNames, stopMark, townsAlong, withoutStyleStops } from './stops.js';
 import { BOARD_MAX, BOARD_SHARE, BOARD_STOPS, boardBlocks, boardQuery, boardShare, displayQuery, ledBy, readBoard, readDisplay, readStops } from './display.js';
 import { mdiAlert, mdiArrowCollapse, mdiArrowExpand, mdiChevronRight, mdiCityVariantOutline, mdiEye, mdiEyeOff, mdiFullscreen, mdiFullscreenExit, mdiMinusCircleOutline, mdiPlaylistPlus, mdiPlus } from './vendor/material-design-icons/icons.js';
 import { AttributionControl, MapLibreMap, NavigationControl } from './vendor/maplibre-gl/maplibre-gl.mjs';
@@ -1494,6 +1494,15 @@ function setActive(index) {
   }
 }
 
+/**
+ * A name with its town below it in small print, where there is one to show:
+ * that of a stop whose name does not say it, in the search and in the stops
+ * of a trip (#246), and the district of a town where another town has the
+ * name too (#24). Its row has the class in-town.
+ */
+const nameInTown = (name, town, props = {}) =>
+  town ? el('span', { class: 'name', ...props }, [el('span', { class: 'stop', text: name }), el('span', { class: 'town', text: town })]) : el('span', { class: 'name', text: name, ...props });
+
 /** Shows the towns, the lines and the stops found below the field, or a note in their place. */
 function listResults(towns, lines, stops, note = '') {
   const option = (choose, props, children) => {
@@ -1505,9 +1514,7 @@ function listResults(towns, lines, stops, note = '') {
   // district where another town has the name too (#24).
   const townRows = towns.map((town) => option(() => chooseTown(town), { class: `place${town.district ? ' in-town' : ''}` }, [
     el('span', { class: 'sign' }, [icon(mdiCityVariantOutline)]),
-    town.district
-      ? el('span', { class: 'name' }, [el('span', { class: 'stop', text: town.name }), el('span', { class: 'town', text: town.district })])
-      : el('span', { class: 'name', text: town.name }),
+    nameInTown(town.name, town.district),
   ]));
   // A line begins with its name on the colour of its mode, as in the departures.
   const lineRows = lines.map((line) => option(() => chooseLine(line), { class: 'line' }, [
@@ -1522,10 +1529,7 @@ function listResults(towns, lines, stops, note = '') {
       return dot;
     });
     // Below its name the town it is in, where the name does not say that: in small print, as a line has who runs it.
-    const name = stop.town
-      ? el('span', { class: 'name' }, [el('span', { class: 'stop', text: stop.name }), el('span', { class: 'town', text: stop.town })])
-      : el('span', { class: 'name', text: stop.name });
-    return option(() => chooseStop(stop), { class: stop.town ? 'in-town' : '', title: stop.modes.map((mode) => t(`mode.${mode}`)).join(', ') }, [el('span', { class: 'dots' }, dots), name]);
+    return option(() => chooseStop(stop), { class: stop.town ? 'in-town' : '', title: stop.modes.map((mode) => t(`mode.${mode}`)).join(', ') }, [el('span', { class: 'dots' }, dots), nameInTown(stop.name, stop.town)]);
   });
   // (each kind under its heading where more than one kind was found)
   const kinds = [towns, lines, stops].filter((list) => list.length).length;
@@ -2579,6 +2583,8 @@ function renderTrip(trip, scrollToNext) {
   let nextRow = null;
   // where it is going from the stop ahead, which may be another place than where it set out for (#225)
   let to = trip.stops[lastIndex].to;
+  // the town of a stop whose name does not say it, below the name as in the search (#246)
+  const towns = townsAlong(trip.stops);
 
   const rows = trip.stops.map((stop, i) => {
     const isLast = i === lastIndex;
@@ -2595,11 +2601,12 @@ function renderTrip(trip, scrollToNext) {
     if (past) classes.push('past');
     if (isNext) classes.push('next');
     if (stop.skipped) classes.push('cancelled');
+    if (towns[i]) classes.push('in-town');
     const row = el('button', { type: 'button', class: classes.join(' '), onclick: () => select('station', stop.station) }, [
       el('span', { class: 'rail' }),
       el('span', { class: 'time', text: formatTime(planned) }),
       stop.skipped ? el('span') : delayNode(delay),
-      el('span', { class: 'name', text: stop.name, title: stop.name }),
+      nameInTown(stop.name, towns[i], { title: stop.name }),
       el('span', { class: 'platform', text: stop.skipped ? t('stop.skipped') : platformText(stop.platform) }),
     ]);
     if (isNext) nextRow = row;

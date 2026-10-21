@@ -282,11 +282,12 @@ button { font: inherit; color: inherit; }
 .search-results .swatch { width: 8px; height: 8px; background: var(--chip-color); }
 .search-results .name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 /* Two lines: a line has where it goes, and below that in small print who
-   runs it; a stop whose name does not say its town has the town there, and
-   a town its district where another town has the name too. */
-.search-results .line .name, .search-results .in-town .name { display: grid; min-width: 0; line-height: 1.25; }
-.search-results .line .to, .search-results .line .agency, .search-results .in-town .stop, .search-results .in-town .town { overflow: hidden; text-overflow: ellipsis; }
-.search-results .line .agency, .search-results .in-town .town { color: var(--text-muted); font-size: 12px; }
+   runs it; a town its district there where another town has the name too;
+   and a stop whose name does not say its town has the town there, in the
+   search as in the stops of a trip (#246). */
+.search-results .line .name, .in-town .name { display: grid; min-width: 0; line-height: 1.25; }
+.search-results .line .to, .search-results .line .agency, .in-town .stop, .in-town .town { overflow: hidden; text-overflow: ellipsis; }
+.search-results .line .agency, .in-town .town { color: var(--text-muted); font-size: 12px; font-weight: 400; }
 .search-results .badge { flex: none; }
 /* the headings of lines and stops, where both were found */
 .search-heading {

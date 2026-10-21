@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { NAME_ZOOM, PLACES_ZOOM, RAIL_NAME_ZOOM, isExpressionFilter, joiningLines, mergePlaces, namePrecedence, namedAt, placeNames, stopMark, withoutStyleStops } from '../public/stops.js';
+import { NAME_ZOOM, PLACES_ZOOM, RAIL_NAME_ZOOM, isExpressionFilter, joiningLines, mergePlaces, namePrecedence, namedAt, placeNames, stopMark, townToShow, townsAlong, withoutStyleStops } from '../public/stops.js';
 
 test('a stop is a pill with a dot for each kind, in rows of three', () => {
   // a bus stop: one dot, as round as it is high
@@ -121,4 +121,30 @@ test('the lines that join the marks of a station go the shortest way through all
   // trains far south, the U-Bahn between, tram and bus side by side in the north: a chain, no line from the trains to the north
   const hbf = [{ x: 300, y: 500 }, { x: 200, y: 290 }, { x: 280, y: 180 }, { x: 190, y: 190 }];
   assert.deepEqual(joiningLines(hbf), [[0, 1], [1, 3], [3, 2]]);
+});
+
+test('a name says its town where one of its words is the first long word of the town', () => {
+  const shown = (name, town) => townToShow(name, town);
+  assert.equal(shown('Marienplatz', 'München'), 'München');
+  assert.equal(shown('Nürnberg Plärrer', 'Nürnberg'), null);
+  assert.equal(shown('München-Pasing', 'München'), null);
+  assert.equal(shown('Halle(Saale)Hbf', 'Halle (Saale)'), null);
+  assert.equal(shown('Frankfurt (Main) Hauptwache', 'Frankfurt am Main'), null);
+  // "Bad" is not the long word of the town, and a word that only begins like the town does not say it
+  assert.equal(shown('Bad Kissingen Bahnhof', 'Bad Kissingen'), null);
+  assert.equal(shown('Bad Bahnhof', 'Bad Kissingen'), 'Bad Kissingen');
+  assert.equal(shown('Nürnberger Straße', 'Fürth'), 'Fürth');
+  assert.equal(shown('Nürnberger Straße', 'Nürnberg'), 'Nürnberg');
+  // nor does a town in short, which says it only to whoever knows it already
+  assert.equal(shown('D-Froschenteich', 'Düsseldorf'), 'Düsseldorf');
+  assert.equal(shown('Hauptbahnhof', null), null);
+});
+
+test('the stops of a trip through more than one town have the town where their name does not say it, those of a trip within one none (#246)', () => {
+  const stops = (...named) => named.map(([name, town = null]) => ({ name, town }));
+  const ice = stops(['Berlin Hbf', 'Berlin'], ['Halle(Saale)Hbf', 'Halle (Saale)'], ['Hauptbahnhof', 'Erfurt'], ['Bamberg', 'Bamberg'], ['Basel SBB']);
+  assert.deepEqual(townsAlong(ice), [null, null, 'Erfurt', null, null]);
+  // a tram that stays in Leipzig, beyond which no town is known
+  const tram = stops(['Krakauer Str.', 'Leipzig'], ['Ratzelbogen', 'Leipzig'], ['Am Rande']);
+  assert.deepEqual(townsAlong(tram), [null, null, null]);
 });
