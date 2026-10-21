@@ -46,7 +46,7 @@ test('the reader takes the ways that classify keeps, and then the places of just
   for (const options of [{}, { sorted: true }, { backwards: true }]) {
     const read = readMade(dir, EXTRACT.nodes, EXTRACT.ways, { keepNode: inside, ...options });
     const label = JSON.stringify(options);
-    assert.deepEqual(read.kinds, [{ net: 'road', factor: 1.3, dir: 3 }, { net: 'tram', factor: 1, dir: 1, shared: ['subway'] }, { net: 'road', factor: 1.6, dir: 3 }], label);
+    assert.deepEqual(read.kinds, [{ net: 'road', factor: 1.3, dir: 3 }, { net: 'tram', factor: 1, dir: 1, shared: ['subway', 'rail'] }, { net: 'road', factor: 1.6, dir: 3 }], label);
     assert.deepEqual(Array.from(read.ways.id), [100, 102, 104], label);
     assert.deepEqual(Array.from(read.ways.kind), [0, 1, 2], label);
     // the nodes of a way as places, by their ids: none for one that is not kept or not there
@@ -70,7 +70,8 @@ test('the networks of extracts: ways cut where a node is not kept, nodes numbere
   assert.deepEqual(Array.from(nets.tram.lat), [494200000, 494300000, 494400000, 494500000]);
   // … and is on the network of the U-Bahn as well, at a higher cost, as a track of another kind (4)
   assert.deepEqual([nets.subway.a, nets.subway.b, nets.subway.f, nets.subway.d].map((list) => Array.from(list)), [[0, 2], [1, 3], [150, 150], [5, 5]]);
-  assert.equal(nets.rail.a.length, 0);
+  // … and of trains, for tram-trains (#248)
+  assert.deepEqual([nets.rail.a, nets.rail.b, nets.rail.f, nets.rail.d].map((list) => Array.from(list)), [[0, 2], [1, 3], [150, 150], [5, 5]]);
 
   // A second extract has the residential street again, and a road that goes on from node 20.
   const second = readMade(dir, [[10, 49.4, 11.0], [11, 49.41, 11.0], [20, 49.42, 11.0], [5000000000, 49.43, 11.01], [40, 49.42, 10.99]], [
@@ -126,9 +127,9 @@ test('classifyWay: networks, access, one-way rules and bus exceptions', () => {
   assert.equal(classifyWay({ highway: 'service', service: 'parking_aisle' }), null);
   assert.equal(classifyWay({ highway: 'pedestrian' }), null);
   assert.equal(classifyWay({ highway: 'pedestrian', psv: 'yes' }).net, 'road');
-  // the U-Bahn and trams share each other's tracks and those of the light rail (#128)
+  // the U-Bahn and trams share each other's tracks and those of the light rail (#128), and trains those of trams (#248)
   assert.deepEqual(classifyWay({ railway: 'subway' }), { net: 'subway', factor: 1, dir: 3, shared: ['tram'] });
-  assert.deepEqual(classifyWay({ railway: 'tram' }), { net: 'tram', factor: 1, dir: 3, shared: ['subway'] });
+  assert.deepEqual(classifyWay({ railway: 'tram' }), { net: 'tram', factor: 1, dir: 3, shared: ['subway', 'rail'] });
   assert.deepEqual(classifyWay({ railway: 'light_rail' }), { net: 'rail', factor: 1, dir: 3, shared: ['subway', 'tram'] });
   assert.deepEqual(classifyWay({ railway: 'rail' }), { net: 'rail', factor: 1, dir: 3 });
   assert.equal(classifyWay({ railway: 'rail', oneway: 'yes' }).dir, 3);
@@ -138,10 +139,12 @@ test('classifyWay: networks, access, one-way rules and bus exceptions', () => {
   // ferries on their routes across the water, both ways
   assert.deepEqual(classifyWay({ route: 'ferry' }), { net: 'ferry', factor: 1, dir: 3 });
   // cable cars and monorails together with funiculars and rack railways, whole narrow gauge and the track of a tram with a rack among them
-  for (const tags of [{ railway: 'monorail' }, { railway: 'funicular', gauge: '1000' }, { railway: 'narrow_gauge', rack: 'no' }, { railway: 'tram', rack: 'riggenbach' }, { railway: 'rail', rack: 'abt' }, { aerialway: 'gondola' }, { aerialway: 'cable_car' }, { aerialway: 'chair_lift' }]) {
+  for (const tags of [{ railway: 'monorail' }, { railway: 'funicular', gauge: '1000' }, { railway: 'narrow_gauge', rack: 'abt' }, { railway: 'tram', rack: 'riggenbach' }, { railway: 'rail', rack: 'abt' }, { aerialway: 'gondola' }, { aerialway: 'cable_car' }, { aerialway: 'chair_lift' }]) {
     assert.deepEqual(classifyWay(tags), { net: 'cable', factor: 1, dir: 3 }, JSON.stringify(tags));
   }
   assert.equal(classifyWay({ railway: 'monorail', service: 'yard' }).factor, 3);
+  // narrow gauge without a rack is shared with trains, which run on it as well (the Harz, #248)
+  for (const tags of [{ railway: 'narrow_gauge' }, { railway: 'narrow_gauge', rack: 'no' }]) assert.deepEqual(classifyWay(tags), { net: 'cable', factor: 1, dir: 3, shared: ['rail'] }, JSON.stringify(tags));
   // a track that has no rack stays that of the trains, and not every lift carries people as a line does
   assert.equal(classifyWay({ railway: 'rail', rack: 'no' }).net, 'rail');
   assert.equal(classifyWay({ railway: 'tram' }).net, 'tram');
@@ -434,6 +437,42 @@ test('a stop of trains may be on any track a little further away than the neares
   assert.deepEqual(tracksOf(spread), [0, 1, 2, 3, 4, 5]);
   assert.ok(spread.length > 6, `${spread.length} candidates`);
   assert.deepEqual(tracksOf(new Network(graph, { ...options, snapSpread: 100, maxCandidates: 64 }).candidates(...stop)), [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]);
+});
+
+test('trains keep to their own tracks where a stop of the hop is on them, and take those of trams where none is (#248)', () => {
+  // Two stations, X and Y, 2 km apart on a railway that goes round by the south (6 km); a tram line runs
+  // straight between them in the street, 30 m to the north of both, a track that trains share (cost 1.5).
+  const LAT0 = 48;
+  const east = 111320 * Math.cos((LAT0 * Math.PI) / 180);
+  const at = (x, y) => [LAT0 + y / 111320, 11 + x / east];
+  const points = [[0, 0], [0, -2000], [2000, -2000], [2000, 0], [-200, 30], [500, 30], [1500, 30], [2200, 30]];
+  const edges = [[0, 1, 100, 3], [1, 2, 100, 3], [2, 3, 100, 3], [4, 5, 150, 7], [5, 6, 150, 7], [6, 7, 150, 7]];
+  const graph = {
+    lat: Int32Array.from(points, ([x, y]) => Math.round(at(x, y)[0] * 1e7)),
+    lon: Int32Array.from(points, ([x, y]) => Math.round(at(x, y)[1] * 1e7)),
+    a: Int32Array.from(edges, (e) => e[0]),
+    b: Int32Array.from(edges, (e) => e[1]),
+    f: Uint16Array.from(edges, (e) => e[2]),
+    d: Uint8Array.from(edges, (e) => e[3]),
+  };
+  const options = { originLat: LAT0, snapRadius: 400, snapPenalty: 1.5, maxTurn: 120, snapSpread: 100, maxCandidates: 64 };
+  const STOPS = { X: at(0, 0), Y: at(2000, 0), T1: at(500, 32), T2: at(1500, 32) };
+  const rail = new Network(graph, { ...options, sharedLast: true });
+  const route = (network, from, to, own) => {
+    const r = network.route(network.candidates(...STOPS[from]), network.candidates(...STOPS[to]), 20000, null, true, own);
+    return r && lengthOf(r);
+  };
+  // a stop is on the tracks of trains where the nearest of them is no more than 100 m further than the street's
+  assert.deepEqual(['X', 'Y', 'T1', 'T2'].map((stop) => rail.onOwn(rail.candidates(...STOPS[stop]))), [true, true, false, false]);
+  // from station to station by the railway, though the street is shorter …
+  assert.ok(Math.abs(route(rail, 'X', 'Y', true) - 6000) < 5, `${route(rail, 'X', 'Y', true)} m`);
+  // … where any track would do, by the street
+  assert.ok(route(rail, 'X', 'Y', false) < 2200, `${route(rail, 'X', 'Y', false)} m`);
+  // between two stops in the street there is no way on the railway alone, and the street is the one
+  assert.equal(route(rail, 'T1', 'T2', true), null);
+  assert.ok(Math.abs(route(rail, 'T1', 'T2', false) - 1000) < 5);
+  // a network without sharedLast keeps no track to itself: "own" is any
+  assert.equal(route(new Network(graph, options), 'X', 'Y', true), route(new Network(graph, options), 'X', 'Y', false));
 });
 
 test('a network measures lengths and the distances of stops at their own latitude, wherever its plane is right', () => {

@@ -30,7 +30,7 @@ const SETTINGS = {
   road: { snapRadius: 70, snapPenalty: 4, detour: [2.5, 400] },
   tram: { snapRadius: 60, snapPenalty: 3, detour: [2, 300], maxTurn: 120 },
   subway: { snapRadius: 250, snapPenalty: 2, detour: [2, 500], maxTurn: 120 },
-  rail: { snapRadius: 400, snapPenalty: 1.5, detour: [2, 3000], maxTurn: 120, snapSpread: 100, maxCandidates: 64 },
+  rail: { snapRadius: 400, snapPenalty: 1.5, detour: [2, 3000], maxTurn: 120, snapSpread: 100, maxCandidates: 64, sharedLast: true },
   // (a pier can be far from where the line of its ferry ends, and a fairway
   // winds; snapping costs three times a metre of the way, or a short crossing
   // would have both its stops on the far bank and no route)
@@ -238,15 +238,23 @@ export function buildSegments(data, graphs, area, onProgress = () => {}, { roads
       // way.
       const inside = (x, y) => area.distance(...network.toLatLon(x, y)) <= NEAR.exit;
       const off = (candidates) => candidates.every((c) => c.shared);
-      const find = (turning) => {
-        let found = a.length && b.length ? network.route(a, b, maxLength, long ? [bx, by] : null, turning) : null;
-        if (!found && a.length && (off(b) || far(to))) found = network.routeBeyond(a, bx, by, inside, false, maxLength, turning);
-        if (!found && b.length && (off(a) || far(from))) found = network.routeBeyond(b, ax, ay, inside, true, maxLength, turning);
+      // (on its own tracks alone, a train heads that way for a stop with no track near it at all; one on the
+      // tracks of trams alone is reached on those, with the shared tracks)
+      const away = (candidates, own) => (own ? !candidates.length : off(candidates));
+      const find = (turning, own) => {
+        let found = a.length && b.length ? network.route(a, b, maxLength, long ? [bx, by] : null, turning, own) : null;
+        if (!found && a.length && (away(b, own) || far(to))) found = network.routeBeyond(a, bx, by, inside, false, maxLength, turning, own);
+        if (!found && b.length && (away(a, own) || far(from))) found = network.routeBeyond(b, ax, ay, inside, true, maxLength, turning, own);
         return found;
       };
       // (where no route keeps the turns of a track, the train does turn back between two stops, at a station it
-      // passes without a stop or where the tracks are mapped with a corner sharper than they are: the route as ever)
-      let route = find(true) ?? (network.turnCos !== null ? find(false) : null);
+      // passes without a stop or where the tracks are mapped with a corner sharper than they are: the route as ever;
+      // and of trains, a route on their own tracks first where a stop of the hop is on them, on those of trams and
+      // narrow gauge where there is none: tram-trains between two stops in the street, the narrow gauge, #248)
+      const ownFirst = network.sharedLast && (network.onOwn(a) || network.onOwn(b));
+      const tries = network.turnCos === null ? [[true, false]] : ownFirst ? [[true, true], [true, false], [false, true], [false, false]] : [[true, false], [false, false]];
+      let route = null;
+      for (const [turning, own] of tries) if ((route = find(turning, own))) break;
       if (!route) {
         kept?.add(n, placeOf(from), placeOf(to), null);
         continue;
