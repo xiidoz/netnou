@@ -1,8 +1,10 @@
 // Stops on the map (#222): how large the mark of a stop is, which stops carry
 // their name at a zoom, where the names go so that none lies on another, the
 // marks of a station at its places and the lines that join them (#234), and
-// the map style without stops of its own. Without the page around it, so that
-// it can be tested as it is (test/stops.test.js); app.js draws.
+// the map style without stops of its own; and which town a stop's name leaves
+// unsaid, which the search and the stops of a trip show beside it (#246).
+// Without the page around it, so that it can be tested as it is
+// (test/stops.test.js); app.js draws, and search.js finds.
 
 // The kinds of rail. Their stations show from zoom 12 (STATION_ZOOM in app.js),
 // and carry their names earlier than other stops.
@@ -184,4 +186,40 @@ export function withoutStyleStops(style) {
     return { ...layer, filter: isExpressionFilter(layer.filter) ? ['all', layer.filter, NOT_STOPS] : ['all', layer.filter, NOT_STOPS_LEGACY] };
   });
   return { ...style, layers };
+}
+
+/** Lower case and without accents, "ß" as "ss": "Plärrer" becomes "plarrer". */
+export const fold = (text) => text.toLowerCase().replace(/ß/g, 'ss').normalize('NFD').replace(/\p{M}/gu, '');
+
+/** The words of a text, folded: "Halle(Saale)Hbf" has "halle", "saale" and "hbf". */
+const foldedWords = (text) => fold(text).split(/[^\p{L}\p{N}]+/u).filter(Boolean);
+
+/**
+ * The town of a stop to show beside its name, if the name does not say it:
+ * "München" for "Marienplatz", nothing for "Nürnberg Plärrer" and for
+ * "Frankfurt (Main) Hauptwache" in Frankfurt am Main. A name says its town if
+ * one of its words is the first word of the town that has more than three
+ * letters, which leaves out "Bad"; of a town without such a word, the first
+ * one. A word that only begins like the town does not say it: there is a
+ * "Nürnberger Straße" in many towns, and "D-Froschenteich" does not say
+ * Düsseldorf to whoever does not know it already.
+ * @param town the name of the town it is in, null where none is known
+ */
+export function townToShow(name, town) {
+  if (!town) return null;
+  const words = foldedWords(town);
+  const main = words.find((word) => word.length > 3) ?? words[0];
+  return main && foldedWords(name).includes(main) ? null : town;
+}
+
+/**
+ * The towns to show beside the stops of a trip (#246): where it runs through
+ * more than one town, the town of each stop whose name does not say it
+ * (townToShow); within one town none, where every rider knows it.
+ * @param stops [{ name, town }], `town` null where none is known
+ * @returns for each stop its town to show, or null
+ */
+export function townsAlong(stops) {
+  const towns = new Set(stops.map((stop) => stop.town).filter(Boolean));
+  return stops.map((stop) => (towns.size > 1 ? townToShow(stop.name, stop.town) : null));
 }

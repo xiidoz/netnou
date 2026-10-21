@@ -416,7 +416,8 @@ station, under the name it has there. The feed does not name towns, so they
 are known as far as the [OpenStreetMap extracts](configuration.md#settings)
 of the instance reach: a station beyond them has none, and an instance
 without extracts has an empty `towns`. The page finds a station by its town
-as well as by its name and shows the town where the name does not say it.
+as well as by its name and shows the town where the name does not say it,
+as it does in the stops of a trip ([`/api/trip`](#get-apitrip)).
 It finds the towns themselves too, and shows one with all its stations in
 view. The district of a town is the area of the next level of borders
 around it, `admin_level` 6 in Germany: what tells apart the Neuenkirchen of
@@ -528,9 +529,9 @@ address where visits are counted ([Counting visits](configuration.md#counting-vi
   "address": "trip/verkehrsag-nuernberg/tram/10/2026-10-04/1546-nuernberg-am-wegfeld",
   "path": [49.49253, 11.05405, 49.49195, 11.0543, 49.49181, 11.05421, …],
   "stops": [
-    { "station": "637231", "name": "Nürnberg Am Wegfeld", "platform": "", "lat": 49.492527, "lon": 11.05403,
+    { "station": "637231", "name": "Nürnberg Am Wegfeld", "town": "Nürnberg", "platform": "", "lat": 49.492527, "lon": 11.05403,
       "arr": 1791147960, "dep": 1791147960, "arrDelay": null, "depDelay": null, "skipped": false, "to": "Dutzendteich" },
-    { "station": "56536", "name": "Nürnberg Bamberger Str.", "platform": "", "lat": 49.483826, "lon": 11.059016,
+    { "station": "56536", "name": "Nürnberg Bamberger Str.", "town": "Nürnberg", "platform": "", "lat": 49.483826, "lon": 11.059016,
       "arr": 1791148080, "dep": 1791148080, "arrDelay": 41, "depDelay": 41, "skipped": false, "to": "Dutzendteich" },
     …
   ]
@@ -551,6 +552,7 @@ address where visits are counted ([Counting visits](configuration.md#counting-vi
 | `path` | array of numbers | the whole route as a flat list `lat, lon, lat, lon, …` |
 | `stops[].station` | string | id for `/api/departures` |
 | `stops[].name`, `platform` | string | name of the stop; platform, `""` if unknown |
+| `stops[].town` | string or null | the town its station is in, as in [`/api/search`](#get-apisearch); `null` where none is known. The page shows it below the name where the trip runs through more than one town and the name does not say it |
 | `stops[].arr`, `dep` | time | arrival and departure according to the timetable |
 | `stops[].arrDelay`, `depDelay` | delay or null | reported delays; `null` where nothing is known. Where the trip runs coupled with others, the delays all of them share (see `unit` of [`/api/vehicles`](#get-apivehicles)) |
 | `stops[].skipped` | boolean | the run does not call here today |

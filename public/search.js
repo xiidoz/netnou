@@ -14,6 +14,8 @@
 // of a country is a quarter of a million of them, and a phone would take
 // seconds and tens of megabytes to give each its words.
 
+import { fold, townToShow } from './stops.js';
+
 // How close a match is. It comes first in the order of the results. A search
 // goes as far as one of the three: to what begins with the words typed, to
 // what has them inside as well, or to close spellings too.
@@ -52,8 +54,6 @@ const SPACE = 32;
 const NEWLINE = 10;
 const [DIGIT_0, DIGIT_9, LOWER_A, LOWER_E, LOWER_Z] = [48, 57, 97, 101, 122];
 
-/** Lower case and without accents, "ß" as "ss": "Plärrer" becomes "plarrer". */
-export const fold = (text) => text.toLowerCase().replace(/ß/g, 'ss').normalize('NFD').replace(/\p{M}/gu, '');
 
 const split = (text) => text.split(/[^\p{L}\p{N}]+/u).filter(Boolean);
 
@@ -567,23 +567,6 @@ const weigh = (service, lat, lon, near) => {
 const nameOf = (index, i) => index.names.slice(index.nameStarts[i], index.nameStarts[i + 1] - 1);
 
 /**
- * The town of a stop, for a result to show, if its name does not say it:
- * "München" for "Marienplatz", nothing for "Nürnberg Plärrer" and for
- * "Frankfurt (Main) Hauptwache" in Frankfurt am Main. A name says its town if
- * one of its words is the first word of the town that has more than three
- * letters, which leaves out "Bad"; of a town without such a word, the first
- * one. A word that only begins like the town does not say it: there is a
- * "Nürnberger Straße" in many towns.
- */
-function townToShow(index, i) {
-  const town = index.towns.names[index.townOf[i]];
-  if (!town) return null;
-  const words = split(fold(town));
-  const main = words.find((word) => word.length > 3) ?? words[0];
-  return main && split(fold(nameOf(index, i))).includes(main) ? null : town;
-}
-
-/**
  * The stops that match all the words typed, as far as the search goes, the
  * most likely first.
  * @param forms the words (formsOf), the longest first: it is in the fewest names
@@ -674,7 +657,7 @@ export function search(index, query, { near = null, limit = 8 } = {}) {
   // what was not meant as well ("feuer" is nearly the beginning of "Fürth").
   if (!best.length) best = find(index, forms, SPELLING, near, limit);
   return best.map(({ i }) => {
-    const town = townToShow(index, i);
+    const town = townToShow(nameOf(index, i), index.towns.names[index.townOf[i]]);
     return { name: nameOf(index, i), lat: index.lat[i], lon: index.lon[i], modes: index.modes.filter((_, bit) => index.kinds[i] & (1 << bit)), ...(town ? { town } : {}) };
   });
 }

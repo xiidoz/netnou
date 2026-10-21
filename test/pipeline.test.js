@@ -329,6 +329,21 @@ test('a trip goes where its operator says at each stop, and what is said at its 
   assert.deepEqual(signed.lines.find((line) => line.name === 'U1').headsigns, new Map([['Gamma über Beta', 1], ['Alpha', 1]]));
 });
 
+test('a stop of a trip has the town of its station, where one is known (#246)', async () => {
+  const zipPath = path.join(dir, 'towns.zip');
+  fs.writeFileSync(zipPath, makeZip(FEED, { store: ['agency.txt'] }));
+  const data = await buildDataset({ zipPath, area: AREA });
+  // (as import-worker.js adds them: Alpha's station and Beta in towns, Gamma beyond the extracts)
+  const of = { SA: 0, B: 1 };
+  const town = data.stops.town.map((_, i) => of[data.stops.id.get(i)] ?? -1);
+  const file = path.join(dir, 'towns.dataset');
+  writeDataset(file, { ...data, towns: ['Nürnberg', 'Fürth'], districts: ['', ''], stops: { ...data.stops, town } });
+  const placed = new Timetable(readDataset(file));
+  // the platform A has the town of its station
+  assert.deepEqual(placed.trip('T1', DAY, null).stops.map((stop) => [stop.name, stop.town]), [['Alpha', 'Nürnberg'], ['Beta, Markt', 'Fürth'], ['Gamma', null]]);
+  assert.deepEqual(timetable.trip('T1', DAY, null).stops.map((stop) => stop.town), [null, null, null]);
+});
+
 test('a trip whose rows come in two runs is put together, where the feed first names it', async () => {
   const split = await importFeed({
     'stop_times.txt': [

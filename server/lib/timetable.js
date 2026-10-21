@@ -1332,6 +1332,8 @@ export class Timetable extends Schedule {
       stops: Array.from(stops, (s, p) => ({
         station: this.stops.id.get(this.stationOf[s]),
         name: this.stops.name[s],
+        // (the town of its station, which the page shows where the name does not say it, #246)
+        town: this.towns[this.stops.town[this.stationOf[s]]]?.name ?? null,
         platform: this.stops.platform[s],
         lat: this.stops.lat[s],
         lon: this.stops.lon[s],
