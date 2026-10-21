@@ -738,7 +738,9 @@ otherwise a server would load a file written by older code:
   (`/api/departures?lines=`): the 40 of a busy station would hold few of a
   line that comes twice an hour. The choice is in the address of the stop
   and of its board, and a favourite stop keeps it and opens with it; a
-  further stop of a board shows all its lines.
+  further stop of a board shows all its lines. A screen on a wall
+  (`display=fixed`) has no chip: it shows its stop as it was set up, at a
+  platform the departures from that platform.
 - **The board of a stop.** A button beside the share button enlarges the
   details of a stop into a board of its departures
   ([#81](https://github.com/xiidoz/netnou/issues/81)), the same on every

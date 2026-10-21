@@ -801,8 +801,13 @@ function directionName(direction, list) {
   return twin ? t('choice.via', { to: direction.to, stop: direction.next }) : direction.to;
 }
 
-/** The line below the name of the open stop: "Departures", and the chip with what is shown. */
+/**
+ * The line below the name of the open stop: "Departures", and the chip with
+ * what is shown. None on a screen on a wall: it shows its stop as it was set
+ * up, at a platform those of the platform, and nobody is to choose there.
+ */
 function departuresSub() {
+  if (FIXED) return el('p', { class: 'sub', text: t('departures.title') });
   return el('p', { class: 'sub with-choice' }, [el('span', { text: t('departures.title') }), choiceChip()]);
 }
 
@@ -814,8 +819,6 @@ function choiceChip() {
     ? [el('span', { text: t('choice.only') }), ...chosen.slice(0, 4).map(directionSign), ...(chosen.length === 1 ? [el('span', { text: directionName(chosen[0], list) })] : chosen.length > 4 ? [el('span', { text: t('choice.more', { count: chosen.length - 4 }) })] : [])]
     : [el('span', { text: t('choice.all') })];
   const label = chosen.length ? `${t('choice.only')} ${chosen.map((direction) => `${direction.line} ${directionName(direction, list)}`).join(', ')}` : t('choice.all');
-  // (on a wall nothing is to be touched: what is shown is said all the same)
-  if (FIXED) return el('span', { class: `choice${chosen.length ? ' chosen' : ''}` }, [el('span', { class: 'choice-open', 'aria-label': label }, [icon(mdiFilterVariant), ...parts])]);
   return el('span', { class: `choice${chosen.length ? ' chosen' : ''}` }, [
     el('button', { type: 'button', class: 'choice-open', 'aria-label': label, 'aria-haspopup': 'dialog', title: t('choice.title'), onclick: openChoice }, [icon(mdiFilterVariant), ...parts]),
     ...(chosen.length ? [el('button', { type: 'button', class: 'choice-clear', 'aria-label': t('choice.clear'), title: t('choice.clear'), onclick: () => applyChoice([]) }, [icon(mdiClose)])] : []),
@@ -854,7 +857,8 @@ function renderChoice() {
     else lines.push({ mode: direction.mode, line: direction.line, directions: [direction] });
   }
   node.replaceChildren(
-    chip('', all, [el('span', { class: 'name', text: t('choice.all') })], () => applyChoice([])),
+    // (every line again, where only some are shown: while all are, it would do nothing)
+    ...(all ? [] : [chip('', false, [el('span', { class: 'name', text: t('choice.all') })], () => applyChoice([]))]),
     el('ul', { class: 'choice-lines' }, lines.map(({ directions }) => el('li', {}, directions.map((direction) => {
       const name = directionName(direction, list);
       const on = all || state.lines.includes(direction.key) || state.lines.includes(direction.key.split('~')[0]);

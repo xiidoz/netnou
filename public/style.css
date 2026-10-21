@@ -623,7 +623,6 @@ button:focus-visible, select:focus-visible, .row:focus-visible, .panel:focus-vis
 .choice { display: inline-flex; align-items: center; max-width: 100%; border: 1px solid var(--border); border-radius: 999px; background: var(--bg); color: var(--text); font-size: 0.96em; }
 .choice.chosen { border-color: var(--text); font-weight: 600; }
 .choice-open { display: inline-flex; align-items: center; gap: 0.35em; min-width: 0; padding: 0.2em 0.7em 0.2em 0.55em; border: 0; border-radius: 999px; background: none; color: inherit; font: inherit; cursor: pointer; }
-span.choice-open { cursor: default; }
 .choice.chosen .choice-open { padding-right: 0.15em; }
 .choice-open > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .choice .icon { width: 1.1em; height: 1.1em; }
