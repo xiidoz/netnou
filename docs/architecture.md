@@ -121,6 +121,7 @@ Page (`public/`):
 | `display.js` | display mode and the board of a stop in the address of the page: what an address asks for, and the address for what is shown |
 | `address.js` | the addresses of stops, lines and trips, for the page and the server: how a name is written in one, and what an address names (`stopPath`, `linePath`, `tripPath`, `parseAddress`) |
 | `stops.js` | the stops on the map: how large the mark of one is, and the heart of a favourite, from which zoom which stops carry their names and where those go so that none lies on another, the marks of a station at its places and the lines that join them, the style of the map without stops of its own, and whether the name of a stop says its town |
+| `choice.js` | the lines and directions of a stop chosen to be shown (#164): their keys, as the address and `/api/departures` take them, and what a tap does; for the page and the server |
 | `favourites.js` | the stops and lines a visitor marks with the heart (#245): what is kept of them in the browser, and when a stop or a line of another timetable is the one kept |
 | `search.js` | finding stops, lines and towns by name: matching and order, the favourites first, without the page around it |
 | `search-worker.js` | the thread that loads the list of stops, lines and towns and searches it |
@@ -726,6 +727,18 @@ otherwise a server would load a file written by older code:
   keyboard and for screen readers and shows itself with the focus. "How it
   works" is such a sheet too and closes when it is dragged down. All of
   this is plain pointer events in `app.js`.
+- **The lines of a stop to show** ([#164](https://github.com/xiidoz/netnou/issues/164)).
+  Beside "Departures" a chip says which lines the departures are of, all or
+  only those chosen, and opens a sheet to choose them in: the directions of
+  each line, where a direction is the line with the station it goes to next
+  (`public/choice.js`), as the feed has no directions and the destinations of
+  a line vary (the U1 has eleven at Nürnberg Plärrer). Each shows as the line
+  is drawn as a vehicle on the map, its arrowhead turned to where it leaves
+  the stop. The server chooses among the departures before it counts them
+  (`/api/departures?lines=`): the 40 of a busy station would hold few of a
+  line that comes twice an hour. The choice is in the address of the stop
+  and of its board, and a favourite stop keeps it and opens with it; a
+  further stop of a board shows all its lines.
 - **The board of a stop.** A button beside the share button enlarges the
   details of a stop into a board of its departures
   ([#81](https://github.com/xiidoz/netnou/issues/81)), the same on every

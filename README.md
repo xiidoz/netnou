@@ -38,6 +38,9 @@ delay put it. It can be a little ahead of or behind its marker.
   bus is right now.
 - **Show the departures as a board**, in large type for a screen on the wall,
   with up to four stops.
+- **Choose the lines and directions** of a stop with the chip beside its
+  departures, for example only the trains into town: the board keeps them in
+  its address, and a favourite stop opens with them.
 
 ![The departures of Nürnberg Hauptbahnhof as a board beside the map, on a wide screen](docs/pictures/board.webp)
 

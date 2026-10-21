@@ -53,6 +53,7 @@ export const PAGE_MODULES = [
   'address.js',
   'stops.js',
   'favourites.js',
+  'choice.js',
   'vendor/material-design-icons/icons.js',
   'vendor/maplibre-gl/maplibre-gl.mjs',
   'vendor/maplibre-gl/maplibre-gl-shared.mjs',

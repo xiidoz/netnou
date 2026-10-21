@@ -11,9 +11,10 @@
 import { parseAddress, stopPath, wordsOf } from './address.js';
 import { APP_NAME, READMES, dayOf, formatNumber, formatTime, languagePicker, loadLanguage, pageTexts, sentInAnother, setTimeZone, t, translatePage } from './i18n.js';
 import { FAVOURITE_NAME_ZOOM, HEART_MIDDLE, PLACES_ZOOM, RAIL_MODES, heartMark, joiningLines, mergePlaces, namePrecedence, namedAt, placeNames, stopMark, townsAlong, withoutStyleStops } from './stops.js';
-import { favouritesFrom, isFavourite, lineFavourite, sameStop, stopFavourite, withFavourite } from './favourites.js';
+import { favouritesFrom, isFavourite, lineFavourite, sameStop, stopFavourite, withChoice, withFavourite } from './favourites.js';
+import { choiceValue, readChoice, toggled } from './choice.js';
 import { BOARD_MAX, BOARD_SHARE, BOARD_STOPS, boardBlocks, boardQuery, boardShare, displayQuery, ledBy, readBoard, readDisplay, readStops } from './display.js';
-import { mdiAlert, mdiArrowCollapse, mdiArrowExpand, mdiChevronRight, mdiCityVariantOutline, mdiEye, mdiEyeOff, mdiFullscreen, mdiFullscreenExit, mdiHeart, mdiHeartOutline, mdiMinusCircleOutline, mdiPlaylistPlus, mdiPlus } from './vendor/material-design-icons/icons.js';
+import { mdiAlert, mdiArrowCollapse, mdiArrowExpand, mdiChevronRight, mdiCityVariantOutline, mdiClose, mdiEye, mdiEyeOff, mdiFilterVariant, mdiFullscreen, mdiFullscreenExit, mdiHeart, mdiHeartOutline, mdiMinusCircleOutline, mdiPlaylistPlus, mdiPlus } from './vendor/material-design-icons/icons.js';
 import { AttributionControl, MapLibreMap, NavigationControl } from './vendor/maplibre-gl/maplibre-gl.mjs';
 
 // The modes, each with a chip where the timetable has it. Same ids as MODES in
@@ -264,6 +265,8 @@ const state = {
   extra: [], // the further stops on the board of the open stop: [{ path, joined }], see "a board of several stops"
   adding: null, // while the search is to add a stop to the board: { block } or { block: null } for a block of its own
   selection: null, // { type: 'trip' | 'station' | 'line', id, data }, see select()
+  lines: [], // the lines and directions of the open stop that are chosen to be shown, none for every line (#164, choice.js)
+  directions: null, // what there is to choose from at the open stop: { id, list } as api/departures has it
   hits: [], // what can be pointed at on the map: { x, y, r, vehicle or station; named: a stop with its name on the map }, see draw()
   covers: [], // the boxes of the bubbles, which hide what is under them: [x, y, width, height]
   chosenAt: null, // where on the screen the chosen vehicle is drawn, if it is in view: { x, y, … }
@@ -754,6 +757,136 @@ function cutHeartRing(kinds, big, dpr) {
   c.setTransform(1, 0, 0, 1, 0, 0);
   c.drawImage(colour, 0, 0);
   return ring;
+}
+
+// ---------- the lines of a stop to show (#164) ----------
+
+// Beside "Departures" a chip says which lines a stop's departures are of: all,
+// or only those chosen. It opens a sheet to choose them in, the directions of
+// each line as chips; its cross shows every line again. A direction is a line
+// with where it goes next (choice.js), and its sign is the line as the map
+// draws its vehicle, the arrowhead turned to where it leaves the stop.
+
+const SVG = 'http://www.w3.org/2000/svg';
+const svgNode = (name, attributes) => {
+  const node = document.createElementNS(SVG, name);
+  for (const [key, value] of Object.entries(attributes)) node.setAttribute(key, value);
+  return node;
+};
+
+/**
+ * The sign of a direction: a disc in the colour of its kind with the name of
+ * its line, and the arrowhead pointing where it leaves the stop, as drawDisc
+ * and drawArrow draw a vehicle, with their white edges. None for a whole line.
+ */
+function directionSign({ line, mode, heading = null }) {
+  const sign = svgNode('svg', { class: 'direction-sign', viewBox: '-17 -17 34 34', 'aria-hidden': 'true', 'data-mode': DRAW_ORDER.includes(mode) ? mode : 'other' });
+  // (the arrowhead as drawArrow has it: from the edge of the disc at ±0.6 rad to 6 beyond)
+  if (heading !== null) sign.append(svgNode('path', { d: 'M0,-16L5.65,-8.25L-5.65,-8.25Z', transform: `rotate(${heading})` }));
+  sign.append(svgNode('circle', { r: 10 }));
+  const name = svgNode('text', { y: 3.2, 'text-anchor': 'middle' });
+  name.textContent = line;
+  // (a long name narrower, as on the map)
+  if (line.length > 3) Object.entries({ textLength: 17, lengthAdjust: 'spacingAndGlyphs' }).forEach(([key, value]) => name.setAttribute(key, value));
+  sign.append(name);
+  return sign;
+}
+
+/** The directions of the open stop there is to choose from, if they are known: as api/departures lists them. */
+const stopDirections = () => (state.directions && state.directions.id === state.selection?.data?.id ? state.directions.list : null);
+
+/** What a direction is called: where its trips go, and where another direction of its line goes there too, by way of where. */
+function directionName(direction, list) {
+  const twin = list.some((other) => other !== direction && other.mode === direction.mode && other.line === direction.line && other.to === direction.to);
+  return twin ? t('choice.via', { to: direction.to, stop: direction.next }) : direction.to;
+}
+
+/** The line below the name of the open stop: "Departures", and the chip with what is shown. */
+function departuresSub() {
+  return el('p', { class: 'sub with-choice' }, [el('span', { text: t('departures.title') }), choiceChip()]);
+}
+
+/** The chip: every line, or "only" and the signs of the directions chosen, with the name of the one where it is one. */
+function choiceChip() {
+  const list = stopDirections() ?? [];
+  const chosen = state.lines.map((key) => list.find((direction) => direction.key === key)).filter(Boolean);
+  const parts = chosen.length
+    ? [el('span', { text: t('choice.only') }), ...chosen.slice(0, 4).map(directionSign), ...(chosen.length === 1 ? [el('span', { text: directionName(chosen[0], list) })] : chosen.length > 4 ? [el('span', { text: t('choice.more', { count: chosen.length - 4 }) })] : [])]
+    : [el('span', { text: t('choice.all') })];
+  const label = chosen.length ? `${t('choice.only')} ${chosen.map((direction) => `${direction.line} ${directionName(direction, list)}`).join(', ')}` : t('choice.all');
+  // (on a wall nothing is to be touched: what is shown is said all the same)
+  if (FIXED) return el('span', { class: `choice${chosen.length ? ' chosen' : ''}` }, [el('span', { class: 'choice-open', 'aria-label': label }, [icon(mdiFilterVariant), ...parts])]);
+  return el('span', { class: `choice${chosen.length ? ' chosen' : ''}` }, [
+    el('button', { type: 'button', class: 'choice-open', 'aria-label': label, 'aria-haspopup': 'dialog', title: t('choice.title'), onclick: openChoice }, [icon(mdiFilterVariant), ...parts]),
+    ...(chosen.length ? [el('button', { type: 'button', class: 'choice-clear', 'aria-label': t('choice.clear'), title: t('choice.clear'), onclick: () => applyChoice([]) }, [icon(mdiClose)])] : []),
+  ]);
+}
+
+// The sheet in which they are chosen: a dialog as the one of the notes.
+const choiceDialog = $('choice');
+closesByClick(choiceDialog, $('choice-close'));
+// (the focus goes back to the chip, built anew meanwhile)
+choiceDialog.addEventListener('close', () => {
+  if (!panelHead.contains(document.activeElement)) (panelHead.querySelector('.choice-open') ?? panel).focus({ preventScroll: true });
+});
+
+function openChoice() {
+  renderChoice();
+  choiceDialog.showModal();
+  $('choice-list').parentNode.scrollTop = 0;
+}
+
+/** Fills the sheet: every line with its directions, on where they are shown. */
+function renderChoice() {
+  const list = stopDirections();
+  const node = $('choice-list');
+  if (!list) {
+    node.replaceChildren(el('p', { text: t('panel.loading') }));
+    return;
+  }
+  const focused = node.contains(document.activeElement) ? document.activeElement.dataset.key : null;
+  const all = !state.lines.length;
+  const chip = (key, pressed, children, onclick) => el('button', { type: 'button', class: 'chip', 'aria-pressed': String(pressed), data: { key }, onclick }, children);
+  const lines = [];
+  for (const direction of list) {
+    const last = lines.at(-1);
+    if (last && last.mode === direction.mode && last.line === direction.line) last.directions.push(direction);
+    else lines.push({ mode: direction.mode, line: direction.line, directions: [direction] });
+  }
+  node.replaceChildren(
+    chip('', all, [el('span', { class: 'name', text: t('choice.all') })], () => applyChoice([])),
+    el('ul', { class: 'choice-lines' }, lines.map(({ directions }) => el('li', {}, directions.map((direction) => {
+      const name = directionName(direction, list);
+      const on = all || state.lines.includes(direction.key) || state.lines.includes(direction.key.split('~')[0]);
+      const button = chip(direction.key, on, [directionSign(direction), el('span', { class: 'name', text: name })], () => applyChoice(toggled(state.lines, direction.key)));
+      button.dataset.mode = direction.mode;
+      button.setAttribute('aria-label', t('choice.direction', { line: direction.line, to: name }));
+      return button;
+    })))),
+  );
+  if (focused !== null && focused !== undefined) node.querySelector(`[data-key="${CSS.escape(focused)}"]`)?.focus({ preventScroll: true });
+}
+
+/**
+ * Shows these lines of the open stop, every one for none: in the address,
+ * in its favourite if it is one, and asked for anew, as the server chooses
+ * among the departures before it counts them (#164).
+ */
+function applyChoice(keys) {
+  const data = state.selection?.data;
+  if (state.selection?.type !== 'station' || !data) return;
+  state.lines = keys;
+  state.selection.linesAsked = true;
+  if (state.display) writeAddress();
+  else history.replaceState(null, '', `${location.pathname}${boardQuery(location.search, state.board, state.extra, state.lines)}`);
+  if (isFavourite(favourites, 'stops', data)) {
+    favourites = withChoice(favourites, data, keys);
+    keepFavourites();
+  }
+  if (choiceDialog.open) renderChoice();
+  // (the chip at once; the departures with the answer)
+  showSelection(false);
+  loadSelection();
 }
 
 /**
@@ -2044,7 +2177,7 @@ let tipTimer = null;
 
 function offerTip() {
   if (ASKED || state.display || state.board !== null || state.adding || state.banner || state.note) return;
-  if (aboutDialog.open || notesDialog.open || settingsButton.getAttribute('aria-expanded') === 'true') return;
+  if (aboutDialog.open || notesDialog.open || choiceDialog.open || settingsButton.getAttribute('aria-expanded') === 'true') return;
   if (loadSetting('tipped', false) === true) return;
   saveSetting('tipped', true);
   tip.textContent = matchMedia('(pointer: coarse)').matches ? t('tip.departure') : t('tip.departureMouse');
@@ -2214,6 +2347,8 @@ function closePanel() {
   const picked = pickedQuery();
   state.selection = null;
   state.extra = [];
+  state.lines = [];
+  if (choiceDialog.open) choiceDialog.close();
   shareable(false);
   showAddress('', null);
   pickedChanged(picked);
@@ -2238,7 +2373,7 @@ $('panel-close').addEventListener('click', closePanel);
 document.addEventListener('keydown', (event) => {
   if (event.key !== 'Escape') return;
   // Escape closes what is on top: a dialog lies over all else and closes by itself, then the settings, then the details.
-  if (aboutDialog.open || notesDialog.open) return;
+  if (aboutDialog.open || notesDialog.open || choiceDialog.open) return;
   if (!settings.hidden) {
     showSettings(false);
     settingsButton.focus();
@@ -2297,7 +2432,7 @@ function showAddress(path, title) {
   }
   if (path === here()) return;
   // (the settings of the page in its address stay; a board, with its further stops, only where one is shown)
-  history.pushState(null, '', new URL(`${path}${boardQuery(location.search, state.board, state.extra)}`, document.baseURI));
+  history.pushState(null, '', new URL(`${path}${boardQuery(location.search, state.board, state.extra, state.lines)}`, document.baseURI));
 }
 
 /**
@@ -2335,13 +2470,17 @@ async function openAddress(loaded = false) {
   const board = readBoard(location.search);
   const stops = readStops(location.search, found.path.slice('stop/'.length));
   state.extra = stops;
+  // (and the lines it shows, where the address names them: read before the board writes the address anew)
+  const asked = new URLSearchParams(location.search);
+  const lines = asked.has('lines') ? readChoice(asked.get('lines')) : undefined;
+  state.lines = lines ?? [];
   if (board !== state.board) setBoard(board);
   // (as from the search: on a narrow screen the details cover the lower half, so the stop goes above the middle; a board does not.
   // A display whose address names a section of the map keeps that section: it was set up so.)
   const kept = loaded && state.viewAsked;
   if (!kept) map.easeTo({ center: [found.lon, found.lat], zoom: Math.max(map.getZoom(), SEARCH_ZOOM), offset: board === null ? stopOffset() : [0, 0], duration: 0 });
   // (landing here, not on a board: the one tip may follow, once the departures are there)
-  select('station', null, { at: found, counted: loaded, kept, stops, tip: loaded && board === null });
+  select('station', null, { at: found, counted: loaded, kept, stops, tip: loaded && board === null, ...(lines ? { lines } : {}) });
   return true;
 }
 
@@ -2414,7 +2553,7 @@ const favouriteNote = $('panel-favourited');
 function openFavourite() {
   const selection = state.selection;
   if (!selection?.data) return null;
-  if (selection.type === 'station') return { kind: 'stops', item: stopFavourite(selection.data, openStop(selection.data).modes) };
+  if (selection.type === 'station') return { kind: 'stops', item: stopFavourite(selection.data, openStop(selection.data).modes, state.lines) };
   if (selection.type === 'line') return { kind: 'lines', item: lineFavourite(selection.data) };
   return null;
 }
@@ -2491,6 +2630,10 @@ function select(type, id, more = {}) {
   const picked = pickedQuery();
   state.selection = { type, id, data: null, ...more };
   delete state.selection.stops;
+  // (the lines of a stop to show: as the address asks, else as its favourite keeps them, see loadSelection)
+  state.lines = type === 'station' ? (more.lines ?? []) : [];
+  state.selection.linesAsked = more.lines !== undefined;
+  delete state.selection.lines;
   // (the ring around the chosen vehicle, or a line's vehicles alone, with the next frame: not with the server's answer)
   askDraw();
   pickedChanged(picked);
@@ -2508,12 +2651,14 @@ function select(type, id, more = {}) {
  *   opened: the server counts that as a visit of its address, where visits
  *   are counted (#158). A trip has no address.
  */
-function selectionUrl({ type, id, line, at, route }, open = false) {
+function selectionUrl({ type, id, line, at, route }, open = false, first = false) {
   if (type === 'trip') return `api/trip?id=${encodeURIComponent(id)}${open ? '&open=1' : ''}`;
   // (a line is its name, its mode and its operator together, and its place where lines of the name are in places
   // apart, #152; where it runs is asked for until it is known, #148)
   if (type === 'line') return `api/line?${new URLSearchParams({ name: line.name, mode: line.mode, agency: line.agency, ...(line.at ? { at: line.at.join(',') } : {}), ...(route ? {} : { route: '1' }), ...(open ? { open: '1' } : {}) })}`;
-  return `${at ? `api/departures?at=${at.lat.toFixed(5)},${at.lon.toFixed(5)}` : `api/departures?station=${encodeURIComponent(id)}`}${open ? '&open=1' : ''}`;
+  // (only the lines chosen, #164; and once, with the first answer, which lines and directions there are)
+  const choice = `${state.lines.length ? `&lines=${choiceValue(state.lines)}` : ''}${first ? '&directions=1' : ''}`;
+  return `${at ? `api/departures?at=${at.lat.toFixed(5)},${at.lon.toFixed(5)}` : `api/departures?station=${encodeURIComponent(id)}`}${open ? '&open=1' : ''}${choice}`;
 }
 
 async function loadSelection(first = false) {
@@ -2523,18 +2668,31 @@ async function loadSelection(first = false) {
   // (the further stops of a board alongside, so that it is drawn once with all of them)
   const further = selection.type === 'station' && state.board !== null && state.extra.length ? loadBoardStops() : null;
   try {
-    const res = await fetch(selectionUrl(selection, first && !selection.counted));
+    // (an answer that was overtaken by a later question, as after a change of the lines chosen, is not shown)
+    const turn = (selection.turn = (selection.turn ?? 0) + 1);
+    const res = await fetch(selectionUrl(selection, first && !selection.counted, first));
     const data = res.ok ? await res.json() : null;
     await further;
-    if (state.selection !== selection) return; // user moved on meanwhile
+    if (state.selection !== selection || selection.turn !== turn) return; // user moved on meanwhile
     if (data) {
       selection.data = data;
+      if (data.directions) state.directions = { id: data.id, list: data.directions };
       if (data.route) selection.route = data.route;
       if (first && selection.type === 'station') {
+        // (a favourite opens with the lines chosen for it, where the address does not ask for others: asked for again then)
+        const kept = selection.linesAsked || state.lines.length ? null : favourites.stops.find((stop) => sameStop(stop, data));
+        const again = kept?.lines !== undefined;
+        if (again) state.lines = readChoice(choiceValue(kept.lines));
         showAddress(stopPathOf(data), stopTitle(data.name));
         shareable(true, true);
         // (a board keeps the stop it shows in the middle of the map, or all of its stops in view, unless the address of a display says where the map is)
         if (state.board !== null && !selection.kept) showBoardStops(data);
+        if (again) {
+          // (in the address as well, which showAddress leaves where it is that of the stop already)
+          if (!state.display) history.replaceState(null, '', `${location.pathname}${boardQuery(location.search, state.board, state.extra, state.lines)}`);
+          loadSelection();
+          return;
+        }
       }
       if (first && selection.type === 'line') {
         // (from now on asked for by the place the server has for it)
@@ -3062,7 +3220,7 @@ function renderStation(board) {
   const split = tomorrowAt(board.departures);
   const lists = split < 0 ? [list(rows)] : [...(split > 0 ? [list(rows.slice(0, split))] : []), el('h3', { class: 'rows-head day-head', text: t('departures.tomorrow') }), list(rows.slice(split))];
   fillPanel(
-    [el('div', { class: 'panel-head' }, [el('h2', { text: board.name }), el('p', { class: 'sub', text: t('departures.title') }), notesList(board.notes)])],
+    [el('div', { class: 'panel-head' }, [el('h2', { text: board.name }), departuresSub(), notesList(board.notes)])],
     // (the 24 hours the text speaks of are the furthest departures() in server/lib/timetable.js looks)
     ...(rows.length ? lists : [el('p', { class: 'panel-empty', text: t('departures.none') })]),
   );
@@ -3242,7 +3400,7 @@ narrowScreen.addEventListener('change', () => setSheetHeight(null));
 
 // A dialog is a sheet on a narrow screen as well: its bar and its heading
 // drag it down, and let go of far enough down it closes.
-for (const [dialog, ...parts] of [[aboutDialog, $('about-handle'), $('about-title')], [notesDialog, $('notes-handle'), $('notes-title')]]) {
+for (const [dialog, ...parts] of [[aboutDialog, $('about-handle'), $('about-title')], [notesDialog, $('notes-handle'), $('notes-title')], [choiceDialog, $('choice-handle'), $('choice-title')]]) {
   let drag = null;
   const shift = (px) => { dialog.style.transform = px ? `translateY(${Math.round(px)}px)` : ''; };
   const begin = (event) => {
@@ -3334,7 +3492,7 @@ function setBoard(share, written = true) {
 /** Puts the board into the address of the page, or takes it out. */
 function writeBoard() {
   if (state.display) writeAddress();
-  else history.replaceState(null, '', `${location.pathname}${boardQuery(location.search, state.board, state.extra)}`);
+  else history.replaceState(null, '', `${location.pathname}${boardQuery(location.search, state.board, state.extra, state.lines)}`);
 }
 
 boardButton.addEventListener('click', () => setBoard(state.board === null ? boardWas : null));
@@ -3355,12 +3513,13 @@ function renderBoard(board) {
   const columns = boardColumns(blocks.length);
   renderedColumns = columns;
   const headings = blocks.map((block, i) => blockHeading(block, i, i ? 'h3' : 'h2', controls, entries.length));
-  const sub = () => el('p', { class: 'sub', text: t('departures.title') });
+  // (the lines chosen are those of the open stop, whose block is the first)
+  const sub = (i = 0) => (i ? el('p', { class: 'sub', text: t('departures.title') }) : departuresSub());
   const clock = state.clock ? [el('p', { class: 'board-clock', text: formatTime(now()) })] : [];
   // (the notes of the open stop in the head in either case: over the first column in columns)
   const head = columns > 1 ? [...clock, notesList(board.notes)] : [headings[0], sub(), ...clock, notesList(board.notes)];
   const sections = blocks.map((block, i) => el('section', { class: 'board-block' }, [
-    ...(columns > 1 ? [headings[i], sub()] : i ? [headings[i]] : []),
+    ...(columns > 1 ? [headings[i], sub(i)] : i ? [headings[i]] : []),
     ...blockRows(block, times),
   ]));
   const credits = el('p', { class: 'board-credits' });
@@ -3783,6 +3942,8 @@ function applyBoardList(list, focus) {
     if (data) boardStopData.set(was, { name: data.name, lat: data.lat, lon: data.lon, departures: data, gone: false });
     const first = boardStopData.get(list[0].path);
     state.selection = { type: 'station', id: null, data: first.departures ?? null, at: { name: first.name, lat: first.lat, lon: first.lon } };
+    // (the lines chosen were of the stop that led)
+    state.lines = [];
     // (in place of the address so far, not as a step back: then the title, which showAddress gives it without a step there)
     history.replaceState(null, '', new URL(`stop/${list[0].path}${location.search}`, document.baseURI));
     showAddress(`stop/${list[0].path}`, stopTitle(first.name));
@@ -4109,7 +4270,7 @@ function writeAddress() {
     clock: state.clock,
   };
   // (with the path: the stop or the line that is open stays in it; a query alone would be taken from the base of the page, where the instance is)
-  history.replaceState(null, '', `${location.pathname}${displayQuery({ fixed: FIXED, language, board: state.board, stops: state.extra, settings }, MODES)}`);
+  history.replaceState(null, '', `${location.pathname}${displayQuery({ fixed: FIXED, language, board: state.board, stops: state.extra, lines: state.lines, settings }, MODES)}`);
 }
 
 /** Brings the page in line with whether it is a display. */
@@ -4129,7 +4290,7 @@ function setDisplay(on) {
   if (!on && OPENED_AS_DISPLAY) {
     // What is set came with the address and not from this browser: the page
     // with its controls starts afresh, with what is stored here.
-    location.search = boardQuery(ASKED.language ? `?lang=${encodeURIComponent(ASKED.language)}` : '', state.board, state.extra);
+    location.search = boardQuery(ASKED.language ? `?lang=${encodeURIComponent(ASKED.language)}` : '', state.board, state.extra, state.lines);
     return;
   }
   state.display = on;
@@ -4146,7 +4307,7 @@ function setDisplay(on) {
     return;
   }
   // (with the board that is open, which the page was perhaps opened with, or not)
-  history.replaceState(null, '', `${location.pathname}${boardQuery(OWN_SEARCH, state.board, state.extra)}`);
+  history.replaceState(null, '', `${location.pathname}${boardQuery(OWN_SEARCH, state.board, state.extra, state.lines)}`);
   // (where the map was moved to meanwhile is what the browser keeps again)
   const center = map.getCenter();
   saveSetting('view', { lat: center.lat, lon: center.lng, zoom: map.getZoom() });

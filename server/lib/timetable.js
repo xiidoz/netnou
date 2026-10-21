@@ -19,6 +19,7 @@
 //   knots    [time, lat, lon, …] along a vehicle's way ahead; the page
 //            interpolates between them
 
+import { bearing, choiceKey, inChoice } from '../../public/choice.js';
 import { NETS } from './network.js';
 import { searchList } from './search-list.js';
 import { addDays, localDate, serviceDayStart } from './time.js';
@@ -1353,14 +1354,25 @@ export class Timetable extends Schedule {
    * `least`, the next ones after them up to `least`, from the next
    * `furthestS` seconds (#165). So a quiet stop, at night above all, shows
    * when its next train leaves, however far ahead that is.
+   * @param lines the lines and directions to show (public/choice.js), every
+   *   one where none: chosen before the limit, so that a busy station has as
+   *   many of them as a quiet one (#164)
    */
-  departures(stationId, now, realtime, { windowS = 7200, limit = 40, least = 10, furthestS = 86_400 } = {}) {
+  departures(stationId, now, realtime, { windowS = 7200, limit = 40, least = 10, furthestS = 86_400, lines = [] } = {}) {
     const station = this.stopIndex.get(stationId);
     if (station === undefined || this.visitStart[station] === this.visitStart[station + 1]) return null;
 
-    let found = this.leaving(station, now, realtime, windowS).slice(0, limit);
+    // (whether a line with its next station is chosen, once for each: the names are written as keys to be compared)
+    const chosen = new Map();
+    const keep = lines.length ? (t, next) => {
+      const route = this.tripRoute[t];
+      const id = `${route} ${next}`;
+      if (!chosen.has(id)) chosen.set(id, inChoice(lines, { mode: this.routeModes[route], line: this.lineName(route), next: next < 0 ? null : this.stops.name[this.stationOf[next]] }));
+      return chosen.get(id);
+    } : null;
+    let found = this.leaving(station, now, realtime, windowS, keep).slice(0, limit);
     // (the longer search only where it is needed: a busy station has enough within the window)
-    if (found.length < least) found = this.leaving(station, now, realtime, furthestS).slice(0, least);
+    if (found.length < least) found = this.leaving(station, now, realtime, furthestS, keep).slice(0, least);
     return {
       id: stationId,
       name: this.stops.name[station],
@@ -1386,11 +1398,64 @@ export class Timetable extends Schedule {
   }
 
   /**
+   * The lines that leave a station and where each goes next (#164), for
+   * choosing among them: every one the timetable has there, on any of its
+   * days. A direction is a line with the next station of its trips; it is
+   * named by the destination most of them have here, and leaves the stop
+   * the way the bearing to that station says.
+   * @returns [{ line, mode, next, to, heading, key }], by kind, then by line
+   *   as names of lines are sorted, then the busier direction first; null for
+   *   an unknown station
+   */
+  directions(stationId) {
+    const station = this.stopIndex.get(stationId);
+    if (station === undefined) return null;
+    const found = new Map();
+    for (let visit = this.visitStart[station]; visit < this.visitStart[station + 1]; visit++) {
+      const pattern = this.visitPattern[visit];
+      const p = this.visitPosition[visit];
+      const next = this.nextStation(pattern, p);
+      if (next < 0) continue; // (its end: nothing leaves)
+      const stop = this.patternStops[this.patternStart[pattern] + p];
+      for (let k = this.patternFirst[pattern]; k < this.patternFirst[pattern + 1]; k++) {
+        const t = this.tripsOfPattern[k];
+        const route = this.tripRoute[t];
+        const direction = { mode: this.routeModes[route], line: this.lineName(route), next: this.stops.name[this.stationOf[next]] };
+        const key = choiceKey(direction);
+        if (!found.has(key)) found.set(key, { ...direction, trips: 0, to: new Map(), heading: bearing(this.stops.lat[stop], this.stops.lon[stop], this.stops.lat[next], this.stops.lon[next]) });
+        const entry = found.get(key);
+        entry.trips++;
+        const to = this.headsignAt(t, p);
+        entry.to.set(to, (entry.to.get(to) ?? 0) + 1);
+      }
+    }
+    const lineOrder = (a, b) => MODES.indexOf(a.mode) - MODES.indexOf(b.mode) || a.line.localeCompare(b.line, undefined, { numeric: true });
+    return [...found.entries()]
+      .map(([key, { to, trips, ...direction }]) => ({ ...direction, to: [...to].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))[0][0], key, trips }))
+      .sort((a, b) => lineOrder(a, b) || b.trips - a.trips || a.next.localeCompare(b.next))
+      .map(({ mode, line, next, to, heading, key }) => ({ mode, line, next, to, heading, key }));
+  }
+
+  /**
+   * The stop a trip of the pattern comes to after position p at the next
+   * other station: a trip may call at two platforms of one station in a row.
+   * -1 where none comes.
+   */
+  nextStation(pattern, p) {
+    const start = this.patternStart[pattern];
+    const here = this.stationOf[this.patternStops[start + p]];
+    for (let k = start + p + 1; k < this.patternStart[pattern + 1]; k++) if (this.stationOf[this.patternStops[k]] !== here) return this.patternStops[k];
+    return -1;
+  }
+
+  /**
    * What leaves a station (by its number) within `windowS` seconds of `now`,
    * by when it leaves. A day ahead at most: the service days looked at are
    * yesterday, today and tomorrow.
+   * @param keep where only some lines are wanted: whether trip t, coming to
+   *   the stop `next` (nextStation) from here, is one of them
    */
-  leaving(station, now, realtime, windowS) {
+  leaving(station, now, realtime, windowS, keep = null) {
     const today = localDate(now);
     const start = this.tripStart;
     const found = [];
@@ -1405,6 +1470,7 @@ export class Timetable extends Schedule {
         const pattern = this.visitPattern[visit];
         const p = this.visitPosition[visit];
         if (p === this.patternStart[pattern + 1] - this.patternStart[pattern] - 1) continue; // terminus: nothing departs
+        const next = keep ? this.nextStation(pattern, p) : -1;
         // The trips of the pattern are in the order of their first
         // departures: those that can leave here in time begin at `k`. Cheap
         // pre-filter; delays of more than three hours are not expected.
@@ -1422,6 +1488,7 @@ export class Timetable extends Schedule {
           if (!active[this.tripService[t]]) continue;
           const planned = base + this.schedDep(t, p);
           if (planned > now + windowS || planned < now - 3 * 3600) continue;
+          if (keep && !keep(t, next)) continue;
           const row = rtDay < 0 ? -1 : realtime.row(rtDay, t);
           const delay = row < 0 ? null : realtime.depDelay(row, p);
           const expected = planned + (delay ?? 0);

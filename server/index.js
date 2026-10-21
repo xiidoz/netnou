@@ -4,6 +4,7 @@ import http from 'node:http';
 import path from 'node:path';
 import zlib from 'node:zlib';
 import { parseAddress, stopPath } from '../public/address.js';
+import { readChoice } from '../public/choice.js';
 import { t } from '../public/i18n.js';
 import { loadConfig, parseBox, parsePlace } from './config.js';
 import { Addresses, stopTitle } from './lib/addresses.js';
@@ -707,12 +708,15 @@ function handleApi(req, res, url) {
       // A station is named by its id, or by its place as /api/search lists it.
       const at = parsePlace(url.searchParams.get('at'));
       const station = at ? searchList().stationAt(...at) : url.searchParams.get('station');
-      const board = timetable.departures(station ?? '', now, realtime.snapshot);
+      // (only the lines and directions chosen, where some are: public/choice.js, #164)
+      const board = timetable.departures(station ?? '', now, realtime.snapshot, { lines: readChoice(url.searchParams.get('lines')) });
       if (!board) return sendJson(req, res, 404, { error: 'station not found' });
       realtime.touch();
       // (its address as the page writes it into its own: by the name and the place of the station)
       visitOpened(req, res, url, stopPath(board.name, board.lat, board.lon), (language, words) => stopTitle(board.name, words));
-      return sendJson(req, res, 200, { now, ...board });
+      // (and what there is to choose from, where the page asks for it: once, as it does not change with the minute)
+      const directions = url.searchParams.get('directions') === '1' ? { directions: timetable.directions(board.id) } : {};
+      return sendJson(req, res, 200, { now, ...board, ...directions });
     }
 
     default:

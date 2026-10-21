@@ -589,6 +589,8 @@ going.
 | `station` | the id of the station, as [`/api/stations`](#get-apistations) and the stops of [a trip](#get-apitrip) have it |
 | `at` | in place of the id, where the station is: `latitude,longitude` as [`/api/search`](#get-apisearch) lists it, in degrees, for example `at=49.44561,11.08299`. It is the station at that very place, not the nearest one |
 | `open` | `1`: the page's first request for a stop it opens, which counts as a visit of its address where [visits are counted](configuration.md#counting-visits) |
+| `lines` | only these lines and directions, comma-separated: `<mode>/<line>` for a line both ways, `<mode>/<line>~<next station>` for one direction, the names written as in addresses, e.g. `lines=subway/u1~nuernberg-weisser-turm,tram/4`. They are chosen before the departures are counted, so the 40 and the further ones are all of them (#164) |
+| `directions` | `1`: also list the lines of the station and their directions (`directions` below), for choosing among them |
 
 404 `{ "error": "station not found" }` for an unknown id and for a place
 without a station.
@@ -622,6 +624,29 @@ where a "via" is behind it.
 `cancelled` is true when the run is cancelled or skips this station. `notes`
 are notes of the feed about the station, such as a lift out of order, each
 with a `title`, a `text` and a `severity` as for [a trip](#get-apitrip).
+With `directions=1` the answer also has `directions`: every line that
+leaves the station on any day of the timetable, with each of its directions
+(#164). The feed says nothing of a direction, and the destinations of a
+line vary from trip to trip, so a direction is a line with the station its
+trips come to next; trips that end earlier on the same way are in it.
+
+```json
+"directions": [
+  { "mode": "subway", "line": "U1", "next": "Nürnberg Weißer Turm", "to": "Langwasser Süd", "heading": 65, "key": "subway/u1~nuernberg-weisser-turm" },
+  { "mode": "subway", "line": "U1", "next": "Nürnberg Gostenhof", "to": "Fürth Hardhöhe", "heading": 294, "key": "subway/u1~nuernberg-gostenhof" },
+  …
+]
+```
+
+| Field | Type | Meaning |
+| --- | --- | --- |
+| `next` | string | the next station of its trips from here |
+| `to` | string | the destination most of them have here |
+| `heading` | integer | where it leaves the stop: the bearing to `next` in degrees, clockwise from north |
+| `key` | string | what `lines` takes for this direction |
+
+They are sorted by mode, then by line, then the busier direction first.
+
 `warnings` of a departure are those of the notes of its trip that warn, the
 ones with the `severity` `"warning"` or `"severe"`: what is wrong with it
 right now, such as the reason for a delay. For most departures there are

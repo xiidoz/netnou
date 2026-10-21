@@ -222,6 +222,14 @@ export default {
   'stop.skipped': 'skipped',
 
   'departures.title': 'Departures',
+  'choice.all': 'All lines',
+  'choice.only': 'Only',
+  'choice.more': '+{count}',
+  'choice.clear': 'Show all lines',
+  'choice.title': 'Which departures?',
+  'choice.hint': 'Tap a direction to show only it. Tap again to take it out.',
+  'choice.via': '{to} via {stop}',
+  'choice.direction': '{line} to {to}',
   'departures.none': 'No departures in the next 24 hours.',
   'departures.cancelled': 'cancelled',
   // how long until a departure leaves: under a minute, and in whole minutes
