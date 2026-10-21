@@ -50,6 +50,7 @@ public/
   address.js          the addresses of stops, lines and trips
   display.js          what the address of a board or a display on a wall says
   stops.js            the stops on the map: their marks, their names, a station at its places, the style without its own
+  favourites.js       the stops and lines a visitor marks with the heart, kept in the browser
   search.js           finding towns, stops and lines by name
   search-worker.js    the thread it runs in
   i18n.js, locales/   texts per language

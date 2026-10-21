@@ -144,12 +144,15 @@
        and its head move, see "the details as a sheet" in app.js. -->
   <aside class="card panel" id="panel" hidden tabindex="-1" aria-label="Details" data-i18n-aria-label="panel.label">
     <button type="button" class="handle" id="panel-handle" aria-label="Make the details larger or smaller" data-i18n-aria-label="panel.resize"></button>
+    <!-- a stop or a line as a favourite, first in the search (#245) -->
+    <button type="button" class="heart" id="panel-favourite" hidden aria-label="Add to favourites" data-i18n-aria-label="panel.favourite" title="Add to favourites" data-i18n-title="panel.favourite" data-icon="mdiHeartOutline"></button>
     <!-- the address of a stop or a line, for others (#37) -->
     <button type="button" class="share" id="panel-share" hidden aria-label="Share" data-i18n-aria-label="panel.share" title="Share" data-i18n-title="panel.share" data-icon="mdiShareVariant"></button>
     <!-- enlarges the details of a stop into a board, and makes them the details again (#81, "the board" in app.js) -->
     <button type="button" class="enlarge" id="panel-board" hidden aria-label="Enlarge" data-i18n-aria-label="panel.enlarge" title="Enlarge" data-i18n-title="panel.enlarge" data-icon="mdiArrowExpand"></button>
     <button type="button" class="close" id="panel-close" aria-label="Close" data-i18n-aria-label="panel.close" title="Close" data-i18n-title="panel.close" data-icon="mdiClose"></button>
     <p class="copied" id="panel-copied" role="status" hidden data-i18n="panel.copied">Address copied</p>
+    <p class="copied favourited" id="panel-favourited" role="status" hidden data-i18n="panel.favourited">Favourited: at the top of the search</p>
     <div id="panel-head"></div>
     <div id="panel-body"></div>
   </aside>
@@ -175,6 +178,7 @@
         <li><span class="sign stop"></span><p><b id="use-stop" data-i18n="about.useStop">Zoom in, tap a stop:</b> <span data-i18n="about.useStopText">its next departures with delays, to see whether you will still make it.</span></p></li>
         <li><span class="sign departure"></span><p><b id="use-departure" data-i18n="about.useDeparture">Tap a departure:</b> <span data-i18n="about.useDepartureText">straight to its vehicle on the map, to see where it is now.</span></p></li>
         <li><span class="sign" data-icon="mdiMagnify"></span><p><b data-i18n="about.useSearch">Search:</b> <span data-i18n="about.useSearchText">a town, a stop or a line. A line then shows only its own vehicles.</span></p></li>
+        <li><span class="sign" data-icon="mdiHeart"></span><p><b id="use-favourite" data-i18n="about.useFavourite">Tap the heart:</b> <span data-i18n="about.useFavouriteText">makes a stop or a line a favourite. Favourites come first in the search, even before anything is typed.</span></p></li>
         <li><span class="sign modes"></span><p><b id="use-modes" data-i18n="about.useModes">Tap a kind of transport:</b> <span data-i18n="about.useModesText">hides it or shows it again, for example to see only trains.</span></p></li>
         <li><span class="sign" data-icon="mdiCog"></span><p><b data-i18n="about.useColor">Colour by delay:</b> <span data-i18n="about.useColorText">in the settings. Every vehicle in the colour of its delay, to see at a glance where things run late.</span></p></li>
         <li><span class="sign" data-icon="mdiShareVariant"></span><p><b data-i18n="about.useShare">Share:</b> <span data-i18n="about.useShareText">a link to a stop, a line or a trip, for example to show someone where the bus is right now.</span></p></li>

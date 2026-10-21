@@ -30,6 +30,8 @@ delay put it. It can be a little ahead of or behind its marker.
 - **Tap a departure** for its whole trip, with its vehicle marked on the map.
 - **Search** for a town, a stop or a line. A line then shows only its own
   vehicles, all of them at a glance.
+- **Tap the heart** to make a stop or a line a favourite. Favourites come
+  first in the search, even before anything is typed.
 - **Tap a kind of transport** in the row of chips to hide it or show it again,
   for example to see only the trains.
 - **Share** a stop, a line or a trip, for example to show someone where the

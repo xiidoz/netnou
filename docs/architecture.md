@@ -121,7 +121,8 @@ Page (`public/`):
 | `display.js` | display mode and the board of a stop in the address of the page: what an address asks for, and the address for what is shown |
 | `address.js` | the addresses of stops, lines and trips, for the page and the server: how a name is written in one, and what an address names (`stopPath`, `linePath`, `tripPath`, `parseAddress`) |
 | `stops.js` | the stops on the map: how large the mark of one is, from which zoom which stops carry their names and where those go so that none lies on another, the marks of a station at its places and the lines that join them, the style of the map without stops of its own, and whether the name of a stop says its town |
-| `search.js` | finding stops, lines and towns by name: matching and order, without the page around it |
+| `favourites.js` | the stops and lines a visitor marks with the heart (#245): what is kept of them in the browser, and when a stop or a line of another timetable is the one kept |
+| `search.js` | finding stops, lines and towns by name: matching and order, the favourites first, without the page around it |
 | `search-worker.js` | the thread that loads the list of stops, lines and towns and searches it |
 | `i18n.js`, `locales/` | texts in the visitor's language, see [translating.md](translating.md) |
 | `first.js` | what is settled before the page is drawn: light or dark, by the visitor's choice or else the scheme of the device, whether the header card shows at once and in which language, and where the instance is (the base of the page) |
@@ -774,6 +775,18 @@ otherwise a server would load a file written by older code:
   there and opens its departure board. A line is found by the beginning of
   its name, with its mode in front if somebody types one ("bus 33"), and is
   told from others of the same name by where it goes and who runs it.
+- **Favourites.** A stop or a line becomes a favourite with the heart in its
+  details ([#245](https://github.com/xiidoz/netnou/issues/245)), and is
+  kept in the browser (`netnou.favourites`) by what its address says: its
+  name and its place, and for a line its mode and operator as well, not by
+  its id, which changes with every timetable. The search thread looks them
+  up in its list as `/api/address` would, the stop of the name nearest the
+  place within 1 km, and the line nearest within 10 km; one that a timetable
+  no longer has is not listed. With nothing typed, the search lists the
+  favourites, under the headings it has; while typing, a favourite that
+  matches as closely as the search goes comes first among the stops or the
+  lines, with a heart at the end of its row. The order of towns, lines and
+  stops stays as it is.
 - **What a line is.** The trips of a name, mode and operator that share
   stations, also through others
   ([#152](https://github.com/xiidoz/netnou/issues/152)): DB Regio runs an

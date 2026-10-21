@@ -289,6 +289,9 @@ button { font: inherit; color: inherit; }
 .search-results .line .to, .search-results .line .agency, .in-town .stop, .in-town .town { overflow: hidden; text-overflow: ellipsis; }
 .search-results .line .agency, .in-town .town { color: var(--text-muted); font-size: 12px; font-weight: 400; }
 .search-results .badge { flex: none; }
+/* a favourite has a heart at the end of its row (#245) */
+.search-results .favourite { flex: none; margin-left: auto; color: var(--delay-severe); }
+.search-results .favourite .icon { width: 16px; height: 16px; }
 /* the headings of lines and stops, where both were found */
 .search-heading {
   padding: 6px 10px 2px;
@@ -557,8 +560,9 @@ button:focus-visible, select:focus-visible, .row:focus-visible, .panel:focus-vis
 
 /* The details of a stop or a line can be shared (#37): beside the close
    button, and for a stop beside the button that enlarges them into a board
-   (#81) between the two. */
-.close, .share, .enlarge {
+   (#81) between the two. Before the share button the heart, which makes the
+   stop or the line a favourite (#245): red and filled where it is one. */
+.close, .share, .enlarge, .heart {
   position: absolute;
   z-index: 2;
   top: 8px;
@@ -575,6 +579,9 @@ button:focus-visible, select:focus-visible, .row:focus-visible, .panel:focus-vis
 }
 .share, .enlarge { right: 46px; }
 .panel.boardable .share { right: 84px; }
+.heart { right: 84px; }
+.panel.boardable .heart { right: 122px; }
+.heart.on { color: var(--delay-severe); }
 /* (what says that the address was copied, where there is nothing to share it with: under the button, for a moment) */
 .copied {
   position: absolute;
@@ -589,11 +596,15 @@ button:focus-visible, select:focus-visible, .row:focus-visible, .panel:focus-vis
   font-size: 12.5px;
 }
 .panel.boardable .copied { right: 84px; }
+/* (what says where a favourite is to be found: under the row of buttons, to its edge) */
+.panel .copied.favourited { right: 8px; }
 
 .panel-head { padding: 14px 48px 10px 14px; border-bottom: 1px solid var(--border); }
 /* (the heading beside the two buttons; what is below it is clear of them) */
 .panel.shareable .panel-head h2 { padding-right: 38px; }
 .panel.boardable .panel-head h2 { padding-right: 76px; }
+.panel.favourable .panel-head h2 { padding-right: 76px; }
+.panel.favourable.boardable .panel-head h2 { padding-right: 114px; }
 .panel-head h2 {
   margin: 0;
   font-size: 16px;
@@ -841,8 +852,9 @@ li:last-child > .row.stop .rail::before { bottom: 50%; }
    and the status line where it is a warning. On a screen on a wall
    (display=fixed) nothing is to be touched: no buttons at all, on the card or
    in the corner of the map, and no details but the board of a stop (#81).
-   The legend of the delays stays there, as nobody can look up what a colour
-   means. */
+   No heart in the details while the controls are hidden: a favourite is for
+   the search, which is hidden too (#245). The legend of the delays stays
+   there, as nobody can look up what a colour means. */
 :root[data-display] .controls { width: auto; max-width: 360px; }
 :root[data-display=""] .controls > :not(.title, .status),
 :root[data-display="fixed"] .controls > :not(.title, .status, .legend),
@@ -852,7 +864,9 @@ li:last-child > .row.stop .rail::before { bottom: 50%; }
 :root[data-display="fixed"] .title button,
 :root[data-display="fixed"] .maplibregl-ctrl-group,
 :root[data-display="fixed"]:not([data-board]) .panel,
-:root[data-display="fixed"] .panel > button { display: none; }
+:root[data-display="fixed"] .panel > button,
+:root[data-display] .panel .heart,
+:root[data-display] .panel .favourited { display: none; }
 /* the way out of a screen on a wall: it shows for a moment when the screen is touched */
 .display-leave {
   position: absolute;
@@ -1057,6 +1071,12 @@ li:last-child > .row.stop .rail::before { bottom: 50%; }
   .panel .enlarge { top: 14px; right: 12px; }
   .panel.boardable .share, .panel.boardable .copied { right: 50px; }
   .panel.boardable .panel-head h2 { padding-right: 74px; }
+  /* (the heart before the share button) */
+  .panel .heart { top: 14px; right: 50px; }
+  .panel.boardable .heart { right: 88px; }
+  .panel .copied.favourited { top: 52px; right: 12px; }
+  .panel.favourable .panel-head h2 { padding-right: 74px; }
+  .panel.favourable.boardable .panel-head h2 { padding-right: 112px; }
   .panel-head .notes { margin-right: 0; }
   /* A sheet has little room: every note is one line there, cut where it does
      not fit. app.js makes a button of what is cut, and keeps all notes to a
@@ -1180,6 +1200,9 @@ li:last-child > .row.stop .rail::before { bottom: 50%; }
   :root[data-board="alone"] .handle { top: 0; }
 }
 
+/* (no heart on a board: it is in the details of the stop) */
+:root[data-board] .panel .heart,
+:root[data-board] .panel .favourited { display: none; }
 /* Its buttons are at its top on every screen, the one that closes it
    among them: a board is no sheet that is dragged away. */
 :root[data-board] .panel .close,

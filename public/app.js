@@ -11,8 +11,9 @@
 import { parseAddress, stopPath, wordsOf } from './address.js';
 import { APP_NAME, READMES, dayOf, formatNumber, formatTime, languagePicker, loadLanguage, pageTexts, sentInAnother, setTimeZone, t, translatePage } from './i18n.js';
 import { PLACES_ZOOM, RAIL_MODES, joiningLines, mergePlaces, namePrecedence, namedAt, placeNames, stopMark, townsAlong, withoutStyleStops } from './stops.js';
+import { favouritesFrom, isFavourite, lineFavourite, stopFavourite, withFavourite } from './favourites.js';
 import { BOARD_MAX, BOARD_SHARE, BOARD_STOPS, boardBlocks, boardQuery, boardShare, displayQuery, ledBy, readBoard, readDisplay, readStops } from './display.js';
-import { mdiAlert, mdiArrowCollapse, mdiArrowExpand, mdiChevronRight, mdiCityVariantOutline, mdiEye, mdiEyeOff, mdiFullscreen, mdiFullscreenExit, mdiMinusCircleOutline, mdiPlaylistPlus, mdiPlus } from './vendor/material-design-icons/icons.js';
+import { mdiAlert, mdiArrowCollapse, mdiArrowExpand, mdiChevronRight, mdiCityVariantOutline, mdiEye, mdiEyeOff, mdiFullscreen, mdiFullscreenExit, mdiHeart, mdiHeartOutline, mdiMinusCircleOutline, mdiPlaylistPlus, mdiPlus } from './vendor/material-design-icons/icons.js';
 import { AttributionControl, MapLibreMap, NavigationControl } from './vendor/maplibre-gl/maplibre-gl.mjs';
 
 // The modes, each with a chip where the timetable has it. Same ids as MODES in
@@ -198,6 +199,28 @@ function saveSetting(key, value) {
     // private mode or blocked storage: the setting just does not persist
   }
 }
+
+// The favourites (#245, favourites.js) are kept in the browser beside the
+// settings, but are none of them: the address of a display does not carry
+// them, and the page reads them whatever it was opened as.
+const FAVOURITES_KEY = 'netnou.favourites';
+let favourites = (() => {
+  try {
+    return favouritesFrom(JSON.parse(localStorage.getItem(FAVOURITES_KEY)));
+  } catch {
+    return favouritesFrom(null);
+  }
+})();
+
+function keepFavourites() {
+  try {
+    localStorage.setItem(FAVOURITES_KEY, JSON.stringify(favourites));
+  } catch {
+    // private mode or blocked storage: they last as long as the page
+  }
+}
+
+const hasFavourites = () => favourites.stops.length > 0 || favourites.lines.length > 0;
 
 // The texts come first: the map takes those of its controls when it is created.
 // (The page came in its own language, which is the visitor's in most cases:
@@ -1471,7 +1494,8 @@ function ask(query) {
   const modeNames = Object.fromEntries(DRAW_ORDER.map((mode) => [mode, t(`mode.${mode}`)]));
   // (stops alone where one is added to a board)
   const limits = state.adding ? { towns: 0, lines: 0, stops: SEARCH_LIMIT } : { towns: TOWN_LIMIT, lines: LINE_LIMIT, stops: SEARCH_LIMIT };
-  finder.postMessage({ turn: ++turn, query, near, limits, modeNames });
+  // (and the favourites, which come first, and are what it lists with nothing typed)
+  finder.postMessage({ turn: ++turn, query, near, limits, modeNames, favourites });
 }
 
 /** The list the thread has is not the server's any more: it loads it again with the next question. */
@@ -1517,9 +1541,12 @@ function listResults(towns, lines, stops, note = '') {
     nameInTown(town.name, town.district),
   ]));
   // A line begins with its name on the colour of its mode, as in the departures.
+  // A favourite has a heart at the end of its row: a mark, not a button (#245).
+  const heart = (item) => (item.favourite ? [el('span', { class: 'favourite', role: 'img', 'aria-label': t('search.favourite'), title: t('search.favourite') }, [icon(mdiHeart)])] : []);
   const lineRows = lines.map((line) => option(() => chooseLine(line), { class: 'line' }, [
     badge(line.name, line.mode),
     el('span', { class: 'name' }, [el('span', { class: 'to', text: line.to.join(' – ') }), el('span', { class: 'agency', text: line.agency })]),
+    ...heart(line),
   ]));
   const stopRows = stops.map((stop) => {
     // The dots say what stops there, as the chips do.
@@ -1529,7 +1556,7 @@ function listResults(towns, lines, stops, note = '') {
       return dot;
     });
     // Below its name the town it is in, where the name does not say that: in small print, as a line has who runs it.
-    return option(() => chooseStop(stop), { class: stop.town ? 'in-town' : '', title: stop.modes.map((mode) => t(`mode.${mode}`)).join(', ') }, [el('span', { class: 'dots' }, dots), nameInTown(stop.name, stop.town)]);
+    return option(() => chooseStop(stop), { class: stop.town ? 'in-town' : '', title: stop.modes.map((mode) => t(`mode.${mode}`)).join(', ') }, [el('span', { class: 'dots' }, dots), nameInTown(stop.name, stop.town), ...heart(stop)]);
   });
   // (each kind under its heading where more than one kind was found)
   const kinds = [towns, lines, stops].filter((list) => list.length).length;
@@ -1545,18 +1572,21 @@ function listResults(towns, lines, stops, note = '') {
 function runSearch() {
   const query = searchField.value;
   ask(query);
-  if (!query.trim()) listResults([], [], []);
-  else if (!finderHasList) listResults([], [], [], t('search.loading'));
+  // (with nothing typed the thread answers with the favourites, if there are any)
+  if (!query.trim()) {
+    if (!hasFavourites()) listResults([], [], []);
+  } else if (!finderHasList) listResults([], [], [], t('search.loading'));
 }
 
 /** Shows what the thread found, unless something else has been typed since. */
 function answered({ turn: of, failed = false, towns = [], lines, stops }) {
   // (whatever it was asked: it has the list now, or has not)
   finderHasList = !failed;
-  // (asked for the list alone, or typed on meanwhile)
-  if (of !== turn || !searchField.value.trim()) return;
-  if (failed) listResults([], [], [], t('search.failed'));
-  else listResults(towns, lines, stops, towns.length || lines.length || stops.length ? '' : t('search.none'));
+  // (typed on meanwhile, or asked for the list alone, where there are no favourites to list)
+  const typed = searchField.value.trim() !== '';
+  if (of !== turn || (!typed && !hasFavourites())) return;
+  if (failed) listResults([], [], [], typed ? t('search.failed') : '');
+  else listResults(towns, lines, stops, !typed || towns.length || lines.length || stops.length ? '' : t('search.none'));
 }
 
 /** Shuts the list, and on a narrow screen the field with it. */
@@ -1909,6 +1939,7 @@ if (!matchMedia('(pointer: coarse)').matches) {
   $('use-stop').textContent = t('about.useStopMouse');
   $('use-departure').textContent = t('about.useDepartureMouse');
   $('use-modes').textContent = t('about.useModesMouse');
+  $('use-favourite').textContent = t('about.useFavouriteMouse');
 }
 
 /** A dialog closes with its button, and with a click beside it. */
@@ -2213,7 +2244,54 @@ function shareable(yes, board = false) {
   if (!yes) copiedNote.hidden = true;
   panel.classList.toggle('shareable', yes);
   panel.classList.toggle('boardable', board);
+  showFavourite();
 }
+
+// The heart before the share button (#245): a stop or a line is made a
+// favourite with it, and is one no longer. A note says where a favourite is
+// to be found, for a moment, as the one of the share button does.
+const favouriteButton = $('panel-favourite');
+const favouriteNote = $('panel-favourited');
+
+/** What is open as it is kept as a favourite: { kind, item } of a stop or a line, else null. */
+function openFavourite() {
+  const selection = state.selection;
+  if (!selection?.data) return null;
+  if (selection.type === 'station') return { kind: 'stops', item: stopFavourite(selection.data) };
+  if (selection.type === 'line') return { kind: 'lines', item: lineFavourite(selection.data) };
+  return null;
+}
+
+/** Shows the heart where a stop or a line is open: filled where it is a favourite. */
+function showFavourite() {
+  const open = shareButton.hidden ? null : openFavourite();
+  favouriteButton.hidden = !open;
+  panel.classList.toggle('favourable', open !== null);
+  if (!open) {
+    favouriteNote.hidden = true;
+    return;
+  }
+  const yes = isFavourite(favourites, open.kind, open.item);
+  const label = yes ? t('panel.unfavourite') : t('panel.favourite');
+  favouriteButton.title = label;
+  favouriteButton.setAttribute('aria-label', label);
+  favouriteButton.classList.toggle('on', yes);
+  favouriteButton.replaceChildren(icon(yes ? mdiHeart : mdiHeartOutline));
+}
+
+favouriteButton.addEventListener('click', () => {
+  const open = openFavourite();
+  if (!open) return;
+  const yes = !isFavourite(favourites, open.kind, open.item);
+  favourites = withFavourite(favourites, open.kind, open.item, yes);
+  keepFavourites();
+  showFavourite();
+  // (one note at a time under the buttons; none where the heart goes empty, which says it)
+  copiedNote.hidden = true;
+  favouriteNote.hidden = !yes;
+  clearTimeout(copiedTimer);
+  if (yes) copiedTimer = setTimeout(() => { favouriteNote.hidden = true; }, 2000);
+});
 
 shareButton.addEventListener('click', async () => {
   // (the address alone, without the settings of this page)
@@ -2228,6 +2306,7 @@ shareButton.addEventListener('click', async () => {
     return;
   }
   copiedNote.hidden = false;
+  favouriteNote.hidden = true;
   clearTimeout(copiedTimer);
   copiedTimer = setTimeout(() => {
     copiedNote.hidden = true;

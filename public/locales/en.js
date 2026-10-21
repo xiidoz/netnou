@@ -87,6 +87,7 @@ export default {
   'search.towns': 'Towns',
   'search.lines': 'Lines',
   'search.stops': 'Stops',
+  'search.favourite': 'Favourite',
   'search.none': 'No town, stop or line of that name.',
   'search.loading': 'Loading stops and lines …',
   'search.failed': 'Stops and lines could not be loaded.',
@@ -148,6 +149,9 @@ export default {
   'about.useDepartureText': 'straight to its vehicle on the map, to see where it is now.',
   'about.useSearch': 'Search:',
   'about.useSearchText': 'a town, a stop or a line. A line then shows only its own vehicles.',
+  'about.useFavourite': 'Tap the heart:',
+  'about.useFavouriteMouse': 'Click the heart:',
+  'about.useFavouriteText': 'makes a stop or a line a favourite. Favourites come first in the search, even before anything is typed.',
   // (the chips with the kinds of transport and their numbers)
   'about.useModes': 'Tap a kind of transport:',
   'about.useModesMouse': 'Click a kind of transport:',
@@ -171,6 +175,9 @@ export default {
   'panel.loadFailed': 'The data could not be loaded.',
   'panel.share': 'Share',
   'panel.copied': 'Address copied',
+  'panel.favourite': 'Add to favourites',
+  'panel.unfavourite': 'Remove from favourites',
+  'panel.favourited': 'Favourited: at the top of the search',
   // the button that enlarges the details of a stop into a board of its departures, and the one that makes the board the details again
   'panel.enlarge': 'Enlarge',
   'panel.shrink': 'Make smaller',

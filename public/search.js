@@ -9,11 +9,15 @@
 // part of its name, whether the name says it or not: "Marienplatz" in Munich
 // is found by "münchen marienplatz".
 //
+// The visitor's favourites (favourites.js) come first among the stops and
+// the lines they match, and are what is listed while nothing is typed.
+//
 // The names of all stops are one text, and a word is looked for by reading
 // through that text. Nothing is made for each stop: a list of all the stops
 // of a country is a quarter of a million of them, and a phone would take
 // seconds and tens of megabytes to give each its words.
 
+import { LINE_REACH_M, STOP_REACH_M, metres } from './favourites.js';
 import { fold, townToShow } from './stops.js';
 
 // How close a match is. It comes first in the order of the results. A search
@@ -566,6 +570,9 @@ const weigh = (service, lat, lon, near) => {
 
 const nameOf = (index, i) => index.names.slice(index.nameStarts[i], index.nameStarts[i + 1] - 1);
 
+/** The order of stops found: the closer matches first, then the more service, then by name. */
+const inOrder = (index) => (a, b) => a.match - b.match || b.weight - a.weight || nameOf(index, a.i).localeCompare(nameOf(index, b.i));
+
 /**
  * The stops that match all the words typed, as far as the search goes, the
  * most likely first.
@@ -616,7 +623,7 @@ function find(index, forms, level, near, limit) {
 
   // The best ones so far, in their order.
   const best = [];
-  const before = (a, b) => a.match - b.match || b.weight - a.weight || nameOf(index, a.i).localeCompare(nameOf(index, b.i));
+  const before = inOrder(index);
   let last = null; // of them, once there are as many as are asked for
   const take = (i) => {
     const match = worst[i];
@@ -637,29 +644,83 @@ function find(index, forms, level, near, limit) {
 }
 
 /**
+ * The stops and the lines of the list that are the visitor's favourites
+ * (favourites.js): for each one kept, the stop of its name nearest its
+ * place, and the line of its name, mode and operator nearest its place, as
+ * api/address finds them. One that is no longer in the timetable is not found.
+ * @param favourites { stops, lines } as favouritesFrom gives them
+ * @returns { stops, lines }: their numbers in the list, in the order they were marked
+ */
+export function favouritesIn(index, { stops = [], lines = [] } = {}) {
+  const found = { stops: [], lines: [] };
+  const reach = STOP_REACH_M / 111_320; // (in degrees of latitude: most stops are not looked at closer)
+  for (const kept of stops) {
+    let best = -1;
+    let nearest = STOP_REACH_M;
+    for (let i = 0; i < index.count; i++) {
+      if (Math.abs(index.lat[i] - kept.lat) > reach) continue;
+      const apart = metres(kept.lat, kept.lon, index.lat[i], index.lon[i]);
+      if (apart > nearest || nameOf(index, i) !== kept.name) continue;
+      best = i;
+      nearest = apart;
+    }
+    if (best >= 0 && !found.stops.includes(best)) found.stops.push(best);
+  }
+  const all = index.lines;
+  for (const kept of lines) {
+    let best = -1;
+    let nearest = LINE_REACH_M;
+    for (let i = 0; i < all.name.length; i++) {
+      if (all.name[i] !== kept.name || all.mode[i] !== kept.mode || all.agency[i] !== kept.agency) continue;
+      const apart = metres(kept.lat, kept.lon, all.lat[i], all.lon[i]);
+      if (apart > nearest) continue;
+      best = i;
+      nearest = apart;
+    }
+    if (best >= 0 && !found.lines.includes(best)) found.lines.push(best);
+  }
+  return found;
+}
+
+/**
  * The stops that match what was typed, the most likely first: the closer
  * matches before the others, and among equally close ones those with more
- * service. Service counts for less the further a stop is from `near`.
+ * service. Service counts for less the further a stop is from `near`. The
+ * favourites among them come before all others, and with nothing typed
+ * they are the stops listed.
  * @param index from buildIndex
  * @param near { lat, lon } of the visitor, if they have it shown; else of
  *   the middle of what the map shows, with `km`, how far it reaches from there
- * @returns up to `limit` of { name, lat, lon, modes, town }; `town` only
- *   where one is known and the name does not say it
+ * @param favourites the numbers of the stops that are favourites (favouritesIn)
+ * @returns up to `limit` of { name, lat, lon, modes, town, favourite }, and
+ *   more where more favourites match; `town` only where one is known and
+ *   the name does not say it, `favourite` only where it is one
  */
-export function search(index, query, { near = null, limit = 8 } = {}) {
+export function search(index, query, { near = null, limit = 8, favourites = [] } = {}) {
+  if (limit < 1) return [];
+  const result = (i) => {
+    const town = townToShow(nameOf(index, i), index.towns.names[index.townOf[i]]);
+    return { name: nameOf(index, i), lat: index.lat[i], lon: index.lon[i], modes: index.modes.filter((_, bit) => index.kinds[i] & (1 << bit)), ...(town ? { town } : {}), ...(favourites.includes(i) ? { favourite: true } : {}) };
+  };
   const forms = wordsOf(query).sort((a, b) => b.length - a.length).map(formsOf);
-  if (!forms.length || limit < 1) return [];
+  if (!forms.length) return favourites.map(result);
   // Single letters first by what begins with them alone: that fills the
   // list as a rule, and then nothing found another way would be on it.
-  let best = forms[0].word.length === 1 ? find(index, forms, BEGINNING, near, limit) : [];
-  if (best.length < limit) best = find(index, forms, INSIDE, near, limit);
+  let level = BEGINNING;
+  let best = forms[0].word.length === 1 ? find(index, forms, level, near, limit) : [];
+  if (best.length < limit) best = find(index, forms, (level = INSIDE), near, limit);
   // Close spellings only where nothing is found without them: they bring in
   // what was not meant as well ("feuer" is nearly the beginning of "Fürth").
-  if (!best.length) best = find(index, forms, SPELLING, near, limit);
-  return best.map(({ i }) => {
-    const town = townToShow(nameOf(index, i), index.towns.names[index.townOf[i]]);
-    return { name: nameOf(index, i), lat: index.lat[i], lon: index.lon[i], modes: index.modes.filter((_, bit) => index.kinds[i] & (1 << bit)), ...(town ? { town } : {}) };
-  });
+  if (!best.length) best = find(index, forms, (level = SPELLING), near, limit);
+  // The favourites that match as closely as the search went, first.
+  const first = [];
+  for (const i of favourites) {
+    const match = Math.max(...forms.map((form) => matchOf(index, i, form, level)));
+    if (match !== NOT) first.push({ i, match, weight: weigh(index.service[i], index.lat[i], index.lon[i], near) });
+  }
+  first.sort(inOrder(index));
+  const rest = best.filter(({ i }) => !favourites.includes(i));
+  return [...first, ...rest].slice(0, Math.max(limit, first.length)).map(({ i }) => result(i));
 }
 
 /**
@@ -704,13 +765,21 @@ export function searchTowns(index, query, { near = null, limit = 3 } = {}) {
  * may be left out: "bus 33", "U-Bahn 1". A line of exactly that name comes
  * first, one of that number after it, then the one with more trips, which
  * count for less the further from `near` the line runs.
+ * The favourites among them come before all others, and with nothing typed
+ * they are the lines listed.
  * @param index from buildIndex
  * @param near as for search()
- * @returns up to `limit` of { name, mode, agency, to }
+ * @param favourites the numbers of the lines that are favourites (favouritesIn)
+ * @returns up to `limit` of { name, mode, agency, to, at, favourite }, and
+ *   more where more favourites match; `favourite` only where it is one
  */
-export function searchLines(index, query, { near = null, limit = 3 } = {}) {
+export function searchLines(index, query, { near = null, limit = 3, favourites = [] } = {}) {
+  const { lines } = index;
+  // (with where it runs: lines of a name may be in places apart, #152)
+  const result = (i) => ({ name: lines.name[i], mode: lines.mode[i], agency: lines.agency[i], to: lines.to[i], at: [lines.lat[i], lines.lon[i]], ...(favourites.includes(i) ? { favourite: true } : {}) });
+  if (limit < 1) return [];
   const typed = split(fold(query));
-  if (!typed.length) return [];
+  if (!typed.length) return favourites.map(result);
   // what a name may begin with: all that was typed, or what follows the name of a mode
   const wanted = [{ mode: null, begin: typed.join('') }];
   for (let k = 1; k < typed.length; k++) {
@@ -718,7 +787,6 @@ export function searchLines(index, query, { near = null, limit = 3 } = {}) {
     if (mode) wanted.push({ mode, begin: typed.slice(k).join('') });
   }
 
-  const { lines } = index;
   const found = [];
   for (let i = 0; i < lines.name.length; i++) {
     const name = lines.compact[i];
@@ -730,11 +798,11 @@ export function searchLines(index, query, { near = null, limit = 3 } = {}) {
       if (name.startsWith(begin)) exact = Math.max(exact, name === begin ? 2 : 0);
       else if (mode && number.startsWith(begin)) exact = Math.max(exact, number === begin ? 1 : 0);
     }
-    if (exact >= 0) found.push({ i, exact, weight: weigh(lines.service[i], lines.lat[i], lines.lon[i], near) });
+    if (exact >= 0) found.push({ i, exact, favourite: favourites.includes(i), weight: weigh(lines.service[i], lines.lat[i], lines.lon[i], near) });
   }
+  const many = found.filter(({ favourite }) => favourite).length;
   return found
-    .sort((a, b) => b.exact - a.exact || b.weight - a.weight || lines.name[a.i].localeCompare(lines.name[b.i], undefined, { numeric: true }))
-    .slice(0, limit)
-    // (with where it runs: lines of a name may be in places apart, #152)
-    .map(({ i }) => ({ name: lines.name[i], mode: lines.mode[i], agency: lines.agency[i], to: lines.to[i], at: [lines.lat[i], lines.lon[i]] }));
+    .sort((a, b) => b.favourite - a.favourite || b.exact - a.exact || b.weight - a.weight || lines.name[a.i].localeCompare(lines.name[b.i], undefined, { numeric: true }))
+    .slice(0, Math.max(limit, many))
+    .map(({ i }) => result(i));
 }
