@@ -4,8 +4,10 @@
 // says (address.js), its name and its place, not by its id, which changes
 // with every timetable: a stop is the one of that name nearest its place, a
 // line the one of that name, mode and operator nearest its place, as
-// api/address finds them. Without the page around it, so that it can be
-// tested as it is (test/favourites.test.js); app.js and search.js use it.
+// api/address finds them. A stop keeps the kinds that call there as well, for
+// its heart on the map where the map has no stations of its own. Without the
+// page around it, so that it can be tested as it is (test/favourites.test.js);
+// app.js and search.js use it.
 
 // How far a stop may have moved with a new timetable and still be the one
 // marked: as far as api/address looks for a stop of the name.
@@ -20,23 +22,25 @@ export const metres = (lat1, lon1, lat2, lon2) => Math.hypot(lat2 - lat1, (lon2 
 const round5 = (degrees) => Math.round(degrees * 1e5) / 1e5;
 
 const isPlace = (item) => item !== null && typeof item === 'object' && typeof item.name === 'string' && Number.isFinite(item.lat) && Number.isFinite(item.lon);
+const isModes = (modes) => Array.isArray(modes) && modes.every((mode) => typeof mode === 'string');
 const isLine = (item) => isPlace(item) && typeof item.mode === 'string' && typeof item.agency === 'string';
 
 /**
  * The favourites from what was stored, which may be anything: written by
  * another version of the page or by hand. What is not of their shape is left out.
- * @returns {{ stops: {name, lat, lon}[], lines: {name, mode, agency, lat, lon}[] }}
+ * @returns {{ stops: {name, lat, lon, modes}[], lines: {name, mode, agency, lat, lon}[] }},
+ *   `modes` only where it was kept
  */
 export function favouritesFrom(stored) {
   const list = (key, shape) => (Array.isArray(stored?.[key]) ? stored[key].filter(shape) : []);
   return {
-    stops: list('stops', isPlace).map(({ name, lat, lon }) => ({ name, lat, lon })),
+    stops: list('stops', isPlace).map(({ name, lat, lon, modes }) => ({ name, lat, lon, ...(isModes(modes) ? { modes } : {}) })),
     lines: list('lines', isLine).map(({ name, mode, agency, lat, lon }) => ({ name, mode, agency, lat, lon })),
   };
 }
 
-/** A stop as it is kept, from what api/departures says of it. */
-export const stopFavourite = ({ name, lat, lon }) => ({ name, lat: round5(lat), lon: round5(lon) });
+/** A stop as it is kept, from what api/departures says of it, with the kinds that call there. */
+export const stopFavourite = ({ name, lat, lon }, modes) => ({ name, lat: round5(lat), lon: round5(lon), modes: [...modes] });
 
 /** A line as it is kept, from what api/line says of it: its place is `at`. */
 export const lineFavourite = ({ name, mode, agency, at: [lat, lon] }) => ({ name, mode, agency, lat: round5(lat), lon: round5(lon) });

@@ -1,10 +1,10 @@
-// Stops on the map (#222): how large the mark of a stop is, which stops carry
-// their name at a zoom, where the names go so that none lies on another, the
-// marks of a station at its places and the lines that join them (#234), and
-// the map style without stops of its own; and which town a stop's name leaves
-// unsaid, which the search and the stops of a trip show beside it (#246).
-// Without the page around it, so that it can be tested as it is
-// (test/stops.test.js); app.js draws, and search.js finds.
+// Stops on the map (#222): how large the mark of a stop is, and that of a
+// favourite (#245), which stops carry their name at a zoom, where the names go
+// so that none lies on another, the marks of a station at its places and the
+// lines that join them (#234), and the map style without stops of its own;
+// and which town a stop's name leaves unsaid, which the search and the stops
+// of a trip show beside it (#246). Without the page around it, so that it can
+// be tested as it is (test/stops.test.js); app.js draws, and search.js finds.
 
 // The kinds of rail. Their stations show from zoom 12 (STATION_ZOOM in app.js),
 // and carry their names earlier than other stops.
@@ -13,6 +13,9 @@ export const RAIL_MODES = ['subway', 'suburban', 'regional', 'longdistance'];
 // all from the second.
 export const RAIL_NAME_ZOOM = 14;
 export const NAME_ZOOM = 15;
+// From this zoom a favourite stop carries its name, where the map has none of
+// its own: it is drawn at every zoom (#245).
+export const FAVOURITE_NAME_ZOOM = 11;
 // From this zoom a station whose modes stop at places apart (`places` in
 // api/stations) has a mark at each; below it, one at its own point.
 export const PLACES_ZOOM = 15;
@@ -40,6 +43,38 @@ export function stopMark(kinds, big) {
   return { w, h, corner: Math.min(h / 2, d / 2 + pad), dot: d / 2, dots };
 }
 
+// A favourite stop is a heart: the icon mdiHeart, drawn from its box of 24.
+// Where the middle of the mark is in that box, and for each number of kinds
+// how large the heart is in px and where its dots are, in units of the box:
+// in rows that narrow as the heart does, clear of its edges (one in its
+// middle; three as a triangle with sides of one length).
+export const HEART_MIDDLE = [12, 11.6];
+const HEART_LAYOUT = {
+  1: { size: 19, dots: [[12, 12.3]] },
+  2: { size: 22, dots: [[8.18, 9.8], [15.82, 9.8]] },
+  3: { size: 26, dots: [[8.27, 8.6], [15.73, 8.6], [12, 15.06]] },
+  4: { size: 28, dots: [[6, 9.2], [12, 9.2], [18, 9.2], [12, 15.2]] },
+  5: { size: 31, dots: [[6.4, 8.3], [12, 9.3], [17.6, 8.3], [9.3, 14.1], [14.7, 14.1]] },
+  6: { size: 37, dots: [[6.3, 8.2], [12, 9], [17.7, 8.2], [8.9, 13], [15.1, 13], [12, 16.9]] },
+};
+
+/**
+ * The mark of a favourite stop (#245): a white heart with a dot for each kind
+ * that calls there, measured from its middle. From zoom 15 it is larger, as
+ * the pill is.
+ * @param kinds how many kinds call there
+ * @param big from zoom 15
+ * @returns { w, h } the box it takes, { size } the side of the box of the
+ *   icon, { dot, dots } the radius of the dots and where their centres are
+ */
+export function heartMark(kinds, big) {
+  const { size, dots } = HEART_LAYOUT[Math.min(Math.max(kinds, 1), 6)];
+  const side = big ? (size * 8) / 7 : size;
+  const unit = side / 24;
+  // (the icon fills its box from 2 to 22 across and from 3 to 21.35 down)
+  return { w: (20 / 24) * side, h: (18.35 / 24) * side, size: side, dot: big ? 3 : 2.5, dots: dots.map(([x, y]) => [(x - HEART_MIDDLE[0]) * unit, (y - HEART_MIDDLE[1]) * unit]) };
+}
+
 /** Whether a stop of these kinds carries its name at this zoom. */
 export function namedAt(modes, zoom) {
   return zoom >= NAME_ZOOM || (zoom >= RAIL_NAME_ZOOM && modes.some((mode) => RAIL_MODES.includes(mode)));
@@ -47,10 +82,10 @@ export function namedAt(modes, zoom) {
 
 /**
  * The order in which names get their place: an open stop first, then the
- * stations of rail, then those where more kinds call.
+ * favourites, then the stations of rail, then those where more kinds call.
  */
 export function namePrecedence(a, b) {
-  const weight = (mark) => (mark.open ? 1000 : 0) + (mark.modes.some((mode) => RAIL_MODES.includes(mode)) ? 100 : 0) + mark.modes.length;
+  const weight = (mark) => (mark.open ? 1000 : 0) + (mark.favourite ? 500 : 0) + (mark.modes.some((mode) => RAIL_MODES.includes(mode)) ? 100 : 0) + mark.modes.length;
   return weight(b) - weight(a);
 }
 

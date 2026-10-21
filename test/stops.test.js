@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { NAME_ZOOM, PLACES_ZOOM, RAIL_NAME_ZOOM, isExpressionFilter, joiningLines, mergePlaces, namePrecedence, namedAt, placeNames, stopMark, townToShow, townsAlong, withoutStyleStops } from '../public/stops.js';
+import { HEART_MIDDLE, NAME_ZOOM, PLACES_ZOOM, RAIL_NAME_ZOOM, heartMark, isExpressionFilter, joiningLines, mergePlaces, namePrecedence, namedAt, placeNames, stopMark, townToShow, townsAlong, withoutStyleStops } from '../public/stops.js';
 
 test('a stop is a pill with a dot for each kind, in rows of three', () => {
   // a bus stop: one dot, as round as it is high
@@ -147,4 +147,61 @@ test('the stops of a trip through more than one town have the town where their n
   // a tram that stays in Leipzig, beyond which no town is known
   const tram = stops(['Krakauer Str.', 'Leipzig'], ['Ratzelbogen', 'Leipzig'], ['Am Rande']);
   assert.deepEqual(townsAlong(tram), [null, null, null]);
+});
+
+// The outline of the heart (mdiHeart) as a line of points in its box of 24, to measure the dots of a favourite against
+const cubic = (p0, p1, p2, p3, steps = 60) => Array.from({ length: steps }, (_, k) => {
+  const t = (k + 1) / steps;
+  const m = 1 - t;
+  return [0, 1].map((i) => m * m * m * p0[i] + 3 * m * m * t * p1[i] + 3 * m * t * t * p2[i] + t * t * t * p3[i]);
+});
+const HEART_OUTLINE = [[12, 21.35], [10.55, 20.03], ...cubic([10.55, 20.03], [5.4, 15.36], [2, 12.27], [2, 8.5]), ...cubic([2, 8.5], [2, 5.41], [4.42, 3], [7.5, 3]),
+  ...cubic([7.5, 3], [9.24, 3], [10.91, 3.81], [12, 5.08]), ...cubic([12, 5.08], [13.09, 3.81], [14.76, 3], [16.5, 3]), ...cubic([16.5, 3], [19.58, 3], [22, 5.41], [22, 8.5]),
+  ...cubic([22, 8.5], [22, 12.27], [18.6, 15.36], [13.45, 20.03]), [12, 21.35]];
+const toOutline = ([px, py]) => Math.min(...HEART_OUTLINE.slice(1).map(([bx, by], i) => {
+  const [ax, ay] = HEART_OUTLINE[i];
+  const t = Math.max(0, Math.min(1, ((px - ax) * (bx - ax) + (py - ay) * (by - ay)) / ((bx - ax) ** 2 + (by - ay) ** 2)));
+  return Math.hypot(px - ax - t * (bx - ax), py - ay - t * (by - ay));
+}));
+const inHeart = ([px, py]) => HEART_OUTLINE.reduce((within, [xi, yi], i) => {
+  const [xj, yj] = HEART_OUTLINE[(i || HEART_OUTLINE.length) - 1];
+  return (yi > py) !== (yj > py) && px < ((xj - xi) * (py - yi)) / (yj - yi) + xi ? !within : within;
+}, false);
+
+test('the heart of a favourite has a dot for each kind, inside it and clear of its edge and of each other (#245)', () => {
+  for (const big of [false, true]) {
+    let size = 0;
+    for (let kinds = 1; kinds <= 6; kinds++) {
+      const mark = heartMark(kinds, big);
+      assert.equal(mark.dots.length, kinds);
+      assert.equal(mark.dot, big ? 3 : 2.5);
+      // (larger with more kinds, and from zoom 15)
+      assert.ok(mark.size > size, `${kinds} kinds`);
+      if (big) assert.ok(Math.abs(mark.size - (heartMark(kinds, false).size * 8) / 7) < 1e-9);
+      size = mark.size;
+      const unit = mark.size / 24;
+      for (const [x, y] of mark.dots) {
+        const at = [x / unit + HEART_MIDDLE[0], y / unit + HEART_MIDDLE[1]];
+        assert.ok(inHeart(at), `${kinds} kinds: a dot outside the heart`);
+        // (2 px from the line of the edge: 1.25 px clear of its stroke of 1.5)
+        assert.ok(toOutline(at) * unit - mark.dot >= 2, `${kinds} kinds: a dot ${(toOutline(at) * unit - mark.dot).toFixed(2)} px from the edge`);
+      }
+      for (let i = 0; i < kinds; i++) for (let j = i + 1; j < kinds; j++) assert.ok(Math.hypot(mark.dots[i][0] - mark.dots[j][0], mark.dots[i][1] - mark.dots[j][1]) - 2 * mark.dot >= 1.9);
+    }
+  }
+  // (one dot in the middle across; three as a triangle with sides of one length)
+  assert.equal(heartMark(1, false).dots[0][0], 0);
+  const [a, b, c] = heartMark(3, false).dots;
+  const side = (p, q) => Math.hypot(p[0] - q[0], p[1] - q[1]);
+  assert.ok(Math.abs(side(a, b) - side(b, c)) < 0.05 && Math.abs(side(a, c) - side(b, c)) < 0.05);
+  // (more than six kinds as six, none as one)
+  assert.equal(heartMark(8, false).dots.length, 6);
+  assert.equal(heartMark(0, false).size, heartMark(1, false).size);
+});
+
+test('a favourite gets its name before the stations of rail, after an open stop (#245)', () => {
+  const rail = { modes: ['subway', 'bus'] };
+  const favourite = { modes: ['bus'], favourite: true };
+  const open = { modes: ['bus'], open: true };
+  assert.deepEqual([rail, open, favourite].sort(namePrecedence), [open, favourite, rail]);
 });

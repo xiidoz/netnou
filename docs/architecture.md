@@ -120,7 +120,7 @@ Page (`public/`):
 | `app.js` | map, polling, animation, drawing on a canvas, detail panel |
 | `display.js` | display mode and the board of a stop in the address of the page: what an address asks for, and the address for what is shown |
 | `address.js` | the addresses of stops, lines and trips, for the page and the server: how a name is written in one, and what an address names (`stopPath`, `linePath`, `tripPath`, `parseAddress`) |
-| `stops.js` | the stops on the map: how large the mark of one is, from which zoom which stops carry their names and where those go so that none lies on another, the marks of a station at its places and the lines that join them, the style of the map without stops of its own, and whether the name of a stop says its town |
+| `stops.js` | the stops on the map: how large the mark of one is, and the heart of a favourite, from which zoom which stops carry their names and where those go so that none lies on another, the marks of a station at its places and the lines that join them, the style of the map without stops of its own, and whether the name of a stop says its town |
 | `favourites.js` | the stops and lines a visitor marks with the heart (#245): what is kept of them in the browser, and when a stop or a line of another timetable is the one kept |
 | `search.js` | finding stops, lines and towns by name: matching and order, the favourites first, without the page around it |
 | `search-worker.js` | the thread that loads the list of stops, lines and towns and searches it |
@@ -786,7 +786,15 @@ otherwise a server would load a file written by older code:
   favourites, under the headings it has; while typing, a favourite that
   matches as closely as the search goes comes first among the stops or the
   lines, with a heart at the end of its row. The order of towns, lines and
-  stops stays as it is.
+  stops stays as it is. On the map a favourite stop is a heart in place of
+  its pill, white with the dots of its kinds in rows that narrow as the heart
+  does (`heartMark` in `stops.js`), at every zoom, with its name from zoom 11.
+  Below zoom 14, where the map has no stops of its own, it lies above the
+  vehicles, and a tap finds it before them; from there it lies with the other
+  stops, under them. For that a stop is kept with its kinds, which the map
+  has no stations to take them from when zoomed out. An open favourite has
+  its ring in the shape of the heart, at the same distance all round, cut
+  once on a canvas of its own. A screen on a wall shows none.
 - **What a line is.** The trips of a name, mode and operator that share
   stations, also through others
   ([#152](https://github.com/xiidoz/netnou/issues/152)): DB Regio runs an

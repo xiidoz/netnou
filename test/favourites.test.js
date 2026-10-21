@@ -13,14 +13,17 @@ test('what was stored is taken as far as it has the shape of favourites', () => 
   const none = { stops: [], lines: [] };
   for (const stored of [null, undefined, 'x', 3, [], {}, { stops: 'x', lines: {} }]) assert.deepEqual(favouritesFrom(stored), none);
   assert.deepEqual(favouritesFrom({
-    stops: [PLAERRER, { name: 'no place' }, { name: 1, lat: 2, lon: 3 }, null, { ...PLAERRER, lat: Number.NaN }, { ...PLAERRER, id: '123' }],
+    stops: [PLAERRER, { name: 'no place' }, { name: 1, lat: 2, lon: 3 }, null, { ...PLAERRER, lat: Number.NaN }, { ...PLAERRER, id: '123' }, { ...PLAERRER, modes: ['tram', 3] }],
     lines: [U1, { ...U1, mode: undefined }, PLAERRER],
     more: [1],
-  }), { stops: [PLAERRER, PLAERRER], lines: [U1] });
+  }), { stops: [PLAERRER, PLAERRER, PLAERRER], lines: [U1] });
+  // (a stop keeps the kinds that call there, where they were kept)
+  assert.deepEqual(favouritesFrom({ stops: [{ ...PLAERRER, modes: ['subway', 'tram'] }] }).stops, [{ ...PLAERRER, modes: ['subway', 'tram'] }]);
 });
 
 test('a stop and a line are kept as their answers say them, to 1e-5 degrees', () => {
-  assert.deepEqual(stopFavourite({ id: '258216', name: 'Nürnberg Plärrer', lat: 49.448093, lon: 11.064804, departures: [] }), PLAERRER);
+  const modes = ['subway', 'tram', 'bus'];
+  assert.deepEqual(stopFavourite({ id: '258216', name: 'Nürnberg Plärrer', lat: 49.448093, lon: 11.064804, departures: [] }, modes), { ...PLAERRER, modes });
   assert.deepEqual(lineFavourite({ name: 'U1', mode: 'subway', agency: 'VerkehrsAG Nürnberg', at: [49.444281, 11.059857], vehicles: [] }), U1);
 });
 
