@@ -273,8 +273,8 @@ test('every element app.js asks for by its id is in index.html', () => {
 test('what is opened or closed after a board or a vehicle on the map leaves a step back to what was open', () => {
   const app = withoutComments(read('app.js'));
   assert.deepEqual(app.match(/setBoard\(null\b[^)]*\)/g), ['setBoard(null, false)', 'setBoard(null, false)']);
-  // (the next address has a board where one is shown, not where the address before had one)
-  assert.match(app, /history\.pushState\(null, '', new URL\(`\$\{path\}\$\{boardQuery\(location\.search, state\.board, state\.extra\)\}`/);
+  // (the next address has a board where one is shown, not where the address before had one; and the lines chosen of a stop that is open, #164)
+  assert.match(app, /history\.pushState\(null, '', new URL\(`\$\{path\}\$\{boardQuery\(location\.search, state\.board, state\.extra, state\.lines\)\}`/);
   // (a vehicle chosen on the map goes straight to its trip, not by the map alone)
   const click = app.slice(app.indexOf("map.on('click'"));
   assert.doesNotMatch(click.slice(0, click.indexOf('});')), /showAddress/);

@@ -166,3 +166,14 @@ test('another stop leads a board with its block, and the lists stay as they were
   ]);
   assert.deepEqual(ledBy([missing, rosenau], missing), [{ path: PLAERRER, joined: false }, { path: ROSENAU, joined: false }]);
 });
+
+test('the address of a stop keeps the lines chosen of it, and loses them with another stop (#164)', () => {
+  const lines = ['subway/u1~nuernberg-weisser-turm', 'tram/4'];
+  assert.equal(boardQuery('?lang=de', null, [], lines), '?lang=de&lines=subway/u1~nuernberg-weisser-turm,tram/4');
+  assert.equal(boardQuery('?lines=bus/36&board=60', 60, [], lines), '?board=60&lines=subway/u1~nuernberg-weisser-turm,tram/4');
+  // (none chosen: none in the address, as for another stop or a line)
+  assert.equal(boardQuery('?lang=de&lines=bus/36', null), '?lang=de');
+  assert.equal(boardQuery('?lines=bus/36', null, [], []), '');
+  const settings = { view: { lat: 49.4481, lon: 11.0648, zoom: 15 }, theme: 'auto', colorBy: 'mode', flags: true, hiddenModes: [], times: 'both', clock: true };
+  assert.equal(displayQuery({ fixed: true, language: 'de', board: 100, lines: ['subway/u1~nuernberg-weisser-turm'], settings }, []), '?display=fixed&view=49.4481,11.0648,15.0&lang=de&board=100&lines=subway/u1~nuernberg-weisser-turm');
+});

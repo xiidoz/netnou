@@ -210,6 +210,18 @@
     </div>
   </dialog>
 
+  <!-- Which lines and directions of a stop its departures show (#164): opened
+       from the chip beside "Departures", a sheet on a narrow screen as well. -->
+  <dialog class="dialog" id="choice" aria-labelledby="choice-title">
+    <div class="handle" id="choice-handle"></div>
+    <button type="button" class="close" id="choice-close" aria-label="Close" data-i18n-aria-label="panel.close" title="Close" data-i18n-title="panel.close" data-icon="mdiClose"></button>
+    <div class="dialog-body">
+      <h2 id="choice-title" data-i18n="choice.title">Which departures?</h2>
+      <p data-i18n="choice.hint">Tap a direction to show only it. Tap again to take it out.</p>
+      <div id="choice-list" class="choice-list"></div>
+    </div>
+  </dialog>
+
   <!-- The way back from a display on a wall (display=fixed, see "display
        mode" in app.js), where nothing else is left to press: it shows for a
        moment when the screen is touched. -->

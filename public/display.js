@@ -19,11 +19,13 @@
 //                             minutes until they leave, else both
 //   clock=off                 no clock on the board of a stop
 //   lang=…                    the language, as on the page with its controls
-// and the board of a stop where one is open (below). So the address can be
+// and the board of a stop where one is open (below), and the lines of the stop
+// that it shows where only some are chosen (lines=, choice.js). So the address can be
 // kept, or given to another browser, and shows the same there – also in one
 // that has nothing stored, as on many a wall.
 
 import { parseAddress } from './address.js';
+import { choiceValue } from './choice.js';
 
 /**
  * What an address asks for, or null if it does not ask for a display.
@@ -60,7 +62,7 @@ export function readDisplay(search, modes) {
  * settings is named, but for the section of the map and the language.
  * @param modes the kinds of transport there are
  */
-export function displayQuery({ fixed, language, board = null, stops = [], settings: { view, theme, colorBy, flags, hiddenModes, times, clock } }, modes) {
+export function displayQuery({ fixed, language, board = null, stops = [], lines = [], settings: { view, theme, colorBy, flags, hiddenModes, times, clock } }, modes) {
   const asked = [fixed ? 'display=fixed' : 'display', `view=${view.lat.toFixed(4)},${view.lon.toFixed(4)},${view.zoom.toFixed(1)}`, `lang=${language}`];
   if (theme === 'light' || theme === 'dark') asked.push(`theme=${theme}`);
   if (colorBy === 'delay') asked.push('color=delay');
@@ -69,6 +71,7 @@ export function displayQuery({ fixed, language, board = null, stops = [], settin
   if (times === 'time' || times === 'minutes') asked.push(`times=${times}`);
   if (clock === false) asked.push('clock=off');
   if (board !== null) asked.push(`board=${board}`, ...stopsQuery(stops));
+  if (lines.length) asked.push(`lines=${choiceValue(lines)}`);
   return `?${asked.join('&')}`;
 }
 
@@ -103,14 +106,16 @@ export function readBoard(search) {
 
 /**
  * The query of an address with a board that takes this share of the screen,
- * or with none (null), and the further stops on it; what else it asks for
- * stays as it was written.
+ * or with none (null), the further stops on it, and the lines of its stop
+ * chosen to be shown (#164); what else it asks for stays as it was written.
  * @param search the query of the address so far, as location.search has it
  * @param stops the further stops of the board (readStops): written with a board only
+ * @param lines the choice of the stop that is open (choice.js), none for every line
  */
-export function boardQuery(search, share, stops = []) {
-  const kept = search.replace(/^\?/, '').split('&').filter((part) => part && !/^(board|with|block)(=|$)/.test(part));
+export function boardQuery(search, share, stops = [], lines = []) {
+  const kept = search.replace(/^\?/, '').split('&').filter((part) => part && !/^(board|with|block|lines)(=|$)/.test(part));
   if (share !== null) kept.push(`board=${share}`, ...stopsQuery(stops));
+  if (lines.length) kept.push(`lines=${choiceValue(lines)}`);
   return kept.length ? `?${kept.join('&')}` : '';
 }
 

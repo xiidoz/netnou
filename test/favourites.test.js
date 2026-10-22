@@ -4,7 +4,7 @@
 
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { favouritesFrom, isFavourite, lineFavourite, sameLine, sameStop, stopFavourite, withFavourite } from '../public/favourites.js';
+import { favouritesFrom, isFavourite, lineFavourite, sameLine, sameStop, stopFavourite, withChoice, withFavourite } from '../public/favourites.js';
 
 const PLAERRER = { name: 'Nürnberg Plärrer', lat: 49.44809, lon: 11.0648 };
 const U1 = { name: 'U1', mode: 'subway', agency: 'VerkehrsAG Nürnberg', lat: 49.44428, lon: 11.05986 };
@@ -53,4 +53,18 @@ test('a stop or a line is made a favourite at the end of the list, and is one no
   assert.deepEqual(withFavourite(favourites, 'stops', moved, true).stops, [hbf, moved]);
   assert.deepEqual(withFavourite({ ...favourites, stops: [PLAERRER, hbf, moved] }, 'stops', PLAERRER, false).stops, [hbf]);
   assert.deepEqual(withFavourite(favourites, 'lines', U1, false), { stops: [PLAERRER, hbf], lines: [] });
+});
+
+test('a favourite stop keeps the lines chosen of it, in its place in the list (#164)', () => {
+  const lines = ['subway/u1~nuernberg-weisser-turm'];
+  assert.deepEqual(stopFavourite({ name: 'Nürnberg Plärrer', lat: 49.44809, lon: 11.0648 }, ['subway'], lines), { ...PLAERRER, modes: ['subway'], lines });
+  // (what was stored: a list of texts, else nothing)
+  assert.deepEqual(favouritesFrom({ stops: [{ ...PLAERRER, lines }, { ...PLAERRER, lines: [] }, { ...PLAERRER, lines: 'tram/4' }] }).stops, [{ ...PLAERRER, lines }, PLAERRER, PLAERRER]);
+  const hbf = { name: 'Nürnberg Hbf', lat: 49.44561, lon: 11.08299 };
+  let favourites = { stops: [PLAERRER, hbf], lines: [] };
+  favourites = withChoice(favourites, { ...PLAERRER, lat: 49.4482 }, lines);
+  assert.deepEqual(favourites.stops, [{ ...PLAERRER, lines }, hbf]);
+  assert.deepEqual(withChoice(favourites, PLAERRER, []).stops, [PLAERRER, hbf]);
+  // (a stop that is no favourite: nothing changes)
+  assert.deepEqual(withChoice(favourites, { name: 'Fürth Rathaus', lat: 49.47765, lon: 10.98859 }, lines), favourites);
 });

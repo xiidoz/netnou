@@ -722,6 +722,30 @@ test('where two hours hold few departures, the board goes on with the next ones 
   assert.deepEqual(board('B', '10:10', { least: 2, furthestS: 3600 }).map(([line]) => line), ['U1']);
 });
 
+test('a station has its lines with where each goes next, and a board of some of them (#164)', () => {
+  // At Beta the U1 goes on to Gamma, the ICE to Fern Süd; the U1 at night (T4) does not call there.
+  assert.deepEqual(timetable.directions('B'), [
+    { mode: 'subway', line: 'U1', next: 'Gamma', to: timetable.departures('B', at('10:10'), null).departures[0].to, heading: 33, key: 'subway/u1~gamma' },
+    { mode: 'longdistance', line: 'ICE 5', next: 'Fern Süd', to: 'Fern Süd', heading: 168, key: 'longdistance/ice-5~fern-sued' },
+  ]);
+  // (at a terminus nothing leaves; an unknown station is none)
+  assert.deepEqual(timetable.directions('C').map((d) => d.key), ['subway/u1~alpha']);
+  assert.equal(timetable.directions('nowhere'), null);
+  const lines = (keys, time = '09:50') => timetable.departures('B', at(time), null, { lines: keys }).departures.map((d) => d.line);
+  assert.deepEqual(lines([]), ['ICE 5', 'U1']);
+  // a line both ways, one way, or the other line
+  assert.deepEqual(lines(['subway/u1']), ['U1']);
+  assert.deepEqual(lines(['subway/u1~gamma']), ['U1']);
+  assert.deepEqual(lines(['longdistance/ice-5~fern-sued']), ['ICE 5']);
+  // a direction it does not go, or a line of another kind: nothing, also not further off
+  assert.deepEqual(lines(['subway/u1~alpha']), []);
+  assert.deepEqual(lines(['bus/u1']), []);
+  // (chosen before the limit: with one departure allowed, it is the chosen line, not the first to leave)
+  assert.deepEqual(timetable.departures('B', at('09:50'), null, { lines: ['subway/u1'], limit: 1, least: 1 }).departures.map((d) => d.line), ['U1']);
+  // the next ones within a day go by the choice as well
+  assert.deepEqual(lines(['subway/u1'], '11:00'), ['U1']);
+});
+
 test('alerts are shown only during their active periods', () => {
   const feed = decodeFeed(encodeFeed({
     timestamp: 1,

@@ -40,6 +40,9 @@ Ein Fahrzeug kann also etwas vor oder hinter seiner Markierung sein.
   jemandem zu zeigen, wo der Bus gerade ist.
 - **Als Tafel zeigen:** Abfahrten als große Tafel, zum Beispiel für ein
   Display an der Wand, mit bis zu vier Haltestellen.
+- **Linien und Richtungen wählen:** mit dem Chip neben den Abfahrten, zum
+  Beispiel nur die Züge in die Stadt. Die Tafel behält sie in ihrer Adresse,
+  eine favorisierte Haltestelle öffnet mit ihnen.
 
 ![Die Abfahrten von Nürnberg Hauptbahnhof als Tafel neben der Karte, auf einem breiten Bildschirm](docs/pictures/board.webp)
 
