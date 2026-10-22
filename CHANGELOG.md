@@ -8,6 +8,20 @@ This file is written by
 messages when a release is made. Do not edit it by hand; see
 [Releases](CONTRIBUTING.md#releases).
 
+## [0.19.0](https://github.com/xiidoz/netnou/compare/v0.18.0...v0.19.0) (2026-10-22)
+
+
+### Features
+
+* **page:** favourites with a heart, first in the search and on the map ([#252](https://github.com/xiidoz/netnou/issues/252)) ([17db59c](https://github.com/xiidoz/netnou/commit/17db59c72715dbd5b1cb7366ad1e530c840cef8b))
+* **page:** only some lines and directions of a stop, chosen beside its departures ([#253](https://github.com/xiidoz/netnou/issues/253)) ([6f7d0fe](https://github.com/xiidoz/netnou/commit/6f7d0fee0f9efd4f379dbcfdb168a0f90750ee6a))
+
+
+### Bug Fixes
+
+* **page:** the town below a stop whose name does not say it, in a trip through several towns ([#251](https://github.com/xiidoz/netnou/issues/251)) ([7c0866b](https://github.com/xiidoz/netnou/commit/7c0866bd63189af8bf02abd1020ddeb8da90c778)), closes [#246](https://github.com/xiidoz/netnou/issues/246)
+* **routes:** trains on the tracks of trams and narrow gauge where theirs do not lead ([#249](https://github.com/xiidoz/netnou/issues/249)) ([382d9f9](https://github.com/xiidoz/netnou/commit/382d9f9d4dd68ecde282e70412aaab42df384487)), closes [#248](https://github.com/xiidoz/netnou/issues/248)
+
 ## [0.18.0](https://github.com/xiidoz/netnou/compare/v0.17.1...v0.18.0) (2026-10-20)
 
 
