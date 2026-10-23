@@ -630,8 +630,15 @@ test('the address of a stop or a line is a page of its own, found again by its n
   assert.ok(page.includes(`<link rel="canonical" href="${address}stop/alpha@49.4000,11.0000">`));
   assert.ok(page.includes(`<link rel="alternate" hreflang="en" href="${address}stop/alpha@49.4000,11.0000?lang=en">`));
   assert.match(page, /<aside class="card panel" id="panel" tabindex/);
-  assert.ok(page.includes('<div id="panel-head"><div class="panel-head"><h2>Alpha</h2><p class="sub">Abfahrten</p></div></div>'));
-  assert.equal((await request('/stop/alpha@49.4000,11.0000', { headers: { 'If-None-Match': alpha.headers.etag } })).status, 304);
+  // its details as the page shows them, its departures at this moment (#254): its name the main heading of the page, not the instance's
+  assert.ok(page.includes('<div id="panel-head"><div class="panel-head"><h1>Alpha</h1><p class="sub with-choice"><span>Abfahrten</span><span class="choice"><button type="button" class="choice-open" aria-label="Alle Linien"'));
+  assert.match(page, /<div id="panel-body" data-sent><ul class="rows signed"><li><button type="button" class="row departure times-both" data-trip="T1_\d{8}"><span class="time">\d\d:\d\d<\/span>/);
+  assert.ok(page.includes('<span class="badge" data-mode="subway">U1</span><span class="name" title="Rundkurs">Rundkurs</span>'));
+  assert.ok(page.includes('<div class="site-name">Netnou</div>'));
+  assert.deepEqual(page.match(/<h1\b/g), ['<h1']);
+  // (the same page while the minute is the same: asked again with its ETag, not sent again)
+  const again = async () => (await request('/stop/alpha@49.4000,11.0000', { headers: { 'If-None-Match': (await request('/stop/alpha@49.4000,11.0000')).headers.etag } })).status;
+  assert.ok((await again()) === 304 || (await again()) === 304);
   // the stop with two kinds of transport, in English
   const beta = (await request('/stop/beta@49.5000,11.0000?lang=en')).body.toString();
   assert.match(beta, /<title>Beta departures live – Netnou<\/title>/);
@@ -662,6 +669,9 @@ test('the address of a stop or a line is a page of its own, found again by its n
   assert.match(line, /<base href="\.\.\/\.\.\/\.\.\/">/);
   assert.match(line, /<title>U1 Rundkurs live – Netnou<\/title>/);
   assert.match(line, /content="U1 \(Testbetrieb\) live auf der Karte, jede Fahrt mit ihrer Verspätung\."/);
+  // its details as the page shows them: its vehicles under way at this moment, under where they go (#254)
+  assert.match(line, /<div class="panel-head"><h1><span class="badge" data-mode="subway">U1<\/span><span>U-Bahn<\/span><\/h1><p class="sub">Testbetrieb · \d Fahrzeuge unterwegs<\/p><\/div>/);
+  assert.match(line, /<div id="panel-body" data-sent><h3 class="rows-head">nach Rundkurs<\/h3><ul class="rows signed"><li><button type="button" class="row vehicle" data-trip="T1_\d{8}"><span class="name" title="Alpha">nächster Halt: Alpha<\/span>/);
   const otherKind = await request('/line/testbetrieb/bus/u1');
   assert.equal(otherKind.status, 404);
   assert.ok(otherKind.body.toString().includes('Diese Linie ist nicht im Fahrplan.'));
@@ -688,6 +698,8 @@ test('the address of a stop or a line is a page of its own, found again by its n
   assert.match(tripBody, /content="U1 nach Rundkurs, ab Alpha um 00:00 am \d+\. \p{L}+: live auf der Karte, mit der Verspätung an jedem Halt\."/u);
   assert.match(tripBody, /<meta name="robots" content="noindex">/);
   assert.doesNotMatch(tripBody, /rel="canonical"/);
+  // (its name and where it goes in its details, as their main heading; the rest comes with the script)
+  assert.ok(tripBody.includes('<div id="panel-head"><div class="panel-head"><h1>U1</h1><p class="sub">nach Rundkurs</p></div></div>'));
   // another time, or a day the timetable does not have: no trip
   for (const path of [run.replace('/0000-', '/0100-'), `trip/testbetrieb/subway/u1/2031-01-01/0000-alpha`, run.replace('/subway/', '/bus/')]) {
     assert.equal((await get(`/api/address?path=${encodeURIComponent(path)}`)).status, 404, path);

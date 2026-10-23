@@ -160,7 +160,8 @@ button { font: inherit; color: inherit; }
 :root:not([data-controls]) .controls { display: none; }
 
 .title { display: flex; align-items: baseline; gap: 8px; }
-.title h1 { margin: 0; font-size: 18px; font-weight: 700; letter-spacing: -0.01em; }
+/* the name of the instance: the main heading of the page, except while the details are open (mainHeading in app.js) */
+.title h1, .title .site-name { margin: 0; font-size: 18px; font-weight: 700; letter-spacing: -0.01em; }
 /* the name of the area takes the room between the title and the buttons, on several lines if need be */
 .title p { flex: 1; min-width: 0; margin: 0; color: var(--text-muted); font-size: 13px; }
 
@@ -601,11 +602,12 @@ button:focus-visible, select:focus-visible, .row:focus-visible, .panel:focus-vis
 
 .panel-head { padding: 14px 48px 10px 14px; border-bottom: 1px solid var(--border); }
 /* (the heading beside the two buttons; what is below it is clear of them) */
-.panel.shareable .panel-head h2 { padding-right: 38px; }
-.panel.boardable .panel-head h2 { padding-right: 76px; }
-.panel.favourable .panel-head h2 { padding-right: 76px; }
-.panel.favourable.boardable .panel-head h2 { padding-right: 114px; }
-.panel-head h2 {
+.panel.shareable .panel-head h1, .panel.shareable .panel-head h2 { padding-right: 38px; }
+.panel.boardable .panel-head h1, .panel.boardable .panel-head h2 { padding-right: 76px; }
+.panel.favourable .panel-head h1, .panel.favourable .panel-head h2 { padding-right: 76px; }
+.panel.favourable.boardable .panel-head h1, .panel.favourable.boardable .panel-head h2 { padding-right: 114px; }
+/* the main heading of the page while the details are open (#254); a board has h2 */
+.panel-head h1, .panel-head h2 {
   margin: 0;
   font-size: 16px;
   font-weight: 650;
@@ -706,6 +708,16 @@ button:focus-visible, select:focus-visible, .row:focus-visible, .panel:focus-vis
 .note:hover { color: var(--text); }
 .panel-empty { padding: 14px; color: var(--text-muted); margin: 0; }
 
+/* the colour of a line's badge by its kind (panel.js), set where the page is sent as well: no style of its own (Content-Security-Policy) */
+.badge[data-mode="subway"] { --badge-color: var(--mode-subway); }
+.badge[data-mode="tram"] { --badge-color: var(--mode-tram); }
+.badge[data-mode="bus"] { --badge-color: var(--mode-bus); }
+.badge[data-mode="suburban"] { --badge-color: var(--mode-suburban); }
+.badge[data-mode="regional"] { --badge-color: var(--mode-regional); }
+.badge[data-mode="longdistance"] { --badge-color: var(--mode-longdistance); }
+.badge[data-mode="ferry"] { --badge-color: var(--mode-ferry); }
+.badge[data-mode="cable"] { --badge-color: var(--mode-cable); }
+.badge[data-mode="other"] { --badge-color: var(--mode-other); }
 .badge {
   display: inline-block;
   min-width: 30px;
@@ -986,7 +998,7 @@ li:last-child > .row.stop .rail::before { bottom: 50%; }
     padding: 9px 12px;
     gap: 7px;
   }
-  .title h1 { font-size: 16px; }
+  .title h1, .title .site-name { font-size: 16px; }
   /* The search is a field under the title row, as on a wide screen (#220).
      Above a board, where the card is its title row, it is a button with a
      lens in that row; opened, the field takes the place of the row, with a
@@ -1106,17 +1118,17 @@ li:last-child > .row.stop .rail::before { bottom: 50%; }
   /* (the share button alone at the top of the sheet, where the close button is not shown) */
   .panel .share { top: 14px; right: 12px; }
   .panel .copied { top: 52px; right: 12px; }
-  .panel.shareable .panel-head h2 { padding-right: 36px; }
+  .panel.shareable .panel-head h1, .panel.shareable .panel-head h2 { padding-right: 36px; }
   /* (for a stop the button that enlarges it is the one at the edge, the share button beside it) */
   .panel .enlarge { top: 14px; right: 12px; }
   .panel.boardable .share, .panel.boardable .copied { right: 50px; }
-  .panel.boardable .panel-head h2 { padding-right: 74px; }
+  .panel.boardable .panel-head h1, .panel.boardable .panel-head h2 { padding-right: 74px; }
   /* (the heart before the share button) */
   .panel .heart { top: 14px; right: 50px; }
   .panel.boardable .heart { right: 88px; }
   .panel .copied.favourited { top: 52px; right: 12px; }
-  .panel.favourable .panel-head h2 { padding-right: 74px; }
-  .panel.favourable.boardable .panel-head h2 { padding-right: 112px; }
+  .panel.favourable .panel-head h1, .panel.favourable .panel-head h2 { padding-right: 74px; }
+  .panel.favourable.boardable .panel-head h1, .panel.favourable.boardable .panel-head h2 { padding-right: 112px; }
   .panel-head .notes { margin-right: 0; }
   /* A sheet has little room: every note is one line there, cut where it does
      not fit. app.js makes a button of what is cut, and keeps all notes to a

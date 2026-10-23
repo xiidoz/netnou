@@ -13,7 +13,7 @@ import { LANGUAGES, pageTexts, pickLanguage } from '../public/i18n.js';
 import de from '../public/locales/de.js';
 import en from '../public/locales/en.js';
 import * as shapes from '../public/vendor/material-design-icons/icons.js';
-import { inlineHashes, LANGUAGE_CODES, languageFor, ownFiles, PAGE_INLINE, PAGE_MODULES, pictureSize, renderManifest, renderPage, robotsTxt, securityPolicy, sitemapFiles, versionsOfFiles } from '../server/lib/page.js';
+import { inlineHashes, LANGUAGE_CODES, languageFor, ownFiles, PAGE_INLINE, PAGE_MODULES, panelHtml, pictureSize, renderManifest, renderPage, robotsTxt, securityPolicy, sitemapFiles, versionsOfFiles } from '../server/lib/page.js';
 
 const html = fs.readFileSync(new URL('../public/index.html', import.meta.url), 'utf8');
 const URL_ = 'https://karte.example.org/live/';
@@ -458,6 +458,39 @@ test('a page the server does not find its places in is no page', () => {
   assert.throws(() => renderPage('<html lang="en"><head>\n</head></html>', german), /index\.html: nothing matches/);
 });
 
+// At the address of a stop or a line, the page has its details as the page
+// shows them, at the moment it is sent (#254): what a search engine reads is
+// what a rider sees, and the name of the stop or the line is the main heading
+// of the page.
+test('the page of a stop or a line has its details in it as they are, with their name as its main heading', () => {
+  const now = Date.parse('2026-10-23T10:00:00Z') / 1000;
+  const board = { name: 'Plärrer', departures: [{ trip: 'T1_20261023', line: 'U1', mode: 'subway', to: 'Langwasser Süd', planned: now + 240, delay: 60, platform: '2', cancelled: false, warnings: [] }] };
+  const at = { language: 'de', texts: de, timeZone: 'Europe/Berlin', now };
+  const stop = panelHtml('stop', board, at);
+  assert.ok(stop.head.startsWith('<div class="panel-head"><h1>Plärrer</h1><p class="sub with-choice"><span>Abfahrten</span><span class="choice"><button type="button" class="choice-open" aria-label="Alle Linien"'));
+  // the times as the page shows them until the visitor chooses otherwise, both: the time of day where the area is, and the minutes
+  assert.equal(stop.body, '<ul class="rows"><li><button type="button" class="row departure times-both" data-trip="T1_20261023"><span class="time">12:04</span><span class="delay" data-delay="ok">+1</span><span class="badge" data-mode="subway">U1</span><span class="name" title="Langwasser Süd">Langwasser Süd</span><span class="platform">Gl. 2</span>'
+    + `<span class="minutes" data-leaves="${now + 300}" data-planned="${now + 240}" data-far="none">5 min</span></button></li></ul>`);
+  // a screen on a wall set up for one purpose has no chip
+  assert.equal(panelHtml('stop', board, { ...at, fixed: true }).head, '<div class="panel-head"><h1>Plärrer</h1><p class="sub">Abfahrten</p></div>');
+  const line = panelHtml('line', { name: 'U1', mode: 'subway', agency: 'VAG', vehicles: [{ id: 'T1_20261023', to: 'Langwasser Süd', next: 'Opernhaus', delay: null, warnings: [] }] }, at);
+  assert.equal(line.head, '<div class="panel-head"><h1><span class="badge" data-mode="subway">U1</span><span>U-Bahn</span></h1><p class="sub">VAG · 1 Fahrzeug unterwegs</p></div>');
+
+  // in the page: open, the details written in and marked as sent, the name of the instance no longer the main heading
+  const address = { path: 'stop/plaerrer@49.4480,11.0620', depth: 1, title: 'Abfahrten Plärrer live', description: 'Abfahrten an der Haltestelle Plärrer in Echtzeit.', heading: 'Plärrer', sub: 'Abfahrten', panel: stop };
+  const page = renderPage(html, { ...german, address });
+  assert.match(page, /<aside class="card panel" id="panel" tabindex/);
+  assert.ok(page.includes(`<div id="panel-head">${stop.head}</div>`));
+  assert.ok(page.includes(`<div id="panel-body" data-sent>${stop.body}</div>`));
+  assert.ok(page.includes('<div class="site-name">Netnou</div>'));
+  assert.deepEqual(page.match(/<h1\b[^>]*>[^<]*/g), ['<h1>Plärrer']);
+  // a trip has its name and where it goes, and the rest comes with the script; the page itself has the name of the instance as its heading
+  const trip = renderPage(html, { ...german, address: { path: 'trip/x', depth: 1, title: 'U1 nach Langwasser Süd live', description: '…', heading: 'U1', sub: 'nach Langwasser Süd', unlisted: true } });
+  assert.ok(trip.includes('<div id="panel-head"><div class="panel-head"><h1>U1</h1><p class="sub">nach Langwasser Süd</p></div></div>'));
+  assert.ok(trip.includes('<div id="panel-body"><p class="panel-empty">…</p></div>'));
+  assert.deepEqual(renderPage(html, german).match(/<h1\b[^>]*>[^<]*/g), ['<h1>Netnou']);
+});
+
 test('robots.txt lets everything be read and names the sitemap where there is one', () => {
   assert.equal(robotsTxt(null), 'User-agent: *\nAllow: /\n');
   assert.equal(robotsTxt(URL_), `User-agent: *\nAllow: /\n\nSitemap: ${URL_}sitemap.xml\n`);
@@ -473,4 +506,12 @@ test('the sitemap lists the page once for the browser\'s language and once for e
   assert.equal(links.length, 9);
   assert.deepEqual(links.slice(0, 3), [`de ${URL_}?lang=de`, `en ${URL_}?lang=en`, `x-default ${URL_}`]);
   assert.deepEqual(links.slice(3, 6), links.slice(0, 3));
+});
+
+test('every address in the sitemap has the date of the timetable, where it is known', () => {
+  const [xml] = sitemapFiles(URL_, ['stop/plaerrer@49.4480,11.0620', 'line/vag/subway/u1'], undefined, '2026-10-20');
+  assert.equal(xml.match(/<lastmod>2026-10-20<\/lastmod>/g).length, 5);
+  assert.ok(xml.includes(`  <url><loc>${URL_}stop/plaerrer@49.4480,11.0620</loc><lastmod>2026-10-20</lastmod></url>`));
+  assert.ok(xml.includes(`  <url>\n    <loc>${URL_}</loc>\n    <lastmod>2026-10-20</lastmod>\n    <xhtml:link`));
+  assert.doesNotMatch(sitemapFiles(URL_, ['line/vag/subway/u1'])[0], /lastmod/);
 });
