@@ -13,7 +13,7 @@ import { APP_NAME, READMES, dayOf, formatNumber, formatTime, languagePicker, loa
 import { FAVOURITE_NAME_ZOOM, HEART_MIDDLE, PLACES_ZOOM, RAIL_MODES, heartMark, joiningLines, mergePlaces, namePrecedence, namedAt, placeNames, stopMark, townsAlong, withoutStyleStops } from './stops.js';
 import { favouritesFrom, isFavourite, lineFavourite, sameStop, stopFavourite, withChoice, withFavourite } from './favourites.js';
 import { choiceValue, readChoice, toggled } from './choice.js';
-import { DELAY_MAJOR_S, DELAY_MINOR_S, DELAY_SEVERE_S, MINUTES_MAX, NOTE_CHARS, badge as badgeOf, choiceChip as choiceChipOf, delayCell as delayCellOf, delayClass, delayNode as delayNodeOf, delayFlag, delayText, departureLists, departuresSub as departuresSubOf, directionSign as directionSignOf, leavesAt, lineHead, lineLists, lineStops, minutesNode as minutesNodeOf, trackAt, panelHead as panelHeadOf, tomorrowAt as tomorrowAtOf, untilText as untilTextOf, vehicleLabel, warningSign as warningSignOf, warns } from './panel.js';
+import { DELAY_MAJOR_S, DELAY_MINOR_S, DELAY_SEVERE_S, MINUTES_MAX, NOTE_CHARS, badge as badgeOf, choiceChip as choiceChipOf, delayCell as delayCellOf, delayClass, delayNode as delayNodeOf, delayFlag, delayText, departureLists, departuresSub as departuresSubOf, directionSign as directionSignOf, leavesAt, lineHead, lineLists, lineStops, minutesNode as minutesNodeOf, trackAt, VEHICLE_R, panelHead as panelHeadOf, tomorrowAt as tomorrowAtOf, untilText as untilTextOf, vehicleLabel, warningSign as warningSignOf, warns } from './panel.js';
 import { BOARD_MAX, BOARD_SHARE, BOARD_STOPS, boardBlocks, boardQuery, boardShare, displayQuery, ledBy, readBoard, readDisplay, readStops } from './display.js';
 import { mdiArrowCollapse, mdiArrowExpand, mdiChevronRight, mdiCityVariantOutline, mdiEye, mdiEyeOff, mdiFullscreen, mdiFullscreenExit, mdiHeart, mdiHeartOutline, mdiMinusCircleOutline, mdiPlaylistPlus, mdiPlus } from './vendor/material-design-icons/icons.js';
 import { AttributionControl, MapLibreMap, NavigationControl } from './vendor/maplibre-gl/maplibre-gl.mjs';
@@ -548,15 +548,16 @@ function vehicleColor(v) {
 /** By name, numbers by their value: N2 before N10. For the order within a group, which must not change from frame to frame. */
 const byLabel = (a, b) => a.label.localeCompare(b.label, undefined, { numeric: true }) || (a.id < b.id ? -1 : 1);
 
-function setLabelFont(label) {
-  ctx.font = `700 ${label.length > 3 ? 8 : label.length > 2 ? 9.5 : 11}px system-ui, sans-serif`;
+// (the helpers that draw a vehicle draw on the map, or where they are given another canvas: the stops of a line)
+function setLabelFont(label, c = ctx) {
+  c.font = `700 ${label.length > 3 ? 8 : label.length > 2 ? 9.5 : 11}px system-ui, sans-serif`;
 }
 
 /** The path of a box with round corners. */
-function roundedBox(x, y, w, h, radius) {
-  ctx.beginPath();
-  if (ctx.roundRect) ctx.roundRect(x, y, w, h, radius);
-  else ctx.rect(x, y, w, h);
+function roundedBox(x, y, w, h, radius, c = ctx) {
+  c.beginPath();
+  if (c.roundRect) c.roundRect(x, y, w, h, radius);
+  else c.rect(x, y, w, h);
 }
 
 /**
@@ -564,30 +565,30 @@ function roundedBox(x, y, w, h, radius) {
  * circle of radius r around (x, y). In the colours set; drawn before what it
  * belongs to, which covers its base.
  */
-function drawArrow(x, y, r, a) {
-  ctx.beginPath();
-  ctx.moveTo(x + Math.cos(a) * (r + 6), y + Math.sin(a) * (r + 6));
-  ctx.lineTo(x + Math.cos(a + 0.6) * r, y + Math.sin(a + 0.6) * r);
-  ctx.lineTo(x + Math.cos(a - 0.6) * r, y + Math.sin(a - 0.6) * r);
-  ctx.closePath();
-  ctx.stroke();
-  ctx.fill();
+function drawArrow(x, y, r, a, c = ctx) {
+  c.beginPath();
+  c.moveTo(x + Math.cos(a) * (r + 6), y + Math.sin(a) * (r + 6));
+  c.lineTo(x + Math.cos(a + 0.6) * r, y + Math.sin(a + 0.6) * r);
+  c.lineTo(x + Math.cos(a - 0.6) * r, y + Math.sin(a - 0.6) * r);
+  c.closePath();
+  c.stroke();
+  c.fill();
 }
 
 /** The round marker of a vehicle, with its name where there is room for one. */
-function drawDisc(x, y, r, v, labeled) {
+function drawDisc(x, y, r, v, labeled, c = ctx) {
   // outline and label are white in both themes
-  ctx.strokeStyle = '#fff';
-  ctx.fillStyle = vehicleColor(v);
-  ctx.lineWidth = labeled ? 1.5 : 1;
-  ctx.beginPath();
-  ctx.arc(x, y, r, 0, 2 * Math.PI);
-  ctx.fill();
-  ctx.stroke();
+  c.strokeStyle = '#fff';
+  c.fillStyle = vehicleColor(v);
+  c.lineWidth = labeled ? 1.5 : 1;
+  c.beginPath();
+  c.arc(x, y, r, 0, 2 * Math.PI);
+  c.fill();
+  c.stroke();
   if (!labeled) return;
-  ctx.fillStyle = colors.letters;
-  setLabelFont(v.label);
-  ctx.fillText(v.label, x, y + 0.5);
+  c.fillStyle = colors.letters;
+  setLabelFont(v.label, c);
+  c.fillText(v.label, x, y + 0.5);
 }
 
 /**
@@ -624,18 +625,20 @@ function flagOf(v, live) {
   return flag && { text: flag.text, color: colors.delay[flag.color] };
 }
 
-function drawFlag(x, y, flag) {
-  ctx.font = '700 9px system-ui, sans-serif';
-  const w = flag.text === '?' ? 12 : ctx.measureText(flag.text).width + 6;
-  ctx.fillStyle = flag.color;
-  roundedBox(x, y, w, 12, 4);
-  ctx.fill();
+/** The flag of a vehicle at x, y: its width. */
+function drawFlag(x, y, flag, c = ctx) {
+  c.font = '700 9px system-ui, sans-serif';
+  const w = flag.text === '?' ? 12 : c.measureText(flag.text).width + 6;
+  c.fillStyle = flag.color;
+  roundedBox(x, y, w, 12, 4, c);
+  c.fill();
   // (with the white edge of the markers: a flag may have about the colour of the one it sits on, green on an S-Bahn)
-  ctx.strokeStyle = '#fff';
-  ctx.lineWidth = 1;
-  ctx.stroke();
-  ctx.fillStyle = colors.letters;
-  ctx.fillText(flag.text, x + w / 2, y + 6.5);
+  c.strokeStyle = '#fff';
+  c.lineWidth = 1;
+  c.stroke();
+  c.fillStyle = colors.letters;
+  c.fillText(flag.text, x + w / 2, y + 6.5);
+  return w;
 }
 
 /**
@@ -1481,8 +1484,66 @@ function draw() {
 let frameTimer = null;
 let framePending = false;
 
+// The vehicles on the stops of a line (lineStops in panel.js) are drawn as
+// the map draws its own, on a canvas of their own over the line of the
+// list, and move along their tracks with the frames: every FRAME_MS while
+// they are shown, between two answers of the server too. An element moved by
+// a third of a pixel is drawn a whole pixel on now and then by Firefox and
+// by Chrome on a phone, whatever moves it; a canvas draws it where it is.
+// Over each is a button that cannot be seen, for a tap, the keyboard and a
+// screen reader; the ring of the keyboard focus is drawn on the canvas.
+let lastLineMove = 0;
+const LINE_CANVAS_PX = 100; // its width: the line of the list, a branch beside it and the flags
+const lineTracks = new WeakMap(); // a vehicle's button → its track, read once: [time, x, y, …]
+const lineCanvas = () => (panel.hidden ? null : panelBody.querySelector('canvas.line-canvas'));
+
+/** Makes the canvas of the vehicles on the stops of a line as high as the list, at the resolution of the screen (as far as a canvas may be that high). */
+function fitLineCanvas(paper) {
+  const height = paper.parentNode.offsetHeight;
+  const dpr = Math.min(window.devicePixelRatio || 1, 16_000 / Math.max(1, height));
+  paper.width = Math.round(LINE_CANVAS_PX * dpr);
+  paper.height = Math.round(height * dpr);
+}
+
+function drawLineVehicles(paper) {
+  lastLineMove = performance.now();
+  const c = paper.getContext('2d');
+  const dpr = paper.width / LINE_CANVAS_PX;
+  c.setTransform(dpr, 0, 0, dpr, 0, 0);
+  c.clearRect(0, 0, LINE_CANVAS_PX, paper.height / dpr);
+  c.textAlign = 'center';
+  c.textBaseline = 'middle';
+  const live = realtimeState() === 'live';
+  const at = now();
+  let focused = null;
+  for (const node of paper.parentNode.querySelectorAll('button.line-vehicle')) {
+    if (!lineTracks.has(node)) lineTracks.set(node, node.dataset.track ? node.dataset.track.split(',').map(Number) : [0, ...node.dataset.at.split(',').map(Number)]);
+    const [x, y] = trackAt(lineTracks.get(node), at);
+    // (its button where it is: one that cannot be seen may well go by whole pixels)
+    node.style.transform = `translate(${x.toFixed(1)}px, ${y.toFixed(1)}px)`;
+    const v = { mode: node.dataset.mode, delay: node.dataset.late === undefined ? null : Number(node.dataset.late), label: node.dataset.label };
+    c.strokeStyle = '#fff';
+    c.fillStyle = vehicleColor(v);
+    c.lineWidth = 1.5;
+    drawArrow(x, y, VEHICLE_R, Math.PI / 2, c);
+    drawDisc(x, y, VEHICLE_R, v, true, c);
+    const flag = flagOf(v, live);
+    const width = flag ? drawFlag(x + VEHICLE_R * 0.55, y - VEHICLE_R - 5, flag, c) : 0;
+    if (node.matches(':focus-visible')) focused = { x, y, width };
+  }
+  // the ring of the keyboard focus last, over all of them: round the whole of its vehicle, its flag inside
+  if (focused) {
+    roundedBox(focused.x - 19, focused.y - 21, 19 + Math.max(19, VEHICLE_R * 0.55 + focused.width + 3), 42, 10, c);
+    c.strokeStyle = colors.accent;
+    c.lineWidth = 2;
+    c.stroke();
+  }
+}
+
 function frame() {
   framePending = false;
+  const paper = lineCanvas();
+  if (paper && performance.now() - lastLineMove >= FRAME_MS) drawLineVehicles(paper);
   if (performance.now() - lastDraw >= (drawAsked || settling ? FRAME_MS : quietMs)) draw();
   else nextFrame();
 }
@@ -1495,7 +1556,9 @@ function nextFrame() {
     framePending = true;
     requestAnimationFrame(frame);
   };
-  const wait = lastDraw + (drawAsked || settling ? FRAME_MS : quietMs) - performance.now();
+  // (the next frame of the map, or of the vehicles on the stops of a line where that is sooner)
+  let wait = lastDraw + (drawAsked || settling ? FRAME_MS : quietMs) - performance.now();
+  if (lineCanvas()) wait = Math.min(wait, lastLineMove + FRAME_MS - performance.now());
   if (wait > 0) frameTimer = setTimeout(ask, Math.ceil(wait));
   else ask();
 }
@@ -3125,7 +3188,13 @@ function renderLine(line, first) {
   const way = Math.min(selection.way ?? 0, Math.max(0, (line.ways?.length ?? 1) - 1));
   fillPanel([toDom(lineHead(line, drawn, way))], ...lineStops(line, drawn, way).map((node) => toDom(node)));
   panelBody.scrollTop = scrollTop;
-  moveLineVehicles(panelBody.querySelectorAll('.line-vehicle'));
+  // (its vehicles drawn at once, as high as the list, and with the frames from now on)
+  const paper = lineCanvas();
+  if (paper) {
+    fitLineCanvas(paper);
+    drawLineVehicles(paper);
+    nextFrame();
+  }
 
   // Once, when the line is chosen: where it runs into view, between the
   // cards, as far as it is in the area (#148); without that, its vehicles.
@@ -3135,32 +3204,6 @@ function renderLine(line, first) {
     const lats = line.vehicles.map((v) => v.lat);
     const lons = line.vehicles.map((v) => v.lon);
     map.fitBounds([[Math.min(...lons), Math.min(...lats)], [Math.max(...lons), Math.max(...lats)]], { padding: clearOfCards(), maxZoom: LINE_ZOOM });
-  }
-}
-
-/**
- * The vehicles on the stops of a line (lineStops in panel.js) move along
- * their tracks, between two answers of the server too: each by an animation
- * of its transform from the first place of its track to the last, as far
- * on as the time is, which the browser runs by itself. Set anew every frame,
- * the transform of a vehicle that moves a third of a pixel a second would be
- * drawn a whole pixel on now and then by some browsers; an animation runs
- * smoothly in all of them. One without a track stands where it is.
- */
-function moveLineVehicles(nodes) {
-  const at = now();
-  for (const node of nodes) {
-    const track = node.dataset.track ? node.dataset.track.split(',').map(Number) : [];
-    const [first, last] = [track[0], track[track.length - 3]];
-    if (track.length < 6 || last <= at) {
-      const [x, y] = track.length ? trackAt(track, at) : node.dataset.at.split(',').map(Number);
-      node.style.transform = `translate(${x}px, ${y}px)`;
-      continue;
-    }
-    const frames = [];
-    for (let k = 0; k < track.length; k += 3) frames.push({ offset: (track[k] - first) / (last - first), transform: `translate(${track[k + 1]}px, ${track[k + 2]}px)` });
-    const animation = node.animate(frames, { duration: (last - first) * 1000, fill: 'both' });
-    animation.currentTime = Math.max(0, (at - first) * 1000);
   }
 }
 

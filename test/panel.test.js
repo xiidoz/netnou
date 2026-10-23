@@ -178,10 +178,11 @@ test('the stops of a line in one direction, with its vehicles along them as the 
   const byDelay = html(lineStops(line, { ...drawing(), live: true, colorBy: 'delay' }));
   assert.ok(byDelay.includes('data-mode="subway" data-delay="minor"') && !byDelay.includes('class="flag'));
   assert.ok(!html(lineStops(line, { ...drawing(), live: true, flags: false })).includes('class="flag'));
-  // in the page, which moves them: each a button of its own with where it is and its track, the same sign in it
+  // in the page, which moves them and draws them on a canvas as the map does: each a button that cannot be seen, with
+  // where it is and its track, its kind, delay and label
   const moving = html(lineStops(line, { ...drawing(), live: true, moving: true }));
-  assert.ok(moving.includes(`<div class="line-vehicles"><button type="button" class="line-vehicle" data-trip="a" aria-label="U1 to Langwasser Süd +3" data-mode="subway" data-at="36.0,41.0" data-track="${NOW - 60},36,22,${NOW + 60},36,60,${NOW + 90},36,60"><svg viewBox="-22 -22 54 44" width="54" height="44" aria-hidden="true"><path d="M0.00,17.00L-6.21,9.08L6.21,9.08Z"></path><circle r="11"></circle>`));
-  assert.ok(moving.includes('<button type="button" class="line-vehicle" data-trip="c" aria-label="U1 to Depot ±0" data-mode="subway" data-at="54.0,98.0"><svg') && !moving.includes('<svg class="line-vehicles"'));
+  assert.ok(moving.includes(`<div class="line-vehicles"><canvas class="line-canvas" aria-hidden="true"></canvas><button type="button" class="line-vehicle" data-trip="a" aria-label="U1 to Langwasser Süd +3" data-mode="subway" data-late="180" data-label="U1" data-at="36.0,41.0" data-track="${NOW - 60},36,22,${NOW + 60},36,60,${NOW + 90},36,60"></button>`));
+  assert.ok(moving.includes('<button type="button" class="line-vehicle" data-trip="c" aria-label="U1 to Depot ±0" data-mode="subway" data-late="20" data-label="U1" data-at="54.0,98.0"></button>') && !moving.includes('<svg'));
   // without vehicles under way, no drawing of them; a direction that is not there, nothing
   assert.ok(!html(lineStops({ ...line, ways: [{ ...line.ways[0], vehicles: [] }] }, drawing())).includes('<svg'));
   assert.deepEqual(lineStops(line, drawing(), 1), []);

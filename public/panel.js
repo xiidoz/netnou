@@ -367,9 +367,9 @@ export function lineHead(line, { t }, way = null) {
  * @param context { t, live, colorBy, flags, moving }: whether delays are
  *   coming in (for the question mark of a flag), the map's settings for the
  *   colour of a vehicle and its flag, and whether the page moves the
- *   vehicles: then each is a button of its own, which the page places and
- *   moves (app.js); else they are drawn in their places, as the page sent
- *   has them
+ *   vehicles: then it draws them itself on a canvas, under a button for each
+ *   that cannot be seen (app.js); else they are drawn in their places, as
+ *   the page sent has them
  */
 export function lineStops(line, context, way = 0) {
   const { t } = context;
@@ -429,7 +429,7 @@ export function lineStops(line, context, way = 0) {
   const list = h('ul', { class: 'line-stops', 'data-mode': kindOf(line.mode) }, items);
   if (!vehicles.length) return [h('div', { class: 'line-body' }, list)];
   return [h('div', { class: 'line-body' }, list, context.moving
-    ? h('div', { class: 'line-vehicles' }, vehicles)
+    ? h('div', { class: 'line-vehicles' }, h('canvas', { class: 'line-canvas', 'aria-hidden': 'true' }), vehicles)
     : h('svg', { class: 'line-vehicles', height: Math.round(y + STOPS_TOP) }, vehicles))];
 }
 
@@ -485,19 +485,14 @@ function lineVehicle(line, v, x, y, context, track = []) {
     h('rect', { class: 'hit', x: -18, y: -18, width: 36, height: 36, rx: 18 }), parts);
 }
 
-// The box of the sign of a vehicle that the page moves, in px: the middle of
-// its disc this far from its left and its top, its flag and the ring of the
-// keyboard focus inside.
-const SIGN = { left: 22, top: 22, width: 54, height: 44 };
-
 /**
- * A vehicle on the line of the stops (lineStops) that the page moves: a
- * button of its own, with where it is (data-at) and its track in px. A sharp
- * screen draws a drawing moved by a fraction of a pixel a whole pixel on,
- * now and then; a layer of its own it moves smoothly (style.css).
+ * A vehicle on the line of the stops (lineStops) that the page moves and
+ * draws itself, as the map does (app.js): a button that cannot be seen, for a
+ * tap, the keyboard and a screen reader, with what the page draws it by:
+ * where it is (data-at), its track in px, its kind, delay and label.
  */
-function movingVehicle(line, v, x, y, context, track = []) {
-  const { attrs, parts } = vehicleSign(line, v, context);
-  return h('button', { type: 'button', class: 'line-vehicle', ...attrs, 'data-at': `${x.toFixed(1)},${y.toFixed(1)}`, 'data-track': track.length ? track.join(',') : null },
-    h('svg', { viewBox: `${-SIGN.left} ${-SIGN.top} ${SIGN.width} ${SIGN.height}`, width: SIGN.width, height: SIGN.height, 'aria-hidden': 'true' }, parts));
+function movingVehicle(line, v, x, y, { t }, track = []) {
+  return h('button', { type: 'button', class: 'line-vehicle', 'data-trip': v.id, 'aria-label': [line.name, t('line.to', { destination: v.to }), delayText(v.delay)].filter(Boolean).join(' '),
+    'data-mode': kindOf(line.mode), 'data-late': v.delay ?? null, 'data-label': vehicleLabel(line.name),
+    'data-at': `${x.toFixed(1)},${y.toFixed(1)}`, 'data-track': track.length ? track.join(',') : null });
 }
