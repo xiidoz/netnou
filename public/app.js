@@ -1481,8 +1481,29 @@ function draw() {
 let frameTimer = null;
 let framePending = false;
 
+// The vehicles on the stops of a line (lineStops in panel.js) move along
+// their tracks with the frames too, between two answers of the server: one
+// every FRAME_MS while they are shown, whatever the map needs. Once a
+// second, they would move by steps that a sharp screen shows.
+let lastLineMove = 0;
+const lineTracks = new WeakMap(); // a vehicle's node → its track, read once
+const lineVehicles = () => (panel.hidden ? [] : panel.querySelectorAll('.line-vehicle[data-track]'));
+
+function moveLineVehicles(nodes) {
+  lastLineMove = performance.now();
+  const at = now();
+  for (const node of nodes) {
+    if (!lineTracks.has(node)) lineTracks.set(node, node.dataset.track.split(',').map(Number));
+    const [x, y] = trackAt(lineTracks.get(node), at);
+    const transform = `translate(${x.toFixed(2)} ${y.toFixed(2)})`;
+    if (node.getAttribute('transform') !== transform) node.setAttribute('transform', transform);
+  }
+}
+
 function frame() {
   framePending = false;
+  const nodes = lineVehicles();
+  if (nodes.length && performance.now() - lastLineMove >= FRAME_MS) moveLineVehicles(nodes);
   if (performance.now() - lastDraw >= (drawAsked || settling ? FRAME_MS : quietMs)) draw();
   else nextFrame();
 }
@@ -1495,7 +1516,9 @@ function nextFrame() {
     framePending = true;
     requestAnimationFrame(frame);
   };
-  const wait = lastDraw + (drawAsked || settling ? FRAME_MS : quietMs) - performance.now();
+  // (the next frame of the map, or of the vehicles on the stops of a line where that is sooner)
+  let wait = lastDraw + (drawAsked || settling ? FRAME_MS : quietMs) - performance.now();
+  if (lineVehicles().length) wait = Math.min(wait, lastLineMove + FRAME_MS - performance.now());
   if (wait > 0) frameTimer = setTimeout(ask, Math.ceil(wait));
   else ask();
 }
@@ -3133,6 +3156,8 @@ function renderLine(line, first) {
   const way = Math.min(selection.way ?? 0, Math.max(0, (line.ways?.length ?? 1) - 1));
   fillPanel([toDom(lineHead(line, drawn, way))], ...lineStops(line, drawn, way).map((node) => toDom(node)));
   panelBody.scrollTop = scrollTop;
+  // (its vehicles move with the frames from now on)
+  nextFrame();
 
   // Once, when the line is chosen: where it runs into view, between the
   // cards, as far as it is in the area (#148); without that, its vehicles.
@@ -3163,7 +3188,7 @@ function tomorrowAt(departures) {
   return tomorrowAtOf(departures, drawing());
 }
 
-/** The minutes in the lists of departures, the clock of a board and the vehicles on the stops of a line, as time goes on. */
+/** The minutes in the lists of departures and the clock of a board, as time goes on. */
 function tickTimes() {
   if (panel.hidden) return;
   const update = (node, text) => {
@@ -3172,12 +3197,8 @@ function tickTimes() {
   for (const node of panel.querySelectorAll('.minutes[data-leaves]')) update(node, untilText(Number(node.dataset.leaves), Number(node.dataset.planned), node.dataset.far));
   const clock = panel.querySelector('.board-clock');
   if (clock) update(clock, formatTime(now()));
-  // the vehicles on the stops of a line, along their tracks (lineStops in panel.js): between two answers of the server too
-  for (const node of panel.querySelectorAll('.line-vehicle[data-track]')) {
-    const [x, y] = trackAt(node.dataset.track.split(',').map(Number), now());
-    node.setAttribute('transform', `translate(${x.toFixed(1)} ${y.toFixed(1)})`);
-  }
 }
+
 
 function renderStation(board) {
   if (state.board !== null) {
