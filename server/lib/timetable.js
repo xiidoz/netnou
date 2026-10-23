@@ -110,6 +110,8 @@ const TRAIL_S = 15;
 // or end there where at least this share of the trips of that direction do:
 // a trip from the depot now and then would put it below most of them.
 const TURNING = 0.05;
+// How far ahead the page is told where they will be, in seconds (lineStops).
+const TRACK_S = 900;
 // No time of a timetable is as much before the start of its service day as
 // this: what is added to a time to sort it as a number that is not negative.
 const EARLIEST_S = 30 * 86400;
@@ -476,10 +478,15 @@ class Vehicle {
   /** [time, lat, lon, …] along its way ahead, see Timetable.knots. */
   get knots() {
     if (!this.#knots) {
-      const { arr, dep } = this.#timetable.times(this.#trip, this.#date, this.#realtime, this.#row);
+      const { arr, dep } = this.times;
       this.#knots = this.#timetable.knots(this.#trip, arr, dep, this.#from, this.#last, this.#now);
     }
     return this.#knots;
+  }
+
+  /** When its trip arrives at each of its stops and leaves it, with the delays known (Timetable.times). */
+  get times() {
+    return this.#timetable.times(this.#trip, this.#date, this.#realtime, this.#row);
   }
 }
 
@@ -1245,7 +1252,9 @@ export class Timetable extends Schedule {
    *   joins it at (null where it does neither); a vehicle is between the
    *   stops at the positions `from` and `until` of the list, or of branch
    *   number `branch`, where -1 and the length of the branch are the
-   *   stations it leaves the line at and joins it at
+   *   stations it leaves the line at and joins it at; `track` where it will
+   *   be when, on from there: [time, position, …], positions as `from`,
+   *   for the page to move it between two answers
    */
   lineStops(index, vehicles) {
     const stop = (s) => ({ id: this.stops.id.get(s), name: this.stops.name[s], town: this.towns[this.stops.town[s]]?.name ?? null, path: stopPath(this.stops.name[s], this.stops.lat[s], this.stops.lon[s]) });
@@ -1259,7 +1268,9 @@ export class Timetable extends Schedule {
       let calls = 0;
       for (let k = 0; k <= from; k++) if (this.stationOf[this.patternStops[start + k]] === left && (k === 0 || this.stationOf[this.patternStops[start + k - 1]] !== left)) calls++;
       const at = this.placeOn(ways, left, this.stationOf[this.patternStops[start + next]], calls - 1);
-      if (at) placed[at.way].push({ id: v.id, to: v.to, delay: v.delay, warnings: v.warnings, branch: at.branch, from: at.from, until: at.until, come: at.from === at.until ? 0 : Math.round(come * 100) / 100 });
+      if (!at) continue;
+      const track = this.trackOn(ways[at.way], at, t, from, v.times);
+      placed[at.way].push({ id: v.id, to: v.to, delay: v.delay, warnings: v.warnings, branch: at.branch, from: at.from, until: at.until, come: at.from === at.until ? 0 : Math.round(come * 100) / 100, track });
     }
     return ways.map((way, w) => ({
       to: way.to,
@@ -1272,6 +1283,44 @@ export class Timetable extends Schedule {
       branches: way.branches.map(({ after, before, stations }) => ({ after, before, stops: stations.map(stop) })),
       vehicles: placed[w].sort((a, b) => (a.branch ?? -1) - (b.branch ?? -1) || a.from + a.come - (b.from + b.come)),
     }));
+  }
+
+  /**
+   * Where a vehicle placed on a way (placeOn) will be when, on from the stop
+   * it left: at each station of its trip that follows in the list, or in its
+   * branch, from when it arrives to when it leaves, as far as they follow and
+   * for TRACK_S.
+   * @param at where it is placed (placeOn)
+   * @param from the position in trip t of the stop it left
+   * @param times when the trip arrives and leaves at each of its stops (Timetable.times)
+   * @returns [time, position, …], times in seconds
+   */
+  trackOn(way, at, t, from, { arr, dep }) {
+    // the stations it is on, from the one it left, platforms of one station together
+    const start = this.patternStart[this.tripPattern[t]];
+    const ahead = [];
+    for (let k = from; k < this.patternStart[this.tripPattern[t] + 1] - start; k++) {
+      const station = this.stationOf[this.patternStops[start + k]];
+      if (ahead.at(-1)?.station === station) ahead.at(-1).dep = dep[k];
+      else ahead.push({ station, arr: arr[k], dep: dep[k] });
+    }
+    // the stations of where it is placed, by their positions: the list, or the branch with where it leaves and joins it
+    const branch = at.branch === null ? null : way.branches[at.branch];
+    const run = branch ? [branch.after === null ? -1 : way.list[branch.after], ...branch.stations, branch.before === null ? -1 : way.list[branch.before]] : way.list;
+    const shift = branch ? -1 : 0;
+    // (from the station it left, or from the one ahead where it is placed at that)
+    let p = at.from - shift;
+    let i = ahead.findIndex((call) => call.station === run[p]);
+    if (i < 0) return [];
+    const track = i === 0 ? [ahead[0].dep, at.from] : [ahead[i].arr, at.from, ahead[i].dep, at.from];
+    // (a quarter of an hour ahead: the page asks again long before)
+    for (i++; i < ahead.length && ahead[i - 1].dep < track[0] + TRACK_S; i++) {
+      const q = run.indexOf(ahead[i].station, p + 1);
+      if (q < 0) break;
+      p = q;
+      track.push(ahead[i].arr, p + shift, ahead[i].dep, p + shift);
+    }
+    return track;
   }
 
   /**

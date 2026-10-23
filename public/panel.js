@@ -415,18 +415,36 @@ export function lineStops(line, context, way = 0) {
     const mids = inBranches[v.branch];
     return i < 0 ? [LINE_X, middles[after]] : i >= mids.length ? [LINE_X, middles[before]] : [BRANCH_X, mids[i]];
   };
+  // (and where they will be when, from their tracks, for the page to move them by itself: tickTimes in app.js)
   const vehicles = one.vehicles.map((v) => {
+    const track = (v.track ?? []).flatMap((value, k) => (k % 2 === 0 ? [value] : at(v, value).map((px) => Math.round(px * 10) / 10)));
     const [x0, y0] = at(v, v.from);
     const [x1, y1] = at(v, v.until);
-    return lineVehicle(line, v, x0 + (x1 - x0) * v.come, y0 + (y1 - y0) * v.come, context);
+    const [x, y] = track.length ? trackAt(track, context.now) : [x0 + (x1 - x0) * v.come, y0 + (y1 - y0) * v.come];
+    return lineVehicle(line, v, x, y, context, track);
   });
   return [h('div', { class: 'line-body' },
     h('ul', { class: 'line-stops', 'data-mode': kindOf(line.mode) }, items),
     vehicles.length ? h('svg', { class: 'line-vehicles', height: Math.round(y + STOPS_TOP) }, vehicles) : null)];
 }
 
-/** A vehicle on the line of the stops (lineStops), as the map draws it: a button that opens its trip. */
-function lineVehicle(line, v, x, y, { t, live = false, colorBy = 'mode', flags = true }) {
+/**
+ * Where a vehicle on the stops of a line is at a moment, by its track:
+ * [time, x, y, …], from one place to the next as the time goes, before the
+ * first at the first and after the last at the last.
+ */
+export function trackAt(track, now) {
+  if (now <= track[0]) return [track[1], track[2]];
+  for (let k = 3; k < track.length; k += 3) {
+    if (now >= track[k]) continue;
+    const f = (now - track[k - 3]) / (track[k] - track[k - 3]);
+    return [track[k - 2] + (track[k + 1] - track[k - 2]) * f, track[k - 1] + (track[k + 2] - track[k - 1]) * f];
+  }
+  return [track[track.length - 2], track[track.length - 1]];
+}
+
+/** A vehicle on the line of the stops (lineStops), as the map draws it: a button that opens its trip, with its track in px for the page. */
+function lineVehicle(line, v, x, y, { t, live = false, colorBy = 'mode', flags = true }, track = []) {
   const label = vehicleLabel(line.name);
   const font = label.length > 3 ? 8 : label.length > 2 ? 9.5 : 11;
   // (no flag where the colour says the delay, nor where the visitor switched them off, as on the map)
@@ -434,7 +452,7 @@ function lineVehicle(line, v, x, y, { t, live = false, colorBy = 'mode', flags =
   const width = flag ? (flag.text === '?' ? 12 : flag.text.length * 5.4 + 6) : 0;
   const said = [line.name, t('line.to', { destination: v.to }), delayText(v.delay)].filter(Boolean).join(' ');
   return h('g', { class: 'line-vehicle', transform: `translate(${x.toFixed(1)} ${y.toFixed(1)})`, 'data-trip': v.id, role: 'button', tabindex: '0', 'aria-label': said,
-    'data-mode': kindOf(line.mode), 'data-delay': colorBy === 'delay' ? delayClass(v.delay) : null },
+    'data-mode': kindOf(line.mode), 'data-delay': colorBy === 'delay' ? delayClass(v.delay) : null, 'data-track': track.length ? track.join(',') : null },
     h('rect', { class: 'hit', x: -18, y: -18, width: 36, height: 36, rx: 18 }),
     h('path', { d: ARROW_DOWN }),
     h('circle', { r: VEHICLE_R }),

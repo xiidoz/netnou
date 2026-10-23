@@ -6,7 +6,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { t as translate } from '../public/i18n.js';
 import en from '../public/locales/en.js';
-import { badge, choiceChip, delayClass, delayFlag, delayText, departureLists, departuresSub, directionSign, h, lineHead, lineLists, lineStops, panelHead, toHtml, vehicleLabel } from '../public/panel.js';
+import { badge, choiceChip, delayClass, delayFlag, delayText, departureLists, departuresSub, directionSign, h, lineHead, lineLists, lineStops, panelHead, toHtml, trackAt, vehicleLabel } from '../public/panel.js';
 
 const NOW = Date.parse('2026-10-23T10:00:00Z') / 1000;
 // (times of day and dates in UTC, so that the test reads the same anywhere)
@@ -144,7 +144,7 @@ test('the stops of a line in one direction, with its vehicles along them as the 
     stops: [stop('Hardhöhe'), stop('Gostenhof', { start: true }), stop('Messe', { end: true, start: true }), stop('Langwasser Süd')],
     branches: [{ after: 1, before: null, stops: [stop('Depot')] }],
     vehicles: [
-      vehicle('a', { delay: 180, from: 0, until: 1, come: 0.5 }),
+      vehicle('a', { delay: 180, from: 0, until: 1, come: 0.5, track: [NOW - 60, 0, NOW + 60, 1, NOW + 90, 1] }),
       vehicle('b', { to: 'Messe', from: 2, until: 2, come: 0 }),
       vehicle('c', { to: 'Depot', delay: 20, branch: 0, from: -1, until: 0, come: 1 }),
     ],
@@ -163,9 +163,13 @@ test('the stops of a line in one direction, with its vehicles along them as the 
   assert.ok(out.includes('<svg class="line-vehicles" height="196">'));
   const at = (id) => out.match(new RegExp(`<g class="line-vehicle" transform="translate\\(([\\d.]+) ([\\d.]+)\\)" data-trip="${id}"`)).slice(1).map(Number);
   assert.deepEqual([at('a'), at('b'), at('c')], [[36, 41], [36, 136], [54, 98]]);
-  // as a button named by its line, where it goes and its delay; the disc of its kind with the name of its line, its
-  // arrowhead down the list, and the flag of its delay in the colour of the map, a question mark where none is known
-  assert.ok(out.includes('data-trip="a" role="button" tabindex="0" aria-label="U1 to Langwasser Süd +3" data-mode="subway"><rect class="hit" x="-18" y="-18" width="36" height="36" rx="18"></rect><path d="M0.00,17.00L-6.21,9.08L6.21,9.08Z"></path><circle r="11"></circle><text y="4.0" font-size="11">U1</text><g class="flag major" transform="translate(6.050000000000001 -16)"><rect width="16.8" height="12" rx="4"></rect><text x="8.4" y="9">+3</text></g><rect class="ring" x="-19" y="-21" width="44.9" height="42" rx="10"></rect></g>'));
+  // (one without a track has none for the page: it stays where it is until the next answer)
+  assert.ok(!out.includes('data-trip="b" role="button" tabindex="0" aria-label="U1 to Messe" data-mode="subway" data-track'));
+  // as a button named by its line, where it goes and its delay, with where it will be when in px for the page to move
+  // it by itself (its track: placed by it, at the middle of its way between its first two places); the disc of its kind
+  // with the name of its line, its arrowhead down the list, and the flag of its delay in the colour of the map, a
+  // question mark where none is known
+  assert.ok(out.includes(`data-trip="a" role="button" tabindex="0" aria-label="U1 to Langwasser Süd +3" data-mode="subway" data-track="${NOW - 60},36,22,${NOW + 60},36,60,${NOW + 90},36,60"><rect class="hit" x="-18" y="-18" width="36" height="36" rx="18"></rect><path d="M0.00,17.00L-6.21,9.08L6.21,9.08Z"></path><circle r="11"></circle><text y="4.0" font-size="11">U1</text><g class="flag major" transform="translate(6.050000000000001 -16)"><rect width="16.8" height="12" rx="4"></rect><text x="8.4" y="9">+3</text></g><rect class="ring" x="-19" y="-21" width="44.9" height="42" rx="10"></rect></g>`));
   assert.ok(out.includes('aria-label="U1 to Messe"') && out.includes('<g class="flag none"') && out.includes('<text x="6.0" y="9">?</text>'));
   // on time to the minute: no flag; without delays coming in, no question mark
   assert.ok(out.includes('data-trip="c" role="button" tabindex="0" aria-label="U1 to Depot ±0" data-mode="subway"><rect class="hit" x="-18" y="-18" width="36" height="36" rx="18"></rect><path d="M0.00,17.00L-6.21,9.08L6.21,9.08Z"></path><circle r="11"></circle><text y="4.0" font-size="11">U1</text><rect class="ring" x="-19" y="-21" width="38.0" height="42" rx="10"></rect></g>'));
@@ -177,6 +181,11 @@ test('the stops of a line in one direction, with its vehicles along them as the 
   // without vehicles under way, no drawing of them; a direction that is not there, nothing
   assert.ok(!html(lineStops({ ...line, ways: [{ ...line.ways[0], vehicles: [] }] }, drawing())).includes('<svg'));
   assert.deepEqual(lineStops(line, drawing(), 1), []);
+});
+
+test('a vehicle of the stops of a line goes along its track as the time goes', () => {
+  const track = [100, 36, 20, 160, 36, 80, 220, 36, 80, 280, 54, 110];
+  assert.deepEqual([50, 100, 130, 160, 200, 250, 280, 400].map((now) => trackAt(track, now)), [[36, 20], [36, 20], [36, 50], [36, 80], [36, 80], [45, 95], [54, 110], [54, 110]]);
 });
 
 test('a vehicle carries the first word of its line on its disc, and its delay as a flag where it is not on time', () => {

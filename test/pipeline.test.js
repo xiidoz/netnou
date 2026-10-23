@@ -774,7 +774,8 @@ test('a line has its stops in each direction, and its vehicles between them (#25
   assert.deepEqual([timetable.wayOfTrip(u1, trip('T1')), timetable.wayOfTrip(u1, trip('T4'))], [0, 1]);
   // at 10:15 T1 has left Beta at 10:12 for Gamma at 10:20: three eighths of the way
   const vehicles = timetable.vehicles(at('10:15'), null).filter((v) => v.lineIndex === u1);
-  assert.deepEqual(timetable.lineStops(u1, vehicles)[0].vehicles, [{ id: `T1_${DAY}`, to: beta, delay: null, warnings: [], branch: null, from: 1, until: 2, come: 0.38 }]);
+  // and where it will be when: at Gamma from 10:20, its end
+  assert.deepEqual(timetable.lineStops(u1, vehicles)[0].vehicles, [{ id: `T1_${DAY}`, to: beta, delay: null, warnings: [], branch: null, from: 1, until: 2, come: 0.38, track: [at('10:12'), 1, at('10:20'), 2, at('10:20'), 2] }]);
   assert.deepEqual(timetable.lineVehicles(u1, vehicles).ways, timetable.lineStops(u1, vehicles));
 
   // A short run from Beta, and one that leaves the line after Beta for Delta: Beta is where a share of the trips
