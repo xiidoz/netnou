@@ -622,6 +622,11 @@ button:focus-visible, select:focus-visible, .row:focus-visible, .panel:focus-vis
    all or only those chosen, and opens the sheet to choose them; its cross
    shows all again. Sizes in em, so that it grows with a board. */
 .panel-head .sub.with-choice { display: flex; flex-wrap: wrap; align-items: center; gap: 0.3em 0.6em; }
+/* (out to the edge the rows below end at, as the notes, so that the switch and the chip fit on one line of a wide
+   screen too: they may reach under the buttons in the corner, and are lower than a line below a name is, to be clear
+   of them with room between; on a board, whose name is higher than the buttons, as the line below it is there) */
+.panel-head .sub.with-choice { margin: 10px -34px 0 0; }
+.board-head .sub.with-choice { margin: 0.1em 0 0; }
 .choice { display: inline-flex; align-items: center; max-width: 100%; border: 1px solid var(--border); border-radius: 999px; background: var(--bg); color: var(--text); font-size: 0.96em; }
 .choice.chosen { border-color: var(--text); font-weight: 600; }
 .choice-open { display: inline-flex; align-items: center; gap: 0.35em; min-width: 0; padding: 0.2em 0.7em 0.2em 0.55em; border: 0; border-radius: 999px; background: none; color: inherit; font: inherit; cursor: pointer; }
@@ -634,6 +639,19 @@ button:focus-visible, select:focus-visible, .row:focus-visible, .panel:focus-vis
 .choice-open:focus-visible { outline: none; }
 .choice:has(.choice-open:focus-visible) { outline: 2px solid var(--accent); outline-offset: 2px; }
 .choice-clear { display: grid; place-items: center; width: 1.9em; height: 1.9em; margin-right: 0.15em; padding: 0; border: 0; border-radius: 50%; background: none; color: var(--text-muted); cursor: pointer; }
+
+/* The switch between the next departures of a stop and all its lines
+   (#255): two buttons in one pill, as high as the chip beside it, the one
+   shown filled as in the switches of the settings. */
+.view-switch { display: inline-flex; font-size: 0.96em; }
+.view-switch button { padding: 0.2em 0.75em; border: 1px solid var(--border); background: var(--bg); color: var(--text); font: inherit; white-space: nowrap; cursor: pointer; }
+.view-switch button + button { border-left: 0; }
+.view-switch button:first-child { border-radius: 999px 0 0 999px; padding-left: 0.9em; }
+.view-switch button:last-child { border-radius: 0 999px 999px 0; padding-right: 0.9em; }
+.view-switch button[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--bg); font-weight: 600; }
+.view-switch button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+/* (a focus ring in the head above everything else of the details, the buttons in their corner and what they say among it) */
+.panel-head :focus-visible, .panel-head .choice:has(.choice-open:focus-visible) { position: relative; z-index: 4; }
 
 /* The sign of a direction: its line as the map draws its vehicle, a disc in
    the colour of its kind with the arrowhead to where it leaves the stop,
@@ -797,6 +815,28 @@ button:focus-visible, select:focus-visible, .row:focus-visible, .panel:focus-vis
 @media (hover: hover) {
   .to-line:hover .badge { outline: 2px solid var(--accent); outline-offset: 2px; }
 }
+
+/* All lines of a stop (#255): the badge of each, which leads to it, beside
+   its ways, as wide as the widest badge of its kind (a grid of its own for
+   each kind, which the line's two parts take their columns from). A way is
+   a departure row without its badge; one with no departure soon says so
+   where the time stands, as small as a platform, and opens nothing. */
+.line-rows { list-style: none; margin: 0; padding: 4px 0; display: grid; grid-template-columns: max-content minmax(0, 1fr); }
+.line-rows > li { display: grid; grid-column: 1 / -1; grid-template-columns: subgrid; align-items: start; }
+.line-rows > li + li { margin-top: 4px; }
+.line-rows .to-line { justify-self: start; margin: 0; padding: 6px 10px 6px 14px; color: inherit; text-decoration: none; }
+.line-rows ul { list-style: none; margin: 0; padding: 0; min-width: 0; }
+.row.departure.by-line { padding-left: 0; grid-template-columns: var(--time-width) 30px minmax(0, 1fr) auto auto; }
+.row.departure.by-line.times-minutes { grid-template-columns: var(--minutes-width) 30px minmax(0, 1fr) auto auto; }
+.line-rows.signed .row.departure.by-line { grid-template-columns: var(--time-width) 45px minmax(0, 1fr) auto auto; }
+.line-rows.signed .row.departure.by-line.times-minutes { grid-template-columns: var(--minutes-width) 45px minmax(0, 1fr) auto auto; }
+.row.by-line .day { color: var(--text-muted); white-space: nowrap; }
+.row.departure.by-line.resting { grid-template-columns: calc(var(--time-width) + 38px) minmax(0, 1fr); cursor: default; }
+.row.departure.by-line.resting.times-minutes { grid-template-columns: calc(var(--minutes-width) + 38px) minmax(0, 1fr); }
+.line-rows.signed .row.departure.by-line.resting { grid-template-columns: calc(var(--time-width) + 53px) minmax(0, 1fr); }
+.line-rows.signed .row.departure.by-line.resting.times-minutes { grid-template-columns: calc(var(--minutes-width) + 53px) minmax(0, 1fr); }
+.row.resting:hover { background: none; }
+.row.resting .later { color: var(--text-muted); font-size: 12.5px; white-space: nowrap; text-decoration: none; }
 
 /* --time-chars: how many characters a clock time has at most in the visitor's language (app.js sets it) */
 .row { --time-width: calc(var(--time-chars, 5) * 1ch + 4px); --minutes-width: calc(var(--minutes-chars, 7) * 1ch + 4px); }
@@ -1129,7 +1169,7 @@ li:last-child > .row.stop .rail::before { bottom: 50%; }
   .panel .copied.favourited { top: 52px; right: 12px; }
   .panel.favourable .panel-head h1, .panel.favourable .panel-head h2 { padding-right: 74px; }
   .panel.favourable.boardable .panel-head h1, .panel.favourable.boardable .panel-head h2 { padding-right: 112px; }
-  .panel-head .notes { margin-right: 0; }
+  .panel-head .notes, .panel-head .sub.with-choice { margin-right: 0; }
   /* A sheet has little room: every note is one line there, cut where it does
      not fit. app.js makes a button of what is cut, and keeps all notes to a
      few lines (fitNotes). */

@@ -290,6 +290,11 @@ function addressed(asked) {
   return { type: named.type, found, path: named.type === 'stop' ? addressesNow().stationPath(found) : addressesNow().linePath(found) };
 }
 
+/** Every line of a station with its next departure each way (Timetable.linesAt, #255), each with the address of its page. */
+function linesOf(stationId, now) {
+  return timetable.linesAt(stationId, now, realtime.snapshot).map(({ index, ...line }) => ({ ...line, path: addressesNow().linePath(index) }));
+}
+
 /**
  * A stop or a line that the page opens, which it marks in its first request
  * for it (?open=1): a visit of its address (#158), with the title its page
@@ -333,7 +338,7 @@ function serveAddress(req, res, url) {
       const at = { language, texts: words, timeZone: timeZone(), now: Math.floor(Date.now() / 1000), fixed: readDisplay(url.search, MODES)?.fixed ?? false };
       if (named.type === 'stop') {
         const board = timetable.departures(timetable.stations[found].id, at.now, realtime.snapshot);
-        if (board) address.panel = panelHtml('stop', board, at);
+        if (board) address.panel = panelHtml('stop', { ...board, lines: linesOf(board.id, at.now) }, at);
       } else if (named.type === 'line') {
         address.panel = panelHtml('line', timetable.lineVehicles(found, vehicles().all), at);
       }
@@ -732,7 +737,9 @@ function handleApi(req, res, url) {
       visitOpened(req, res, url, stopPath(board.name, board.lat, board.lon), (language, words) => stopTitle(board.name, words));
       // (and what there is to choose from, where the page asks for it: once, as it does not change with the minute)
       const directions = url.searchParams.get('directions') === '1' ? { directions: timetable.directions(board.id) } : {};
-      return sendJson(req, res, 200, { now, ...board, ...directions });
+      // (and every line of it with its next departure each way, while the page shows them: of all, whatever is chosen, #255)
+      const lines = url.searchParams.get('list') === 'lines' ? { lines: linesOf(board.id, now) } : {};
+      return sendJson(req, res, 200, { now, ...board, ...directions, ...lines });
     }
 
     default:

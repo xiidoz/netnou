@@ -737,8 +737,8 @@ otherwise a server would load a file written by older code:
   works" is such a sheet too and closes when it is dragged down. All of
   this is plain pointer events in `app.js`.
 - **The lines of a stop to show** ([#164](https://github.com/xiidoz/netnou/issues/164)).
-  Beside "Departures" a chip says which lines the departures are of, all or
-  only those chosen, and opens a sheet to choose them in: the directions of
+  Beside the departures a chip says which lines they are of, all ("Filter",
+  #255) or only those chosen, and opens a sheet to choose them in: the directions of
   each line, where a direction is the line with the station it goes to next
   (`public/choice.js`), as the feed has no directions and the destinations of
   a line vary (the U1 has eleven at Nürnberg Plärrer). Each shows as the line
@@ -750,6 +750,24 @@ otherwise a server would load a file written by older code:
   further stop of a board shows all its lines. A screen on a wall
   (`display=fixed`) has no chip: it shows its stop as it was set up, at a
   platform the departures from that platform.
+- **All lines of a stop** ([#255](https://github.com/xiidoz/netnou/issues/255)).
+  A switch below the name shows either the next departures, by when they
+  leave, or all lines of the stop, by kind and name, each beside its ways
+  with the next departure each way. A way is a direction as for choosing
+  (#164), named by where most of its trips go from here; the directions of
+  a line with the same name are one way, as the RE1 leaves Nürnberg Hbf for
+  München by six next stations. A way with no departure within 24 hours
+  says so where the time stands: night buses on a weekday, replacement
+  buses, trains to a stadium. The badge of a line leads to it, a link to
+  its page that the page opens in its details. The server works the ways
+  and their departures out of a day's departures of the station
+  (`Timetable.linesAt`, a few milliseconds at the busiest), only while the
+  page shows them (`/api/departures?list=lines`), and writes them into the
+  page of the stop behind the switch, so that a search engine finds the
+  lines as links. The chip beside the departures says "Filter" while every
+  line is shown, as "All lines" is the switch beside it, and chooses among
+  the departures only: the list of all lines shows them all. A board and a
+  screen on a wall have no switch.
 - **The board of a stop.** A button beside the share button enlarges the
   details of a stop into a board of its departures
   ([#81](https://github.com/xiidoz/netnou/issues/81)), the same on every

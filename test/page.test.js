@@ -464,15 +464,24 @@ test('a page the server does not find its places in is no page', () => {
 // of the page.
 test('the page of a stop or a line has its details in it as they are, with their name as its main heading', () => {
   const now = Date.parse('2026-10-23T10:00:00Z') / 1000;
-  const board = { name: 'Plärrer', departures: [{ trip: 'T1_20261023', line: 'U1', mode: 'subway', to: 'Langwasser Süd', planned: now + 240, delay: 60, platform: '2', cancelled: false, warnings: [] }] };
+  const departure = { trip: 'T1_20261023', line: 'U1', mode: 'subway', to: 'Langwasser Süd', planned: now + 240, delay: 60, platform: '2', cancelled: false, warnings: [] };
+  const lines = [{ name: 'U1', mode: 'subway', agency: 'VAG', at: [49.45, 11.07], path: 'line/vag/subway/u1', ways: [{ to: 'Langwasser Süd', departure }] }];
+  const board = { name: 'Plärrer', departures: [departure], lines };
   const at = { language: 'de', texts: de, timeZone: 'Europe/Berlin', now };
   const stop = panelHtml('stop', board, at);
-  assert.ok(stop.head.startsWith('<div class="panel-head"><h1>Plärrer</h1><p class="sub with-choice"><span>Abfahrten</span><span class="choice"><button type="button" class="choice-open" aria-label="Alle Linien"'));
+  assert.ok(stop.head.startsWith('<div class="panel-head"><h1>Plärrer</h1><p class="sub with-choice"><span class="view-switch" role="group" aria-label="Ansicht"><button type="button" aria-pressed="true" data-view="departures">Nächste Abfahrten</button><button type="button" aria-pressed="false" data-view="lines">Alle Linien</button></span><span class="choice"><button type="button" class="choice-open" aria-label="Filter"'));
   // the times as the page shows them until the visitor chooses otherwise, both: the time of day where the area is, and the minutes
   assert.equal(stop.body, '<ul class="rows"><li><button type="button" class="row departure times-both" data-trip="T1_20261023"><span class="time">12:04</span><span class="delay" data-delay="ok">+1</span><span class="badge" data-mode="subway">U1</span><span class="name" title="Langwasser Süd">Langwasser Süd</span><span class="platform">Gl. 2</span>'
-    + `<span class="minutes" data-leaves="${now + 300}" data-planned="${now + 240}" data-far="none">5 min</span></button></li></ul>`);
-  // a screen on a wall set up for one purpose has no chip
-  assert.equal(panelHtml('stop', board, { ...at, fixed: true }).head, '<div class="panel-head"><h1>Plärrer</h1><p class="sub">Abfahrten</p></div>');
+    + `<span class="minutes" data-leaves="${now + 300}" data-planned="${now + 240}" data-far="none">5 min</span></button></li></ul>`
+    // and behind the switch all its lines, each a link to its page (#255)
+    + '<div class="view-lines" hidden><ul class="line-rows"><li><a class="to-line" href="line/vag/subway/u1" aria-label="Zur Linie U1" title="Zur Linie U1" data-line="{&#34;name&#34;:&#34;U1&#34;,&#34;mode&#34;:&#34;subway&#34;,&#34;agency&#34;:&#34;VAG&#34;,&#34;at&#34;:[49.45,11.07]}">'
+    + '<span class="badge" data-mode="subway">U1<svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M8.59,16.58L13.17,12L8.59,7.41L10,6L16,12L10,18L8.59,16.58Z"></path></svg></span></a>'
+    + '<ul><li><button type="button" class="row departure times-both by-line" data-trip="T1_20261023"><span class="time">12:04</span><span class="delay" data-delay="ok">+1</span><span class="name" title="Langwasser Süd">Langwasser Süd</span><span class="platform">Gl. 2</span>'
+    + `<span class="minutes" data-leaves="${now + 300}" data-planned="${now + 240}" data-far="none">5 min</span></button></li></ul></li></ul></div>`);
+  // a screen on a wall set up for one purpose has neither switch nor chip, nor the lines
+  const fixed = panelHtml('stop', board, { ...at, fixed: true });
+  assert.equal(fixed.head, '<div class="panel-head"><h1>Plärrer</h1><p class="sub">Abfahrten</p></div>');
+  assert.ok(!fixed.body.includes('view-lines'));
   const line = panelHtml('line', { name: 'U1', mode: 'subway', agency: 'VAG', vehicles: [{ id: 'T1_20261023', to: 'Langwasser Süd', next: 'Opernhaus', delay: null, warnings: [] }] }, at);
   assert.equal(line.head, '<div class="panel-head"><h1><span class="badge" data-mode="subway">U1</span><span>U-Bahn</span></h1><p class="sub">VAG · 1 Fahrzeug unterwegs</p></div>');
 

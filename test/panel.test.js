@@ -6,7 +6,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { t as translate } from '../public/i18n.js';
 import en from '../public/locales/en.js';
-import { badge, choiceChip, delayClass, delayText, departureLists, directionSign, h, lineHead, panelHead, toHtml, vehicleLists } from '../public/panel.js';
+import { badge, choiceChip, delayClass, delayText, departureLists, departuresSub, directionSign, h, lineHead, lineLists, panelHead, toHtml, vehicleLists } from '../public/panel.js';
 
 const NOW = Date.parse('2026-10-23T10:00:00Z') / 1000;
 // (times of day and dates in UTC, so that the test reads the same anywhere)
@@ -73,11 +73,19 @@ test('where the next day begins among the departures, a line says so between two
   assert.deepEqual(parts.map((node) => node.children.length), [1, 1, 2]);
 });
 
-test('the head of the details has the name as the main heading, and the chip of the lines to show', () => {
+test('the head of the details has the name as the main heading, the switch between the departures and the lines, and the chip of the lines to show', () => {
   const context = drawing();
   assert.equal(toHtml(panelHead('Plärrer', h('p', { class: 'sub' }, 'Departures'))), '<div class="panel-head"><h1>Plärrer</h1><p class="sub">Departures</p></div>');
-  // every line
-  assert.match(toHtml(choiceChip([], context)), /^<span class="choice"><button type="button" class="choice-open" aria-label="All lines" aria-haspopup="dialog" title="Which departures\?"><svg class="icon" [^>]*><path d="[^"]+"><\/path><\/svg><span>All lines<\/span><\/button><\/span>$/);
+  // every line: "Filter", as "All lines" is the list beside it (#255)
+  const all = choiceChip([], context);
+  assert.match(toHtml(all), /^<span class="choice"><button type="button" class="choice-open" aria-label="Filter" aria-haspopup="dialog" title="Which departures\?"><svg class="icon" [^>]*><path d="[^"]+"><\/path><\/svg><span>Filter<\/span><\/button><\/span>$/);
+  // the switch, with the chip beside the departures and none beside all lines
+  const views = (view) => `<span class="view-switch" role="group" aria-label="View"><button type="button" aria-pressed="${view === 'departures'}" data-view="departures">Next departures</button><button type="button" aria-pressed="${view === 'lines'}" data-view="lines">All lines</button></span>`;
+  assert.equal(toHtml(departuresSub('departures', all, context)), `<p class="sub with-choice">${views('departures')}${toHtml(all)}</p>`);
+  assert.equal(toHtml(departuresSub('lines', all, context)), `<p class="sub with-choice">${views('lines')}</p>`);
+  // a board has no switch, and a screen on a wall not even the chip
+  assert.equal(toHtml(departuresSub(null, all, context)), `<p class="sub with-choice"><span>Departures</span>${toHtml(all)}</p>`);
+  assert.equal(toHtml(departuresSub(null, null, context)), '<p class="sub">Departures</p>');
   // one direction: its sign and its name, and the cross that shows all again
   const one = toHtml(choiceChip([{ line: 'U1', mode: 'subway', heading: 61, name: 'Langwasser Süd' }], context));
   assert.match(one, /^<span class="choice chosen"><button [^>]*aria-label="Only U1 Langwasser Süd"/);
@@ -88,6 +96,33 @@ test('the head of the details has the name as the main heading, and the chip of 
   assert.ok(five.includes('<span>+1</span>'));
   // a long name of a line narrower, as on the map
   assert.ok(toHtml(directionSign({ line: 'N10A', mode: 'bus' })).includes('<text y="3.2" text-anchor="middle" textLength="17" lengthAdjust="spacingAndGlyphs">N10A</text>'));
+});
+
+test('all lines of a stop: the badge of each leading to it, beside its ways with their next departures, under their kinds (#255)', () => {
+  const u1 = { name: 'U1', mode: 'subway', agency: 'VAG', at: [49.45, 11.07], path: 'line/vag/subway/u1', ways: [
+    { to: 'Langwasser Süd', departure: departure(4, { delay: 120, to: 'Messe' }) },
+    { to: 'Fürth Hardhöhe', departure: null },
+  ] };
+  const tram = { name: '4', mode: 'tram', agency: 'VAG', at: [49.44, 11.06], path: 'line/vag/tram/4', ways: [{ to: 'Gibitzenhof', departure: departure(20 * 60, { line: 'x', mode: 'bus', to: 'Gibitzenhof', platform: '3' }) }] };
+  const out = html(lineLists({ lines: [u1, tram] }, drawing('both')));
+  // the badge is a link to the line's page, which the page opens itself by what data-line says
+  assert.ok(out.startsWith(`<h3 class="rows-head">${en['mode.subway']}</h3><ul class="line-rows"><li><a class="to-line" href="line/vag/subway/u1" aria-label="To line U1" title="To line U1" data-line="{&#34;name&#34;:&#34;U1&#34;,&#34;mode&#34;:&#34;subway&#34;,&#34;agency&#34;:&#34;VAG&#34;,&#34;at&#34;:[49.45,11.07]}"><span class="badge" data-mode="subway">U1<svg class="icon"`));
+  // a way: its next departure as a row without the badge, which opens its trip, going where that trip goes
+  assert.ok(out.includes(`<ul><li><button type="button" class="row departure times-both by-line" data-trip="T4_20261023"><span class="time">10:04</span><span class="delay" data-delay="minor">+2</span><span class="name" title="Messe">Messe</span><span class="platform"></span><span class="minutes" data-leaves="${NOW + 6 * 60}"`));
+  // one with no departure in the next 24 hours: in short where the time stands, in full under a mouse; it opens nothing
+  assert.ok(out.includes(`<li><div class="row departure times-both by-line resting"><abbr class="later" title="${en['lines.laterLong']}">${en['lines.later']}</abbr><span class="name" title="Fürth Hardhöhe">Fürth Hardhöhe</span></div></li></ul></li></ul>`));
+  // of another day: it says so where the minutes stand; and the kind and name are the line's
+  assert.ok(out.includes(`<h3 class="rows-head">${en['mode.tram']}</h3><ul class="line-rows"><li><a class="to-line" href="line/vag/tram/4"`));
+  assert.ok(out.includes(`<span class="time">06:00</span><span class="delay" data-delay="none"></span><span class="name" title="Gibitzenhof">Gibitzenhof</span><span class="platform">Plat. 3</span><span class="day">${en['departures.tomorrow']}</span></button>`));
+  // of one kind only, no heading; in minutes, the minutes where the time stands; none at all, as the departures say it
+  const minutes = html(lineLists({ lines: [u1] }, drawing('minutes')));
+  assert.ok(minutes.startsWith('<ul class="line-rows"><li>'));
+  assert.ok(minutes.includes(`<button type="button" class="row departure times-minutes by-line" data-trip="T4_20261023"><span class="minutes" data-leaves="${NOW + 6 * 60}" data-planned="${NOW + 4 * 60}" data-far="time">6 min</span>`));
+  assert.ok(minutes.includes('<div class="row departure times-minutes by-line resting">'));
+  assert.equal(html(lineLists({ lines: [] }, drawing())), `<p class="panel-empty">${en['departures.none']}</p>`);
+  // a list with a train that has something wrong with it keeps the place of the sign in every row
+  const warned = { ...u1, ways: [{ to: 'Langwasser Süd', departure: departure(4, { warnings: [{ title: null, text: 'Signal failure', severity: 'warning' }] }) }] };
+  assert.ok(html(lineLists({ lines: [warned, tram] }, drawing())).includes('<ul class="line-rows signed">'));
 });
 
 test('the vehicles of a line under way, under where they go, each opening its trip', () => {

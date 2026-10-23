@@ -28,6 +28,9 @@ delay put it. It can be a little ahead of or behind its marker.
 - **Zoom in and tap a stop** for its next departures with their delays: will
   you still make it?
 - **Tap a departure** for its whole trip, with its vehicle marked on the map.
+- **See all lines** of a stop, each with its next departure in every
+  direction, also a night bus that runs only at weekends. Tap a line to see
+  its vehicles.
 - **Search** for a town, a stop or a line. A line then shows only its own
   vehicles, all of them at a glance.
 - **Tap the heart** to make a stop or a line a favourite. Favourites come
@@ -38,7 +41,7 @@ delay put it. It can be a little ahead of or behind its marker.
   bus is right now.
 - **Show the departures as a board**, in large type for a screen on the wall,
   with up to four stops.
-- **Choose the lines and directions** of a stop with the chip beside its
+- **Choose the lines and directions** of a stop with the filter beside its
   departures, for example only the trains into town: the board keeps them in
   its address, and a favourite stop opens with them.
 

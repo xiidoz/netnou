@@ -1379,22 +1379,83 @@ export class Timetable extends Schedule {
       lat: this.stops.lat[station],
       lon: this.stops.lon[station],
       notes: realtime?.notesOfStation(station) ?? [],
-      departures: found.map(({ t, p, date, planned, delay, cancelled }) => {
-        const route = this.tripRoute[t];
-        return {
-          trip: `${this.tripId(t)}_${date}`,
-          line: this.lineName(route),
-          mode: this.routeModes[route],
-          to: this.headsignAt(t, p),
-          platform: this.stops.platform[this.patternStops[this.patternStart[this.tripPattern[t]] + p]],
-          planned,
-          delay,
-          cancelled,
-          // What is wrong with the trip right now, for a list that marks such a departure.
-          warnings: realtime?.warningsOfTrip(t) ?? [],
-        };
-      }),
+      departures: found.map((leaves) => this.departureOf(leaves, realtime)),
     };
+  }
+
+  /** A departure as the board lists it, from what leaving() found. */
+  departureOf({ t, p, date, planned, delay, cancelled }, realtime) {
+    const route = this.tripRoute[t];
+    return {
+      trip: `${this.tripId(t)}_${date}`,
+      line: this.lineName(route),
+      mode: this.routeModes[route],
+      to: this.headsignAt(t, p),
+      platform: this.stops.platform[this.patternStops[this.patternStart[this.tripPattern[t]] + p]],
+      planned,
+      delay,
+      cancelled,
+      // What is wrong with the trip right now, for a list that marks such a departure.
+      warnings: realtime?.warningsOfTrip(t) ?? [],
+    };
+  }
+
+  /**
+   * Every line that leaves a station, with each way it goes from there and
+   * when it next leaves that way (#255). The ways are those of directions():
+   * by the next station of its trips, named by the destination most of them
+   * have here; those of a line with the same name are one, as a train that
+   * leaves for one place by several next stops goes there all the same. Of
+   * each, the next departure of the next `windowS` seconds that runs, or none.
+   * @returns [{ index, name, mode, agency, at, ways: [{ to, departure }] }]:
+   *   `index` is the number of the line (its address, Addresses.linePath), `at`
+   *   its place; by kind, then by line as names of lines are sorted, the
+   *   busier way first; null for an unknown station
+   */
+  linesAt(stationId, now, realtime, { windowS = 86_400 } = {}) {
+    const station = this.stopIndex.get(stationId);
+    if (station === undefined) return null;
+    // (each line and its ways by their next station, with how many trips go which way)
+    const found = new Map(); // line number → Map(next station → { trips, to })
+    for (let visit = this.visitStart[station]; visit < this.visitStart[station + 1]; visit++) {
+      const pattern = this.visitPattern[visit];
+      const p = this.visitPosition[visit];
+      const next = this.nextStation(pattern, p);
+      if (next < 0) continue; // (its end: nothing leaves)
+      for (let k = this.patternFirst[pattern]; k < this.patternFirst[pattern + 1]; k++) {
+        const t = this.tripsOfPattern[k];
+        const ways = found.get(this.tripLine[t]) ?? found.set(this.tripLine[t], new Map()).get(this.tripLine[t]);
+        const way = ways.get(this.stationOf[next]) ?? ways.set(this.stationOf[next], { trips: 0, to: new Map() }).get(this.stationOf[next]);
+        way.trips++;
+        const to = this.headsignAt(t, p);
+        way.to.set(to, (way.to.get(to) ?? 0) + 1);
+      }
+    }
+    const lines = [];
+    const wayOf = new Map(); // `${line number} ${next station}` → the way it is listed in
+    for (const [index, byNext] of found) {
+      const ways = [];
+      for (const [next, { trips, to }] of [...byNext].sort((a, b) => b[1].trips - a[1].trips)) {
+        const name = [...to].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))[0][0];
+        const way = ways.find((other) => other.to === name) ?? ways[ways.push({ to: name, trips, departure: null }) - 1];
+        wayOf.set(`${index} ${next}`, way);
+      }
+      const { name, mode, agency, place } = this.lines[index];
+      lines.push({ index, name, mode, agency, at: place, ways });
+    }
+    // the next departure each way, of those that run
+    let open = lines.reduce((sum, line) => sum + line.ways.length, 0);
+    for (const leaves of this.leaving(station, now, realtime, windowS)) {
+      if (leaves.cancelled) continue;
+      const next = this.nextStation(this.tripPattern[leaves.t], leaves.p);
+      const way = wayOf.get(`${this.tripLine[leaves.t]} ${this.stationOf[next]}`);
+      if (!way || way.departure) continue;
+      way.departure = this.departureOf(leaves, realtime);
+      if (--open === 0) break;
+    }
+    return lines
+      .sort((a, b) => MODES.indexOf(a.mode) - MODES.indexOf(b.mode) || a.name.localeCompare(b.name, undefined, { numeric: true }) || (a.agency ?? '').localeCompare(b.agency ?? ''))
+      .map(({ ways, ...line }) => ({ ...line, ways: ways.map(({ to, departure }) => ({ to, departure })) }));
   }
 
   /**
