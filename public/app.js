@@ -170,7 +170,7 @@ function toDom(node, svg = false) {
  * line as on the map, whether delays come in and how the vehicles are coloured and flagged.
  */
 function drawing() {
-  return { t, time: formatTime, day: dayOf, now: now(), times: state.times, live: realtimeState() === 'live', colorBy: state.colorBy, flags: state.flags };
+  return { t, time: formatTime, day: dayOf, now: now(), times: state.times, live: realtimeState() === 'live', colorBy: state.colorBy, flags: state.flags, moving: true };
 }
 
 // The icons on the page's own buttons are from Material Design Icons
@@ -1484,19 +1484,20 @@ let framePending = false;
 // The vehicles on the stops of a line (lineStops in panel.js) move along
 // their tracks with the frames too, between two answers of the server: one
 // every FRAME_MS while they are shown, whatever the map needs. Once a
-// second, they would move by steps that a sharp screen shows.
+// second, they would move by steps that a sharp screen shows. Each is a
+// button on a layer of its own, placed by a transform (style.css).
 let lastLineMove = 0;
-const lineTracks = new WeakMap(); // a vehicle's node → its track, read once
+const lineTracks = new WeakMap(); // a vehicle's node → its track, read once: [time, x, y, …]
 const lineVehicles = () => (panel.hidden ? [] : panel.querySelectorAll('.line-vehicle[data-track]'));
 
 function moveLineVehicles(nodes) {
   lastLineMove = performance.now();
   const at = now();
   for (const node of nodes) {
-    if (!lineTracks.has(node)) lineTracks.set(node, node.dataset.track.split(',').map(Number));
+    if (!lineTracks.has(node)) lineTracks.set(node, node.dataset.track ? node.dataset.track.split(',').map(Number) : [0, ...node.dataset.at.split(',').map(Number)]);
     const [x, y] = trackAt(lineTracks.get(node), at);
-    const transform = `translate(${x.toFixed(2)} ${y.toFixed(2)})`;
-    if (node.getAttribute('transform') !== transform) node.setAttribute('transform', transform);
+    const transform = `translate(${x.toFixed(2)}px, ${y.toFixed(2)}px)`;
+    if (node.style.transform !== transform) node.style.transform = transform;
   }
 }
 
@@ -2754,7 +2755,7 @@ function showSelection(first = false) {
 map.on('resize', () => showSelection());
 
 // (what in the lists of the panel can have the keyboard focus, which it gets back once they are built anew: rows, the badges of lines, the vehicles of a line)
-const FOCUSED_IN_BODY = 'button.row, a.row, a.to-line, [data-trip][tabindex]';
+const FOCUSED_IN_BODY = 'button.row, a.row, a.to-line, button.line-vehicle';
 
 /**
  * Replaces what the panel shows: its head, which stays, and what scrolls
@@ -2865,14 +2866,6 @@ function showSaid(sign) {
   saidTip.style.transform = `translate(${Math.round(x)}px, ${Math.round(y)}px)`;
 }
 
-// The vehicles on the stops of a line are drawn, not buttons (lineStops in
-// panel.js): Enter and the space bar open their trips as a click does.
-panel.addEventListener('keydown', (event) => {
-  const vehicle = event.target.closest?.('[data-trip][role="button"]');
-  if (!vehicle || (event.key !== 'Enter' && event.key !== ' ')) return;
-  event.preventDefault();
-  select('trip', vehicle.dataset.trip, { fit: 'unseen' });
-});
 
 panel.addEventListener('pointerover', (event) => {
   const sign = hovering.matches ? event.target.closest('.sign[data-said]') : null;
@@ -3156,7 +3149,8 @@ function renderLine(line, first) {
   const way = Math.min(selection.way ?? 0, Math.max(0, (line.ways?.length ?? 1) - 1));
   fillPanel([toDom(lineHead(line, drawn, way))], ...lineStops(line, drawn, way).map((node) => toDom(node)));
   panelBody.scrollTop = scrollTop;
-  // (its vehicles move with the frames from now on)
+  // (its vehicles in their places at once, and moving with the frames from now on)
+  moveLineVehicles(panelBody.querySelectorAll('.line-vehicle'));
   nextFrame();
 
   // Once, when the line is chosen: where it runs into view, between the

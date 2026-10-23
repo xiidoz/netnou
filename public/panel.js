@@ -364,9 +364,12 @@ export function lineHead(line, { t }, way = null) {
  * beside them. Its vehicles under way on that line where they are, as the
  * map draws them, with their flags; each opens its trip.
  * @param line as api/line answers, with `ways` (Timetable.lineStops)
- * @param context { t, live, colorBy, flags }: whether delays are coming in
- *   (for the question mark of a flag), and the map's settings for the colour
- *   of a vehicle and its flag
+ * @param context { t, live, colorBy, flags, moving }: whether delays are
+ *   coming in (for the question mark of a flag), the map's settings for the
+ *   colour of a vehicle and its flag, and whether the page moves the
+ *   vehicles: then each is a button of its own, which the page places and
+ *   moves (app.js); else they are drawn in their places, as the page sent
+ *   has them
  */
 export function lineStops(line, context, way = 0) {
   const { t } = context;
@@ -415,17 +418,19 @@ export function lineStops(line, context, way = 0) {
     const mids = inBranches[v.branch];
     return i < 0 ? [LINE_X, middles[after]] : i >= mids.length ? [LINE_X, middles[before]] : [BRANCH_X, mids[i]];
   };
-  // (and where they will be when, from their tracks, for the page to move them by itself: tickTimes in app.js)
+  // (and where they will be when, from their tracks, for the page to move them by itself: app.js)
   const vehicles = one.vehicles.map((v) => {
     const track = (v.track ?? []).flatMap((value, k) => (k % 2 === 0 ? [value] : at(v, value).map((px) => Math.round(px * 10) / 10)));
     const [x0, y0] = at(v, v.from);
     const [x1, y1] = at(v, v.until);
     const [x, y] = track.length ? trackAt(track, context.now) : [x0 + (x1 - x0) * v.come, y0 + (y1 - y0) * v.come];
-    return lineVehicle(line, v, x, y, context, track);
+    return (context.moving ? movingVehicle : lineVehicle)(line, v, x, y, context, track);
   });
-  return [h('div', { class: 'line-body' },
-    h('ul', { class: 'line-stops', 'data-mode': kindOf(line.mode) }, items),
-    vehicles.length ? h('svg', { class: 'line-vehicles', height: Math.round(y + STOPS_TOP) }, vehicles) : null)];
+  const list = h('ul', { class: 'line-stops', 'data-mode': kindOf(line.mode) }, items);
+  if (!vehicles.length) return [h('div', { class: 'line-body' }, list)];
+  return [h('div', { class: 'line-body' }, list, context.moving
+    ? h('div', { class: 'line-vehicles' }, vehicles)
+    : h('svg', { class: 'line-vehicles', height: Math.round(y + STOPS_TOP) }, vehicles))];
 }
 
 /**
@@ -443,17 +448,24 @@ export function trackAt(track, now) {
   return [track[track.length - 2], track[track.length - 1]];
 }
 
-/** A vehicle on the line of the stops (lineStops), as the map draws it: a button that opens its trip, with its track in px for the page. */
-function lineVehicle(line, v, x, y, { t, live = false, colorBy = 'mode', flags = true }, track = []) {
+/**
+ * The sign of a vehicle on the stops of a line, as the map draws it, around
+ * the middle of its disc: its parts, what it is called, and what its
+ * colour goes by.
+ */
+function vehicleSign(line, v, { t, live = false, colorBy = 'mode', flags = true }) {
   const label = vehicleLabel(line.name);
   const font = label.length > 3 ? 8 : label.length > 2 ? 9.5 : 11;
   // (no flag where the colour says the delay, nor where the visitor switched them off, as on the map)
   const flag = colorBy === 'mode' && flags ? delayFlag(v.delay, live) : null;
   const width = flag ? (flag.text === '?' ? 12 : flag.text.length * 5.4 + 6) : 0;
-  const said = [line.name, t('line.to', { destination: v.to }), delayText(v.delay)].filter(Boolean).join(' ');
-  return h('g', { class: 'line-vehicle', transform: `translate(${x.toFixed(1)} ${y.toFixed(1)})`, 'data-trip': v.id, role: 'button', tabindex: '0', 'aria-label': said,
-    'data-mode': kindOf(line.mode), 'data-delay': colorBy === 'delay' ? delayClass(v.delay) : null, 'data-track': track.length ? track.join(',') : null },
-    h('rect', { class: 'hit', x: -18, y: -18, width: 36, height: 36, rx: 18 }),
+  const attrs = {
+    'data-trip': v.id,
+    'aria-label': [line.name, t('line.to', { destination: v.to }), delayText(v.delay)].filter(Boolean).join(' '),
+    'data-mode': kindOf(line.mode),
+    'data-delay': colorBy === 'delay' ? delayClass(v.delay) : null,
+  };
+  const parts = [
     h('path', { d: ARROW_DOWN }),
     h('circle', { r: VEHICLE_R }),
     h('text', { y: (font * 0.36).toFixed(1), 'font-size': font }, label),
@@ -461,5 +473,31 @@ function lineVehicle(line, v, x, y, { t, live = false, colorBy = 'mode', flags =
       h('rect', { width: width.toFixed(1), height: 12, rx: 4 }),
       h('text', { x: (width / 2).toFixed(1), y: 9 }, flag.text)) : null,
     // (the ring of the keyboard focus, last, round all of it: its arrowhead and its flag inside)
-    h('rect', { class: 'ring', x: -19, y: -21, width: (19 + Math.max(19, VEHICLE_R * 0.55 + width + 3)).toFixed(1), height: 42, rx: 10 }));
+    h('rect', { class: 'ring', x: -19, y: -21, width: (19 + Math.max(19, VEHICLE_R * 0.55 + width + 3)).toFixed(1), height: 42, rx: 10 }),
+  ];
+  return { attrs, parts };
+}
+
+/** A vehicle on the line of the stops (lineStops) in its place, as the page sent has it: a button drawn there, with its track in px. */
+function lineVehicle(line, v, x, y, context, track = []) {
+  const { attrs, parts } = vehicleSign(line, v, context);
+  return h('g', { class: 'line-vehicle', transform: `translate(${x.toFixed(1)} ${y.toFixed(1)})`, 'data-trip': v.id, role: 'button', tabindex: '0', ...attrs, 'data-track': track.length ? track.join(',') : null },
+    h('rect', { class: 'hit', x: -18, y: -18, width: 36, height: 36, rx: 18 }), parts);
+}
+
+// The box of the sign of a vehicle that the page moves, in px: the middle of
+// its disc this far from its left and its top, its flag and the ring of the
+// keyboard focus inside.
+const SIGN = { left: 22, top: 22, width: 54, height: 44 };
+
+/**
+ * A vehicle on the line of the stops (lineStops) that the page moves: a
+ * button of its own, with where it is (data-at) and its track in px. A sharp
+ * screen draws a drawing moved by a fraction of a pixel a whole pixel on,
+ * now and then; a layer of its own it moves smoothly (style.css).
+ */
+function movingVehicle(line, v, x, y, context, track = []) {
+  const { attrs, parts } = vehicleSign(line, v, context);
+  return h('button', { type: 'button', class: 'line-vehicle', ...attrs, 'data-at': `${x.toFixed(1)},${y.toFixed(1)}`, 'data-track': track.length ? track.join(',') : null },
+    h('svg', { viewBox: `${-SIGN.left} ${-SIGN.top} ${SIGN.width} ${SIGN.height}`, width: SIGN.width, height: SIGN.height, 'aria-hidden': 'true' }, parts));
 }

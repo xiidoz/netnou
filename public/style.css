@@ -837,7 +837,14 @@ button:focus-visible, select:focus-visible, .row:focus-visible, .panel:focus-vis
 /* The vehicles on it, as the map draws them (lineVehicle in panel.js): in
    the colour of their kind, or of their delay where the map has them so,
    with white edges and the flag of their delay. */
-.line-vehicles { position: absolute; left: 0; top: 0; width: 100%; overflow: visible; pointer-events: none; }
+svg.line-vehicles { position: absolute; left: 0; top: 0; width: 100%; overflow: visible; pointer-events: none; }
+/* (in the page, each a button on a layer of its own, which it moves by a transform from the top left of the list:
+   smoothly, by fractions of a pixel, where a drawing moved so would go by whole pixels; SIGN in panel.js) */
+div.line-vehicles { position: absolute; left: 0; top: 0; }
+button.line-vehicle { position: absolute; left: -22px; top: -22px; width: 54px; height: 44px; padding: 0; border: 0; background: none; will-change: transform; }
+button.line-vehicle svg { display: block; overflow: visible; }
+/* (one with the keyboard focus above the others, its ring with it) */
+button.line-vehicle:focus-visible { z-index: 1; }
 .line-vehicle { pointer-events: auto; cursor: pointer; --sign: var(--mode-other); }
 .line-vehicle[data-mode="subway"] { --sign: var(--mode-subway); }
 .line-vehicle[data-mode="tram"] { --sign: var(--mode-tram); }
