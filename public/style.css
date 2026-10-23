@@ -622,8 +622,11 @@ button:focus-visible, select:focus-visible, .row:focus-visible, .panel:focus-vis
    all or only those chosen, and opens the sheet to choose them; its cross
    shows all again. Sizes in em, so that it grows with a board. */
 .panel-head .sub.with-choice { display: flex; flex-wrap: wrap; align-items: center; gap: 0.3em 0.6em; }
-/* (out to the edge the rows below end at, as the notes: the buttons in the corner are above it, and the switch and the chip fit on one line of a wide screen too) */
-.panel-head .sub.with-choice { margin-right: -34px; }
+/* (out to the edge the rows below end at, as the notes, so that the switch and the chip fit on one line of a wide
+   screen too: they may reach under the buttons in the corner, and are lower than a line below a name is, to be clear
+   of them with room between; on a board, whose name is higher than the buttons, as the line below it is there) */
+.panel-head .sub.with-choice { margin: 10px -34px 0 0; }
+.board-head .sub.with-choice { margin: 0.1em 0 0; }
 .choice { display: inline-flex; align-items: center; max-width: 100%; border: 1px solid var(--border); border-radius: 999px; background: var(--bg); color: var(--text); font-size: 0.96em; }
 .choice.chosen { border-color: var(--text); font-weight: 600; }
 .choice-open { display: inline-flex; align-items: center; gap: 0.35em; min-width: 0; padding: 0.2em 0.7em 0.2em 0.55em; border: 0; border-radius: 999px; background: none; color: inherit; font: inherit; cursor: pointer; }
