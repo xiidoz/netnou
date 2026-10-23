@@ -9,6 +9,7 @@ import { test } from 'node:test';
 import vm from 'node:vm';
 import { ATTRIBUTES, LANGUAGES, READMES, dayOf, formatNumber, formatTime, loadLanguage, pageTexts, pickLanguage, sentInAnother, setTimeZone, t } from '../public/i18n.js';
 import en from '../public/locales/en.js';
+import { tomorrowAt as nextDayAt } from '../public/panel.js';
 import { PAGE_INLINE, PAGE_MODULES } from '../server/lib/page.js';
 import { MODES } from '../server/lib/timetable.js';
 
@@ -204,8 +205,10 @@ test('every key in use has a text and every text is in use', () => {
   for (const name of ['index.js', 'lib/addresses.js']) {
     for (const [, key] of withoutComments(fs.readFileSync(new URL(`../server/${name}`, import.meta.url), 'utf8')).matchAll(/\bt\(\s*'([^']+)'/g)) used.add(key);
   }
-  // In app.js the key of every text can be read off the call.
-  for (const [call] of withoutComments(read('app.js')).matchAll(/\bt\([^)]{0,30}/g)) assert.match(call, /^t\(\s*['`]/, `app.js: ${call}… – a key this test cannot read`);
+  // In app.js and panel.js the key of every text can be read off the call.
+  for (const name of ['app.js', 'panel.js']) {
+    for (const [call] of withoutComments(read(name)).matchAll(/\bt\([^)]{0,30}/g)) assert.match(call, /^t\(\s*['`]/, `${name}: ${call}… – a key this test cannot read`);
+  }
   for (const [, key] of read('index.html').matchAll(/\sdata-i18n(?:-[a-z-]+)?="([^"]*)"/g)) used.add(key);
 
   for (const key of used) assert.ok(key in en, `${key} is used but has no text in locales/en.js`);
@@ -585,14 +588,13 @@ test('texts with placeholders and plural forms, numbers and times in the languag
   assert.equal(formatTime(0), '01:00');
 });
 
-// The line "tomorrow" in a list of departures, where tomorrowAt in app.js
-// puts it, run as it is written there. The list is in the order they leave:
+// The line "tomorrow" in a list of departures, where tomorrowAt in panel.js
+// puts it. The list is in the order they leave:
 // after midnight a train of the day before that leaves late is among those
 // of today, and the next day begins with the first planned for it (#193).
 test('the next day begins with the first departure planned for it, not with a late one of the day before', () => {
-  const source = /^function tomorrowAt\(departures\) \{$[\s\S]*?^\}$/m.exec(read('app.js'))[0];
   const at = (time) => Date.parse(time) / 1000;
-  const tomorrowAt = (time, planned) => vm.runInNewContext(`${source}\ntomorrowAt(departures);`, { dayOf, now: () => at(time), departures: planned.map((when) => ({ planned: at(when) })) });
+  const tomorrowAt = (time, planned) => nextDayAt(planned.map((when) => ({ planned: at(when) })), { day: dayOf, now: at(time) });
   setTimeZone('Europe/Berlin');
   // Sunday, ten past midnight: 00:17, 00:17, 23:25 of Saturday 56 minutes late, 00:34, 00:46
   const night = ['2026-10-18T00:17+02:00', '2026-10-18T00:17+02:00', '2026-10-17T23:25+02:00', '2026-10-18T00:34+02:00', '2026-10-18T00:46+02:00'];

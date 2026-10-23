@@ -123,6 +123,7 @@ Page (`public/`):
 | `stops.js` | the stops on the map: how large the mark of one is, and the heart of a favourite, from which zoom which stops carry their names and where those go so that none lies on another, the marks of a station at its places and the lines that join them, the style of the map without stops of its own, and whether the name of a stop says its town |
 | `choice.js` | the lines and directions of a stop chosen to be shown (#164): their keys, as the address and `/api/departures` take them, and what a tap does; for the page and the server |
 | `favourites.js` | the stops and lines a visitor marks with the heart (#245): what is kept of them in the browser, and when a stop or a line of another timetable is the one kept |
+| `panel.js` | what the details of a stop and of a line list, as a tree of elements: the page makes it into its own, the server writes it into the page of an address as it is at that moment (#254); for the page and the server |
 | `search.js` | finding stops, lines and towns by name: matching and order, the favourites first, without the page around it |
 | `search-worker.js` | the thread that loads the list of stops, lines and towns and searches it |
 | `i18n.js`, `locales/` | texts in the visitor's language, see [translating.md](translating.md) |
@@ -694,11 +695,19 @@ otherwise a server would load a file written by older code:
   and the description of what it names into the page ("Abfahrten Nürnberg
   Plärrer live", with up to six of its lines, the busiest first, and the
   other kinds that call there), its address as the canonical one, and the
-  details opened with its name. The departures load as on any page: a
-  search engine's copy of them would be wrong within the hour. The sitemap
-  lists every stop and line, 14,228 addresses for the default area in one
-  file, and the 269,995 of all of Germany in six files under an index, as a
-  file may hold 50,000.
+  details opened as the page shows them at that moment
+  ([#254](https://github.com/xiidoz/netnou/issues/254)): of a stop its
+  departures, of a line its vehicles under way, with its name as the main
+  heading of the page. Before, the pages of all stops and lines were one
+  page with a few words of their own, and no search engine had reason to
+  keep them. Both are drawn by one module, `panel.js`, which the page
+  makes into its own elements and the server into HTML, so that what a
+  search engine reads is what a rider sees; the script takes the details
+  over and keeps them live. A row says in its data what it opens, as the
+  server's page has no script: the page listens to the details for it. The
+  sitemap lists every stop and line, 14,228 addresses for the default area
+  in one file, and the 269,995 of all of Germany in six files under an
+  index, as a file may hold 50,000, each dated by its timetable.
 - **Notes in the head.** Some operators write whole pages into one note and
   attach dozens to one trip, and the head does not scroll. So a note that
   does not fit shows its headline, or its first lines where it has none, on

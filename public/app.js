@@ -13,8 +13,9 @@ import { APP_NAME, READMES, dayOf, formatNumber, formatTime, languagePicker, loa
 import { FAVOURITE_NAME_ZOOM, HEART_MIDDLE, PLACES_ZOOM, RAIL_MODES, heartMark, joiningLines, mergePlaces, namePrecedence, namedAt, placeNames, stopMark, townsAlong, withoutStyleStops } from './stops.js';
 import { favouritesFrom, isFavourite, lineFavourite, sameStop, stopFavourite, withChoice, withFavourite } from './favourites.js';
 import { choiceValue, readChoice, toggled } from './choice.js';
+import { DELAY_MAJOR_S, DELAY_MINOR_S, DELAY_SEVERE_S, MINUTES_MAX, NOTE_CHARS, badge as badgeOf, choiceChip as choiceChipOf, delayCell as delayCellOf, delayClass, delayNode as delayNodeOf, delayText, departureLists, departuresSub as departuresSubOf, directionSign as directionSignOf, leavesAt, lineHead, minutesNode as minutesNodeOf, panelHead as panelHeadOf, tomorrowAt as tomorrowAtOf, untilText as untilTextOf, vehicleLists, warningSign as warningSignOf, warns } from './panel.js';
 import { BOARD_MAX, BOARD_SHARE, BOARD_STOPS, boardBlocks, boardQuery, boardShare, displayQuery, ledBy, readBoard, readDisplay, readStops } from './display.js';
-import { mdiAlert, mdiArrowCollapse, mdiArrowExpand, mdiChevronRight, mdiCityVariantOutline, mdiClose, mdiEye, mdiEyeOff, mdiFilterVariant, mdiFullscreen, mdiFullscreenExit, mdiHeart, mdiHeartOutline, mdiMinusCircleOutline, mdiPlaylistPlus, mdiPlus } from './vendor/material-design-icons/icons.js';
+import { mdiArrowCollapse, mdiArrowExpand, mdiChevronRight, mdiCityVariantOutline, mdiEye, mdiEyeOff, mdiFullscreen, mdiFullscreenExit, mdiHeart, mdiHeartOutline, mdiMinusCircleOutline, mdiPlaylistPlus, mdiPlus } from './vendor/material-design-icons/icons.js';
 import { AttributionControl, MapLibreMap, NavigationControl } from './vendor/maplibre-gl/maplibre-gl.mjs';
 
 // The modes, each with a chip where the timetable has it. Same ids as MODES in
@@ -40,8 +41,7 @@ const IDLE_RELOAD_MS = 2 * 60_000;
 // How departure times show, in every list of them (#81): the time of day,
 // the minutes until it leaves, or both.
 const TIMES = ['time', 'minutes', 'both'];
-// Minutes count up to an hour; a departure further off shows its time of day (#165).
-const MINUTES_MAX = 60;
+// (minutes count up to an hour, MINUTES_MAX in panel.js; a departure further off shows its time of day, #165)
 
 const POLL_MS = 10_000;
 const RETRY_LOADING_MS = 5000; // while the server has no timetable yet
@@ -76,12 +76,8 @@ const ALL_STATIONS_ZOOM = 14;
 // A tap this near a stop opens it (#222): 28 px across, which a finger finds.
 // Where it hits a vehicle as well, the vehicle wins (hitTest).
 const STOP_HIT_PX = 14;
-// Delay classes in seconds; the legend is made from them. A delay belongs to
+// Delay classes in seconds (DELAY_*_S in panel.js); the legend is made from them. A delay belongs to
 // the class of the whole minutes it is shown as: what reads "+2" is "from 2 min".
-const DELAY_EARLY_S = -60; // ahead of the timetable
-const DELAY_MINOR_S = 120;
-const DELAY_MAJOR_S = 300;
-const DELAY_SEVERE_S = 600;
 // The colour of a delay as a flag on a marker, by its class. Late, it is one
 // class "hotter" than the dots, for the same reason (see .delay in style.css).
 const FLAG_COLOR = { early: 'early', ok: 'ok', minor: 'major', major: 'severe', severe: 'severe' };
@@ -114,7 +110,7 @@ const SHEET_FLICK = 0.3;
 // stand there in full.
 const NOTES_LINES = 4;
 const NOTES_SHARE = 0.25;
-const NOTE_CHARS = 120;
+// (and NOTE_CHARS in panel.js)
 // Realtime data older than this counts as timetable only. When its fetches
 // fail, the server keeps the last delays up to the same age (STALE_AFTER_S in
 // server/lib/realtime.js).
@@ -155,6 +151,25 @@ function el(tag, props = {}, children = []) {
   }
   node.append(...children);
   return node;
+}
+
+/**
+ * Makes a tree of panel.js into elements of the page; an element of its own
+ * may stand in it already. What is inside an svg is svg as well.
+ */
+function toDom(node, svg = false) {
+  if (typeof node === 'string' || typeof node === 'number') return document.createTextNode(String(node));
+  if (node instanceof Node) return node;
+  const inSvg = svg || node.tag === 'svg';
+  const out = inSvg ? document.createElementNS('http://www.w3.org/2000/svg', node.tag) : document.createElement(node.tag);
+  for (const [key, value] of Object.entries(node.attrs)) if (value !== null && value !== undefined && value !== false) out.setAttribute(key, value === true ? '' : value);
+  out.append(...node.children.map((child) => toDom(child, inSvg)));
+  return out;
+}
+
+/** What panel.js needs to draw: the texts, times of day and dates where the area is, the clock, and how departure times show. */
+function drawing() {
+  return { t, time: formatTime, day: dayOf, now: now(), times: state.times };
 }
 
 // The icons on the page's own buttons are from Material Design Icons
@@ -280,24 +295,6 @@ const hiddenModes = loadSetting('hiddenModes', []);
 if (Array.isArray(hiddenModes)) for (const mode of MODES) if (hiddenModes.includes(mode)) state.enabled.delete(mode);
 
 const now = () => Date.now() / 1000 + state.clockOffset;
-
-function delayClass(delay) {
-  if (delay === null || delay === undefined) return 'none';
-  // (as delayText shows it)
-  const shown = Math.round(delay / 60) * 60;
-  if (shown <= DELAY_EARLY_S) return 'early';
-  if (shown < DELAY_MINOR_S) return 'ok';
-  if (shown < DELAY_MAJOR_S) return 'minor';
-  if (shown < DELAY_SEVERE_S) return 'major';
-  return 'severe';
-}
-
-function delayText(delay) {
-  if (delay === null || delay === undefined) return '';
-  const minutes = Math.round(delay / 60);
-  if (minutes === 0) return '±0';
-  return minutes > 0 ? `+${minutes}` : `−${-minutes}`;
-}
 
 // Colors live in style.css so that canvas and DOM share one palette.
 let colors = {};
@@ -767,29 +764,9 @@ function cutHeartRing(kinds, big, dpr) {
 // with where it goes next (choice.js), and its sign is the line as the map
 // draws its vehicle, the arrowhead turned to where it leaves the stop.
 
-const SVG = 'http://www.w3.org/2000/svg';
-const svgNode = (name, attributes) => {
-  const node = document.createElementNS(SVG, name);
-  for (const [key, value] of Object.entries(attributes)) node.setAttribute(key, value);
-  return node;
-};
-
-/**
- * The sign of a direction: a disc in the colour of its kind with the name of
- * its line, and the arrowhead pointing where it leaves the stop, as drawDisc
- * and drawArrow draw a vehicle, with their white edges. None for a whole line.
- */
-function directionSign({ line, mode, heading = null }) {
-  const sign = svgNode('svg', { class: 'direction-sign', viewBox: '-17 -17 34 34', 'aria-hidden': 'true', 'data-mode': DRAW_ORDER.includes(mode) ? mode : 'other' });
-  // (the arrowhead as drawArrow has it: from the edge of the disc at ±0.6 rad to 6 beyond)
-  if (heading !== null) sign.append(svgNode('path', { d: 'M0,-16L5.65,-8.25L-5.65,-8.25Z', transform: `rotate(${heading})` }));
-  sign.append(svgNode('circle', { r: 10 }));
-  const name = svgNode('text', { y: 3.2, 'text-anchor': 'middle' });
-  name.textContent = line;
-  // (a long name narrower, as on the map)
-  if (line.length > 3) Object.entries({ textLength: 17, lengthAdjust: 'spacingAndGlyphs' }).forEach(([key, value]) => name.setAttribute(key, value));
-  sign.append(name);
-  return sign;
+/** The sign of a direction (panel.js), for the chip and the sheet. */
+function directionSign(direction) {
+  return toDom(directionSignOf(direction));
 }
 
 /** The directions of the open stop there is to choose from, if they are known: as api/departures lists them. */
@@ -807,22 +784,14 @@ function directionName(direction, list) {
  * up, at a platform those of the platform, and nobody is to choose there.
  */
 function departuresSub() {
-  if (FIXED) return el('p', { class: 'sub', text: t('departures.title') });
-  return el('p', { class: 'sub with-choice' }, [el('span', { text: t('departures.title') }), choiceChip()]);
+  return toDom(departuresSubOf(FIXED ? null : choiceChip(), drawing()));
 }
 
-/** The chip: every line, or "only" and the signs of the directions chosen, with the name of the one where it is one. */
+/** The chip: every line, or "only" and the directions chosen (panel.js); a tap on it opens the sheet, its cross shows all again (see the details' clicks). */
 function choiceChip() {
   const list = stopDirections() ?? [];
   const chosen = state.lines.map((key) => list.find((direction) => direction.key === key)).filter(Boolean);
-  const parts = chosen.length
-    ? [el('span', { text: t('choice.only') }), ...chosen.slice(0, 4).map(directionSign), ...(chosen.length === 1 ? [el('span', { text: directionName(chosen[0], list) })] : chosen.length > 4 ? [el('span', { text: t('choice.more', { count: chosen.length - 4 }) })] : [])]
-    : [el('span', { text: t('choice.all') })];
-  const label = chosen.length ? `${t('choice.only')} ${chosen.map((direction) => `${direction.line} ${directionName(direction, list)}`).join(', ')}` : t('choice.all');
-  return el('span', { class: `choice${chosen.length ? ' chosen' : ''}` }, [
-    el('button', { type: 'button', class: 'choice-open', 'aria-label': label, 'aria-haspopup': 'dialog', title: t('choice.title'), onclick: openChoice }, [icon(mdiFilterVariant), ...parts]),
-    ...(chosen.length ? [el('button', { type: 'button', class: 'choice-clear', 'aria-label': t('choice.clear'), title: t('choice.clear'), onclick: () => applyChoice([]) }, [icon(mdiClose)])] : []),
-  ]);
+  return choiceChipOf(chosen.map((direction) => ({ ...direction, name: directionName(direction, list) })), drawing());
 }
 
 // The sheet in which they are chosen: a dialog as the one of the notes.
@@ -2359,6 +2328,7 @@ function closePanel() {
   clearTimeout(panelTimer);
   hideSaid();
   panel.hidden = true;
+  mainHeading();
   // The keyboard focus goes back to what opened the details, or else to the
   // search, and not to the start of the page (#194). After a click or a tap
   // it is left where it falls: moved, it would show a ring.
@@ -2644,8 +2614,13 @@ function select(type, id, more = {}) {
   // (a stop and a line have their addresses once the server has said what they are: loadSelection; a trip has none)
   shareable(false);
   panel.hidden = false;
-  panelHead.replaceChildren();
-  panelBody.replaceChildren(el('p', { class: 'panel-empty', text: t('panel.loading') }));
+  // (the page of an address has its details in it as the server sent it, #254: they stay until the answer comes)
+  if (!(more.counted && panelBody.hasAttribute('data-sent'))) {
+    panelHead.replaceChildren();
+    panelBody.replaceChildren(el('p', { class: 'panel-empty', text: t('panel.loading') }));
+    mainHeading();
+  }
+  panelBody.removeAttribute('data-sent');
   loadSelection(true);
 }
 
@@ -2750,6 +2725,7 @@ function fillPanel(head, ...nodes) {
   focusNext = null;
   panelHead.replaceChildren(...head);
   panelBody.replaceChildren(...nodes);
+  mainHeading();
   fitNotes();
   // (the sign a pointer is on was built anew with its row, or is gone)
   if (!saidTip.hidden) {
@@ -2766,60 +2742,52 @@ function fillPanel(head, ...nodes) {
 // (what is to have the keyboard focus once the panel is filled anew, by its data-focus: see "a board of several stops")
 let focusNext = null;
 
+/**
+ * The main heading of the page (#254): the name of what the details are of,
+ * while they are open with one, as the server writes the page of its
+ * address; else the name of the instance in the header card, which stands
+ * there the same either way.
+ */
+function mainHeading() {
+  const own = !panel.hidden && state.board === null && Boolean(panelHead.querySelector('h1'));
+  const name = document.querySelector('.title h1, .title .site-name');
+  if (!name || (name.tagName === 'H1') !== own) return;
+  const swapped = document.createElement(own ? 'div' : 'h1');
+  if (own) swapped.className = 'site-name';
+  swapped.textContent = name.textContent;
+  name.replaceWith(swapped);
+}
+
+// What the rows of panel.js open, and its chip of the lines of a stop: they
+// say so in their data and their class, as in the page the server sends.
+panel.addEventListener('click', (event) => {
+  const row = event.target.closest('[data-trip]');
+  if (row) select('trip', row.dataset.trip, { fit: 'unseen' });
+  else if (event.target.closest('.choice-open')) openChoice();
+  else if (event.target.closest('.choice-clear')) applyChoice([]);
+});
+
 const platformText = (platform) => (platform ? t('stop.platform', { platform }) : '');
 
 function badge(line, mode, ...more) {
-  const node = el('span', { class: 'badge', text: line }, more);
-  node.style.setProperty('--badge-color', `var(--mode-${mode})`);
-  return node;
+  return toDom(badgeOf(line, mode, ...more));
 }
 
 function delayNode(delay) {
-  return el('span', { class: 'delay', text: delayText(delay), data: { delay: delayClass(delay) } });
+  return toDom(delayNodeOf(delay));
 }
 
-/** Whether a note of the feed warns: of what is wrong with a trip or a stop right now, such as the reason for a delay. */
-const warns = (note) => note.severity === 'warning' || note.severity === 'severe';
-
-/**
- * The sign of a warning. In the notes it stands where a note that does not
- * warn has its bullet, before what the warning says. In a list of trains it
- * stands for the warning: `said` is then what the warning says, which a
- * screen reader reads out and a pointer on the sign is shown (showSaid).
- */
+/** The sign of a warning (panel.js): before a note that warns, or in a list for what the warnings of a train say. */
 function warningSign(said = '') {
-  const sign = icon(mdiAlert);
-  sign.classList.add('sign');
-  sign.removeAttribute('aria-hidden');
-  sign.setAttribute('role', 'img');
-  sign.setAttribute('aria-label', said ? t('notes.warningOf', { text: said }) : t('notes.warning'));
-  if (said) sign.dataset.said = said;
-  return sign;
+  return toDom(warningSignOf(said, drawing()));
 }
 
 /** A note is long if it does not stand in the head of the details as it is: its headline does, or how it begins. */
 const isLong = (note) => note.text.length > NOTE_CHARS || note.text.includes('\n');
 
-/** What the warnings of a train say, for its sign in a list: a line each, and of a long one how it begins. */
-function saidOf(warnings) {
-  return warnings.map((note) => {
-    const line = note.text.replace(/\s+/g, ' ');
-    return line.length > NOTE_CHARS ? `${line.slice(0, NOTE_CHARS).trimEnd()} …` : line;
-  }).join('\n');
-}
-
-/**
- * The delay of a train in a list and, if something is wrong with the train
- * right now, the sign of a warning: after the delay, which the warning mostly
- * explains, and before the train. In a list with such a train every row
- * keeps the place of the sign, so that what follows begins at the same place
- * in all of them.
- * @param delay the delay as a node (delayNode), or an empty one of its kind
- * @param signed whether a train of the list has something wrong with it
- */
+/** The delay of a train in a list, with the sign of a warning where something is wrong with it (panel.js). */
 function delayCell(delay, warnings, signed) {
-  if (!signed) return delay;
-  return el('span', { class: 'late' }, warnings.length ? [delay, warningSign(saidOf(warnings))] : [delay]);
+  return toDom(delayCellOf(delay, warnings, signed, drawing()));
 }
 
 // What the sign of a warning in a list says is shown at the sign while a
@@ -3025,7 +2993,7 @@ function renderTrip(trip, scrollToNext) {
   fillPanel(
     [
       el('div', { class: 'panel-head' }, [
-        el('h2', {}, [toLine, el('span', { text: `→ ${to}` })]),
+        el('h1', {}, [toLine, el('span', { text: `→ ${to}` })]),
         el('p', { class: 'sub', text: [mode, trip.agency, trip.realtime ? t('trip.realtime') : t('trip.scheduleOnly')].filter(Boolean).join(' · ') }),
         notesList(trip.notes, source, trip.cancelled ? t('trip.cancelled') : null),
       ]),
@@ -3117,27 +3085,9 @@ function renderLine(line, first) {
   const selection = state.selection;
   selection.ids = new Set(line.vehicles.map((v) => v.id)); // the map shows these alone, see draw()
 
-  // under where they go, in the order of the server: the one with the fewest stops left first
-  const byDestination = new Map();
-  for (const v of line.vehicles) byDestination.set(v.to, [...(byDestination.get(v.to) ?? []), v]);
-  const signed = line.vehicles.some((v) => v.warnings.length > 0);
-  const lists = [...byDestination].flatMap(([destination, vehicles]) => [
-    el('h3', { class: 'rows-head', text: t('line.to', { destination }) }),
-    el('ul', { class: `rows${signed ? ' signed' : ''}` }, vehicles.map((v) => el('li', {}, [
-      el('button', { type: 'button', class: 'row vehicle', onclick: () => select('trip', v.id, { fit: 'unseen' }) }, [
-        el('span', { class: 'name', text: t('line.next', { stop: v.next }), title: v.next }),
-        delayCell(delayNode(v.delay), v.warnings, signed),
-      ]),
-    ]))),
-  ]);
-  const mode = t(`mode.${DRAW_ORDER.includes(line.mode) ? line.mode : 'other'}`);
-  fillPanel(
-    [el('div', { class: 'panel-head' }, [
-      el('h2', {}, [badge(line.name, line.mode), el('span', { text: mode })]),
-      el('p', { class: 'sub', text: [line.agency, line.vehicles.length ? t('line.vehicles', { count: line.vehicles.length }) : ''].filter(Boolean).join(' · ') }),
-    ])],
-    ...(lists.length ? lists : [el('p', { class: 'panel-empty', text: t('line.none') })]),
-  );
+  // (as the server writes them into the page of the line: panel.js)
+  const drawn = drawing();
+  fillPanel([toDom(lineHead(line, drawn))], ...vehicleLists(line, drawn).map((node) => toDom(node)));
   panelBody.scrollTop = scrollTop;
 
   // Once, when the line is chosen: where it runs into view, between the
@@ -3151,40 +3101,22 @@ function renderLine(line, first) {
   }
 }
 
-/** When a departure leaves, in epoch seconds: as planned, moved by the delay as it is shown. */
-const leavesAt = (dep) => dep.planned + Math.round((dep.delay ?? 0) / 60) * 60;
-
 /** How many whole minutes until a departure leaves, as the clock goes. */
 const minutesUntil = (leaves) => Math.floor(leaves / 60) - Math.floor(now() / 60);
 
-/**
- * How long until a departure leaves: "4 min", "now" under a minute. Further
- * off than an hour its time of day says more (#165): that, or nothing where
- * the row has it already.
- * @param far 'time' or 'none': what stands there beyond the hour
- */
+/** How long until a departure leaves (panel.js). */
 function untilText(leaves, planned, far) {
-  const minutes = minutesUntil(leaves);
-  if (minutes > MINUTES_MAX) return far === 'time' ? formatTime(planned) : '';
-  return minutes < 1 ? t('departures.now') : t('departures.minutes', { count: minutes });
+  return untilTextOf(leaves, planned, far, drawing());
 }
 
 /** The minutes until a departure leaves, which count down by themselves between two answers of the server (tickTimes). */
 function minutesNode(dep, far) {
-  const leaves = leavesAt(dep);
-  return el('span', { class: 'minutes', text: untilText(leaves, dep.planned, far), data: { leaves, planned: dep.planned, far } });
+  return toDom(minutesNodeOf(dep, far, drawing()));
 }
 
-/**
- * Where in a list of departures the next day begins, which a line says
- * ("tomorrow"): the first planned for a later date, or -1. The list is in the
- * order they leave, and one of the day before that leaves late, after
- * midnight, is among those of today (#193).
- */
+/** Where in a list of departures the next day begins (panel.js). */
 function tomorrowAt(departures) {
-  const today = dayOf(now());
-  // (dates as YYYY-MM-DD, which compare as the days do)
-  return departures.findIndex((dep) => dayOf(dep.planned) > today);
+  return tomorrowAtOf(departures, drawing());
 }
 
 /** The minutes in the lists of departures and the clock of a board, as time goes on. */
@@ -3204,33 +3136,11 @@ function renderStation(board) {
     return;
   }
   const scrollTop = panelBody.scrollTop;
-  const signed = board.departures.some((dep) => dep.warnings.length > 0);
-  // (the time of day first, or the minutes in its place; with both, the minutes at the end of the row)
-  const times = state.times;
-  const rows = board.departures.map((dep) =>
-    el('li', {}, [
-      el('button', { type: 'button', class: `row departure times-${times}${dep.cancelled ? ' cancelled' : ''}`, onclick: () => select('trip', dep.trip, { fit: 'unseen' }) }, [
-        times === 'minutes' ? minutesNode(dep, 'time') : el('span', { class: 'time', text: formatTime(dep.planned) }),
-        delayCell(dep.cancelled ? el('span', { class: 'delay' }) : delayNode(dep.delay), dep.warnings, signed),
-        badge(dep.line, dep.mode),
-        el('span', { class: 'name', text: dep.to, title: dep.to }),
-        el('span', { class: 'platform', text: dep.cancelled ? t('departures.cancelled') : platformText(dep.platform) }),
-        ...(times === 'both' ? [minutesNode(dep, 'none')] : []),
-      ]),
-    ]),
-  );
-  // (where the next day begins, a line says so, between two lists)
-  const list = (part) => el('ul', { class: `rows${signed ? ' signed' : ''}` }, part);
-  const split = tomorrowAt(board.departures);
-  const lists = split < 0 ? [list(rows)] : [...(split > 0 ? [list(rows.slice(0, split))] : []), el('h3', { class: 'rows-head day-head', text: t('departures.tomorrow') }), list(rows.slice(split))];
-  fillPanel(
-    [el('div', { class: 'panel-head' }, [el('h2', { text: board.name }), departuresSub(), notesList(board.notes)])],
-    // (the 24 hours the text speaks of are the furthest departures() in server/lib/timetable.js looks)
-    ...(rows.length ? lists : [el('p', { class: 'panel-empty', text: t('departures.none') })]),
-  );
+  // (as the server writes them into the page of the stop: panel.js)
+  fillPanel([toDom(panelHeadOf(board.name, departuresSub(), notesList(board.notes)))], ...departureLists(board, drawing()).map((node) => toDom(node)));
   panelBody.scrollTop = scrollTop;
   // (the one tip, when there are departures to tap)
-  if (state.selection?.tip && rows.length) {
+  if (state.selection?.tip && board.departures.length) {
     state.selection.tip = false;
     offerTip();
   }
@@ -3319,7 +3229,10 @@ function clearMapButtons() {
     group.style.visibility = out ? 'hidden' : '';
   }
 }
-new ResizeObserver(clearMapButtons).observe(panel);
+const clearing = new ResizeObserver(clearMapButtons);
+clearing.observe(panel);
+// (and their corner: the credits below them fold up once the map is there, which moves the buttons down, #254)
+clearing.observe(map.getContainer().querySelector('.maplibregl-ctrl-bottom-right'));
 map.on('resize', clearMapButtons);
 
 /** The sheet comes to rest at a height, and what is chosen on the map stays in sight above it. */

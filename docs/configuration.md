@@ -290,6 +290,18 @@ therefore gets to read the title and the description for English, whatever
 `NETNOU_LANGUAGE` is: yours for English, else yours for every language, else the
 page's own.
 
+At the address of a stop or a line, the page is that stop or line as it is
+when the page is sent ([#254](https://github.com/xiidoz/netnou/issues/254)):
+its name is the main heading, and its details are open with what they show,
+the departures of the stop (when, which line, where to, from which
+platform) or the vehicles of the line under way. That is what a search
+engine reads, and what a visitor sees before the script has run; the script
+then keeps it live. The sitemap dates each address with the timetable it
+was made from, the day its feed was published, so a search engine knows
+when to come back. Telling search engines of a change as it happens is left
+to the operator: it is about particular search engines and not about
+transit, and can be done beside the instance from its sitemap.
+
 Whether search engines may list the instance at all is `NETNOU_SEARCH_ENGINES`.
 If nothing is set, an instance that knows its address is listed and any
 other is not: most instances are private or for trying things out, and one

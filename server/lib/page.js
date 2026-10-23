@@ -22,6 +22,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { LANGUAGES, pageTexts, pickLanguage, t } from '../../public/i18n.js';
 import * as shapes from '../../public/vendor/material-design-icons/icons.js';
+import { choiceChip, departureLists, departuresSub, h, lineHead, panelHead, toHtml, vehicleLists } from '../../public/panel.js';
 
 export const LANGUAGE_CODES = LANGUAGES.map(([code]) => code);
 // The picture of a link's preview: the icon, unless the operator has one of
@@ -52,6 +53,7 @@ export const PAGE_MODULES = [
   'display.js',
   'address.js',
   'stops.js',
+  'panel.js',
   'favourites.js',
   'choice.js',
   'vendor/material-design-icons/icons.js',
@@ -254,8 +256,8 @@ const versions = (publicUrl) => [...LANGUAGE_CODES.map((code) => [code, addressI
  * @param address the address of a stop, a line or a trip that the page is
  *   sent for (#37, #178), null for the page itself: { path, depth } of the
  *   address, with { title, description, heading, sub, unlisted } of what it
- *   names (lib/addresses.js),
- *   or { gone } with the text that says it names nothing now, or neither
+ *   names (lib/addresses.js) and, of a stop or a line, the `panel` its details
+ *   show now (panelHtml), or { gone } with the text that says it names nothing now, or neither
  *   while that is not known yet (there is no timetable)
  * @param inline the style sheets and the first script, by their address in
  *   index.html (PAGE_INLINE), to be written into the page in place of the
@@ -291,7 +293,8 @@ export function renderPage(html, { language, asked, texts, siteName, areaName, s
   // (a description of the operator's own, or of what an address names, stands as it is: without the mark by which the script would put the page's in its place)
   put(/(<meta name="description" content=")[^"]*"( data-i18n-content="page\.description")/, (_, start, mark) => `${start}${escapeHtml(description)}"${siteDescription === null && !named ? mark : ''}`);
   put(/(<meta name="apple-mobile-web-app-title" content=")[^"]*"/, (_, start) => `${start}${escapeHtml(siteName)}"`);
-  put(/(<h1>)[^<]*/, (_, start) => `${start}${escapeHtml(siteName)}`);
+  // (the main heading of the page, except at an address: there it is the name of what that names, in its details, #254)
+  put(/<h1>[^<]*<\/h1>/, () => (named ? `<div class="site-name">${escapeHtml(siteName)}</div>` : `<h1>${escapeHtml(siteName)}</h1>`));
   put(/(<p id="area-name">)[^<]*/, (_, start) => `${start}${escapeHtml(areaName)}`);
   // (the icons by addresses with their versions: a new one is fetched anew)
   for (const file of Object.keys(fileVersions)) page = page.replaceAll(`href="${file}"`, `href="${versioned(file, fileVersions)}"`);
@@ -305,12 +308,14 @@ export function renderPage(html, { language, asked, texts, siteName, areaName, s
   const elsewhere = (href) => (href.startsWith('/') ? '' : ' target="_blank" rel="noopener"');
   const anchors = links.map(({ text, href }) => `<a href="${escapeHtml(href)}"${elsewhere(href)}>${escapeHtml(text)}</a>`).join('');
   put(/(<nav class="links"[^>]*?) hidden><\/nav>/, (whole, start) => (links.length ? `${start}>${anchors}</nav>` : whole));
-  // At an address, its details are open from the start, with what a search
-  // engine is to read of them; the script fills in the rest.
+  // At an address, its details are open from the start: those of a stop or
+  // a line as the page shows them, at the moment the page is sent (#254),
+  // which the script keeps until it has them anew (data-sent); of a trip its
+  // name and what it is. What a search engine reads is what a rider sees.
   if (named || address?.gone) {
     put(/(<aside class="card panel" id="panel") hidden/, (_, start) => start);
-    if (named) put(/<div id="panel-head"><\/div>/, () => `<div id="panel-head"><div class="panel-head"><h2>${escapeHtml(address.heading)}</h2><p class="sub">${escapeHtml(address.sub)}</p></div></div>`);
-    put(/<div id="panel-body"><\/div>/, () => `<div id="panel-body"><p class="panel-empty">${escapeHtml(named ? address.description : address.gone)}</p></div>`);
+    if (named) put(/<div id="panel-head"><\/div>/, () => `<div id="panel-head">${address.panel?.head ?? toHtml(panelHead(address.heading, h('p', { class: 'sub' }, address.sub)))}</div>`);
+    put(/<div id="panel-body"><\/div>/, () => (address.panel ? `<div id="panel-body" data-sent>${address.panel.body}</div>` : `<div id="panel-body"><p class="panel-empty">${escapeHtml(named ? address.description : address.gone)}</p></div>`));
   }
 
   // For previews of a link (Open Graph, which the others read as well).
@@ -389,6 +394,28 @@ export function renderManifest(json, { language, texts, siteName, areaName, site
 }
 
 /**
+ * The details of a stop or a line as the page shows them (public/panel.js),
+ * as they are at a moment, to be written into the page of its address
+ * (#254): a stop's departures, with the times as the page shows them until
+ * the visitor chooses otherwise (both, state.times in app.js) and the chip of
+ * its lines where there is one to choose; a line's vehicles under way. The
+ * notes of a stop come with the script.
+ * @param kind 'stop' or 'line'
+ * @param data what api/departures or api/line answers for it
+ * @param fixed whether the page is a screen on a wall set up for one purpose, which has no chip
+ * @returns { head, body } as HTML
+ */
+export function panelHtml(kind, data, { language, texts, timeZone, now, fixed = false }) {
+  const time = new Intl.DateTimeFormat(language, { timeStyle: 'short', timeZone });
+  const day = new Intl.DateTimeFormat('en-CA', { year: 'numeric', month: '2-digit', day: '2-digit', timeZone });
+  const drawing = { t: (key, params) => t(key, params, texts), time: (epoch) => time.format(epoch * 1000), day: (epoch) => day.format(epoch * 1000), now, times: 'both' };
+  const [head, body] = kind === 'stop'
+    ? [panelHead(data.name, departuresSub(fixed ? null : choiceChip([], drawing), drawing)), departureLists(data, drawing)]
+    : [lineHead(data, drawing), vehicleLists(data, drawing)];
+  return { head: toHtml(head), body: body.map(toHtml).join('') };
+}
+
+/**
  * Search engines may read everything, also on an instance that is not to be
  * listed: what is not to be listed says so itself, in a header of the answer,
  * and a search engine that may not read it would never get to see that.
@@ -407,17 +434,20 @@ export const SITEMAP_MAX = 50_000;
  * lines (#37). Up to `max` addresses are one file, sitemap.xml. More are
  * cut into files of that many, sitemap-1.xml on, which sitemap.xml then
  * lists: those of the default area are one file, the 270,000 of all of
- * Germany six.
+ * Germany six. Each address has the date of the timetable it was made from
+ * (#254), where that is known: what a stop or a line lists comes from it.
  * @param paths the addresses of the stops and lines, from where the instance is
+ * @param lastmod that date, YYYY-MM-DD, or null
  * @returns the files: sitemap.xml, then sitemap-1.xml on if there are more
  */
-export function sitemapFiles(publicUrl, paths = [], max = SITEMAP_MAX) {
+export function sitemapFiles(publicUrl, paths = [], max = SITEMAP_MAX, lastmod = null) {
   const escapeXml = (text) => text.replace(/[&<>"']/g, (char) => `&#${char.charCodeAt(0)};`);
   const all = versions(publicUrl);
   const links = all.map(([code, href]) => `    <xhtml:link rel="alternate" hreflang="${code}" href="${escapeXml(href)}"/>`).join('\n');
   // (the one that follows the browser first: it is the address people pass on)
-  const urls = [all.at(-1), ...all.slice(0, -1)].map(([, href]) => `  <url>\n    <loc>${escapeXml(href)}</loc>\n${links}\n  </url>`);
-  for (const path of paths) urls.push(`  <url><loc>${escapeXml(publicUrl + path)}</loc></url>`);
+  const dated = lastmod ? `<lastmod>${lastmod}</lastmod>` : '';
+  const urls = [all.at(-1), ...all.slice(0, -1)].map(([, href]) => `  <url>\n    <loc>${escapeXml(href)}</loc>${dated ? `\n    ${dated}` : ''}\n${links}\n  </url>`);
+  for (const path of paths) urls.push(`  <url><loc>${escapeXml(publicUrl + path)}</loc>${dated}</url>`);
   const head = '<?xml version="1.0" encoding="UTF-8"?>\n';
   const urlset = (listed) => `${head}<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:xhtml="http://www.w3.org/1999/xhtml">\n${listed.join('\n')}\n</urlset>\n`;
   if (urls.length <= max) return [urlset(urls)];

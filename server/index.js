@@ -5,13 +5,14 @@ import path from 'node:path';
 import zlib from 'node:zlib';
 import { parseAddress, stopPath } from '../public/address.js';
 import { readChoice } from '../public/choice.js';
+import { readDisplay } from '../public/display.js';
 import { t } from '../public/i18n.js';
 import { loadConfig, parseBox, parsePlace } from './config.js';
 import { Addresses, stopTitle } from './lib/addresses.js';
 import { FeedUpdater } from './lib/feed.js';
 import { RealtimePoller } from './lib/realtime.js';
-import { addressTitle, inlineHashes, LANGUAGE_CODES, languageFor, ownFiles, PAGE_INLINE, pictureSize, renderManifest, renderPage, robotsTxt, securityPolicy, sitemapFiles, titleOf, versionsOfFiles } from './lib/page.js';
-import { setTimeZone } from './lib/time.js';
+import { addressTitle, inlineHashes, LANGUAGE_CODES, languageFor, ownFiles, PAGE_INLINE, panelHtml, pictureSize, renderManifest, renderPage, robotsTxt, securityPolicy, sitemapFiles, titleOf, versionsOfFiles } from './lib/page.js';
+import { setTimeZone, timeZone } from './lib/time.js';
 import { sharesFor, thinOut, ZOOM_ALL, ZOOM_MIN } from './lib/thinning.js';
 import { LITE_AHEAD_S, MODES, lite } from './lib/timetable.js';
 import { describeBuild, githubReleases, UpdateChecker } from './lib/update.js';
@@ -328,6 +329,14 @@ function serveAddress(req, res, url) {
     } else {
       const { found } = named;
       Object.assign(address, named.type === 'stop' ? addressesNow().stationWords(found, language, words) : named.type === 'line' ? addressesNow().lineWords(found, language, words) : addressesNow().tripWords(found.trip, found.date, language, words));
+      // (the departures of a stop and the vehicles of a line as its details show them now, #254)
+      const at = { language, texts: words, timeZone: timeZone(), now: Math.floor(Date.now() / 1000), fixed: readDisplay(url.search, MODES)?.fixed ?? false };
+      if (named.type === 'stop') {
+        const board = timetable.departures(timetable.stations[found].id, at.now, realtime.snapshot);
+        if (board) address.panel = panelHtml('stop', board, at);
+      } else if (named.type === 'line') {
+        address.panel = panelHtml('line', timetable.lineVehicles(found, vehicles().all), at);
+      }
     }
   }
   const body = pageBody(language, askedLanguage, address);
@@ -387,8 +396,15 @@ function serveMissing(req, res, url) {
 // all of Germany, the files take 25 MB).
 let sitemaps = { of: undefined, files: [] };
 
+/** The date of the timetable, YYYY-MM-DD: when its feed was published, else when it was imported; null without one. */
+function timetableDate() {
+  const { lastModified, importedAt } = timetable?.source ?? {};
+  const date = new Date(lastModified ?? importedAt ?? NaN);
+  return Number.isNaN(date.getTime()) ? null : date.toISOString().slice(0, 10);
+}
+
 function serveSitemap(req, res, part) {
-  if (sitemaps.of !== timetable) sitemaps = { of: timetable, files: sitemapFiles(sitemapAt, timetable ? addressesNow().paths() : []).map((xml) => keep(Buffer.from(xml))) };
+  if (sitemaps.of !== timetable) sitemaps = { of: timetable, files: sitemapFiles(sitemapAt, timetable ? addressesNow().paths() : [], undefined, timetableDate()).map((xml) => keep(Buffer.from(xml))) };
   const kept = sitemaps.files[part];
   if (!kept) return send(req, res, 404, MIME['.txt'], Buffer.from('not found\n'), { 'Cache-Control': 'no-cache' });
   return send(req, res, 200, MIME['.xml'], kept.body, { 'Cache-Control': 'no-cache' }, kept);
