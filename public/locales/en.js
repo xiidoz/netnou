@@ -210,11 +210,17 @@ export default {
   // the same where the sign stands alone, in a list of departures: {text} is what the warning says
   'notes.warningOf': 'Warning: {text}',
 
-  // The view of a line: its vehicles that are under way, under where they go ({destination}), each with the stop ahead of it.
+  // The view of a line (#256): how many of its vehicles are under way, and its stops in one direction with its vehicles
+  // along them; where it goes two ways, a switch between them after "to", each named by its destination. {destination}
+  // is where a vehicle goes, for a screen reader. Below a station: that some of its trips start or end there.
   'line.vehicles': { one: '{count} vehicle under way', other: '{count} vehicles under way' },
-  'line.none': 'No vehicle of this line is under way right now.',
   'line.to': 'to {destination}',
-  'line.next': 'next: {stop}',
+  'line.toward': 'to',
+  // what a screen reader calls the switch
+  'line.ways': 'Direction',
+  'line.starts': 'Some trips start here',
+  'line.ends': 'Some trips end here',
+  'line.turns': 'Some trips start and end here',
   // the name of the badge at the top of a trip, which leads to its line
   'line.open': 'To line {line}',
 

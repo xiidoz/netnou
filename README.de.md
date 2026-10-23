@@ -34,7 +34,8 @@ Ein Fahrzeug kann also etwas vor oder hinter seiner Markierung sein.
   jede Richtung, auch für den Nachtbus, der nur am Wochenende fährt. Ein Tipp
   auf die Linie zeigt ihre Fahrzeuge.
 - **Suchen:** Ort, Haltestelle oder Linie. Eine Linie zeigt dann nur ihre
-  eigenen Fahrzeuge.
+  eigenen Fahrzeuge auf der Karte, und ihre Haltestellen der Reihe nach mit
+  den Fahrzeugen dazwischen.
 - **Herz antippen:** favorisiert eine Haltestelle oder Linie. Favoriten
   stehen in der Suche ganz oben, schon bevor man etwas tippt.
 - **Verkehrsmittel antippen** (U-Bahn, Tram, Bus …): blendet sie aus und

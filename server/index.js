@@ -690,9 +690,12 @@ function handleApi(req, res, url) {
       realtime.touch();
       // (where it runs, asked for once: when the page opens the line, #148)
       const route = url.searchParams.get('route') === '1' ? { route: timetable.lineRoute(index, at) } : {};
+      // (opened from a trip, the way of its stops that trip goes, #256)
+      const trip = timetable.tripIndex.get(/^(.+)_\d{8}$/.exec(url.searchParams.get('trip') ?? '')?.[1]);
+      const way = trip === undefined ? {} : { way: Math.max(0, timetable.wayOfTrip(index, trip)) };
       const path = addressesNow().linePath(index);
       visitOpened(req, res, url, path, (language, words) => addressesNow().lineWords(index, language, words).title);
-      return sendJson(req, res, 200, { now: at, ...timetable.lineVehicles(index, all), path, ...route });
+      return sendJson(req, res, 200, { now: at, ...timetable.lineVehicles(index, all), path, ...route, ...way });
     }
 
     case '/api/trip': {

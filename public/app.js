@@ -13,7 +13,7 @@ import { APP_NAME, READMES, dayOf, formatNumber, formatTime, languagePicker, loa
 import { FAVOURITE_NAME_ZOOM, HEART_MIDDLE, PLACES_ZOOM, RAIL_MODES, heartMark, joiningLines, mergePlaces, namePrecedence, namedAt, placeNames, stopMark, townsAlong, withoutStyleStops } from './stops.js';
 import { favouritesFrom, isFavourite, lineFavourite, sameStop, stopFavourite, withChoice, withFavourite } from './favourites.js';
 import { choiceValue, readChoice, toggled } from './choice.js';
-import { DELAY_MAJOR_S, DELAY_MINOR_S, DELAY_SEVERE_S, MINUTES_MAX, NOTE_CHARS, badge as badgeOf, choiceChip as choiceChipOf, delayCell as delayCellOf, delayClass, delayNode as delayNodeOf, delayText, departureLists, departuresSub as departuresSubOf, directionSign as directionSignOf, leavesAt, lineHead, lineLists, minutesNode as minutesNodeOf, panelHead as panelHeadOf, tomorrowAt as tomorrowAtOf, untilText as untilTextOf, vehicleLists, warningSign as warningSignOf, warns } from './panel.js';
+import { DELAY_MAJOR_S, DELAY_MINOR_S, DELAY_SEVERE_S, MINUTES_MAX, NOTE_CHARS, badge as badgeOf, choiceChip as choiceChipOf, delayCell as delayCellOf, delayClass, delayNode as delayNodeOf, delayFlag, delayText, departureLists, departuresSub as departuresSubOf, directionSign as directionSignOf, leavesAt, lineHead, lineLists, lineStops, minutesNode as minutesNodeOf, panelHead as panelHeadOf, tomorrowAt as tomorrowAtOf, untilText as untilTextOf, vehicleLabel, warningSign as warningSignOf, warns } from './panel.js';
 import { BOARD_MAX, BOARD_SHARE, BOARD_STOPS, boardBlocks, boardQuery, boardShare, displayQuery, ledBy, readBoard, readDisplay, readStops } from './display.js';
 import { mdiArrowCollapse, mdiArrowExpand, mdiChevronRight, mdiCityVariantOutline, mdiEye, mdiEyeOff, mdiFullscreen, mdiFullscreenExit, mdiHeart, mdiHeartOutline, mdiMinusCircleOutline, mdiPlaylistPlus, mdiPlus } from './vendor/material-design-icons/icons.js';
 import { AttributionControl, MapLibreMap, NavigationControl } from './vendor/maplibre-gl/maplibre-gl.mjs';
@@ -78,9 +78,6 @@ const ALL_STATIONS_ZOOM = 14;
 const STOP_HIT_PX = 14;
 // Delay classes in seconds (DELAY_*_S in panel.js); the legend is made from them. A delay belongs to
 // the class of the whole minutes it is shown as: what reads "+2" is "from 2 min".
-// The colour of a delay as a flag on a marker, by its class. Late, it is one
-// class "hotter" than the dots, for the same reason (see .delay in style.css).
-const FLAG_COLOR = { early: 'early', ok: 'ok', minor: 'major', major: 'severe', severe: 'severe' };
 // Vehicles count as being at one place when their markers are at most
 // NEAR_IN_PX apart: one would hide the other. Once they do, they go on doing
 // so up to NEAR_OUT_PX, or two that are about NEAR_IN_PX apart would be
@@ -167,9 +164,13 @@ function toDom(node, svg = false) {
   return out;
 }
 
-/** What panel.js needs to draw: the texts, times of day and dates where the area is, the clock, and how departure times show. */
+/**
+ * What panel.js needs to draw: the texts, times of day and dates where the
+ * area is, the clock, how departure times show, and for the vehicles of a
+ * line as on the map, whether delays come in and how the vehicles are coloured and flagged.
+ */
 function drawing() {
-  return { t, time: formatTime, day: dayOf, now: now(), times: state.times };
+  return { t, time: formatTime, day: dayOf, now: now(), times: state.times, live: realtimeState() === 'live', colorBy: state.colorBy, flags: state.flags };
 }
 
 // The icons on the page's own buttons are from Material Design Icons
@@ -516,18 +517,13 @@ function positionAt(knots, time) {
   return { lat: knots[n - 2], lon: knots[n - 1], k: -1 };
 }
 
-function shortLabel(line) {
-  const first = line.trim().split(/\s+/)[0] || '?';
-  return first.length > 4 ? first.slice(0, 4) : first;
-}
-
 function applyVehicles(list) {
   const seen = new Set();
   for (const v of list) {
     seen.add(v.id);
     const known = state.vehicles.get(v.id);
     if (known) Object.assign(known, v);
-    else state.vehicles.set(v.id, { ...v, label: shortLabel(v.line), lat: null, lon: null });
+    else state.vehicles.set(v.id, { ...v, label: vehicleLabel(v.line), lat: null, lon: null });
   }
   for (const id of state.vehicles.keys()) if (!seen.has(id)) state.vehicles.delete(id);
   state.drawList = [...state.vehicles.values()].sort((a, b) => DRAW_ORDER.indexOf(a.mode) - DRAW_ORDER.indexOf(b.mode));
@@ -618,17 +614,14 @@ function drawRing(x, y, r, w, color) {
 }
 
 /**
- * The flag a vehicle carries at its shoulder: its delay in minutes, early or
- * late, or a question mark where none is reported while others have one
- * (`live`). On time to the minute it carries none.
- * None when the vehicles are coloured by delay: the colour says both then.
- * And none at all for a visitor who has switched the flags off.
+ * The flag a vehicle carries at its shoulder (delayFlag in panel.js), in its
+ * colour. None when the vehicles are coloured by delay: the colour says both
+ * then. And none at all for a visitor who has switched the flags off.
  */
 function flagOf(v, live) {
   if (state.colorBy !== 'mode' || !state.flags) return null;
-  if (v.delay === null) return live ? { text: '?', color: colors.delay.none } : null;
-  if (Math.round(v.delay / 60) === 0) return null;
-  return { text: delayText(v.delay), color: colors.delay[FLAG_COLOR[delayClass(v.delay)]] };
+  const flag = delayFlag(v.delay, live);
+  return flag && { text: flag.text, color: colors.delay[flag.color] };
 }
 
 function drawFlag(x, y, flag) {
@@ -789,6 +782,14 @@ function directionName(direction, list) {
  */
 function departuresSub(board = false) {
   return toDom(departuresSubOf(FIXED || board ? null : state.view, FIXED ? null : choiceChip(), drawing()));
+}
+
+/** Shows the stops of the open line in its other direction (#256), with what the last answer had of them. */
+function showWay(way) {
+  const selection = state.selection;
+  if (selection?.type !== 'line' || !selection.data || selection.way === way) return;
+  selection.way = way;
+  renderLine(selection.data, false);
 }
 
 /** Shows the next departures of the open stop, or all its lines (#255): those of the last answer at once, if it had them, and asked for anew. */
@@ -2643,11 +2644,11 @@ function select(type, id, more = {}) {
  *   opened: the server counts that as a visit of its address, where visits
  *   are counted (#158). A trip has no address.
  */
-function selectionUrl({ type, id, line, at, route }, open = false, first = false) {
+function selectionUrl({ type, id, line, at, route, fromTrip }, open = false, first = false) {
   if (type === 'trip') return `api/trip?id=${encodeURIComponent(id)}${open ? '&open=1' : ''}`;
   // (a line is its name, its mode and its operator together, and its place where lines of the name are in places
   // apart, #152; where it runs is asked for until it is known, #148)
-  if (type === 'line') return `api/line?${new URLSearchParams({ name: line.name, mode: line.mode, agency: line.agency, ...(line.at ? { at: line.at.join(',') } : {}), ...(route ? {} : { route: '1' }), ...(open ? { open: '1' } : {}) })}`;
+  if (type === 'line') return `api/line?${new URLSearchParams({ name: line.name, mode: line.mode, agency: line.agency, ...(line.at ? { at: line.at.join(',') } : {}), ...(route ? {} : { route: '1' }), ...(open ? { open: '1' } : {}), ...(first && fromTrip ? { trip: fromTrip } : {}) })}`;
   // (only the lines chosen, #164; once, with the first answer, which lines and directions there are; and all
   // lines with their next departures while they are shown, #255, which a board does not)
   const choice = `${state.lines.length ? `&lines=${choiceValue(state.lines)}` : ''}${first ? '&directions=1' : ''}${state.view === 'lines' && state.board === null ? '&list=lines' : ''}`;
@@ -2692,6 +2693,8 @@ async function loadSelection(first = false) {
       if (first && selection.type === 'line') {
         // (from now on asked for by the place the server has for it)
         selection.line = { ...selection.line, at: data.at };
+        // (opened from a trip, in the direction that trip goes)
+        if (data.way !== undefined) selection.way = data.way;
         showAddress(data.path, lineTitle(data));
         shareable(true);
       }
@@ -2727,8 +2730,8 @@ function showSelection(first = false) {
 // When the page gets another size, the notes in the head have other room (fitNotes).
 map.on('resize', () => showSelection());
 
-// (what in the lists of the panel can have the keyboard focus, which it gets back once they are built anew: rows and the badges of lines)
-const FOCUSED_IN_BODY = 'button.row, a.to-line';
+// (what in the lists of the panel can have the keyboard focus, which it gets back once they are built anew: rows, the badges of lines, the vehicles of a line)
+const FOCUSED_IN_BODY = 'button.row, a.row, a.to-line, [data-trip][tabindex]';
 
 /**
  * Replaces what the panel shows: its head, which stays, and what scrolls
@@ -2783,13 +2786,16 @@ panel.addEventListener('click', (event) => {
   const row = event.target.closest('[data-trip]');
   const toLine = event.target.closest('a.to-line[data-line]');
   const view = event.target.closest('.view-switch [data-view]');
+  const way = event.target.closest('.view-switch [data-way]');
+  const station = event.target.closest('a.row[data-station]');
+  // (a link to the page of a line or a stop: opened in the details, unless it is to open elsewhere)
+  if ((toLine || station) && (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey)) return;
+  if (toLine || station) event.preventDefault();
   if (row) select('trip', row.dataset.trip, { fit: 'unseen' });
-  else if (toLine) {
-    // (a link to the line's page: opened in the details, unless it is to open elsewhere)
-    if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
-    event.preventDefault();
-    selectLine(JSON.parse(toLine.dataset.line));
-  } else if (view) showView(view.dataset.view);
+  else if (station) select('station', station.dataset.station);
+  else if (way) showWay(Number(way.dataset.way));
+  else if (toLine) selectLine(JSON.parse(toLine.dataset.line));
+  else if (view) showView(view.dataset.view);
   else if (event.target.closest('.choice-open')) openChoice();
   else if (event.target.closest('.choice-clear')) applyChoice([]);
 });
@@ -2835,6 +2841,15 @@ function showSaid(sign) {
   const y = below + saidTip.offsetHeight > page.clientHeight - 8 ? at.top - 6 - saidTip.offsetHeight : below;
   saidTip.style.transform = `translate(${Math.round(x)}px, ${Math.round(y)}px)`;
 }
+
+// The vehicles on the stops of a line are drawn, not buttons (lineStops in
+// panel.js): Enter and the space bar open their trips as a click does.
+panel.addEventListener('keydown', (event) => {
+  const vehicle = event.target.closest?.('[data-trip][role="button"]');
+  if (!vehicle || (event.key !== 'Enter' && event.key !== ' ')) return;
+  event.preventDefault();
+  select('trip', vehicle.dataset.trip, { fit: 'unseen' });
+});
 
 panel.addEventListener('pointerover', (event) => {
   const sign = hovering.matches ? event.target.closest('.sign[data-said]') : null;
@@ -3014,7 +3029,7 @@ function renderTrip(trip, scrollToNext) {
   // The badge leads to the line, whichever way the trip was chosen (#147),
   // with a sign in it: a finger cannot rest on it to find out.
   const line = { name: trip.line, mode: trip.mode, agency: trip.agency, at: trip.lineAt };
-  const toLine = el('button', { type: 'button', class: 'to-line', 'aria-label': t('line.open', { line: trip.line }), title: t('line.open', { line: trip.line }), onclick: () => selectLine(line) }, [
+  const toLine = el('button', { type: 'button', class: 'to-line', 'aria-label': t('line.open', { line: trip.line }), title: t('line.open', { line: trip.line }), onclick: () => selectLine(line, { fromTrip: trip.id }) }, [
     badge(trip.line, trip.mode, icon(mdiChevronRight)),
   ]);
   fillPanel(
@@ -3114,7 +3129,9 @@ function renderLine(line, first) {
 
   // (as the server writes them into the page of the line: panel.js)
   const drawn = drawing();
-  fillPanel([toDom(lineHead(line, drawn))], ...vehicleLists(line, drawn).map((node) => toDom(node)));
+  // (its stops in one direction, which it shows until another is chosen, with its vehicles along them: #256)
+  const way = Math.min(selection.way ?? 0, Math.max(0, (line.ways?.length ?? 1) - 1));
+  fillPanel([toDom(lineHead(line, drawn, way))], ...lineStops(line, drawn, way).map((node) => toDom(node)));
   panelBody.scrollTop = scrollTop;
 
   // Once, when the line is chosen: where it runs into view, between the

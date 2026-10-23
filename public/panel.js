@@ -11,6 +11,7 @@
 // Without the page around it, so that it runs on the server and in the tests
 // as it is (test/panel.test.js).
 
+import { townsAlong } from './stops.js';
 import { mdiAlert, mdiChevronRight, mdiClose, mdiFilterVariant } from './vendor/material-design-icons/icons.js';
 
 // The kinds of transport, as the API names them; any other is drawn as "other".
@@ -300,30 +301,147 @@ export const panelHead = (heading, ...more) => h('div', { class: 'panel-head' },
 
 // ---------- a line ----------
 
-/** The head of the details of a line: its name and kind, who runs it and how many of its vehicles are under way. */
-export function lineHead(line, { t }) {
-  const sub = [line.agency, line.vehicles.length ? t('line.vehicles', { count: line.vehicles.length }) : ''].filter(Boolean).join(' · ');
-  return panelHead([badge(line.name, line.mode), h('span', {}, t(`mode.${kindOf(line.mode)}`))], h('p', { class: 'sub' }, sub));
+// The rows of the stops of a line (#256), in px, as style.css has them: a
+// station, and one with a line below its name; and the padding above them.
+export const STOP_ROW = 32;
+export const NOTED_ROW = 44;
+const STOPS_TOP = 6;
+// Where its line runs, from the left of the list, and that of a branch.
+const LINE_X = 36;
+const BRANCH_X = LINE_X + 18;
+// A vehicle as the map draws it from zoom 14 (app.js): its radius, and its
+// arrowhead from the edge of the disc at ±0.6 rad to 6 px beyond, pointing
+// down the list, the way it goes.
+export const VEHICLE_R = 11;
+const point = (a, r) => `${(Math.cos(a) * r).toFixed(2)},${(Math.sin(a) * r).toFixed(2)}`;
+const ARROW_DOWN = `M${point(Math.PI / 2, VEHICLE_R + 6)}L${point(Math.PI / 2 + 0.6, VEHICLE_R)}L${point(Math.PI / 2 - 0.6, VEHICLE_R)}Z`;
+
+/** What a vehicle carries on its disc, on the map and in the stops of its line: the first word of its line, four letters at most. */
+export function vehicleLabel(line) {
+  const first = line.trim().split(/\s+/)[0] || '?';
+  return first.length > 4 ? first.slice(0, 4) : first;
+}
+
+// The colour of a delay as a flag on a marker, by its class. Late, it is one
+// class "hotter" than the dots, for the same reason (see .delay in style.css).
+export const FLAG_COLOR = { early: 'early', ok: 'ok', minor: 'major', major: 'severe', severe: 'severe' };
+
+/**
+ * The flag a vehicle carries at its shoulder: its delay in minutes, early or
+ * late, or a question mark where none is reported while others have one
+ * (`live`). On time to the minute it carries none.
+ * @returns { text, color } with the class of its colour (FLAG_COLOR, or none for the question mark), or null
+ */
+export function delayFlag(delay, live) {
+  if (delay === null || delay === undefined) return live ? { text: '?', color: 'none' } : null;
+  if (Math.round(delay / 60) === 0) return null;
+  return { text: delayText(delay), color: FLAG_COLOR[delayClass(delay)] };
 }
 
 /**
- * The vehicles of a line under way, under where they go, in the order of the
- * server: the one with the fewest stops left first. A row opens its trip.
- * @param line as api/line answers
+ * The head of the details of a line: its name and kind, who runs it and how
+ * many of its vehicles are under way; and where it goes two ways, the
+ * switch between them (#256), each named by the destination it shows over
+ * most of its way.
+ * @param way the way shown, or null for no switch
  */
-export function vehicleLists(line, context) {
+export function lineHead(line, { t }, way = null) {
+  const sub = [line.agency, line.vehicles.length ? t('line.vehicles', { count: line.vehicles.length }) : ''].filter(Boolean).join(' · ');
+  const ways = line.ways ?? [];
+  return panelHead([badge(line.name, line.mode), h('span', {}, t(`mode.${kindOf(line.mode)}`))], h('p', { class: 'sub' }, sub),
+    way !== null && ways.length > 1
+      ? h('p', { class: 'sub with-choice line-ways' }, h('span', {}, t('line.toward')),
+        h('span', { class: 'view-switch ways', role: 'group', 'aria-label': t('line.ways') },
+          ways.map((one, i) => h('button', { type: 'button', 'aria-pressed': String(i === way), 'data-way': i, title: t('line.to', { destination: one.to }) }, one.to))))
+      : null);
+}
+
+/**
+ * The stops of a line in one direction (#256), as a trip lists its stops: a
+ * line with a ring for each station, each a link to its page, the town
+ * below a name that does not say it (#246) and that some trips start or end
+ * there; branches where they leave the line or join it, the line going on
+ * beside them. Its vehicles under way on that line where they are, as the
+ * map draws them, with their flags; each opens its trip.
+ * @param line as api/line answers, with `ways` (Timetable.lineStops)
+ * @param context { t, live, colorBy, flags }: whether delays are coming in
+ *   (for the question mark of a flag), and the map's settings for the colour
+ *   of a vehicle and its flag
+ */
+export function lineStops(line, context, way = 0) {
   const { t } = context;
-  if (!line.vehicles.length) return [h('p', { class: 'panel-empty' }, t('line.none'))];
-  const byDestination = new Map();
-  for (const v of line.vehicles) byDestination.set(v.to, [...(byDestination.get(v.to) ?? []), v]);
-  const signed = line.vehicles.some((v) => v.warnings.length > 0);
-  return [...byDestination].flatMap(([destination, vehicles]) => [
-    h('h3', { class: 'rows-head' }, t('line.to', { destination })),
-    h('ul', { class: `rows${signed ? ' signed' : ''}` }, vehicles.map((v) =>
-      h('li', {}, h('button', { type: 'button', class: 'row vehicle', 'data-trip': v.id },
-        h('span', { class: 'name', title: v.next }, t('line.next', { stop: v.next })),
-        delayCell(delayNode(v.delay), v.warnings, signed, context),
-      )),
-    )),
-  ]);
+  const one = line.ways?.[way];
+  if (!one) return [];
+  const towns = townsAlong([...one.stops, ...one.branches.flatMap((branch) => branch.stops)]);
+  const noteOf = (stop) => (stop.start && stop.end ? t('line.turns') : stop.start ? t('line.starts') : stop.end ? t('line.ends') : null);
+  // (the rows one after the other, and the middle of each, where the vehicles between them are placed)
+  let y = STOPS_TOP;
+  const row = (stop, town, note, className) => {
+    const below = [town, note].filter(Boolean).join(' · ');
+    const height = below ? NOTED_ROW : STOP_ROW;
+    const middle = y + height / 2;
+    y += height;
+    const name = below ? h('span', { class: 'name' }, h('span', { class: 'stop' }, stop.name), h('span', { class: 'town' }, below)) : h('span', { class: 'name' }, stop.name);
+    return { middle, node: h('li', { class: className }, h('a', { class: `row on-line${below ? ' in-town' : ''}`, href: stop.path, 'data-station': stop.id, title: stop.name }, h('span', { class: 'rail' }), name)) };
+  };
+  const ends = (i, n) => `on-line station${i === 0 ? ' first' : ''}${i === n - 1 ? ' last' : ''}`;
+  const middles = [];
+  const inBranches = one.branches.map(() => []);
+  let next = one.stops.length; // (the town of the next stop of a branch, after those of the list)
+  const branch = (k) => {
+    const { after, before, stops } = one.branches[k];
+    // (one that leaves the line, one that joins it, one that does both, as a loop off a station and back, or one apart)
+    const kind = [after !== null ? 'leaves' : null, before !== null ? 'joins' : null].filter(Boolean).join(' ') || 'apart';
+    return h('li', { class: `branch-part ${kind}` }, h('ul', { class: 'branch' }, stops.map((stop, i) => {
+      const { middle, node } = row(stop, towns[next++], null, ends(i, stops.length));
+      inBranches[k].push(middle);
+      return node;
+    })));
+  };
+  // (a branch that leaves the line after its station, one that joins it before its station, one apart at the end)
+  const items = [];
+  one.stops.forEach((stop, i) => {
+    one.branches.forEach((b, k) => b.after === null && b.before === i && items.push(branch(k)));
+    const { middle, node } = row(stop, towns[i], noteOf(stop), ends(i, one.stops.length));
+    middles.push(middle);
+    items.push(node);
+    one.branches.forEach((b, k) => b.after === i && items.push(branch(k)));
+  });
+  one.branches.forEach((b, k) => b.after === null && b.before === null && items.push(branch(k)));
+  // the vehicles, between the middles of the rows of their two stations, as far as they have come
+  const at = (v, i) => {
+    if (v.branch === null) return [LINE_X, middles[i]];
+    const { after, before } = one.branches[v.branch];
+    const mids = inBranches[v.branch];
+    return i < 0 ? [LINE_X, middles[after]] : i >= mids.length ? [LINE_X, middles[before]] : [BRANCH_X, mids[i]];
+  };
+  const vehicles = one.vehicles.map((v) => {
+    const [x0, y0] = at(v, v.from);
+    const [x1, y1] = at(v, v.until);
+    return lineVehicle(line, v, x0 + (x1 - x0) * v.come, y0 + (y1 - y0) * v.come, context);
+  });
+  return [h('div', { class: 'line-body' },
+    h('ul', { class: 'line-stops', 'data-mode': kindOf(line.mode) }, items),
+    vehicles.length ? h('svg', { class: 'line-vehicles', height: Math.round(y + STOPS_TOP) }, vehicles) : null)];
+}
+
+/** A vehicle on the line of the stops (lineStops), as the map draws it: a button that opens its trip. */
+function lineVehicle(line, v, x, y, { t, live = false, colorBy = 'mode', flags = true }) {
+  const label = vehicleLabel(line.name);
+  const font = label.length > 3 ? 8 : label.length > 2 ? 9.5 : 11;
+  // (no flag where the colour says the delay, nor where the visitor switched them off, as on the map)
+  const flag = colorBy === 'mode' && flags ? delayFlag(v.delay, live) : null;
+  const width = flag ? (flag.text === '?' ? 12 : flag.text.length * 5.4 + 6) : 0;
+  const said = [line.name, t('line.to', { destination: v.to }), delayText(v.delay)].filter(Boolean).join(' ');
+  return h('g', { class: 'line-vehicle', transform: `translate(${x.toFixed(1)} ${y.toFixed(1)})`, 'data-trip': v.id, role: 'button', tabindex: '0', 'aria-label': said,
+    'data-mode': kindOf(line.mode), 'data-delay': colorBy === 'delay' ? delayClass(v.delay) : null },
+    h('rect', { class: 'hit', x: -18, y: -18, width: 36, height: 36, rx: 18 }),
+    h('path', { d: ARROW_DOWN }),
+    h('circle', { r: VEHICLE_R }),
+    h('text', { y: (font * 0.36).toFixed(1), 'font-size': font }, label),
+    flag ? h('g', { class: `flag ${flag.color}`, transform: `translate(${VEHICLE_R * 0.55} ${-VEHICLE_R - 5})` },
+      h('rect', { width: width.toFixed(1), height: 12, rx: 4 }),
+      h('text', { x: (width / 2).toFixed(1), y: 9 }, flag.text)) : null,
+    // (the ring of the keyboard focus, last, round all of it: its arrowhead and its flag inside)
+    h('rect', { class: 'ring', x: -19, y: -21, width: (19 + Math.max(19, VEHICLE_R * 0.55 + width + 3)).toFixed(1), height: 42, rx: 10 }));
 }

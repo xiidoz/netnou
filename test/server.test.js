@@ -315,10 +315,10 @@ test('/api/search: all stations and lines as columns, sent again only when they 
   assert.deepEqual((await get('/api/search?q=alp')).json, json);
 });
 
-test('/api/line: the vehicles of one line that are under way', async () => {
+test('/api/line: the vehicles of one line that are under way, and its stops with them', async () => {
   const { status, json } = await get('/api/line?name=U1&mode=subway&agency=Testbetrieb');
   assert.equal(status, 200);
-  assert.deepEqual(Object.keys(json).sort(), ['agency', 'at', 'mode', 'name', 'now', 'path', 'vehicles']);
+  assert.deepEqual(Object.keys(json).sort(), ['agency', 'at', 'mode', 'name', 'now', 'path', 'vehicles', 'ways']);
   assert.deepEqual([json.name, json.mode, json.agency], ['U1', 'subway', 'Testbetrieb']);
   // its place, the middle of its stations, and its address: the only line of its name has none in it (#152)
   assert.deepEqual([json.at, json.path], [[49.45, 11], 'line/testbetrieb/subway/u1']);
@@ -334,6 +334,18 @@ test('/api/line: the vehicles of one line that are under way', async () => {
     assert.ok(v.lat >= 49.4 && v.lat <= 49.5 && v.lon === 11);
   }
   assert.equal(json.vehicles.find((v) => v.id === `T1_${today}`).delay, 120);
+  // its stops (#256): the shuttle is one way, A and B by turns, each vehicle between two of them, the one ahead its next
+  assert.deepEqual(json.ways.map((way) => [way.to, way.stops.length, way.branches]), [['Rundkurs', 102, []]]);
+  assert.deepEqual(json.ways[0].stops.slice(0, 3).map((stop) => [stop.id, stop.name, stop.path]), [['A', 'Alpha', 'stop/alpha@49.4000,11.0000'], ['B', 'Beta', 'stop/beta@49.5000,11.0000'], ['A', 'Alpha', 'stop/alpha@49.4000,11.0000']]);
+  assert.deepEqual(json.ways[0].vehicles.map((v) => v.id).sort(), json.vehicles.map((v) => v.id).sort());
+  for (const v of json.ways[0].vehicles) {
+    assert.equal(v.until, v.from + 1);
+    assert.equal(json.ways[0].stops[v.until].name, json.vehicles.find((one) => one.id === v.id).next);
+    assert.ok(v.come >= 0 && v.come <= 1);
+  }
+  // opened from a trip, the way it goes
+  assert.equal((await get(`/api/line?name=U1&mode=subway&agency=Testbetrieb&trip=T1_${today}`)).json.way, 0);
+  assert.equal(json.way, undefined);
 
   // the ICE is under way too, far outside the area
   const { json: ice } = await get('/api/line?name=ICE%205&mode=longdistance&agency=Testbetrieb');
@@ -679,10 +691,11 @@ test('the address of a stop or a line is a page of its own, found again by its n
   assert.match(line, /<base href="\.\.\/\.\.\/\.\.\/">/);
   assert.match(line, /<title>U1 Rundkurs live – Netnou<\/title>/);
   assert.match(line, /content="U1 \(Testbetrieb\) live auf der Karte, jede Fahrt mit ihrer Verspätung\."/);
-  // its details as the page shows them: its vehicles under way at this moment, under where they go (#254), each with
-  // the stop ahead, which is Beta in the first half of an hour and Alpha in the second (the shuttle of the fixture)
+  // its details as the page shows them (#254): its stops, each a link to its page, and its vehicles under way along them
+  // at this moment (#256)
   assert.match(line, /<div class="panel-head"><h1><span class="badge" data-mode="subway">U1<\/span><span>U-Bahn<\/span><\/h1><p class="sub">Testbetrieb · \d Fahrzeuge unterwegs<\/p><\/div>/);
-  assert.match(line, /<div id="panel-body" data-sent><h3 class="rows-head">nach Rundkurs<\/h3><ul class="rows signed"><li><button type="button" class="row vehicle" data-trip="T1_\d{8}"><span class="name" title="(Alpha|Beta)">nächster Halt: \1<\/span>/);
+  assert.ok(line.includes('<div id="panel-body" data-sent><div class="line-body"><ul class="line-stops" data-mode="subway"><li class="on-line station first"><a class="row on-line" href="stop/alpha@49.4000,11.0000" data-station="A" title="Alpha">'));
+  assert.equal(line.match(/<g class="line-vehicle" transform="translate\(36\.0 [\d.]+\)" data-trip="T1_\d{8}" role="button" tabindex="0" aria-label="U1 nach Rundkurs[^"]*" data-mode="subway">/g).length, 2);
   const otherKind = await request('/line/testbetrieb/bus/u1');
   assert.equal(otherKind.status, 404);
   assert.ok(otherKind.body.toString().includes('Diese Linie ist nicht im Fahrplan.'));
