@@ -787,12 +787,16 @@ otherwise a server would load a file written by older code:
   of the rows of their two stations as far as they have come, as the map
   draws them with their flags. In the page as sent they are an SVG over the
   list, placed by its attributes, as the CSP of the page allows no style
-  attributes; in the page each is a button moved along the times the
-  server sends for it by an animation of its transform, which the browser
-  runs. Set anew every frame, a transform that moves a third of a pixel a
-  second went by whole pixels in Firefox and in Chrome on a phone; an
-  animation runs smoothly. Each opens its trip, and from a trip the line
-  opens in its direction.
+  attributes. In the page they are drawn as the map draws its own, with
+  its helpers, on a canvas over the line of the list, along the times the
+  server sends for each, every frame of the map's loop while they are
+  shown; over each is a button that cannot be seen, for a tap, the
+  keyboard and a screen reader, and the ring of the keyboard focus is drawn
+  last on the canvas. An element that moves a third of a pixel a second
+  went by whole pixels in Firefox and in Chrome on a phone, whether a
+  transform set every frame, a layer of its own or an animation moved it;
+  a canvas draws it where it is. Each opens its trip, and from a trip the
+  line opens in its direction.
 - **The board of a stop.** A button beside the share button enlarges the
   details of a stop into a board of its departures
   ([#81](https://github.com/xiidoz/netnou/issues/81)), the same on every
