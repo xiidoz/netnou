@@ -19,6 +19,7 @@
 //   knots    [time, lat, lon, …] along a vehicle's way ahead; the page
 //            interpolates between them
 
+import { stopPath } from '../../public/address.js';
 import { bearing, choiceKey, inChoice } from '../../public/choice.js';
 import { NETS } from './network.js';
 import { searchList } from './search-list.js';
@@ -105,6 +106,12 @@ export const hopKey = (net, from, to, stopCount) => (net * stopCount + from) * s
 // visible briefly after reaching its last stop.
 const LEAD_S = 30;
 const TRAIL_S = 15;
+// The stops of a line (#256) say below a station that some of its trips start
+// or end there where at least this share of the trips of that direction do:
+// a trip from the depot now and then would put it below most of them.
+const TURNING = 0.05;
+// How far ahead the page is told where they will be, in seconds (lineStops).
+const TRACK_S = 900;
 // No time of a timetable is as much before the start of its service day as
 // this: what is added to a time to sort it as a number that is not negative.
 const EARLIEST_S = 30 * 86400;
@@ -404,12 +411,17 @@ class Vehicle {
   #from;
   #last;
   #now;
+  #come;
   #id = null;
   #knots = null;
 
-  /** @param realtime, row the realtime data and the row of the trip in it (Snapshot in snapshot.js); -1 without any */
-  constructor(timetable, t, date, realtime, row, from, last, now, lat, lon) {
+  /**
+   * @param realtime, row the realtime data and the row of the trip in it (Snapshot in snapshot.js); -1 without any
+   * @param come how far it has come from the stop it left to the one ahead, from 0 to 1
+   */
+  constructor(timetable, t, date, realtime, row, from, last, now, lat, lon, come = 0) {
     this.#timetable = timetable;
+    this.#come = come;
     this.#trip = t;
     this.#date = date;
     this.#realtime = realtime;
@@ -432,6 +444,11 @@ class Vehicle {
     this.lineIndex = timetable.tripLine[t];
     this.next = timetable.stops.name[timetable.patternStops[timetable.patternStart[timetable.tripPattern[t]] + next]];
     this.stopsLeft = last - next;
+  }
+
+  /** Where it is in its trip, for the stops of its line (#256): the stop it left and the one ahead, as positions in its trip, and how far it has come between them. */
+  get stretch() {
+    return { t: this.#trip, from: this.#from, next: Math.min(this.#from + 1, this.#last), come: this.#come };
   }
 
   /** Whether it is the vehicle of this trip on this service day: what its id says, without making it. */
@@ -461,10 +478,15 @@ class Vehicle {
   /** [time, lat, lon, …] along its way ahead, see Timetable.knots. */
   get knots() {
     if (!this.#knots) {
-      const { arr, dep } = this.#timetable.times(this.#trip, this.#date, this.#realtime, this.#row);
+      const { arr, dep } = this.times;
       this.#knots = this.#timetable.knots(this.#trip, arr, dep, this.#from, this.#last, this.#now);
     }
     return this.#knots;
+  }
+
+  /** When its trip arrives at each of its stops and leaves it, with the delays known (Timetable.times). */
+  get times() {
+    return this.#timetable.times(this.#trip, this.#date, this.#realtime, this.#row);
   }
 }
 
@@ -1139,7 +1161,9 @@ export class Timetable extends Schedule {
         }
 
         this.position(t, i, last, t0, t1, now);
-        const vehicle = new Vehicle(this, t, date, realtime, row, i, last, now, this.at[0], this.at[1]);
+        // (how far it has come to the stop ahead: all the way where it stands there)
+        const come = arrived ? 1 : t1 > t0 ? Math.min(1, Math.max(0, (now - t0) / (t1 - t0))) : 0;
+        const vehicle = new Vehicle(this, t, date, realtime, row, i, last, now, this.at[0], this.at[1], come);
         const { mode } = vehicle;
         const next = Math.min(i + 1, last);
         out.push(vehicle);
@@ -1209,11 +1233,224 @@ export class Timetable extends Schedule {
    */
   lineVehicles(index, vehicles) {
     const { name, mode, agency, place } = this.lines[index];
-    const list = vehicles
-      .filter((v) => v.lineIndex === index)
+    const own = vehicles.filter((v) => v.lineIndex === index);
+    const list = own
       .sort((a, b) => a.to.localeCompare(b.to) || a.stopsLeft - b.stopsLeft)
       .map((v) => ({ id: v.id, to: v.to, next: v.next, delay: v.delay, lat: round5(v.lat), lon: round5(v.lon), warnings: v.warnings }));
-    return { name, mode, agency, at: place, vehicles: list };
+    return { name, mode, agency, at: place, vehicles: list, ways: this.lineStops(index, own) };
+  }
+
+  /**
+   * The stops of a line in each direction, with its vehicles along them
+   * (#256), as its card lists them: of each way (lineWays) its stations,
+   * where some of its trips start or end, its branches, and each vehicle
+   * under way between the two stations it is between.
+   * @returns [{ to, stops: [{ id, name, town, path, start, end }], branches:
+   *   [{ after, before, stops }], vehicles: [{ id, to, delay, warnings,
+   *   branch, from, until, come }] }]: `after` and `before` are the
+   *   positions in `stops` of the station a branch leaves the line at or
+   *   joins it at (null where it does neither); a vehicle is between the
+   *   stops at the positions `from` and `until` of the list, or of branch
+   *   number `branch`, where -1 and the length of the branch are the
+   *   stations it leaves the line at and joins it at; `track` where it will
+   *   be when, on from there: [time, position, …], positions as `from`,
+   *   for the page to move it between two answers
+   */
+  lineStops(index, vehicles) {
+    const stop = (s) => ({ id: this.stops.id.get(s), name: this.stops.name[s], town: this.towns[this.stops.town[s]]?.name ?? null, path: stopPath(this.stops.name[s], this.stops.lat[s], this.stops.lon[s]) });
+    const ways = this.lineWays(index);
+    const placed = ways.map(() => []);
+    for (const v of vehicles) {
+      const { t, from, next, come } = v.stretch;
+      const start = this.patternStart[this.tripPattern[t]];
+      const left = this.stationOf[this.patternStops[start + from]];
+      // (which of its calls at that station it left: a run may call at one twice, as around a loop)
+      let calls = 0;
+      for (let k = 0; k <= from; k++) if (this.stationOf[this.patternStops[start + k]] === left && (k === 0 || this.stationOf[this.patternStops[start + k - 1]] !== left)) calls++;
+      const at = this.placeOn(ways, left, this.stationOf[this.patternStops[start + next]], calls - 1);
+      if (!at) continue;
+      const track = this.trackOn(ways[at.way], at, t, from, v.times);
+      placed[at.way].push({ id: v.id, to: v.to, delay: v.delay, warnings: v.warnings, branch: at.branch, from: at.from, until: at.until, come: at.from === at.until ? 0 : Math.round(come * 100) / 100, track });
+    }
+    return ways.map((way, w) => ({
+      to: way.to,
+      // (where at least a twentieth of its trips start or end, on the way: its first and last stations are where they all do)
+      stops: way.list.map((s, i) => ({
+        ...stop(s),
+        start: i > 0 && (way.starts.get(s) ?? 0) >= TURNING * way.trips,
+        end: i < way.list.length - 1 && (way.ends.get(s) ?? 0) >= TURNING * way.trips,
+      })),
+      branches: way.branches.map(({ after, before, stations }) => ({ after, before, stops: stations.map(stop) })),
+      vehicles: placed[w].sort((a, b) => (a.branch ?? -1) - (b.branch ?? -1) || a.from + a.come - (b.from + b.come)),
+    }));
+  }
+
+  /**
+   * Where a vehicle placed on a way (placeOn) will be when, on from the stop
+   * it left: at each station of its trip that follows in the list, or in its
+   * branch, from when it arrives to when it leaves, as far as they follow and
+   * for TRACK_S.
+   * @param at where it is placed (placeOn)
+   * @param from the position in trip t of the stop it left
+   * @param times when the trip arrives and leaves at each of its stops (Timetable.times)
+   * @returns [time, position, …], times in seconds
+   */
+  trackOn(way, at, t, from, { arr, dep }) {
+    // the stations it is on, from the one it left, platforms of one station together
+    const start = this.patternStart[this.tripPattern[t]];
+    const ahead = [];
+    for (let k = from; k < this.patternStart[this.tripPattern[t] + 1] - start; k++) {
+      const station = this.stationOf[this.patternStops[start + k]];
+      if (ahead.at(-1)?.station === station) ahead.at(-1).dep = dep[k];
+      else ahead.push({ station, arr: arr[k], dep: dep[k] });
+    }
+    // the stations of where it is placed, by their positions: the list, or the branch with where it leaves and joins it
+    const branch = at.branch === null ? null : way.branches[at.branch];
+    const run = branch ? [branch.after === null ? -1 : way.list[branch.after], ...branch.stations, branch.before === null ? -1 : way.list[branch.before]] : way.list;
+    const shift = branch ? -1 : 0;
+    // (from the station it left, or from the one ahead where it is placed at that)
+    let p = at.from - shift;
+    let i = ahead.findIndex((call) => call.station === run[p]);
+    if (i < 0) return [];
+    const track = i === 0 ? [ahead[0].dep, at.from] : [ahead[i].arr, at.from, ahead[i].dep, at.from];
+    // (a quarter of an hour ahead: the page asks again long before)
+    for (i++; i < ahead.length && ahead[i - 1].dep < track[0] + TRACK_S; i++) {
+      const q = run.indexOf(ahead[i].station, p + 1);
+      if (q < 0) break;
+      p = q;
+      track.push(ahead[i].arr, p + shift, ahead[i].dep, p + shift);
+    }
+    return track;
+  }
+
+  /**
+   * Where on the ways of a line (lineWays) a vehicle is that has left the
+   * station `a` for the station `b`: between the two in the list of a way
+   * where they are nearest, or in one of its branches, or else at `b`
+   * where only that is in it. Null where neither is.
+   * @param call which of the calls of its trip at `a` it left (0 the first):
+   *   where a list has the station as often, that one of them
+   */
+  placeOn(ways, a, b, call = 0) {
+    let best = null;
+    ways.forEach((way, w) => {
+      const { list } = way;
+      // (that call first, where the list has as many, then the others)
+      const calls = list.flatMap((s, i) => (s === a ? [i] : []));
+      const order = calls.length > call ? [calls[call], ...calls.filter((_, k) => k !== call)] : calls;
+      for (const i of order) {
+        const j = a === b ? i : list.indexOf(b, i + 1);
+        if (j < i) continue;
+        if (!best || j - i < best.gap) best = { way: w, branch: null, from: i, until: j, gap: j - i };
+        break;
+      }
+    });
+    if (best) return best;
+    for (const [w, way] of ways.entries()) {
+      for (const [k, { after, before, stations }] of way.branches.entries()) {
+        // (the stations of the branch, with where it leaves and joins the line around them)
+        const run = [after === null ? -1 : way.list[after], ...stations, before === null ? -1 : way.list[before]];
+        const i = run.indexOf(a);
+        const j = run.indexOf(b, i + 1);
+        if (i >= 0 && j > i) return { way: w, branch: k, from: i - 1, until: j - 1 };
+      }
+    }
+    for (const [w, way] of ways.entries()) {
+      const j = way.list.indexOf(b);
+      if (j >= 0) return { way: w, branch: null, from: j, until: j };
+    }
+    return null;
+  }
+
+  /**
+   * The ways line number `index` goes, worked out once: the runs of its
+   * trips as their stations follow each other, on any day of the timetable,
+   * in two directions (the busiest run, and those that go along it the
+   * other way), or one for a line that goes one way only, as around a ring.
+   * The stations of a direction are a list: its busiest run, with the
+   * stations of runs that go further added at its ends and those that some
+   * runs have between two of its stations put in their place, the busier
+   * runs first. What is left of a run branches off: the stations it has
+   * after it left the list, or before it joins it. A direction is named by
+   * the destination its trips show over most of the way they go.
+   * @returns [{ to, list, branches: [{ after, before, stations }], trips,
+   *   starts, ends, patterns }]: stations by their numbers; `starts` and
+   *   `ends` how many trips start and end at each; `patterns` those of the
+   *   trips that go this way
+   */
+  lineWays(index) {
+    this.waysOfLines ??= new Map();
+    if (this.waysOfLines.has(index)) return this.waysOfLines.get(index);
+    // (the patterns of each line, found once for all of them)
+    if (!this.patternsOfLines) {
+      this.patternsOfLines = new Map();
+      for (let t = 0; t < this.tripLine.length; t++) {
+        const set = this.patternsOfLines.get(this.tripLine[t]) ?? this.patternsOfLines.set(this.tripLine[t], new Set()).get(this.tripLine[t]);
+        set.add(this.tripPattern[t]);
+      }
+    }
+    // its runs: the trips of a sequence of stations, whatever platforms they call at
+    const runs = new Map();
+    for (const pattern of this.patternsOfLines.get(index) ?? []) {
+      const seq = [];
+      for (let k = this.patternStart[pattern]; k < this.patternStart[pattern + 1]; k++) {
+        const s = this.stationOf[this.patternStops[k]];
+        if (seq.at(-1) !== s) seq.push(s);
+      }
+      if (seq.length < 2) continue;
+      const key = seq.join(',');
+      const run = runs.get(key) ?? runs.set(key, { seq, trips: 0, to: new Map(), patterns: [] }).get(key);
+      run.patterns.push(pattern);
+      for (let k = this.patternFirst[pattern]; k < this.patternFirst[pattern + 1]; k++) {
+        const t = this.tripsOfPattern[k];
+        if (this.tripLine[t] !== index) continue;
+        run.trips++;
+        const to = this.headsignAt(t, 0);
+        run.to.set(to, (run.to.get(to) ?? 0) + 1);
+      }
+    }
+    // (the busiest first, and of as busy ones the longer)
+    const sorted = [...runs.values()].filter((run) => run.trips > 0).sort((a, b) => b.trips - a.trips || b.seq.length - a.seq.length);
+    const ways = [];
+    if (sorted.length) {
+      // Which way a run goes along the busiest: by more of its steps between
+      // their common stations. One that has fewer than two of them in common
+      // goes the way where it adds the fewest stations on branches, as a
+      // shuttle from the end of the line to a village goes on from that end.
+      const along = new Map(sorted[0].seq.map((s, i) => [s, i]));
+      const directions = [[], []];
+      const unsure = [];
+      for (const run of sorted) {
+        let up = 0;
+        let down = 0;
+        let prev = null;
+        for (const s of run.seq) {
+          if (!along.has(s)) continue;
+          if (prev !== null) {
+            if (along.get(s) > prev) up++;
+            else if (along.get(s) < prev) down++;
+          }
+          prev = along.get(s);
+        }
+        // (the busiest is the first way, also where it calls at a station twice and its steps go both ways)
+        if (run === sorted[0]) directions[0].push(run);
+        else if (up === down) unsure.push(run);
+        else directions[down > up ? 1 : 0].push(run);
+      }
+      if (unsure.length && directions[1].length) {
+        const lists = directions.map((group) => wayOf(group).list);
+        for (const run of unsure) directions[branchedOff(lists[1], run.seq) < branchedOff(lists[0], run.seq) ? 1 : 0].push(run);
+        for (const group of directions) group.sort((a, b) => b.trips - a.trips || b.seq.length - a.seq.length);
+      } else directions[0].push(...unsure);
+      for (const group of directions) if (group.length) ways.push(wayOf(group));
+    }
+    this.waysOfLines.set(index, ways);
+    return ways;
+  }
+
+  /** Which of the ways of line number `index` (lineWays) trip t goes: -1 for none. */
+  wayOfTrip(index, t) {
+    return this.lineWays(index).findIndex((way) => way.patterns.has(this.tripPattern[t]));
   }
 
   /**
@@ -1562,6 +1799,90 @@ export class Timetable extends Schedule {
     found.sort((a, b) => a.planned + (a.delay ?? 0) - (b.planned + (b.delay ?? 0)) || a.day - b.day || a.t - b.t || a.p - b.p);
     return found;
   }
+}
+
+/**
+ * How many stations of a run would be on branches off a list of stations
+ * (wayOf): those of its parts the list does not have that are neither
+ * between two of its stations nor beyond one of its ends. Going from one of
+ * its stations back to one before it counts as all of them.
+ */
+function branchedOff(list, seq) {
+  const at = new Map(list.map((s, i) => [s, i]));
+  let off = 0;
+  let last = -1;
+  for (let k = 0; k < seq.length;) {
+    if (at.has(seq[k])) {
+      if (at.get(seq[k]) < last) off += list.length;
+      last = at.get(seq[k]);
+      k++;
+      continue;
+    }
+    let e = k;
+    while (e < seq.length && !at.has(seq[e])) e++;
+    const a = k > 0 ? at.get(seq[k - 1]) : -1;
+    const b = e < seq.length ? at.get(seq[e]) : -1;
+    if (!((a >= 0 && b > a) || (a === list.length - 1 && b < 0) || (a < 0 && b === 0))) off += e - k;
+    k = e;
+  }
+  return off;
+}
+
+/**
+ * The way of a line in one direction (Timetable.lineWays), from the runs that
+ * go that way, the busiest first: { seq, trips, to, patterns } each, `to` how
+ * many of its trips show which destination at their start.
+ */
+function wayOf(runs) {
+  const list = [...runs[0].seq];
+  const branches = [];
+  for (const run of runs.slice(1)) {
+    let at = new Map(list.map((s, i) => [s, i]));
+    for (let k = 0; k < run.seq.length;) {
+      if (at.has(run.seq[k])) {
+        k++;
+        continue;
+      }
+      // (a part of the run that the list does not have, and the stations of the list before and after it)
+      let e = k;
+      while (e < run.seq.length && !at.has(run.seq[e])) e++;
+      const part = run.seq.slice(k, e);
+      const a = k > 0 ? at.get(run.seq[k - 1]) : -1;
+      const b = e < run.seq.length ? at.get(run.seq[e]) : -1;
+      if (a >= 0 && b > a) list.splice(b, 0, ...part);
+      else if (a >= 0 && b < 0 && a === list.length - 1) list.push(...part);
+      else if (a < 0 && b === 0) list.unshift(...part);
+      else branches.push({ after: a >= 0 ? list[a] : null, before: b >= 0 ? list[b] : null, stations: part });
+      at = new Map(list.map((s, i) => [s, i]));
+      k = e;
+    }
+  }
+  // (a station of a branch that a later run put in the list is no longer on it, nor one of an earlier branch)
+  const listed = new Set(list);
+  const branched = new Set();
+  const kept = [];
+  for (const { after, before, stations } of branches) {
+    const own = stations.filter((s) => !listed.has(s) && !branched.has(s));
+    for (const s of own) branched.add(s);
+    if (own.length) kept.push({ after: after === null ? null : list.indexOf(after), before: before === null ? null : list.indexOf(before), stations: own });
+  }
+  const count = (pick) => {
+    const counts = new Map();
+    for (const run of runs) counts.set(pick(run), (counts.get(pick(run)) ?? 0) + run.trips);
+    return counts;
+  };
+  // (the destination shown over most of the way, trips by the stations they go: not that of short runs, however many)
+  const to = new Map();
+  for (const run of runs) for (const [name, n] of run.to) to.set(name, (to.get(name) ?? 0) + n * run.seq.length);
+  return {
+    to: [...to].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))[0][0],
+    list,
+    branches: kept,
+    trips: runs.reduce((n, run) => n + run.trips, 0),
+    starts: count((run) => run.seq[0]),
+    ends: count((run) => run.seq.at(-1)),
+    patterns: new Set(runs.flatMap((run) => run.patterns)),
+  };
 }
 
 /**

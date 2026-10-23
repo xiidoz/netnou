@@ -22,7 +22,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { LANGUAGES, pageTexts, pickLanguage, t } from '../../public/i18n.js';
 import * as shapes from '../../public/vendor/material-design-icons/icons.js';
-import { choiceChip, departureLists, departuresSub, h, lineHead, lineLists, panelHead, toHtml, vehicleLists } from '../../public/panel.js';
+import { choiceChip, departureLists, departuresSub, h, lineHead, lineLists, lineStops, panelHead, toHtml } from '../../public/panel.js';
 
 export const LANGUAGE_CODES = LANGUAGES.map(([code]) => code);
 // The picture of a link's preview: the icon, unless the operator has one of
@@ -400,7 +400,8 @@ export function renderManifest(json, { language, texts, siteName, areaName, site
  * the visitor chooses otherwise (both, state.times in app.js), the switch to
  * all its lines and the chip of the lines the departures are of, and behind
  * the switch all its lines, each a link to its page (#255); a line's
- * vehicles under way. The notes of a stop come with the script.
+ * stops in its first direction, each a link to its page, with its vehicles
+ * where they are (#256). The notes of a stop come with the script.
  * @param kind 'stop' or 'line'
  * @param data what api/departures (with list=lines) or api/line answers for it
  * @param fixed whether the page is a screen on a wall set up for one purpose, which has neither switch nor chip
@@ -413,7 +414,7 @@ export function panelHtml(kind, data, { language, texts, timeZone, now, fixed = 
   const [head, body] = kind === 'stop'
     ? [panelHead(data.name, fixed ? departuresSub(null, null, drawing) : departuresSub('departures', choiceChip([], drawing), drawing)),
       [...departureLists(data, drawing), fixed ? null : h('div', { class: 'view-lines', hidden: true }, lineLists(data, drawing))].filter(Boolean)]
-    : [lineHead(data, drawing), vehicleLists(data, drawing)];
+    : [lineHead(data, drawing, 0), lineStops(data, { ...drawing, live: data.vehicles.some((v) => v.delay !== null) }, 0)];
   return { head: toHtml(head), body: body.map(toHtml).join('') };
 }
 

@@ -159,9 +159,12 @@ export default {
   'notes.warningOf': 'Warnung: {text}',
 
   'line.vehicles': { one: '{count} Fahrzeug unterwegs', other: '{count} Fahrzeuge unterwegs' },
-  'line.none': 'Von dieser Linie ist gerade kein Fahrzeug unterwegs.',
   'line.to': 'nach {destination}',
-  'line.next': 'nächster Halt: {stop}',
+  'line.toward': 'nach',
+  'line.ways': 'Richtung',
+  'line.starts': 'Hier beginnen manche Fahrten',
+  'line.ends': 'Hier enden manche Fahrten',
+  'line.turns': 'Hier beginnen und enden manche Fahrten',
   'line.open': 'Zur Linie {line}',
 
   'stop.platform': 'Gl. {platform}',

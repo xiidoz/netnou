@@ -768,6 +768,35 @@ otherwise a server would load a file written by older code:
   line is shown, as "All lines" is the switch beside it, and chooses among
   the departures only: the list of all lines shows them all. A board and a
   screen on a wall have no switch.
+- **The stops of a line** ([#256](https://github.com/xiidoz/netnou/issues/256)).
+  The details of a line list its stations in one direction at a time, a
+  switch after "nach" naming the two by their destinations; on a line with
+  a ring for each station, as a trip has its stops, each a link to its page,
+  with the town below a name that does not say it. Only 22 % of lines call
+  at the same stations both ways, so each direction has a list of its own:
+  the run most of its trips take, with those of runs that go further added
+  at its ends and the stations some runs have between two of its stations
+  put in their place (`Timetable.lineWays`, worked out once for each line).
+  That holds 90 % of the stations of all of Germany; what is left is on
+  branches, drawn where they leave the line or join it, the line going on
+  beside them. Below a station where a twentieth of the trips of the
+  direction start or end, a line says so: half of all directions end at
+  more than one station. A direction is named by the destination its
+  trips show over most of the way they go, not by that of its short runs.
+  Its vehicles are drawn on that line where they are, between the middles
+  of the rows of their two stations as far as they have come, as the map
+  draws them with their flags. In the page as sent they are an SVG over the
+  list, placed by its attributes, as the CSP of the page allows no style
+  attributes. In the page they are drawn as the map draws its own, with
+  its helpers, on a canvas over the line of the list, along the times the
+  server sends for each, every frame of the map's loop while they are
+  shown; over each is a button that cannot be seen, for a tap, the
+  keyboard and a screen reader, and the ring of the keyboard focus is drawn
+  last on the canvas. An element that moves a third of a pixel a second
+  went by whole pixels in Firefox and in Chrome on a phone, whether a
+  transform set every frame, a layer of its own or an animation moved it;
+  a canvas draws it where it is. Each opens its trip, and from a trip the
+  line opens in its direction.
 - **The board of a stop.** A button beside the share button enlarges the
   details of a stop into a board of its departures
   ([#81](https://github.com/xiidoz/netnou/issues/81)), the same on every

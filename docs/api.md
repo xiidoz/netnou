@@ -443,13 +443,15 @@ request with a matching `If-None-Match` is answered with 304.
 
 ## `GET /api/line`
 
-The vehicles of one line that are under way.
+The vehicles of one line that are under way, and its stops in each
+direction with its vehicles along them.
 
 | Parameter | Meaning |
 | --- | --- |
 | `name`, `mode`, `agency` | the line, as [`/api/search`](#get-apisearch) lists it; all three are needed |
 | `at` | `lat,lon`: of the lines of that name, mode and operator in places apart, the one whose place (`at` of the answer) is nearest; without it the busiest |
 | `route` | `1`: with `route`, where the line runs today (below) |
+| `trip` | the id of a trip of the line (as `/api/trip` takes it): with `way`, which of its `ways` that trip goes, for the page that opens the line from it |
 | `open` | `1`: the page's first request for a line it opens, which counts as a visit of its address where [visits are counted](configuration.md#counting-visits) |
 
 ```json
@@ -483,6 +485,46 @@ The vehicles are sorted by destination and, among those with the same one,
 by how many stops they have left. A line with no vehicle under way answers
 with an empty list; a line that does not exist with 404. Asking keeps the
 server fetching the realtime feed, like `/api/vehicles`.
+
+`ways` are the stops of the line in each of its directions, with its
+vehicles along them (#256): two for most lines, one for a line that goes one
+way only, as around a ring. The stops of a direction are those of the run
+most of its trips take, with those of runs that go further added at its ends
+and those that some runs have between two of its stations put in their
+place, from the trips of all days of the timetable. What is left of a run is
+a branch: the stations it has after it leaves the list, or before it joins
+it. A direction is named by the destination its trips show over most of the
+way they go.
+
+```json
+"ways": [
+  {
+    "to": "Langwasser Süd",
+    "stops": [
+      { "id": "1041", "name": "Fürth Hardhöhe", "town": "Fürth", "path": "stop/fuerth-hardhoehe@49.4802,10.9817", "start": false, "end": false },
+      …,
+      { "id": "384784", "name": "Nürnberg Eberhardshof", "town": "Nürnberg", "path": "stop/nuernberg-eberhardshof@49.4573,11.0306", "start": true, "end": false },
+      …
+    ],
+    "branches": [],
+    "vehicles": [
+      { "id": "640168_20261022", "to": "Langwasser Süd", "delay": 60, "warnings": [], "branch": null, "from": 2, "until": 3, "come": 0.78,
+        "track": [1792669023, 2, 1792669096, 3, 1792669096, 3, 1792669191, 4, …] },
+      …
+    ]
+  },
+  { "to": "Fürth Hardhöhe", … }
+]
+```
+
+| Field | Type | Meaning |
+| --- | --- | --- |
+| `stops[].start`, `end` | boolean | whether at least a twentieth of the trips of the direction start or end there, on the way: at its first and last stops they all do |
+| `branches[].after`, `before` | integer or `null` | the place in `stops` of the station the branch leaves the line after, and of the one it joins it before; `null` where it does not |
+| `branches[].stops` | array | its stations, as in `stops` without `start` and `end` |
+| `vehicles[].from`, `until` | integers | the places of the two stops it is between, in `stops`, or in those of branch number `branch` where that is not `null`: there -1 is the station it leaves the line at and the length of the branch the one it joins it at; the same twice where it stands at that stop |
+| `vehicles[].come` | number | how far it has come between them, from 0 to 1 |
+| `vehicles[].track` | array | where it will be when, from the stop it left on for a quarter of an hour: `[time, position, …]`, a time in seconds and a place as `from` has it, from its arrival at each station to its departure; for the page to move it along between two answers |
 
 With `route=1` the answer also says where the line runs: the routes of its
 trips of the day, each stretch between two stops once. The page asks for it

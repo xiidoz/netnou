@@ -785,11 +785,92 @@ button:focus-visible, select:focus-visible, .row:focus-visible, .panel:focus-vis
 .row.departure.times-both .minutes { text-align: right; }
 .row.cancelled .minutes { text-decoration: line-through; color: var(--text-muted); font-weight: 400; }
 
-/* the vehicles of a line: the stop ahead and the delay, under a heading that says where they go */
-.row.vehicle { grid-template-columns: 1fr auto; }
-/* (their delays are at the end of the rows: the sign after them, a little apart) */
-.rows.signed .row.vehicle { grid-template-columns: 1fr 48px; }
-.row.vehicle .late .delay { margin-right: 3px; text-align: right; }
+/* The stops of a line in one direction (#256): a line in the colour of its
+   kind with a ring for each station, as a trip has them, its rows exactly
+   as high as lineStops in panel.js counts them (STOP_ROW, NOTED_ROW, and
+   STOPS_TOP above them), for it places the vehicles on the line by them.
+   A branch leaves the line in a curve, or joins it, the line going on
+   beside it. */
+.panel-head .sub.line-ways { margin-top: 10px; }
+.view-switch.ways { min-width: 0; max-width: calc(100% - 3em); }
+.view-switch.ways button { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.line-body { position: relative; }
+.line-stops { list-style: none; margin: 0; padding: 6px 0; --rail: var(--mode-other); }
+.line-stops[data-mode="subway"] { --rail: var(--mode-subway); }
+.line-stops[data-mode="tram"] { --rail: var(--mode-tram); }
+.line-stops[data-mode="bus"] { --rail: var(--mode-bus); }
+.line-stops[data-mode="suburban"] { --rail: var(--mode-suburban); }
+.line-stops[data-mode="regional"] { --rail: var(--mode-regional); }
+.line-stops[data-mode="longdistance"] { --rail: var(--mode-longdistance); }
+.line-stops[data-mode="ferry"] { --rail: var(--mode-ferry); }
+.line-stops[data-mode="cable"] { --rail: var(--mode-cable); }
+.line-stops ul { list-style: none; margin: 0; padding: 0; }
+.row.on-line { grid-template-columns: 44px minmax(0, 1fr); height: 32px; padding-block: 0; color: inherit; text-decoration: none; }
+.row.on-line.in-town { height: 44px; }
+.row.on-line > .name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.on-line .rail { position: relative; align-self: stretch; }
+.on-line .rail::before { content: ""; position: absolute; left: 20.5px; top: 0; bottom: 0; width: 3px; background: var(--rail); opacity: 0.85; }
+.on-line.first > .row .rail::before { top: 50%; }
+.on-line.last > .row .rail::before { bottom: 50%; }
+.on-line .rail::after {
+  content: "";
+  position: absolute;
+  left: 17px;
+  top: 50%;
+  width: 7px;
+  height: 7px;
+  margin-top: -5.5px;
+  border-radius: 50%;
+  background: var(--bg);
+  border: 2px solid var(--rail);
+}
+.line-stops .branch-part { position: relative; }
+/* (the line beside a branch: not beside one that is apart from it) */
+.line-stops .branch-part::before { content: ""; position: absolute; left: 34.5px; top: 0; bottom: 0; width: 3px; background: var(--rail); opacity: 0.85; }
+.line-stops .branch-part.apart::before { display: none; }
+.line-stops .branch { position: relative; }
+.line-stops .branch .row.on-line { padding-left: 32px; }
+.line-stops .branch::before, .line-stops .branch::after { content: ""; position: absolute; box-sizing: border-box; left: 34.5px; width: 21px; height: 34px; border: 0 solid var(--rail); opacity: 0.85; }
+/* (one that leaves curves off the line above its first stop, one that joins curves into it below its last) */
+.line-stops .leaves > .branch::before { top: -16px; border-width: 3px 3px 0 0; border-top-right-radius: 16px; }
+.line-stops .joins > .branch::after { bottom: -16px; border-width: 0 3px 3px 0; border-bottom-right-radius: 16px; }
+/* The vehicles on it, as the map draws them (lineVehicle in panel.js): in
+   the colour of their kind, or of their delay where the map has them so,
+   with white edges and the flag of their delay. */
+svg.line-vehicles { position: absolute; left: 0; top: 0; width: 100%; overflow: visible; pointer-events: none; }
+/* (in the page, drawn on a canvas over the line of the list as the map draws them, which moves them smoothly in
+   every browser, each under a button that cannot be seen; drawLineVehicles in app.js, LINE_CANVAS_PX its width) */
+div.line-vehicles { position: absolute; left: 0; top: 0; bottom: 0; width: 100px; pointer-events: none; }
+canvas.line-canvas { display: block; width: 100%; height: 100%; }
+button.line-vehicle { position: absolute; left: -18px; top: -18px; width: 36px; height: 36px; padding: 0; border: 0; border-radius: 50%; background: none; opacity: 0; pointer-events: auto; }
+.line-vehicle { pointer-events: auto; cursor: pointer; --sign: var(--mode-other); }
+.line-vehicle[data-mode="subway"] { --sign: var(--mode-subway); }
+.line-vehicle[data-mode="tram"] { --sign: var(--mode-tram); }
+.line-vehicle[data-mode="bus"] { --sign: var(--mode-bus); }
+.line-vehicle[data-mode="suburban"] { --sign: var(--mode-suburban); }
+.line-vehicle[data-mode="regional"] { --sign: var(--mode-regional); }
+.line-vehicle[data-mode="longdistance"] { --sign: var(--mode-longdistance); }
+.line-vehicle[data-mode="ferry"] { --sign: var(--mode-ferry); }
+.line-vehicle[data-mode="cable"] { --sign: var(--mode-cable); }
+.line-vehicle[data-delay="early"] { --sign: var(--delay-early); }
+.line-vehicle[data-delay="ok"] { --sign: var(--delay-ok); }
+.line-vehicle[data-delay="minor"] { --sign: var(--delay-minor); }
+.line-vehicle[data-delay="major"] { --sign: var(--delay-major); }
+.line-vehicle[data-delay="severe"] { --sign: var(--delay-severe); }
+.line-vehicle[data-delay="none"] { --sign: var(--delay-none); }
+.line-vehicle .hit { fill: transparent; }
+.line-vehicle path, .line-vehicle circle { fill: var(--sign); stroke: #fff; stroke-width: 1.5; stroke-linejoin: round; }
+.line-vehicle text { fill: var(--letters); font-family: system-ui, sans-serif; font-weight: 700; text-anchor: middle; }
+.line-vehicle .flag rect { stroke: #fff; stroke-width: 1; }
+.line-vehicle .flag.early rect { fill: var(--delay-early); }
+.line-vehicle .flag.ok rect { fill: var(--delay-ok); }
+.line-vehicle .flag.major rect { fill: var(--delay-major); }
+.line-vehicle .flag.severe rect { fill: var(--delay-severe); }
+.line-vehicle .flag.none rect { fill: var(--delay-none); }
+.line-vehicle .flag text { font-size: 9px; }
+.line-vehicle:focus { outline: none; }
+.line-vehicle .ring { fill: none; stroke: none; }
+.line-vehicle:focus-visible .ring { stroke: var(--accent); stroke-width: 2; }
 .rows-head { margin: 0; padding: 10px 14px 0; color: var(--text-muted); font-size: 13px; font-weight: 650; }
 /* (where the next day begins in a list of departures: the word, and a line on to the edge) */
 .day-head { display: flex; align-items: center; gap: 8px; padding-right: 14px; }

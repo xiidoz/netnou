@@ -6,7 +6,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { t as translate } from '../public/i18n.js';
 import en from '../public/locales/en.js';
-import { badge, choiceChip, delayClass, delayText, departureLists, departuresSub, directionSign, h, lineHead, lineLists, panelHead, toHtml, vehicleLists } from '../public/panel.js';
+import { badge, choiceChip, delayClass, delayFlag, delayText, departureLists, departuresSub, directionSign, h, lineHead, lineLists, lineStops, panelHead, toHtml, trackAt, vehicleLabel } from '../public/panel.js';
 
 const NOW = Date.parse('2026-10-23T10:00:00Z') / 1000;
 // (times of day and dates in UTC, so that the test reads the same anywhere)
@@ -125,17 +125,76 @@ test('all lines of a stop: the badge of each leading to it, beside its ways with
   assert.ok(html(lineLists({ lines: [warned, tram] }, drawing())).includes('<ul class="line-rows signed">'));
 });
 
-test('the vehicles of a line under way, under where they go, each opening its trip', () => {
-  const vehicle = (id, to, next, delay = null) => ({ id, to, next, delay, warnings: [] });
-  const line = { name: 'U1', mode: 'subway', agency: 'VAG', vehicles: [vehicle('a', 'Fürth Hardhöhe', 'Gostenhof', 60), vehicle('b', 'Fürth Hardhöhe', 'Plärrer'), vehicle('c', 'Langwasser Süd', 'Aufseßplatz', 360)] };
-  assert.equal(toHtml(lineHead(line, drawing())), `<div class="panel-head"><h1><span class="badge" data-mode="subway">U1</span><span>${en['mode.subway']}</span></h1><p class="sub">VAG · 3 vehicles under way</p></div>`);
-  assert.equal(html(vehicleLists(line, drawing())), '<h3 class="rows-head">to Fürth Hardhöhe</h3><ul class="rows">'
-    + '<li><button type="button" class="row vehicle" data-trip="a"><span class="name" title="Gostenhof">next: Gostenhof</span><span class="delay" data-delay="ok">+1</span></button></li>'
-    + '<li><button type="button" class="row vehicle" data-trip="b"><span class="name" title="Plärrer">next: Plärrer</span><span class="delay" data-delay="none"></span></button></li>'
-    + '</ul><h3 class="rows-head">to Langwasser Süd</h3><ul class="rows">'
-    + '<li><button type="button" class="row vehicle" data-trip="c"><span class="name" title="Aufseßplatz">next: Aufseßplatz</span><span class="delay" data-delay="major">+6</span></button></li></ul>');
-  // none under way
-  const none = { ...line, vehicles: [] };
-  assert.equal(toHtml(lineHead(none, drawing())), `<div class="panel-head"><h1><span class="badge" data-mode="subway">U1</span><span>${en['mode.subway']}</span></h1><p class="sub">VAG</p></div>`);
-  assert.equal(html(vehicleLists(none, drawing())), `<p class="panel-empty">${en['line.none']}</p>`);
+test('the head of a line: its name and kind, its operator and vehicles, and the switch between its two directions (#256)', () => {
+  const line = { name: 'U1', mode: 'subway', agency: 'VAG', vehicles: [{ id: 'a' }, { id: 'b' }, { id: 'c' }], ways: [{ to: 'Langwasser Süd' }, { to: 'Fürth Hardhöhe' }] };
+  const head = `<div class="panel-head"><h1><span class="badge" data-mode="subway">U1</span><span>${en['mode.subway']}</span></h1><p class="sub">VAG · 3 vehicles under way</p>`;
+  assert.equal(toHtml(lineHead(line, drawing(), 1)), `${head}<p class="sub with-choice line-ways"><span>${en['line.toward']}</span><span class="view-switch ways" role="group" aria-label="${en['line.ways']}">`
+    + '<button type="button" aria-pressed="false" data-way="0" title="to Langwasser Süd">Langwasser Süd</button><button type="button" aria-pressed="true" data-way="1" title="to Fürth Hardhöhe">Fürth Hardhöhe</button></span></p></div>');
+  // none to switch: without a way shown, or with one way only, as around a ring; none under way
+  assert.equal(toHtml(lineHead(line, drawing())), `${head}</div>`);
+  assert.equal(toHtml(lineHead({ ...line, ways: [{ to: 'Ring' }] }, drawing(), 0)), `${head}</div>`);
+  assert.ok(toHtml(lineHead({ ...line, vehicles: [] }, drawing())).includes('<p class="sub">VAG</p>'));
+});
+
+test('the stops of a line in one direction, with its vehicles along them as the map draws them (#256)', () => {
+  const stop = (name, more = {}) => ({ id: name.slice(0, 2), name, town: null, path: `stop/${name.toLowerCase()}`, start: false, end: false, ...more });
+  const vehicle = (id, more) => ({ id, to: 'Langwasser Süd', delay: null, warnings: [], branch: null, ...more });
+  const line = { name: 'U1', mode: 'subway', agency: 'VAG', vehicles: [], ways: [{
+    to: 'Langwasser Süd',
+    stops: [stop('Hardhöhe'), stop('Gostenhof', { start: true }), stop('Messe', { end: true, start: true }), stop('Langwasser Süd')],
+    branches: [{ after: 1, before: null, stops: [stop('Depot')] }],
+    vehicles: [
+      vehicle('a', { delay: 180, from: 0, until: 1, come: 0.5, track: [NOW - 60, 0, NOW + 60, 1, NOW + 90, 1] }),
+      vehicle('b', { to: 'Messe', from: 2, until: 2, come: 0 }),
+      vehicle('c', { to: 'Depot', delay: 20, branch: 0, from: -1, until: 0, come: 1 }),
+    ],
+  }] };
+  const out = html(lineStops(line, { ...drawing(), live: true }));
+  // a station: a link to its page, which the page opens in the details by its id; the first and the last end the line
+  assert.ok(out.startsWith('<div class="line-body"><ul class="line-stops" data-mode="subway"><li class="on-line station first"><a class="row on-line" href="stop/hardhöhe" data-station="Ha" title="Hardhöhe"><span class="rail"></span><span class="name">Hardhöhe</span></a></li>'));
+  // where some trips start, end, or both: below the name, in a higher row
+  assert.ok(out.includes(`<a class="row on-line in-town" href="stop/gostenhof" data-station="Go" title="Gostenhof"><span class="rail"></span><span class="name"><span class="stop">Gostenhof</span><span class="town">${en['line.starts']}</span></span></a>`));
+  assert.ok(out.includes(`<span class="town">${en['line.turns']}</span>`));
+  // a branch where it leaves the line, after its station
+  assert.ok(out.includes('</a></li><li class="branch-part leaves"><ul class="branch"><li class="on-line station first last"><a class="row on-line" href="stop/depot"'));
+  assert.ok(out.includes('<li class="on-line station last"><a class="row on-line" href="stop/langwasser süd"'));
+  // The vehicles between the middles of the rows: from 6 px down, Hardhöhe at 22, Gostenhof at 60 (a higher row),
+  // the depot of the branch at 98, Messe at 136, Langwasser Süd at 174; the list 196 px high.
+  assert.ok(out.includes('<svg class="line-vehicles" height="196">'));
+  const at = (id) => out.match(new RegExp(`<g class="line-vehicle" transform="translate\\(([\\d.]+) ([\\d.]+)\\)" data-trip="${id}"`)).slice(1).map(Number);
+  assert.deepEqual([at('a'), at('b'), at('c')], [[36, 41], [36, 136], [54, 98]]);
+  // (one without a track has none for the page: it stays where it is until the next answer)
+  assert.ok(!out.includes('data-trip="b" role="button" tabindex="0" aria-label="U1 to Messe" data-mode="subway" data-track'));
+  // as a button named by its line, where it goes and its delay, with where it will be when in px for the page to move
+  // it by itself (its track: placed by it, at the middle of its way between its first two places); the disc of its kind
+  // with the name of its line, its arrowhead down the list, and the flag of its delay in the colour of the map, a
+  // question mark where none is known
+  assert.ok(out.includes(`data-trip="a" role="button" tabindex="0" aria-label="U1 to Langwasser Süd +3" data-mode="subway" data-track="${NOW - 60},36,22,${NOW + 60},36,60,${NOW + 90},36,60"><rect class="hit" x="-18" y="-18" width="36" height="36" rx="18"></rect><path d="M0.00,17.00L-6.21,9.08L6.21,9.08Z"></path><circle r="11"></circle><text y="4.0" font-size="11">U1</text><g class="flag major" transform="translate(6.050000000000001 -16)"><rect width="16.8" height="12" rx="4"></rect><text x="8.4" y="9">+3</text></g><rect class="ring" x="-19" y="-21" width="44.9" height="42" rx="10"></rect></g>`));
+  assert.ok(out.includes('aria-label="U1 to Messe"') && out.includes('<g class="flag none"') && out.includes('<text x="6.0" y="9">?</text>'));
+  // on time to the minute: no flag; without delays coming in, no question mark
+  assert.ok(out.includes('data-trip="c" role="button" tabindex="0" aria-label="U1 to Depot ±0" data-mode="subway"><rect class="hit" x="-18" y="-18" width="36" height="36" rx="18"></rect><path d="M0.00,17.00L-6.21,9.08L6.21,9.08Z"></path><circle r="11"></circle><text y="4.0" font-size="11">U1</text><rect class="ring" x="-19" y="-21" width="38.0" height="42" rx="10"></rect></g>'));
+  assert.ok(!html(lineStops(line, drawing())).includes('<g class="flag none"'));
+  // coloured by delay as the map can be, or with the flags switched off: no flags
+  const byDelay = html(lineStops(line, { ...drawing(), live: true, colorBy: 'delay' }));
+  assert.ok(byDelay.includes('data-mode="subway" data-delay="minor"') && !byDelay.includes('class="flag'));
+  assert.ok(!html(lineStops(line, { ...drawing(), live: true, flags: false })).includes('class="flag'));
+  // in the page, which moves them and draws them on a canvas as the map does: each a button that cannot be seen, with
+  // where it is and its track, its kind, delay and label
+  const moving = html(lineStops(line, { ...drawing(), live: true, moving: true }));
+  assert.ok(moving.includes(`<div class="line-vehicles"><canvas class="line-canvas" aria-hidden="true"></canvas><button type="button" class="line-vehicle" data-trip="a" aria-label="U1 to Langwasser Süd +3" data-mode="subway" data-late="180" data-label="U1" data-at="36.0,41.0" data-track="${NOW - 60},36,22,${NOW + 60},36,60,${NOW + 90},36,60"></button>`));
+  assert.ok(moving.includes('<button type="button" class="line-vehicle" data-trip="c" aria-label="U1 to Depot ±0" data-mode="subway" data-late="20" data-label="U1" data-at="54.0,98.0"></button>') && !moving.includes('<svg'));
+  // without vehicles under way, no drawing of them; a direction that is not there, nothing
+  assert.ok(!html(lineStops({ ...line, ways: [{ ...line.ways[0], vehicles: [] }] }, drawing())).includes('<svg'));
+  assert.deepEqual(lineStops(line, drawing(), 1), []);
+});
+
+test('a vehicle of the stops of a line goes along its track as the time goes', () => {
+  const track = [100, 36, 20, 160, 36, 80, 220, 36, 80, 280, 54, 110];
+  assert.deepEqual([50, 100, 130, 160, 200, 250, 280, 400].map((now) => trackAt(track, now)), [[36, 20], [36, 20], [36, 50], [36, 80], [36, 80], [45, 95], [54, 110], [54, 110]]);
+});
+
+test('a vehicle carries the first word of its line on its disc, and its delay as a flag where it is not on time', () => {
+  assert.deepEqual(['U1', 'ICE 25', 'Bus 123', 'ABCDEF', ' '].map(vehicleLabel), ['U1', 'ICE', 'Bus', 'ABCD', '?']);
+  assert.deepEqual([[-90, false], [20, false], [150, false], [400, false], [null, false], [null, true]].map(([delay, live]) => delayFlag(delay, live)),
+    [{ text: '−1', color: 'early' }, null, { text: '+3', color: 'major' }, { text: '+7', color: 'severe' }, null, { text: '?', color: 'none' }]);
 });

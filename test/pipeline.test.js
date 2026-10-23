@@ -762,6 +762,43 @@ test('a station has every line that leaves it, with the next departure each way 
   assert.equal(timetable.linesAt('nowhere', at('10:00'), null), null);
 });
 
+test('a line has its stops in each direction, and its vehicles between them (#256)', async () => {
+  const u1 = timetable.lines.findIndex((line) => line.name === 'U1');
+  const trip = (id) => timetable.tripIndex.get(id);
+  const names = (way) => way.stops.map((stop) => stop.name);
+  // T1 from Alpha by Beta to Gamma, T4 back to Alpha on Friday nights: two ways, the busier first, each named by its destination
+  const beta = timetable.departures('B', at('09:50'), null).departures.find((dep) => dep.line === 'U1').to;
+  const [there, back] = timetable.lineStops(u1, []);
+  assert.deepEqual([there.to, names(there), back.to, names(back)], [beta, ['Alpha', 'Beta, Markt', 'Gamma'], 'Alpha', ['Gamma', 'Alpha']]);
+  assert.deepEqual(there.stops[0], { id: 'SA', name: 'Alpha', town: null, path: 'stop/alpha@49.4000,11.0000', start: false, end: false });
+  assert.deepEqual([timetable.wayOfTrip(u1, trip('T1')), timetable.wayOfTrip(u1, trip('T4'))], [0, 1]);
+  // at 10:15 T1 has left Beta at 10:12 for Gamma at 10:20: three eighths of the way
+  const vehicles = timetable.vehicles(at('10:15'), null).filter((v) => v.lineIndex === u1);
+  // and where it will be when: at Gamma from 10:20, its end
+  assert.deepEqual(timetable.lineStops(u1, vehicles)[0].vehicles, [{ id: `T1_${DAY}`, to: beta, delay: null, warnings: [], branch: null, from: 1, until: 2, come: 0.38, track: [at('10:12'), 1, at('10:20'), 2, at('10:20'), 2] }]);
+  assert.deepEqual(timetable.lineVehicles(u1, vehicles).ways, timetable.lineStops(u1, vehicles));
+
+  // A short run from Beta, and one that leaves the line after Beta for Delta: Beta is where a share of the trips
+  // start (one of four), and Delta is on a branch after it.
+  const files = {
+    'stops.txt': `${FEED['stops.txt']}Delta,,D,49.55,11.20,,\r\n`,
+    'trips.txt': `${FEED['trips.txt']}R1,DAILY,T5\nR1,DAILY,T6\nR1,DAILY,T7\n`,
+    'stop_times.txt': `${FEED['stop_times.txt']}${[
+      'T5,11:10:00,11:12:00,B,1,Gamma,,', 'T5,11:20:00,11:20:00,C,2,Gamma,,',
+      'T6,12:00:00,12:00:00,A,0,Delta,,', 'T6,12:10:00,12:12:00,B,1,Delta,,', 'T6,12:20:00,12:20:00,D,2,Delta,,',
+      'T7,13:00:00,13:00:00,A,0,Gamma,,', 'T7,13:10:00,13:12:00,B,1,Gamma,,', 'T7,13:20:00,13:20:00,C,2,Gamma,,',
+    ].join('\n')}\n`,
+  };
+  const more = await importFeed(files, 'branch.zip');
+  const line = more.lines.findIndex((one) => one.name === 'U1');
+  const [way] = more.lineStops(line, []);
+  assert.deepEqual([names(way), way.stops.map((stop) => [stop.start, stop.end])], [['Alpha', 'Beta, Markt', 'Gamma'], [[false, false], [true, false], [false, false]]]);
+  assert.deepEqual(way.branches, [{ after: 1, before: null, stops: [{ id: 'D', name: 'Delta', town: null, path: 'stop/delta@49.5500,11.2000' }] }]);
+  // T6 between Beta and Delta: from the line onto the branch
+  const onBranch = more.lineStops(line, more.vehicles(at('12:16'), null).filter((v) => v.lineIndex === line))[0].vehicles;
+  assert.deepEqual(onBranch.map(({ id, branch, from, until, come }) => [id, branch, from, until, come]), [[`T6_${DAY}`, 0, -1, 0, 0.5]]);
+});
+
 test('alerts are shown only during their active periods', () => {
   const feed = decodeFeed(encodeFeed({
     timestamp: 1,
