@@ -746,6 +746,22 @@ test('a station has its lines with where each goes next, and a board of some of 
   assert.deepEqual(lines(['subway/u1'], '11:00'), ['U1']);
 });
 
+test('a station has every line that leaves it, with the next departure each way (#255)', () => {
+  const linesAt = (station, time, date = DAY) => timetable.linesAt(station, at(time, date), null);
+  const beta = linesAt('B', '09:50');
+  // by kind, each with its operator, its place and its number, which names its address
+  assert.deepEqual(beta.map(({ name, mode, agency }) => [name, mode, agency]), [['U1', 'subway', 'Testbetrieb'], ['ICE 5', 'longdistance', 'Testbetrieb']]);
+  assert.deepEqual(beta.map((line) => [timetable.lines[line.index].name, line.at]), [['U1', timetable.lines[beta[0].index].place], ['ICE 5', timetable.lines[beta[1].index].place]]);
+  // each way named by where its trips go from here, with the next departure of it as the board has it
+  const board = timetable.departures('B', at('09:50'), null).departures;
+  const first = (line) => board.find((dep) => dep.line === line);
+  assert.deepEqual(beta.map((line) => line.ways), [[{ to: first('U1').to, departure: first('U1') }], [{ to: 'Fern Süd', departure: first('ICE 5') }]]);
+  // the U1 from Gamma runs on Friday nights alone: on a Saturday none in the next 24 hours, on the Friday evening the one of that night
+  assert.deepEqual(linesAt('C', '10:00').map((line) => line.ways), [[{ to: 'Alpha', departure: null }]]);
+  assert.equal(linesAt('C', '23:00', '20261002')[0].ways[0].departure.planned, at('25:00', '20261002'));
+  assert.equal(timetable.linesAt('nowhere', at('10:00'), null), null);
+});
+
 test('alerts are shown only during their active periods', () => {
   const feed = decodeFeed(encodeFeed({
     timestamp: 1,

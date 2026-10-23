@@ -591,6 +591,7 @@ going.
 | `open` | `1`: the page's first request for a stop it opens, which counts as a visit of its address where [visits are counted](configuration.md#counting-visits) |
 | `lines` | only these lines and directions, comma-separated: `<mode>/<line>` for a line both ways, `<mode>/<line>~<next station>` for one direction, the names written as in addresses, e.g. `lines=subway/u1~nuernberg-weisser-turm,tram/4`. They are chosen before the departures are counted, so the 40 and the further ones are all of them (#164) |
 | `directions` | `1`: also list the lines of the station and their directions (`directions` below), for choosing among them |
+| `list` | `lines`: also list every line of the station with the next departure each way (`lines` below), of all lines, whatever `lines` chooses (#255) |
 
 404 `{ "error": "station not found" }` for an unknown id and for a place
 without a station.
@@ -646,6 +647,38 @@ trips come to next; trips that end earlier on the same way are in it.
 | `key` | string | what `lines` takes for this direction |
 
 They are sorted by mode, then by line, then the busier direction first.
+
+With `list=lines` the answer also has `lines`: every line that leaves the
+station on any day of the timetable, each with the ways it goes from there
+and the next departure each way (#255). A way is a direction as above,
+named by the destination most of its trips have here; the directions of a
+line with the same name are one way, as a train that leaves for one place
+by several next stations goes there all the same. Its `departure` is the
+next one within 24 hours that is not cancelled, as the board has it, which
+may go somewhere else than the way is named after (a run that ends
+earlier), or `null` where none leaves that way within 24 hours.
+
+```json
+"lines": [
+  { "name": "U1", "mode": "subway", "agency": "VerkehrsAG Nürnberg", "at": [49.44, 11.06], "path": "line/verkehrsag-nuernberg/subway/u1",
+    "ways": [
+      { "to": "Langwasser Süd", "departure": { "trip": "816501_20261022", "line": "U1", "mode": "subway", "to": "Langwasser Süd", "platform": "", "planned": 1792669140, "delay": 0, "cancelled": false, "warnings": [] } },
+      { "to": "Fürth Hardhöhe", "departure": { … } }
+    ] },
+  { "name": "N9", "mode": "bus", "agency": "VerkehrsAG Nürnberg", "at": [49.46, 10.99], "path": "line/verkehrsag-nuernberg/bus/n9",
+    "ways": [{ "to": "Burgfarrnbach ü.Fürth Rathaus", "departure": null }, { "to": "Hauptbahnhof", "departure": null }] },
+  …
+]
+```
+
+| Field | Type | Meaning |
+| --- | --- | --- |
+| `at` | [latitude, longitude] | the middle of the line's stations, as [`/api/line`](#get-apiline) takes it |
+| `path` | string | the address of the line's page |
+| `ways[].to` | string | the destination most of its trips have here |
+| `ways[].departure` | object or null | the next departure that way, as in `departures` |
+
+They are sorted by mode, then by line, then the busier way first.
 
 `warnings` of a departure are those of the notes of its trip that warn, the
 ones with the `severity` `"warning"` or `"severe"`: what is wrong with it

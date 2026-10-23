@@ -430,6 +430,14 @@ test('/api/departures', async () => {
   }
   const times = departures.map((d) => d.planned + (d.delay ?? 0));
   assert.deepEqual(times, [...times].sort((a, b) => a - b));
+  assert.equal(json.lines, undefined);
+
+  // with list=lines, every line of the station with the next departure each way and the address of its page (#255), of all
+  // the lines whatever is chosen: here the U1 alone, which goes one way from Alpha
+  const listed = (await get('/api/departures?station=A&list=lines&lines=longdistance/ice-5')).json;
+  assert.deepEqual(listed.departures, []);
+  assert.deepEqual(listed.lines.map(({ name, mode, agency, path }) => ({ name, mode, agency, path })), [{ name: 'U1', mode: 'subway', agency: 'Testbetrieb', path: 'line/testbetrieb/subway/u1' }]);
+  assert.deepEqual(listed.lines[0].ways.map((way) => [way.to, way.departure.trip, way.departure.planned]), [['Rundkurs', departures[0].trip, departures[0].planned]]);
 
   for (const station of ['Z', '']) {
     const missing = await get(`/api/departures?station=${station}`);
@@ -631,7 +639,9 @@ test('the address of a stop or a line is a page of its own, found again by its n
   assert.ok(page.includes(`<link rel="alternate" hreflang="en" href="${address}stop/alpha@49.4000,11.0000?lang=en">`));
   assert.match(page, /<aside class="card panel" id="panel" tabindex/);
   // its details as the page shows them, its departures at this moment (#254): its name the main heading of the page, not the instance's
-  assert.ok(page.includes('<div id="panel-head"><div class="panel-head"><h1>Alpha</h1><p class="sub with-choice"><span>Abfahrten</span><span class="choice"><button type="button" class="choice-open" aria-label="Alle Linien"'));
+  assert.ok(page.includes('<div id="panel-head"><div class="panel-head"><h1>Alpha</h1><p class="sub with-choice"><span class="view-switch" role="group" aria-label="Ansicht"><button type="button" aria-pressed="true" data-view="departures">Nächste Abfahrten</button><button type="button" aria-pressed="false" data-view="lines">Alle Linien</button></span><span class="choice"><button type="button" class="choice-open" aria-label="Filter"'));
+  // and behind the switch all its lines, each a link to its page (#255)
+  assert.ok(page.includes('<div class="view-lines" hidden><ul class="line-rows signed"><li><a class="to-line" href="line/testbetrieb/subway/u1" aria-label="Zur Linie U1" title="Zur Linie U1" data-line='));
   assert.match(page, /<div id="panel-body" data-sent><ul class="rows signed"><li><button type="button" class="row departure times-both" data-trip="T1_\d{8}"><span class="time">\d\d:\d\d<\/span>/);
   assert.ok(page.includes('<span class="badge" data-mode="subway">U1</span><span class="name" title="Rundkurs">Rundkurs</span>'));
   assert.ok(page.includes('<div class="site-name">Netnou</div>'));

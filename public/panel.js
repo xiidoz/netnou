@@ -11,7 +11,7 @@
 // Without the page around it, so that it runs on the server and in the tests
 // as it is (test/panel.test.js).
 
-import { mdiAlert, mdiClose, mdiFilterVariant } from './vendor/material-design-icons/icons.js';
+import { mdiAlert, mdiChevronRight, mdiClose, mdiFilterVariant } from './vendor/material-design-icons/icons.js';
 
 // The kinds of transport, as the API names them; any other is drawn as "other".
 const KINDS = ['subway', 'tram', 'bus', 'suburban', 'regional', 'longdistance', 'ferry', 'cable', 'other'];
@@ -162,25 +162,76 @@ export function tomorrowAt(departures, { day, now }) {
  *   showing them (time of day, minutes or both)
  */
 export function departureLists(board, context) {
-  const { t, time, times } = context;
+  const { t } = context;
   const signed = board.departures.some((dep) => dep.warnings.length > 0);
-  // (the time of day first, or the minutes in its place; with both, the minutes at the end of the row)
-  const rows = board.departures.map((dep) =>
-    h('li', {}, h('button', { type: 'button', class: `row departure times-${times}${dep.cancelled ? ' cancelled' : ''}`, 'data-trip': dep.trip },
-      times === 'minutes' ? minutesNode(dep, 'time', context) : h('span', { class: 'time' }, time(dep.planned)),
-      delayCell(dep.cancelled ? h('span', { class: 'delay' }) : delayNode(dep.delay), dep.warnings, signed, context),
-      badge(dep.line, dep.mode),
-      h('span', { class: 'name', title: dep.to }, dep.to),
-      h('span', { class: 'platform' }, dep.cancelled ? t('departures.cancelled') : dep.platform ? t('stop.platform', { platform: dep.platform }) : ''),
-      times === 'both' ? minutesNode(dep, 'none', context) : null,
-    )),
-  );
+  const rows = board.departures.map((dep) => h('li', {}, departureRow(dep, signed, context)));
   // (the 24 hours the text speaks of are the furthest departures() in server/lib/timetable.js looks)
   if (!rows.length) return [h('p', { class: 'panel-empty' }, t('departures.none'))];
   const list = (part) => h('ul', { class: `rows${signed ? ' signed' : ''}` }, part);
   const split = tomorrowAt(board.departures, context);
   if (split < 0) return [list(rows)];
   return [split > 0 ? list(rows.slice(0, split)) : null, h('h3', { class: 'rows-head day-head' }, t('departures.tomorrow')), list(rows.slice(split))].filter(Boolean);
+}
+
+/**
+ * The row of a departure, which opens its trip: the time of day first, or
+ * the minutes in its place; with both, the minutes at the end of the row.
+ * @param signed whether a train of its list has something wrong with it (delayCell)
+ * @param byLine whether it is the next departure of a way in the list of a
+ *   stop's lines (lineLists): without the badge, which its line has, and
+ *   one of another day says so where the minutes stand
+ */
+function departureRow(dep, signed, context, byLine = false) {
+  const { t, time, day, now, times } = context;
+  const later = byLine && day(dep.planned) > day(now);
+  return h('button', { type: 'button', class: `row departure times-${times}${byLine ? ' by-line' : ''}${dep.cancelled ? ' cancelled' : ''}`, 'data-trip': dep.trip },
+    times === 'minutes' ? minutesNode(dep, 'time', context) : h('span', { class: 'time' }, time(dep.planned)),
+    delayCell(dep.cancelled ? h('span', { class: 'delay' }) : delayNode(dep.delay), dep.warnings, signed, context),
+    byLine ? null : badge(dep.line, dep.mode),
+    h('span', { class: 'name', title: dep.to }, dep.to),
+    h('span', { class: 'platform' }, dep.cancelled ? t('departures.cancelled') : dep.platform ? t('stop.platform', { platform: dep.platform }) : ''),
+    later ? h('span', { class: 'day' }, t('departures.tomorrow')) : times === 'both' ? minutesNode(dep, 'none', context) : null,
+  );
+}
+
+// ---------- the lines of a stop ----------
+
+/**
+ * The badge of a line that leads to it, with the sign in it that says so, as
+ * at the top of a trip (#147): a link to its page, which the page opens in
+ * its details instead, by what data-line says of it.
+ * @param line { name, mode, agency, at, path } as api/departures?list=lines has it
+ */
+export function lineLink(line, { t }) {
+  const label = t('line.open', { line: line.name });
+  const { name, mode, agency, at } = line;
+  return h('a', { class: 'to-line', href: line.path, 'aria-label': label, title: label, 'data-line': JSON.stringify({ name, mode, agency, at }) },
+    badge(line.name, line.mode, iconOf(mdiChevronRight)));
+}
+
+/**
+ * Every line of a stop with each way it goes from there and its next
+ * departure (#255), under the kinds where there are several: the badge of
+ * the line, which leads to it, beside its ways. A way with no departure in
+ * the next 24 hours says so where the time stands and opens nothing.
+ * @param board as api/departures?list=lines answers, with `lines`
+ */
+export function lineLists(board, context) {
+  const { t, times } = context;
+  const lines = board.lines ?? [];
+  if (!lines.length) return [h('p', { class: 'panel-empty' }, t('departures.none'))];
+  const signed = lines.some((line) => line.ways.some((way) => way.departure?.warnings.length > 0));
+  const kinds = [...new Set(lines.map((line) => kindOf(line.mode)))];
+  const way = (line, { to, departure }) => h('li', {}, departure
+    ? departureRow({ ...departure, line: line.name, mode: line.mode }, signed, context, true)
+    : h('div', { class: `row departure times-${times} by-line resting` },
+      h('abbr', { class: 'later', title: t('lines.laterLong') }, t('lines.later')),
+      h('span', { class: 'name', title: to }, to)));
+  return kinds.flatMap((kind) => [
+    kinds.length > 1 ? h('h3', { class: 'rows-head' }, t(`mode.${kind}`)) : null,
+    h('ul', { class: `line-rows${signed ? ' signed' : ''}` }, lines.filter((line) => kindOf(line.mode) === kind).map((line) =>
+      h('li', {}, lineLink(line, context), h('ul', {}, line.ways.map((one) => way(line, one)))))),
+  ]).filter(Boolean);
 }
 
 /**
@@ -201,31 +252,44 @@ export function directionSign({ line, mode, heading = null }) {
 }
 
 /**
- * The chip beside "Departures" that says which lines of a stop are shown and
- * opens the sheet to choose them (#164): every line, or "only" and the signs
- * of the directions chosen, with the name of the one where it is one, and a
- * cross that shows all again.
+ * The chip beside the switch of a stop that says which lines its next
+ * departures are of and opens the sheet to choose them (#164): "Filter"
+ * while it shows every line (#255: "All lines" is the list beside it), or
+ * "only" and the signs of the directions chosen, with the name of the one
+ * where it is one, and a cross that shows all again.
  * @param chosen the directions chosen, each with its `name` (directionName in app.js)
  */
 export function choiceChip(chosen, { t }) {
   const parts = !chosen.length
-    ? [h('span', {}, t('choice.all'))]
+    ? [h('span', {}, t('choice.filter'))]
     : [h('span', {}, t('choice.only')), chosen.slice(0, 4).map(directionSign), chosen.length === 1 ? h('span', {}, chosen[0].name) : chosen.length > 4 ? h('span', {}, t('choice.more', { count: chosen.length - 4 })) : null];
-  const label = chosen.length ? `${t('choice.only')} ${chosen.map((direction) => `${direction.line} ${direction.name}`).join(', ')}` : t('choice.all');
+  const label = chosen.length ? `${t('choice.only')} ${chosen.map((direction) => `${direction.line} ${direction.name}`).join(', ')}` : t('choice.filter');
   return h('span', { class: `choice${chosen.length ? ' chosen' : ''}` },
     h('button', { type: 'button', class: 'choice-open', 'aria-label': label, 'aria-haspopup': 'dialog', title: t('choice.title') }, iconOf(mdiFilterVariant), parts),
     chosen.length ? h('button', { type: 'button', class: 'choice-clear', 'aria-label': t('choice.clear'), title: t('choice.clear') }, iconOf(mdiClose)) : null,
   );
 }
 
+/** The views of a stop (#255): its next departures, and every line with when it next leaves each way. */
+export const VIEWS = ['departures', 'lines'];
+
 /**
- * The line below the name of a stop: "Departures", and the chip with what is
- * shown, where there is one to choose (null: none, as on a screen on a wall
- * set up for a platform).
+ * The line below the name of a stop: the switch between its next departures
+ * and all its lines, and with the departures the chip of the lines they are
+ * of. A board has no switch (view null), as it shows the departures alone:
+ * "Departures" and the chip; on a screen on a wall set up for one purpose,
+ * as at a platform, not even the chip (null), as nobody is to choose there.
+ * @param view what is shown, of VIEWS, or null
+ * @param chip the chip (choiceChip), or null
  */
-export function departuresSub(chip, { t }) {
-  if (!chip) return h('p', { class: 'sub' }, t('departures.title'));
-  return h('p', { class: 'sub with-choice' }, h('span', {}, t('departures.title')), chip);
+export function departuresSub(view, chip, { t }) {
+  if (!view && !chip) return h('p', { class: 'sub' }, t('departures.title'));
+  const names = { departures: t('view.departures'), lines: t('view.lines') };
+  const label = view
+    ? h('span', { class: 'view-switch', role: 'group', 'aria-label': t('view.label') },
+      VIEWS.map((one) => h('button', { type: 'button', 'aria-pressed': String(one === view), 'data-view': one }, names[one])))
+    : h('span', {}, t('departures.title'));
+  return h('p', { class: 'sub with-choice' }, label, view === 'lines' ? null : chip);
 }
 
 /**

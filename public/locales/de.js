@@ -168,6 +168,12 @@ export default {
   'stop.skipped': 'entfällt',
 
   'departures.title': 'Abfahrten',
+  'view.label': 'Ansicht',
+  'view.departures': 'Nächste Abfahrten',
+  'view.lines': 'Alle Linien',
+  'lines.later': 'nicht in 24 h',
+  'lines.laterLong': 'Nicht in den nächsten 24 Stunden',
+  'choice.filter': 'Filter',
   'choice.all': 'Alle Linien',
   'choice.only': 'Nur',
   'choice.more': '+{count}',

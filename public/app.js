@@ -13,7 +13,7 @@ import { APP_NAME, READMES, dayOf, formatNumber, formatTime, languagePicker, loa
 import { FAVOURITE_NAME_ZOOM, HEART_MIDDLE, PLACES_ZOOM, RAIL_MODES, heartMark, joiningLines, mergePlaces, namePrecedence, namedAt, placeNames, stopMark, townsAlong, withoutStyleStops } from './stops.js';
 import { favouritesFrom, isFavourite, lineFavourite, sameStop, stopFavourite, withChoice, withFavourite } from './favourites.js';
 import { choiceValue, readChoice, toggled } from './choice.js';
-import { DELAY_MAJOR_S, DELAY_MINOR_S, DELAY_SEVERE_S, MINUTES_MAX, NOTE_CHARS, badge as badgeOf, choiceChip as choiceChipOf, delayCell as delayCellOf, delayClass, delayNode as delayNodeOf, delayText, departureLists, departuresSub as departuresSubOf, directionSign as directionSignOf, leavesAt, lineHead, minutesNode as minutesNodeOf, panelHead as panelHeadOf, tomorrowAt as tomorrowAtOf, untilText as untilTextOf, vehicleLists, warningSign as warningSignOf, warns } from './panel.js';
+import { DELAY_MAJOR_S, DELAY_MINOR_S, DELAY_SEVERE_S, MINUTES_MAX, NOTE_CHARS, badge as badgeOf, choiceChip as choiceChipOf, delayCell as delayCellOf, delayClass, delayNode as delayNodeOf, delayText, departureLists, departuresSub as departuresSubOf, directionSign as directionSignOf, leavesAt, lineHead, lineLists, minutesNode as minutesNodeOf, panelHead as panelHeadOf, tomorrowAt as tomorrowAtOf, untilText as untilTextOf, vehicleLists, warningSign as warningSignOf, warns } from './panel.js';
 import { BOARD_MAX, BOARD_SHARE, BOARD_STOPS, boardBlocks, boardQuery, boardShare, displayQuery, ledBy, readBoard, readDisplay, readStops } from './display.js';
 import { mdiArrowCollapse, mdiArrowExpand, mdiChevronRight, mdiCityVariantOutline, mdiEye, mdiEyeOff, mdiFullscreen, mdiFullscreenExit, mdiHeart, mdiHeartOutline, mdiMinusCircleOutline, mdiPlaylistPlus, mdiPlus } from './vendor/material-design-icons/icons.js';
 import { AttributionControl, MapLibreMap, NavigationControl } from './vendor/maplibre-gl/maplibre-gl.mjs';
@@ -282,6 +282,7 @@ const state = {
   selection: null, // { type: 'trip' | 'station' | 'line', id, data }, see select()
   lines: [], // the lines and directions of the open stop that are chosen to be shown, none for every line (#164, choice.js)
   directions: null, // what there is to choose from at the open stop: { id, list } as api/departures has it
+  view: 'departures', // what the open stop shows, of VIEWS in panel.js: its next departures or all its lines (#255)
   hits: [], // what can be pointed at on the map: { x, y, r, vehicle or station; named: a stop with its name on the map }, see draw()
   covers: [], // the boxes of the bubbles, which hide what is under them: [x, y, width, height]
   chosenAt: null, // where on the screen the chosen vehicle is drawn, if it is in view: { x, y, … }
@@ -779,12 +780,23 @@ function directionName(direction, list) {
 }
 
 /**
- * The line below the name of the open stop: "Departures", and the chip with
- * what is shown. None on a screen on a wall: it shows its stop as it was set
- * up, at a platform those of the platform, and nobody is to choose there.
+ * The line below the name of the open stop: the switch between its next
+ * departures and all its lines (#255), and the chip of the lines the
+ * departures are of. A board has no switch, as it shows the departures
+ * alone: "Departures" and the chip. A screen on a wall has neither: it shows
+ * its stop as it was set up, at a platform those of the platform, and nobody
+ * is to choose there.
  */
-function departuresSub() {
-  return toDom(departuresSubOf(FIXED ? null : choiceChip(), drawing()));
+function departuresSub(board = false) {
+  return toDom(departuresSubOf(FIXED || board ? null : state.view, FIXED ? null : choiceChip(), drawing()));
+}
+
+/** Shows the next departures of the open stop, or all its lines (#255): those of the last answer at once, if it had them, and asked for anew. */
+function showView(view) {
+  if (view === state.view || state.selection?.type !== 'station') return;
+  state.view = view;
+  showSelection(false);
+  loadSelection();
 }
 
 /** The chip: every line, or "only" and the directions chosen (panel.js); a tap on it opens the sheet, its cross shows all again (see the details' clicks). */
@@ -2606,6 +2618,7 @@ function select(type, id, more = {}) {
   delete state.selection.stops;
   // (the lines of a stop to show: as the address asks, else as its favourite keeps them, see loadSelection)
   state.lines = type === 'station' ? (more.lines ?? []) : [];
+  state.view = 'departures';
   state.selection.linesAsked = more.lines !== undefined;
   delete state.selection.lines;
   // (the ring around the chosen vehicle, or a line's vehicles alone, with the next frame: not with the server's answer)
@@ -2635,8 +2648,9 @@ function selectionUrl({ type, id, line, at, route }, open = false, first = false
   // (a line is its name, its mode and its operator together, and its place where lines of the name are in places
   // apart, #152; where it runs is asked for until it is known, #148)
   if (type === 'line') return `api/line?${new URLSearchParams({ name: line.name, mode: line.mode, agency: line.agency, ...(line.at ? { at: line.at.join(',') } : {}), ...(route ? {} : { route: '1' }), ...(open ? { open: '1' } : {}) })}`;
-  // (only the lines chosen, #164; and once, with the first answer, which lines and directions there are)
-  const choice = `${state.lines.length ? `&lines=${choiceValue(state.lines)}` : ''}${first ? '&directions=1' : ''}`;
+  // (only the lines chosen, #164; once, with the first answer, which lines and directions there are; and all
+  // lines with their next departures while they are shown, #255, which a board does not)
+  const choice = `${state.lines.length ? `&lines=${choiceValue(state.lines)}` : ''}${first ? '&directions=1' : ''}${state.view === 'lines' && state.board === null ? '&list=lines' : ''}`;
   return `${at ? `api/departures?at=${at.lat.toFixed(5)},${at.lon.toFixed(5)}` : `api/departures?station=${encodeURIComponent(id)}`}${open ? '&open=1' : ''}${choice}`;
 }
 
@@ -2654,6 +2668,8 @@ async function loadSelection(first = false) {
     await further;
     if (state.selection !== selection || selection.turn !== turn) return; // user moved on meanwhile
     if (data) {
+      // (the lines of the stop as they were last, until the next answer with them: to be shown at once on the switch)
+      if (selection.type === 'station' && !data.lines && selection.data?.id === data.id && selection.data.lines) data.lines = selection.data.lines;
       selection.data = data;
       if (data.directions) state.directions = { id: data.id, list: data.directions };
       if (data.route) selection.route = data.route;
@@ -2711,6 +2727,9 @@ function showSelection(first = false) {
 // When the page gets another size, the notes in the head have other room (fitNotes).
 map.on('resize', () => showSelection());
 
+// (what in the lists of the panel can have the keyboard focus, which it gets back once they are built anew: rows and the badges of lines)
+const FOCUSED_IN_BODY = 'button.row, a.to-line';
+
 /**
  * Replaces what the panel shows: its head, which stays, and what scrolls
  * below it. Both are rebuilt with every refresh, so the row or the button of
@@ -2718,7 +2737,7 @@ map.on('resize', () => showSelection());
  * @param head the nodes of the head
  */
 function fillPanel(head, ...nodes) {
-  const focused = [...panelBody.querySelectorAll('.row')].indexOf(document.activeElement);
+  const focused = [...panelBody.querySelectorAll(FOCUSED_IN_BODY)].indexOf(document.activeElement);
   const inHead = [...panelHead.querySelectorAll('button')].indexOf(document.activeElement);
   // (a button of a board by what it does, where its place on the board changes: data-focus)
   const keyed = focusNext ?? (panel.contains(document.activeElement) ? document.activeElement.dataset?.focus : undefined);
@@ -2735,7 +2754,7 @@ function fillPanel(head, ...nodes) {
   }
   const again = keyed && [...panel.querySelectorAll('[data-focus]')].find((node) => node.dataset.focus === keyed);
   if (again) again.focus({ preventScroll: true });
-  else if (focused >= 0) panelBody.querySelectorAll('.row')[focused]?.focus({ preventScroll: true });
+  else if (focused >= 0) panelBody.querySelectorAll(FOCUSED_IN_BODY)[focused]?.focus({ preventScroll: true });
   else if (inHead >= 0) (panelHead.querySelectorAll('button')[inHead] ?? panel).focus({ preventScroll: true });
 }
 
@@ -2762,7 +2781,15 @@ function mainHeading() {
 // say so in their data and their class, as in the page the server sends.
 panel.addEventListener('click', (event) => {
   const row = event.target.closest('[data-trip]');
+  const toLine = event.target.closest('a.to-line[data-line]');
+  const view = event.target.closest('.view-switch [data-view]');
   if (row) select('trip', row.dataset.trip, { fit: 'unseen' });
+  else if (toLine) {
+    // (a link to the line's page: opened in the details, unless it is to open elsewhere)
+    if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+    event.preventDefault();
+    selectLine(JSON.parse(toLine.dataset.line));
+  } else if (view) showView(view.dataset.view);
   else if (event.target.closest('.choice-open')) openChoice();
   else if (event.target.closest('.choice-clear')) applyChoice([]);
 });
@@ -3137,7 +3164,10 @@ function renderStation(board) {
   }
   const scrollTop = panelBody.scrollTop;
   // (as the server writes them into the page of the stop: panel.js)
-  fillPanel([toDom(panelHeadOf(board.name, departuresSub(), notesList(board.notes)))], ...departureLists(board, drawing()).map((node) => toDom(node)));
+  // (its next departures, or all its lines: until they come, a word that they are on the way)
+  const waiting = state.view === 'lines' && !board.lines;
+  const listed = waiting ? [el('p', { class: 'panel-empty', text: t('panel.loading') })] : (state.view === 'lines' ? lineLists : departureLists)(board, drawing()).map((node) => toDom(node));
+  fillPanel([toDom(panelHeadOf(board.name, departuresSub(), notesList(board.notes)))], ...listed);
   panelBody.scrollTop = scrollTop;
   // (the one tip, when there are departures to tap)
   if (state.selection?.tip && board.departures.length) {
@@ -3431,7 +3461,7 @@ function renderBoard(board) {
   renderedColumns = columns;
   const headings = blocks.map((block, i) => blockHeading(block, i, i ? 'h3' : 'h2', controls, entries.length));
   // (the lines chosen are those of the open stop, whose block is the first)
-  const sub = (i = 0) => (i ? el('p', { class: 'sub', text: t('departures.title') }) : departuresSub());
+  const sub = (i = 0) => (i ? el('p', { class: 'sub', text: t('departures.title') }) : departuresSub(true));
   const clock = state.clock ? [el('p', { class: 'board-clock', text: formatTime(now()) })] : [];
   // (the notes of the open stop in the head in either case: over the first column in columns)
   const head = columns > 1 ? [...clock, notesList(board.notes)] : [headings[0], sub(), ...clock, notesList(board.notes)];

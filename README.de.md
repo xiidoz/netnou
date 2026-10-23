@@ -30,6 +30,9 @@ Ein Fahrzeug kann also etwas vor oder hinter seiner Markierung sein.
   Verspätung – reicht es noch zum Bus?
 - **Abfahrt antippen:** direkt zum Fahrzeug auf der Karte, um zu sehen, wo es
   gerade ist.
+- **Alle Linien:** zu jeder Linie einer Haltestelle die nächste Abfahrt in
+  jede Richtung, auch für den Nachtbus, der nur am Wochenende fährt. Ein Tipp
+  auf die Linie zeigt ihre Fahrzeuge.
 - **Suchen:** Ort, Haltestelle oder Linie. Eine Linie zeigt dann nur ihre
   eigenen Fahrzeuge.
 - **Herz antippen:** favorisiert eine Haltestelle oder Linie. Favoriten
@@ -40,7 +43,7 @@ Ein Fahrzeug kann also etwas vor oder hinter seiner Markierung sein.
   jemandem zu zeigen, wo der Bus gerade ist.
 - **Als Tafel zeigen:** Abfahrten als große Tafel, zum Beispiel für ein
   Display an der Wand, mit bis zu vier Haltestellen.
-- **Linien und Richtungen wählen:** mit dem Chip neben den Abfahrten, zum
+- **Linien und Richtungen wählen:** mit dem Filter neben den Abfahrten, zum
   Beispiel nur die Züge in die Stadt. Die Tafel behält sie in ihrer Adresse,
   eine favorisierte Haltestelle öffnet mit ihnen.
 

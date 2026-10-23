@@ -221,7 +221,20 @@ export default {
   'stop.platform': 'Plat. {platform}',
   'stop.skipped': 'skipped',
 
+  // what a stop on a screen on a wall shows, which has nothing to choose
   'departures.title': 'Departures',
+  // the switch below the name of a stop (#255): its departures in the order they leave, and every line that leaves there
+  // with when it next leaves each way; the label is what a screen reader calls the switch
+  'view.label': 'View',
+  'view.departures': 'Next departures',
+  'view.lines': 'All lines',
+  // in the list of all lines, a way with no departure in the next 24 hours: in short where the time stands, and in full
+  // under a mouse and for a screen reader
+  'lines.later': 'not in 24 h',
+  'lines.laterLong': 'Not in the next 24 hours',
+  // the chip beside the switch that opens the sheet to choose which lines the departures are of, while all are shown
+  'choice.filter': 'Filter',
+  // the button in that sheet that shows all of them again
   'choice.all': 'All lines',
   'choice.only': 'Only',
   'choice.more': '+{count}',
