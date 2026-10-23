@@ -1481,30 +1481,8 @@ function draw() {
 let frameTimer = null;
 let framePending = false;
 
-// The vehicles on the stops of a line (lineStops in panel.js) move along
-// their tracks with the frames too, between two answers of the server: one
-// every FRAME_MS while they are shown, whatever the map needs. Once a
-// second, they would move by steps that a sharp screen shows. Each is a
-// button on a layer of its own, placed by a transform (style.css).
-let lastLineMove = 0;
-const lineTracks = new WeakMap(); // a vehicle's node → its track, read once: [time, x, y, …]
-const lineVehicles = () => (panel.hidden ? [] : panel.querySelectorAll('.line-vehicle[data-track]'));
-
-function moveLineVehicles(nodes) {
-  lastLineMove = performance.now();
-  const at = now();
-  for (const node of nodes) {
-    if (!lineTracks.has(node)) lineTracks.set(node, node.dataset.track ? node.dataset.track.split(',').map(Number) : [0, ...node.dataset.at.split(',').map(Number)]);
-    const [x, y] = trackAt(lineTracks.get(node), at);
-    const transform = `translate(${x.toFixed(2)}px, ${y.toFixed(2)}px)`;
-    if (node.style.transform !== transform) node.style.transform = transform;
-  }
-}
-
 function frame() {
   framePending = false;
-  const nodes = lineVehicles();
-  if (nodes.length && performance.now() - lastLineMove >= FRAME_MS) moveLineVehicles(nodes);
   if (performance.now() - lastDraw >= (drawAsked || settling ? FRAME_MS : quietMs)) draw();
   else nextFrame();
 }
@@ -1517,9 +1495,7 @@ function nextFrame() {
     framePending = true;
     requestAnimationFrame(frame);
   };
-  // (the next frame of the map, or of the vehicles on the stops of a line where that is sooner)
-  let wait = lastDraw + (drawAsked || settling ? FRAME_MS : quietMs) - performance.now();
-  if (lineVehicles().length) wait = Math.min(wait, lastLineMove + FRAME_MS - performance.now());
+  const wait = lastDraw + (drawAsked || settling ? FRAME_MS : quietMs) - performance.now();
   if (wait > 0) frameTimer = setTimeout(ask, Math.ceil(wait));
   else ask();
 }
@@ -3149,9 +3125,7 @@ function renderLine(line, first) {
   const way = Math.min(selection.way ?? 0, Math.max(0, (line.ways?.length ?? 1) - 1));
   fillPanel([toDom(lineHead(line, drawn, way))], ...lineStops(line, drawn, way).map((node) => toDom(node)));
   panelBody.scrollTop = scrollTop;
-  // (its vehicles in their places at once, and moving with the frames from now on)
   moveLineVehicles(panelBody.querySelectorAll('.line-vehicle'));
-  nextFrame();
 
   // Once, when the line is chosen: where it runs into view, between the
   // cards, as far as it is in the area (#148); without that, its vehicles.
@@ -3161,6 +3135,32 @@ function renderLine(line, first) {
     const lats = line.vehicles.map((v) => v.lat);
     const lons = line.vehicles.map((v) => v.lon);
     map.fitBounds([[Math.min(...lons), Math.min(...lats)], [Math.max(...lons), Math.max(...lats)]], { padding: clearOfCards(), maxZoom: LINE_ZOOM });
+  }
+}
+
+/**
+ * The vehicles on the stops of a line (lineStops in panel.js) move along
+ * their tracks, between two answers of the server too: each by an animation
+ * of its transform from the first place of its track to the last, as far
+ * on as the time is, which the browser runs by itself. Set anew every frame,
+ * the transform of a vehicle that moves a third of a pixel a second would be
+ * drawn a whole pixel on now and then by some browsers; an animation runs
+ * smoothly in all of them. One without a track stands where it is.
+ */
+function moveLineVehicles(nodes) {
+  const at = now();
+  for (const node of nodes) {
+    const track = node.dataset.track ? node.dataset.track.split(',').map(Number) : [];
+    const [first, last] = [track[0], track[track.length - 3]];
+    if (track.length < 6 || last <= at) {
+      const [x, y] = track.length ? trackAt(track, at) : node.dataset.at.split(',').map(Number);
+      node.style.transform = `translate(${x}px, ${y}px)`;
+      continue;
+    }
+    const frames = [];
+    for (let k = 0; k < track.length; k += 3) frames.push({ offset: (track[k] - first) / (last - first), transform: `translate(${track[k + 1]}px, ${track[k + 2]}px)` });
+    const animation = node.animate(frames, { duration: (last - first) * 1000, fill: 'both' });
+    animation.currentTime = Math.max(0, (at - first) * 1000);
   }
 }
 

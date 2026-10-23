@@ -838,8 +838,8 @@ button:focus-visible, select:focus-visible, .row:focus-visible, .panel:focus-vis
    the colour of their kind, or of their delay where the map has them so,
    with white edges and the flag of their delay. */
 svg.line-vehicles { position: absolute; left: 0; top: 0; width: 100%; overflow: visible; pointer-events: none; }
-/* (in the page, each a button on a layer of its own, which it moves by a transform from the top left of the list:
-   smoothly, by fractions of a pixel, where a drawing moved so would go by whole pixels; SIGN in panel.js) */
+/* (in the page, each a button on a layer of its own, which an animation of its transform moves from the top left of
+   the list: smoothly, by fractions of a pixel, in every browser; SIGN in panel.js, moveLineVehicles in app.js) */
 div.line-vehicles { position: absolute; left: 0; top: 0; }
 button.line-vehicle { position: absolute; left: -22px; top: -22px; width: 54px; height: 44px; padding: 0; border: 0; background: none; will-change: transform; }
 button.line-vehicle svg { display: block; overflow: visible; }

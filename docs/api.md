@@ -524,7 +524,7 @@ way they go.
 | `branches[].stops` | array | its stations, as in `stops` without `start` and `end` |
 | `vehicles[].from`, `until` | integers | the places of the two stops it is between, in `stops`, or in those of branch number `branch` where that is not `null`: there -1 is the station it leaves the line at and the length of the branch the one it joins it at; the same twice where it stands at that stop |
 | `vehicles[].come` | number | how far it has come between them, from 0 to 1 |
-| `vehicles[].track` | array | where it will be when, from the stop it left on for a quarter of an hour: `[time, position, …]`, a time in seconds and a place as `from` has it, from its arrival at each station to its departure; for the page to move it along between two answers, on frames of its own as the map moves its vehicles |
+| `vehicles[].track` | array | where it will be when, from the stop it left on for a quarter of an hour: `[time, position, …]`, a time in seconds and a place as `from` has it, from its arrival at each station to its departure; for the page to move it along between two answers |
 
 With `route=1` the answer also says where the line runs: the routes of its
 trips of the day, each stretch between two stops once. The page asks for it
