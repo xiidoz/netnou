@@ -679,9 +679,10 @@ test('the address of a stop or a line is a page of its own, found again by its n
   assert.match(line, /<base href="\.\.\/\.\.\/\.\.\/">/);
   assert.match(line, /<title>U1 Rundkurs live – Netnou<\/title>/);
   assert.match(line, /content="U1 \(Testbetrieb\) live auf der Karte, jede Fahrt mit ihrer Verspätung\."/);
-  // its details as the page shows them: its vehicles under way at this moment, under where they go (#254)
+  // its details as the page shows them: its vehicles under way at this moment, under where they go (#254), each with
+  // the stop ahead, which is Beta in the first half of an hour and Alpha in the second (the shuttle of the fixture)
   assert.match(line, /<div class="panel-head"><h1><span class="badge" data-mode="subway">U1<\/span><span>U-Bahn<\/span><\/h1><p class="sub">Testbetrieb · \d Fahrzeuge unterwegs<\/p><\/div>/);
-  assert.match(line, /<div id="panel-body" data-sent><h3 class="rows-head">nach Rundkurs<\/h3><ul class="rows signed"><li><button type="button" class="row vehicle" data-trip="T1_\d{8}"><span class="name" title="Alpha">nächster Halt: Alpha<\/span>/);
+  assert.match(line, /<div id="panel-body" data-sent><h3 class="rows-head">nach Rundkurs<\/h3><ul class="rows signed"><li><button type="button" class="row vehicle" data-trip="T1_\d{8}"><span class="name" title="(Alpha|Beta)">nächster Halt: \1<\/span>/);
   const otherKind = await request('/line/testbetrieb/bus/u1');
   assert.equal(otherKind.status, 404);
   assert.ok(otherKind.body.toString().includes('Diese Linie ist nicht im Fahrplan.'));
