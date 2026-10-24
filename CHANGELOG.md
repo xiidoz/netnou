@@ -8,6 +8,18 @@ This file is written by
 messages when a release is made. Do not edit it by hand; see
 [Releases](CONTRIBUTING.md#releases).
 
+## [0.21.0](https://github.com/xiidoz/netnou/compare/v0.20.1...v0.21.0) (2026-10-24)
+
+
+### Features
+
+* **routes:** between two stops a vehicle goes at the speeds of its roads and tracks ([#269](https://github.com/xiidoz/netnou/issues/269)) ([cdc6ce8](https://github.com/xiidoz/netnou/commit/cdc6ce88df5bcd73edeb006ed1d5179f2accaaed)), closes [#264](https://github.com/xiidoz/netnou/issues/264)
+
+
+### Bug Fixes
+
+* **page:** a g or an Ü in the two lines of a row is no longer cut off ([#268](https://github.com/xiidoz/netnou/issues/268)) ([e8b91ce](https://github.com/xiidoz/netnou/commit/e8b91ceacf71de914e093f251427b477552cc21e))
+
 ## [0.20.1](https://github.com/xiidoz/netnou/compare/v0.20.0...v0.20.1) (2026-10-24)
 
 
