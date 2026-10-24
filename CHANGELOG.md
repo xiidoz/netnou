@@ -8,6 +8,17 @@ This file is written by
 messages when a release is made. Do not edit it by hand; see
 [Releases](CONTRIBUTING.md#releases).
 
+## [0.20.0](https://github.com/xiidoz/netnou/compare/v0.19.0...v0.20.0) (2026-10-24)
+
+
+### Features
+
+* **page:** a stop's town below its name and in its title, where the name does not say it ([#263](https://github.com/xiidoz/netnou/issues/263)) ([d719d0b](https://github.com/xiidoz/netnou/commit/d719d0bd285eeefda04668df038f63e5096e05b2)), closes [#254](https://github.com/xiidoz/netnou/issues/254)
+* **page:** every line of a stop with its next departure each way, beside its next departures ([#260](https://github.com/xiidoz/netnou/issues/260)) ([471f841](https://github.com/xiidoz/netnou/commit/471f841d49a6bd51f9698cfd65540f3c5682006c))
+* **page:** stations near the map in the empty search, and links to them in the page as sent ([#257](https://github.com/xiidoz/netnou/issues/257)) ([#262](https://github.com/xiidoz/netnou/issues/262)) ([864b23a](https://github.com/xiidoz/netnou/commit/864b23acbf227b3f96ed65a59ea8e2eddc57cd18))
+* **page:** stop and line pages carry their details as sent, with dates in the sitemap ([#258](https://github.com/xiidoz/netnou/issues/258)) ([8b25eef](https://github.com/xiidoz/netnou/commit/8b25eefab077e1bcb361ac8692498e2553b97c7c))
+* **page:** the stops of a line in each direction, with its vehicles along them as on the map ([#261](https://github.com/xiidoz/netnou/issues/261)) ([217a856](https://github.com/xiidoz/netnou/commit/217a85689650c45688c3e8f5509665a35a81687b))
+
 ## [0.19.0](https://github.com/xiidoz/netnou/compare/v0.18.0...v0.19.0) (2026-10-22)
 
 
