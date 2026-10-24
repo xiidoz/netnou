@@ -426,7 +426,7 @@ test('/api/departures', async () => {
   const { status, json } = await get('/api/departures?station=A');
   assert.equal(status, 200);
   const { now, departures, ...board } = json;
-  assert.deepEqual(board, { id: 'A', name: 'Alpha', lat: 49.4, lon: 11, notes: [{ title: 'Aufzug gestört', text: 'Aufzug außer Betrieb', severity: 'info' }] });
+  assert.deepEqual(board, { id: 'A', name: 'Alpha', town: null, lat: 49.4, lon: 11, notes: [{ title: 'Aufzug gestört', text: 'Aufzug außer Betrieb', severity: 'info' }] });
   // one an hour from each of the runs under way: four to nine in the next two hours, and as that is fewer than ten, the next ones up to ten (#165)
   const soon = departures.filter((d) => d.planned <= now + 7200).length;
   assert.ok(soon >= 4 && soon <= 9, `${soon} departures in two hours`);

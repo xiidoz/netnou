@@ -22,7 +22,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { LANGUAGES, pageTexts, pickLanguage, t } from '../../public/i18n.js';
 import * as shapes from '../../public/vendor/material-design-icons/icons.js';
-import { choiceChip, departureLists, departuresSub, h, lineHead, lineLists, lineStops, panelHead, toHtml } from '../../public/panel.js';
+import { choiceChip, departureLists, departuresSub, h, lineHead, lineLists, lineStops, panelHead, stopHeading, toHtml } from '../../public/panel.js';
 
 export const LANGUAGE_CODES = LANGUAGES.map(([code]) => code);
 // The picture of a link's preview: the icon, unless the operator has one of
@@ -426,7 +426,7 @@ export function panelHtml(kind, data, { language, texts, timeZone, now, fixed = 
   const day = new Intl.DateTimeFormat('en-CA', { year: 'numeric', month: '2-digit', day: '2-digit', timeZone });
   const drawing = { t: (key, params) => t(key, params, texts), time: (epoch) => time.format(epoch * 1000), day: (epoch) => day.format(epoch * 1000), now, times: 'both' };
   const [head, body] = kind === 'stop'
-    ? [panelHead(data.name, fixed ? departuresSub(null, null, drawing) : departuresSub('departures', choiceChip([], drawing), drawing)),
+    ? [panelHead(stopHeading(data.name, data.town), fixed ? departuresSub(null, null, drawing) : departuresSub('departures', choiceChip([], drawing), drawing)),
       [...departureLists(data, drawing), fixed ? null : h('div', { class: 'view-lines', hidden: true }, lineLists(data, drawing))].filter(Boolean)]
     : [lineHead(data, drawing, 0), lineStops(data, { ...drawing, live: data.vehicles.some((v) => v.delay !== null) }, 0)];
   return { head: toHtml(head), body: body.map(toHtml).join('') };

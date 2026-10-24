@@ -288,7 +288,9 @@ button { font: inherit; color: inherit; }
    search as in the stops of a trip (#246). */
 .search-results .line .name, .in-town .name { display: grid; min-width: 0; line-height: 1.25; }
 .search-results .line .to, .search-results .line .agency, .in-town .stop, .in-town .town { overflow: hidden; text-overflow: ellipsis; }
-.search-results .line .agency, .in-town .town { color: var(--text-muted); font-size: 12px; font-weight: 400; }
+.search-results .line .agency, .in-town .town, .panel-head h1 .town { color: var(--text-muted); font-size: 12px; font-weight: 400; }
+/* (a stop's town below its name in the head of its details, #254: a line of its own in the heading) */
+.panel-head h1 .town { flex-basis: 100%; margin-top: -6px; }
 .search-results .badge { flex: none; }
 /* a favourite has a heart at the end of its row (#245) */
 .search-results .favourite { flex: none; margin-left: auto; color: var(--delay-severe); }

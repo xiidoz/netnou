@@ -260,6 +260,8 @@ export default {
 
   // the page of an address of a stop or a line (#37), for search engines and previews
   'address.stopTitle': '{stop} departures live',
+  'address.stopWithTown': '{stop}, {town}',
+  'address.stopInTown': '{stop} in {town}',
   'address.stopDescription': 'Departures at {stop} in real time: {lines}, live on the map.',
   'address.stopDescriptionNone': 'Departures at {stop} in real time, live on the map.',
   'address.more': '{lines}, plus {kinds}',

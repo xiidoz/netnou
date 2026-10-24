@@ -695,11 +695,15 @@ otherwise a server would load a file written by older code:
 - **What search engines get.** At an address the server writes the title
   and the description of what it names into the page ("Abfahrten Nürnberg
   Plärrer live", with up to six of its lines, the busiest first, and the
-  other kinds that call there), its address as the canonical one, and the
-  details opened as the page shows them at that moment
-  ([#254](https://github.com/xiidoz/netnou/issues/254)): of a stop its
-  departures, of a line its vehicles under way, with its name as the main
-  heading of the page. Before, the pages of all stops and lines were one
+  other kinds that call there; a stop whose name does not say its town
+  with the town, "Abfahrten Bruck/ER Rotes Kreuz, Erlangen live"), its
+  address as the canonical one, and the details opened as the page shows
+  them at that moment ([#254](https://github.com/xiidoz/netnou/issues/254)):
+  of a stop its name with that town below it, its departures, and its lines
+  as links to their pages (#255); of a line its stops as links to theirs,
+  with its vehicles along them (#256); either name the main heading of the
+  page. The plain page links the stations near where the map first opens
+  (#257). Before, the pages of all stops and lines were one
   page with a few words of their own, and no search engine had reason to
   keep them. Both are drawn by one module, `panel.js`, which the page
   makes into its own elements and the server into HTML, so that what a

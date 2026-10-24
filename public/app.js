@@ -10,10 +10,10 @@
 
 import { parseAddress, stopPath, wordsOf } from './address.js';
 import { APP_NAME, READMES, dayOf, formatNumber, formatTime, languagePicker, loadLanguage, pageTexts, sentInAnother, setTimeZone, t, translatePage } from './i18n.js';
-import { FAVOURITE_NAME_ZOOM, HEART_MIDDLE, PLACES_ZOOM, RAIL_MODES, heartMark, joiningLines, mergePlaces, namePrecedence, namedAt, placeNames, stopMark, townsAlong, withoutStyleStops } from './stops.js';
+import { FAVOURITE_NAME_ZOOM, HEART_MIDDLE, PLACES_ZOOM, RAIL_MODES, heartMark, joiningLines, mergePlaces, namePrecedence, namedAt, placeNames, stopMark, townToShow, townsAlong, withoutStyleStops } from './stops.js';
 import { favouritesFrom, isFavourite, lineFavourite, sameStop, stopFavourite, withChoice, withFavourite } from './favourites.js';
 import { choiceValue, readChoice, toggled } from './choice.js';
-import { DELAY_MAJOR_S, DELAY_MINOR_S, DELAY_SEVERE_S, MINUTES_MAX, NOTE_CHARS, badge as badgeOf, choiceChip as choiceChipOf, delayCell as delayCellOf, delayClass, delayNode as delayNodeOf, delayFlag, delayText, departureLists, departuresSub as departuresSubOf, directionSign as directionSignOf, leavesAt, lineHead, lineLists, lineStops, minutesNode as minutesNodeOf, trackAt, VEHICLE_R, panelHead as panelHeadOf, tomorrowAt as tomorrowAtOf, untilText as untilTextOf, vehicleLabel, warningSign as warningSignOf, warns } from './panel.js';
+import { DELAY_MAJOR_S, DELAY_MINOR_S, DELAY_SEVERE_S, MINUTES_MAX, NOTE_CHARS, badge as badgeOf, choiceChip as choiceChipOf, delayCell as delayCellOf, delayClass, delayNode as delayNodeOf, delayFlag, delayText, departureLists, departuresSub as departuresSubOf, directionSign as directionSignOf, leavesAt, lineHead, lineLists, lineStops, minutesNode as minutesNodeOf, trackAt, VEHICLE_R, panelHead as panelHeadOf, stopHeading, tomorrowAt as tomorrowAtOf, untilText as untilTextOf, vehicleLabel, warningSign as warningSignOf, warns } from './panel.js';
 import { BOARD_MAX, BOARD_SHARE, BOARD_STOPS, boardBlocks, boardQuery, boardShare, displayQuery, ledBy, readBoard, readDisplay, readStops } from './display.js';
 import { mdiArrowCollapse, mdiArrowExpand, mdiChevronRight, mdiCityVariantOutline, mdiEye, mdiEyeOff, mdiFullscreen, mdiFullscreenExit, mdiHeart, mdiHeartOutline, mdiMinusCircleOutline, mdiPlaylistPlus, mdiPlus } from './vendor/material-design-icons/icons.js';
 import { AttributionControl, MapLibreMap, NavigationControl } from './vendor/maplibre-gl/maplibre-gl.mjs';
@@ -2453,7 +2453,11 @@ const here = () => decodeURIComponent(location.pathname).slice(new URL(document.
 let pageTitle = document.title;
 let siteName = APP_NAME;
 
-const stopTitle = (name) => `${t('address.stopTitle', { stop: name })} – ${siteName}`;
+/** The title of the page of a stop, with its town where the name does not say it (#254), as the server gives its page (stopTitle in server/lib/addresses.js). */
+function stopTitle(name, town = null) {
+  const shown = townToShow(name, town);
+  return `${t('address.stopTitle', { stop: shown ? t('address.stopWithTown', { stop: name, town: shown }) : name })} – ${siteName}`;
+}
 
 function lineTitle({ name, mode }) {
   const line = /^\d/.test(name) ? `${t(`address.kind.${mode}`)} ${name}` : name;
@@ -2748,7 +2752,7 @@ async function loadSelection(first = false) {
         const kept = selection.linesAsked || state.lines.length ? null : favourites.stops.find((stop) => sameStop(stop, data));
         const again = kept?.lines !== undefined;
         if (again) state.lines = readChoice(choiceValue(kept.lines));
-        showAddress(stopPathOf(data), stopTitle(data.name));
+        showAddress(stopPathOf(data), stopTitle(data.name, data.town));
         shareable(true, true);
         // (a board keeps the stop it shows in the middle of the map, or all of its stops in view, unless the address of a display says where the map is)
         if (state.board !== null && !selection.kept) showBoardStops(data);
@@ -3253,7 +3257,7 @@ function renderStation(board) {
   // (its next departures, or all its lines: until they come, a word that they are on the way)
   const waiting = state.view === 'lines' && !board.lines;
   const listed = waiting ? [el('p', { class: 'panel-empty', text: t('panel.loading') })] : (state.view === 'lines' ? lineLists : departureLists)(board, drawing()).map((node) => toDom(node));
-  fillPanel([toDom(panelHeadOf(board.name, departuresSub(), notesList(board.notes)))], ...listed);
+  fillPanel([toDom(panelHeadOf(stopHeading(board.name, board.town), departuresSub(), notesList(board.notes)))], ...listed);
   panelBody.scrollTop = scrollTop;
   // (the one tip, when there are departures to tap)
   if (state.selection?.tip && board.departures.length) {
@@ -3979,7 +3983,7 @@ function applyBoardList(list, focus) {
     state.lines = [];
     // (in place of the address so far, not as a step back: then the title, which showAddress gives it without a step there)
     history.replaceState(null, '', new URL(`stop/${list[0].path}${location.search}`, document.baseURI));
-    showAddress(`stop/${list[0].path}`, stopTitle(first.name));
+    showAddress(`stop/${list[0].path}`, stopTitle(first.name, first.departures?.town));
   }
   state.extra = list.slice(1);
   writeBoard();

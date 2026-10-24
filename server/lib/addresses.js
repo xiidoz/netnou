@@ -7,6 +7,7 @@
 
 import { linePath, slug, stopPath, tripPath } from '../../public/address.js';
 import { t } from '../../public/i18n.js';
+import { townToShow } from '../../public/stops.js';
 import { addDays, localClock, localDate, serviceDayStart, timeZone } from './time.js';
 import { MODES } from './timetable.js';
 
@@ -236,6 +237,9 @@ export class Addresses {
    */
   stationWords(i, language, texts) {
     const stop = this.timetable.stations[i].name;
+    // (its town, where its name does not say it, #254: "in Erlangen" in the description)
+    const town = townToShow(stop, this.timetable.towns[this.timetable.stationTown[i]]?.name ?? null);
+    const said = town ? t('address.stopInTown', { stop, town }, texts) : stop;
     const lines = this.linesAt(i);
     const named = lines.slice(0, NAMED_LINES);
     // the lines in groups of their kind, the kinds in the order in which their busiest line comes
@@ -246,8 +250,8 @@ export class Addresses {
     const others = MODES.filter((mode) => mode !== 'other' && !groups.has(mode) && lines.some((line) => line.mode === mode));
     const words = others.length ? t('address.more', { lines: parts.join(', '), kinds: listed(others.map((mode) => t(`address.kind.${mode}`, {}, texts)), language) }, texts) : parts.join(', ');
     return {
-      title: stopTitle(stop, texts),
-      description: lines.length ? t('address.stopDescription', { stop, lines: words }, texts) : t('address.stopDescriptionNone', { stop }, texts),
+      title: stopTitle(stop, texts, town),
+      description: lines.length ? t('address.stopDescription', { stop: said, lines: words }, texts) : t('address.stopDescriptionNone', { stop: said }, texts),
       heading: stop,
       sub: t('departures.title', {}, texts),
     };
@@ -299,5 +303,9 @@ const listed = (words, language) => new Intl.ListFormat(language, { type: 'conju
 
 const firstUp = (text) => text.charAt(0).toUpperCase() + text.slice(1);
 
-/** The title of a stop of that name, as its page has it (stationWords), in the language of the texts. */
-export const stopTitle = (stop, texts) => t('address.stopTitle', { stop }, texts);
+/**
+ * The title of a stop of that name, as its page has it (stationWords), in the
+ * language of the texts: with its town where the name does not say it (#254).
+ * @param town that town (townToShow in public/stops.js), else null
+ */
+export const stopTitle = (stop, texts, town = null) => t('address.stopTitle', { stop: town ? t('address.stopWithTown', { stop, town }, texts) : stop }, texts);
