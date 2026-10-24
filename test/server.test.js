@@ -657,7 +657,8 @@ test('the address of a stop or a line is a page of its own, found again by its n
   assert.ok(page.includes('<div id="panel-head"><div class="panel-head"><h1>Alpha</h1><p class="sub with-choice"><span class="view-switch" role="group" aria-label="Ansicht"><button type="button" aria-pressed="true" data-view="departures">Nächste Abfahrten</button><button type="button" aria-pressed="false" data-view="lines">Alle Linien</button></span><span class="choice"><button type="button" class="choice-open" aria-label="Filter"'));
   // and behind the switch all its lines, each a link to its page (#255)
   assert.ok(page.includes('<div class="view-lines" hidden><ul class="line-rows signed"><li><a class="to-line" href="line/testbetrieb/subway/u1" aria-label="Zur Linie U1" title="Zur Linie U1" data-line='));
-  assert.match(page, /<div id="panel-body" data-sent><ul class="rows signed"><li><button type="button" class="row departure times-both" data-trip="T1_\d{8}"><span class="time">\d\d:\d\d<\/span>/);
+  // (after half past eleven the next one is tomorrow's, which a heading says before it)
+  assert.match(page, /<div id="panel-body" data-sent>(<h3 class="rows-head day-head">morgen<\/h3>)?<ul class="rows signed"><li><button type="button" class="row departure times-both" data-trip="T1_\d{8}"><span class="time">\d\d:\d\d<\/span>/);
   assert.ok(page.includes('<span class="badge" data-mode="subway">U1</span><span class="name" title="Rundkurs">Rundkurs</span>'));
   assert.ok(page.includes('<div class="site-name">Netnou</div>'));
   assert.deepEqual(page.match(/<h1\b/g), ['<h1']);
