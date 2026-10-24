@@ -35,7 +35,8 @@ Ein Fahrzeug kann also etwas vor oder hinter seiner Markierung sein.
   auf die Linie zeigt ihre Fahrzeuge.
 - **Suchen:** Ort, Haltestelle oder Linie. Eine Linie zeigt dann nur ihre
   eigenen Fahrzeuge auf der Karte, und ihre Haltestellen der Reihe nach mit
-  den Fahrzeugen dazwischen.
+  den Fahrzeugen dazwischen. Bevor man etwas tippt, schlägt die Suche die
+  großen Haltestellen in der Nähe der Karte vor.
 - **Herz antippen:** favorisiert eine Haltestelle oder Linie. Favoriten
   stehen in der Suche ganz oben, schon bevor man etwas tippt.
 - **Verkehrsmittel antippen** (U-Bahn, Tram, Bus …): blendet sie aus und

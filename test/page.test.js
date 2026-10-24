@@ -331,6 +331,18 @@ test('the header card has a chip for each kind of transport the timetable has, a
   assert.match(renderPage(html, { ...german, kinds: germany }), /<span class="name" data-i18n="mode\.cable">Seil- &#38; Schwebebahn<\/span>/);
 });
 
+test('the list of the search has the stations it suggests near the first view, each a link to its page (#257)', () => {
+  const nearby = [{ name: 'Nürnberg Hbf', path: 'stop/nuernberg-hbf@49.44561,11.08299' }, { name: 'Plärrer', town: 'Nürnberg', path: 'stop/plaerrer@49.44809,11.0648' }];
+  const list = (page) => /<ul class="search-results" id="search-results"[^>]*>(.*?)<\/ul>/s.exec(page)[1];
+  assert.equal(list(renderPage(html, { ...german, nearby })), `<li class="search-heading" role="presentation">${de['search.nearby']}</li>`
+    + '<li role="option" aria-selected="false"><a href="stop/nuernberg-hbf@49.44561,11.08299">Nürnberg Hbf</a></li>'
+    + '<li role="option" aria-selected="false" class="in-town"><a href="stop/plaerrer@49.44809,11.0648"><span class="stop">Plärrer</span> <span class="town">Nürnberg</span></a></li>');
+  // (under the heading of the page's language)
+  assert.ok(list(renderPage(html, { ...german, language: 'en', texts: en, nearby })).startsWith('<li class="search-heading" role="presentation">Nearby</li>'));
+  // none while there is no timetable: the list as the file has it
+  assert.equal(list(renderPage(html, german)), '');
+});
+
 test('files of the operator\'s own are found by their names, and only those that are there', () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'netnou-brand-'));
   try {

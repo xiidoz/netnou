@@ -253,6 +253,10 @@ const versions = (publicUrl) => [...LANGUAGE_CODES.map((code) => [code, addressI
  * @param kinds the kinds of transport the timetable has (MODES in
  *   lib/timetable.js), which get a chip and no others; null while there is no
  *   timetable: the chips are then those that index.html shows
+ * @param nearby the stations the search suggests for the first view of the
+ *   instance (#257), [{ name, town, path }]: links in the list of the search,
+ *   which is not shown until the search is opened, and then with the
+ *   page's own
  * @param address the address of a stop, a line or a trip that the page is
  *   sent for (#37, #178), null for the page itself: { path, depth } of the
  *   address, with { title, description, heading, sub, unlisted } of what it
@@ -263,7 +267,7 @@ const versions = (publicUrl) => [...LANGUAGE_CODES.map((code) => [code, addressI
  *   index.html (PAGE_INLINE), to be written into the page in place of the
  *   tags that name them; null leaves the tags
  */
-export function renderPage(html, { language, asked, texts, siteName, areaName, siteTitle = null, siteDescription = null, links = [], preview = null, previewSize = null, publicUrl, listed, styleUrl = null, mapOrigins = [], kinds = null, address = null, inline = null, fileVersions = {} }) {
+export function renderPage(html, { language, asked, texts, siteName, areaName, siteTitle = null, siteDescription = null, links = [], preview = null, previewSize = null, publicUrl, listed, styleUrl = null, mapOrigins = [], kinds = null, nearby = [], address = null, inline = null, fileVersions = {} }) {
   const worded = pageTexts(areaName, texts, siteName);
   const named = Boolean(address?.title);
   const title = named ? addressTitle(address.title, siteName) : siteTitle ?? worded.title;
@@ -308,6 +312,16 @@ export function renderPage(html, { language, asked, texts, siteName, areaName, s
   const elsewhere = (href) => (href.startsWith('/') ? '' : ' target="_blank" rel="noopener"');
   const anchors = links.map(({ text, href }) => `<a href="${escapeHtml(href)}"${elsewhere(href)}>${escapeHtml(text)}</a>`).join('');
   put(/(<nav class="links"[^>]*?) hidden><\/nav>/, (whole, start) => (links.length ? `${start}>${anchors}</nav>` : whole));
+  // The stations the search suggests near the first view (#257), each a link
+  // to its page: what a search engine has to find its way into the stops and
+  // lines from the page itself. As the search lists them, under their heading.
+  if (nearby.length) {
+    const rows = [
+      h('li', { class: 'search-heading', role: 'presentation' }, t('search.nearby', {}, texts)),
+      ...nearby.map((stop) => h('li', { role: 'option', 'aria-selected': 'false', class: stop.town ? 'in-town' : null }, h('a', { href: stop.path }, stop.town ? [h('span', { class: 'stop' }, stop.name), ' ', h('span', { class: 'town' }, stop.town)] : stop.name))),
+    ];
+    put(/(<ul class="search-results" id="search-results"[^>]*>)(<\/ul>)/, (_, start, end) => `${start}${rows.map(toHtml).join('')}${end}`);
+  }
   // At an address, its details are open from the start: those of a stop or
   // a line as the page shows them, at the moment the page is sent (#254),
   // which the script keeps until it has them anew (data-sent); of a trip its

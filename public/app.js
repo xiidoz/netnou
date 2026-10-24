@@ -237,8 +237,6 @@ function keepFavourites() {
   }
 }
 
-const hasFavourites = () => favourites.stops.length > 0 || favourites.lines.length > 0;
-
 // The texts come first: the map takes those of its controls when it is created.
 // (The page came in its own language, which is the visitor's in most cases:
 // then this changes nothing in it.)
@@ -1810,17 +1808,19 @@ function ask(query) {
   }
   // Near is where the visitor is, if they have it shown; else what the map
   // shows: its middle, and how far it reaches from there, half its diagonal
-  // (#154). Neither leaves the browser: the search is here.
-  const view = map.getBounds();
+  // (#154). Neither leaves the browser: the search is here. What the map
+  // shows comes along: the favourites on it are listed first (#257).
+  const bounds = map.getBounds();
   const near = state.position
     ? { lat: state.position.lat, lon: state.position.lon }
-    : { lat: view.getCenter().lat, lon: view.getCenter().lng, km: view.getSouthWest().distanceTo(view.getNorthEast()) / 2000 };
+    : { lat: bounds.getCenter().lat, lon: bounds.getCenter().lng, km: bounds.getSouthWest().distanceTo(bounds.getNorthEast()) / 2000 };
+  const view = [bounds.getSouth(), bounds.getWest(), bounds.getNorth(), bounds.getEast()];
   // (with the names of the modes as the visitor reads them: "bus 33" is a line of the buses)
   const modeNames = Object.fromEntries(DRAW_ORDER.map((mode) => [mode, t(`mode.${mode}`)]));
   // (stops alone where one is added to a board)
   const limits = state.adding ? { towns: 0, lines: 0, stops: SEARCH_LIMIT } : { towns: TOWN_LIMIT, lines: LINE_LIMIT, stops: SEARCH_LIMIT };
-  // (and the favourites, which come first, and are what it lists with nothing typed)
-  finder.postMessage({ turn: ++turn, query, near, limits, modeNames, favourites });
+  // (and the favourites, which come first, and are what it lists with nothing typed, with stations near the map below them)
+  finder.postMessage({ turn: ++turn, query, near, view, limits, modeNames, favourites });
 }
 
 /** The list the thread has is not the server's any more: it loads it again with the next question. */
@@ -1852,8 +1852,12 @@ function setActive(index) {
 const nameInTown = (name, town, props = {}) =>
   town ? el('span', { class: 'name', ...props }, [el('span', { class: 'stop', text: name }), el('span', { class: 'town', text: town })]) : el('span', { class: 'name', text: name, ...props });
 
-/** Shows the towns, the lines and the stops found below the field, or a note in their place. */
-function listResults(towns, lines, stops, note = '') {
+/**
+ * Shows the towns, the lines and the stops found below the field, or a note
+ * in their place; with nothing typed, the favourites and the stations near
+ * the map suggested below them (`nearby`, #257).
+ */
+function listResults(towns, lines, stops, note = '', nearby = []) {
   const option = (choose, props, children) => {
     found.push(choose);
     return el('li', { id: `search-result-${found.length - 1}`, role: 'option', 'aria-selected': 'false', onclick: choose, ...props }, children);
@@ -1873,7 +1877,7 @@ function listResults(towns, lines, stops, note = '') {
     el('span', { class: 'name' }, [el('span', { class: 'to', text: line.to.join(' – ') }), el('span', { class: 'agency', text: line.agency })]),
     ...heart(line),
   ]));
-  const stopRows = stops.map((stop) => {
+  const stopRow = (stop) => {
     // The dots say what stops there, as the chips do.
     const dots = stop.modes.map((mode) => {
       const dot = el('span', { class: 'swatch' });
@@ -1882,11 +1886,13 @@ function listResults(towns, lines, stops, note = '') {
     });
     // Below its name the town it is in, where the name does not say that: in small print, as a line has who runs it.
     return option(() => chooseStop(stop), { class: stop.town ? 'in-town' : '', title: stop.modes.map((mode) => t(`mode.${mode}`)).join(', ') }, [el('span', { class: 'dots' }, dots), nameInTown(stop.name, stop.town), ...heart(stop)]);
-  });
-  // (each kind under its heading where more than one kind was found)
-  const kinds = [towns, lines, stops].filter((list) => list.length).length;
-  const heading = (list, text) => (kinds > 1 && list.length ? [el('li', { class: 'search-heading', role: 'presentation', text })] : []);
-  searchResults.replaceChildren(...heading(towns, t('search.towns')), ...townRows, ...heading(lines, t('search.lines')), ...lineRows, ...heading(stops, t('search.stops')), ...stopRows);
+  };
+  const stopRows = stops.map(stopRow);
+  const nearbyRows = nearby.map(stopRow);
+  // (each kind under its heading where more than one kind was found; the stations suggested always under theirs, which says why they are there)
+  const kinds = [towns, lines, stops, nearby].filter((list) => list.length).length;
+  const heading = (list, text, always = false) => ((kinds > 1 || always) && list.length ? [el('li', { class: 'search-heading', role: 'presentation', text })] : []);
+  searchResults.replaceChildren(...heading(towns, t('search.towns')), ...townRows, ...heading(lines, t('search.lines')), ...lineRows, ...heading(stops, t('search.stops')), ...stopRows, ...heading(nearby, t('search.nearby'), true), ...nearbyRows);
   $('search-note').textContent = note;
   setActive(-1);
   // (where a stop is added to a board, what it is added to is said above, also before anything is typed)
@@ -1897,21 +1903,21 @@ function listResults(towns, lines, stops, note = '') {
 function runSearch() {
   const query = searchField.value;
   ask(query);
-  // (with nothing typed the thread answers with the favourites, if there are any)
+  // (with nothing typed the thread answers with the favourites and the stations near the map; until it has its list, there is nothing)
   if (!query.trim()) {
-    if (!hasFavourites()) listResults([], [], []);
+    if (!finderHasList) listResults([], [], []);
   } else if (!finderHasList) listResults([], [], [], t('search.loading'));
 }
 
 /** Shows what the thread found, unless something else has been typed since. */
-function answered({ turn: of, failed = false, towns = [], lines, stops }) {
+function answered({ turn: of, failed = false, towns = [], lines, stops, nearby = [] }) {
   // (whatever it was asked: it has the list now, or has not)
   finderHasList = !failed;
-  // (typed on meanwhile, or asked for the list alone, where there are no favourites to list)
+  // (typed on meanwhile)
+  if (of !== turn) return;
   const typed = searchField.value.trim() !== '';
-  if (of !== turn || (!typed && !hasFavourites())) return;
   if (failed) listResults([], [], [], typed ? t('search.failed') : '');
-  else listResults(towns, lines, stops, !typed || towns.length || lines.length || stops.length ? '' : t('search.none'));
+  else listResults(towns, lines, stops, !typed || towns.length || lines.length || stops.length ? '' : t('search.none'), nearby);
 }
 
 /** Shuts the list, and on a narrow screen the field with it. */

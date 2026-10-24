@@ -87,6 +87,7 @@ export default {
   'search.towns': 'Towns',
   'search.lines': 'Lines',
   'search.stops': 'Stops',
+  'search.nearby': 'Nearby',
   'search.favourite': 'Favourite',
   'search.none': 'No town, stop or line of that name.',
   'search.loading': 'Loading stops and lines …',

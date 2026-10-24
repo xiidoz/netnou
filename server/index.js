@@ -7,6 +7,9 @@ import { parseAddress, stopPath } from '../public/address.js';
 import { readChoice } from '../public/choice.js';
 import { readDisplay } from '../public/display.js';
 import { t } from '../public/i18n.js';
+import { nearby, placesOf } from '../public/nearby.js';
+import { kilometres } from '../public/search.js';
+import { townToShow } from '../public/stops.js';
 import { loadConfig, parseBox, parsePlace } from './config.js';
 import { Addresses, stopTitle } from './lib/addresses.js';
 import { FeedUpdater } from './lib/feed.js';
@@ -235,7 +238,7 @@ function pageLanguage(req, url) {
 /** index.html as it is sent (renderPage), in a language: the page itself, or at the address of a stop or a line. */
 function pageBody(language, asked, address = null) {
   const file = path.join(config.publicDir, 'index.html');
-  return Buffer.from(renderPage(fs.readFileSync(file, 'utf8'), { language, asked, texts: texts[language], siteName: config.siteName, areaName: config.areaName, siteTitle: config.siteTitle[language], siteDescription: config.siteDescription[language], links: config.links, preview: own.preview, previewSize, publicUrl: config.publicUrl, listed: config.searchEngines, styleUrl: config.styleUrl, mapOrigins: config.mapOrigins, kinds: timetable?.kinds ?? null, address, inline: pageInline().inline, fileVersions }));
+  return Buffer.from(renderPage(fs.readFileSync(file, 'utf8'), { language, asked, texts: texts[language], siteName: config.siteName, areaName: config.areaName, siteTitle: config.siteTitle[language], siteDescription: config.siteDescription[language], links: config.links, preview: own.preview, previewSize, publicUrl: config.publicUrl, listed: config.searchEngines, styleUrl: config.styleUrl, mapOrigins: config.mapOrigins, kinds: timetable?.kinds ?? null, nearby: nearbySent(), address, inline: pageInline().inline, fileVersions }));
 }
 
 const etagOf = (body) => `"${crypto.createHash('sha1').update(body).digest('hex').slice(0, 16)}"`;
@@ -243,8 +246,8 @@ const etagOf = (body) => `"${crypto.createHash('sha1').update(body).digest('hex'
 function servePage(req, res, url) {
   const file = path.join(config.publicDir, 'index.html');
   const stat = fs.statSync(file);
-  // (the page has a chip for each kind of transport the timetable has: another timetable may need another page)
-  const stamp = `${stat.size}-${stat.mtimeMs}-${pageInline().stamp}-${timetable?.kinds.join() ?? ''}`;
+  // (the page has a chip for each kind of transport the timetable has, and the stations its search suggests: another timetable may need another page)
+  const stamp = `${stat.size}-${stat.mtimeMs}-${pageInline().stamp}-${timetable?.kinds.join() ?? ''}-${nearbySent().map((stop) => stop.path).join()}`;
   const { asked, language } = pageLanguage(req, url);
   // (the page of an address with a language names that address as its own: not the same page)
   const key = asked ? `?lang=${asked}` : language;
@@ -521,6 +524,36 @@ function searchList() {
     searchCache = { body, etag: `"${crypto.createHash('sha1').update(body).digest('hex').slice(0, 16)}"`, packed: null, stationAt };
   }
   return searchCache;
+}
+
+// The stations the search suggests before anything is typed, for the first
+// view of the instance (#257): written into every page as it is sent, as links
+// to their pages, from which a search engine finds its way to the lines of
+// each and on to all their stops. The page puts those of its own view in
+// their place once the search is opened. Worked out once for each timetable,
+// as the page does it from its list (public/nearby.js).
+let nearbyCache = null;
+
+function nearbySent() {
+  if (!timetable) return [];
+  if (nearbyCache?.timetable !== timetable) {
+    const { stations, stationService, stationTown, towns } = timetable;
+    const places = placesOf({
+      count: stations.length,
+      modes: MODES,
+      lat: stations.map((station) => station.lat),
+      lon: stations.map((station) => station.lon),
+      kinds: stations.map((station) => station.modes.reduce((bits, mode) => bits | (1 << MODES.indexOf(mode)), 0)),
+      service: stationService,
+      townOf: stationTown,
+    });
+    // (the middle of the first view, and how far it reaches from there, as the page has it when it opens there)
+    const [south, west, north, east] = config.view;
+    const near = { lat: (south + north) / 2, lon: (west + east) / 2, km: kilometres(south, west, north, east) / 2 };
+    const stops = nearby(places, near).map((i) => ({ name: stations[i].name, town: townToShow(stations[i].name, towns[stationTown[i]]?.name), path: addressesNow().stationPath(i) }));
+    nearbyCache = { timetable, stops };
+  }
+  return nearbyCache.stops;
 }
 
 const inBox = (box, lat, lon) => lat >= box[0] && lat <= box[2] && lon >= box[1] && lon <= box[3];
