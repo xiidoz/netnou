@@ -288,6 +288,10 @@ button { font: inherit; color: inherit; }
    search as in the stops of a trip (#246). */
 .search-results .line .name, .in-town .name { display: grid; min-width: 0; line-height: 1.25; }
 .search-results .line .to, .search-results .line .agency, .in-town .stop, .in-town .town { overflow: hidden; text-overflow: ellipsis; }
+/* (each of the lines, and the two together, with room above and below for the dots of an Ü and the tail of a g, which a
+   font that reaches further than the line is high draws there, as Segoe UI does, and the "…" would cut off; the room
+   taken back by margins, so that the rows are as high as before and the letters where they were) */
+.search-results .line .name, .in-town .name, .search-results .line .to, .search-results .line .agency, .in-town .stop, .in-town .town { padding-block: 0.25em; margin-block: -0.25em; }
 .search-results .line .agency, .in-town .town, .panel-head h1 .town { color: var(--text-muted); font-size: 12px; font-weight: 400; }
 /* (a stop's town below its name in the head of its details, #254: a line of its own in the heading) */
 .panel-head h1 .town { flex-basis: 100%; margin-top: -6px; }
