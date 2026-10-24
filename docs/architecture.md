@@ -56,8 +56,10 @@ vehicle positions. A position is therefore derived:
    timetable times plus the reported delay. A delay carries forward to later
    stops until the feed says otherwise. The times are forced to be
    non-decreasing.
-2. Between two stops the vehicle moves at constant speed along the route
-   geometry of that hop, or along a straight line where there is none.
+2. Between two stops the vehicle moves along the route geometry of that
+   hop in the time the timetable gives it, slower where its roads or tracks
+   are slow and faster where they are fast (see *Speeds* below). Where there
+   is no route it moves at constant speed along a straight line.
 3. Without realtime data for a trip, the timetable alone is used. The page
    marks such a vehicle with a question mark while others have a delay
    reported. Without any realtime data it says so once, as a warning in the
@@ -397,6 +399,27 @@ the default area that is about 60,000 distinct hops, for all of Germany
   done for a stop inside the area that is not near the network, or only near
   tracks of another kind, which need not lead there: a stop of trams above a
   tunnel of the U-Bahn.
+- **Speeds** ([#264](https://github.com/xiidoz/netnou/issues/264)). A hop
+  takes the time of the timetable, but not at one speed: every edge has the
+  speed of its way, and the vehicle goes slower where that is slow and
+  faster where it is fast, in the same proportion. The speed of a way is its
+  `maxspeed` (or that of one direction, or an implied limit such as
+  `DE:urban`), else one for its kind (`ROAD_SPEED`, `RAIL_SPEED`): 50 km/h
+  on a primary road, 30 in a residential street, 100 on rail, 40 for a tram.
+  A bus goes no faster than 80 km/h, 100 on motorways and trunk roads, and
+  slower than the limit in town, as junctions, lights and traffic have it:
+  60 % of a limit up to 50 km/h, 80 % of one of 60 or 70 (`TOWN_SHARE`).
+  The straight line beyond the extract is as fast as the fastest part of
+  the route. Pulling away and braking at a stop are not part of it. The
+  networks keep the speed of every edge as half its km/h in a byte. In all
+  of Germany (October 2026) a speed is tagged on 93 % of main lines of rail,
+  90 % of motorways and 93 % of primary roads, but on a third of the tracks
+  of the U-Bahn and 40 % of those of trams. A vehicle is then, at some
+  moment of the hop, more than a kilometre from where one speed would have
+  had it on 97 % of the hops of coaches longer than 20 km, 10 % of those of
+  trains and 1.7 % of the other hops of buses: the ICE from Köln Hbf to
+  Frankfurt Flughafen leaves Köln at 39 km/h, where it went 183 before, and
+  is up to 14 km from where it was.
 - **Fallback.** A hop without a path is a straight line. In October 2026 that
   was the case for about 1 % of the hops inside the default area. For all of
   Germany it was 1.1 % of the hops on roads, 11 % on rail, 2 % of trams and
@@ -411,16 +434,19 @@ the default area that is about 60,000 distinct hops, for all of Germany
   hop, shared by all trips that use it. A hop is gone through from its
   first point on, so that point is stored as it is and each of the others as
   its step from the one before, in 16 bits each way; a step longer than a
-  third of a degree is cut into shorter ones. The share of the hop's length
-  up to a point is stored in 16 bits as well. That is 6 bytes a point, 117 MB
-  for all of Germany where it was 277. A 65,535th of the length of a long
-  hop is a few metres: a vehicle is drawn up to 6 m from where a share of 64
-  bits would have it.
+  third of a degree is cut into shorter ones. The share of the hop's time up
+  to a point, by the speeds of its parts, is stored in 16 bits as well, and a
+  point is kept where the speed changes. That is 6 bytes a point: for all of
+  Germany 18.3 million points, 126 MB with where every hop begins. A
+  65,535th of the time of a long hop is a few metres: a vehicle is drawn up
+  to 10 m from where a share of 64 bits would have it, on a coach from
+  Warsaw to Berlin.
 - **Time and memory.** For the default area the route step of an import
   takes the test machine about 40 seconds, the server at most 1 GB of
   memory. For all of Germany it takes 8 minutes, 3 to read the extract and 5
-  to route, when none of the routes are kept, and the server at most 3.3 GB:
-  it holds the timetable it serves meanwhile. Routing the tracks from edge to
+  to route, when none of the routes are kept, and the server at most 3.5 GB:
+  it holds the timetable it serves meanwhile. The speeds of the edges take
+  0.2 GB of that. Routing the tracks from edge to
   edge, with the tracks that trains share, takes 38 seconds of that where it
   took 27, and 0.1 GB more while they are routed.
 - **Kept from one import to the next.** A route is found again by its
@@ -432,7 +458,7 @@ the default area that is about 60,000 distinct hops, for all of Germany
   `osm-routes.bin` as they are found, so that a restart in the middle of
   routing goes on from there, and when routing is done the routes of the
   hops of the timetable are written anew. For all of Germany that file is
-  150 MB. An import whose hops are all kept takes seconds for its routes and
+  240 MB. An import whose hops are all kept takes seconds for its routes and
   reads no networks, a minute in all and at most 2.4 GB. One in a hundred
   hops new, spread over the whole country, takes 2 minutes: the network of a
   tile is built for however few hops it has.
@@ -1075,8 +1101,9 @@ otherwise a server would load a file written by older code:
 
 ## Known limits
 
-- Positions are estimates. Between two stops the speed is assumed constant,
-  and a route is a shortest-path guess.
+- Positions are estimates. Between two stops the speed follows the speeds
+  of the roads and tracks, not the vehicle's own, with no time to pull away
+  or to brake, and a route is a shortest-path guess.
 - The feed's own `shapes.txt` is ignored.
 - Kinds of train are recognised by line names as used in Germany.
 - One time zone for the whole feed (`NETNOU_TIMEZONE`); `agency_timezone` is not
