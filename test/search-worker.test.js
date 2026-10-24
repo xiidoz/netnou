@@ -64,20 +64,32 @@ test('the first question fetches the list, and every question is answered from i
       { name: 'Nürnberg Hbf', lat: 49.44561, lon: 11.08299, modes: ['subway', 'tram', 'bus', 'regional'] },
       { name: 'Nürnberg Plärrer', lat: 49.44809, lon: 11.0648, modes: ['subway', 'tram', 'bus'] },
     ],
+    // (something typed: nothing suggested)
+    nearby: [],
   });
   assert.deepEqual(server.requests, ['api/search']);
 
   // a line by the name the visitor reads its mode called; as many as are asked for
   ask(2, 'u-bahn 1');
-  assert.deepEqual(await answered(), { turn: 2, towns: [], lines: [{ name: 'U1', mode: 'subway', agency: 'VerkehrsAG Nürnberg', to: ['Fürth Hardhöhe', 'Langwasser Süd'], at: [49.44428, 11.05986] }], stops: [] });
+  assert.deepEqual(await answered(), { turn: 2, towns: [], lines: [{ name: 'U1', mode: 'subway', agency: 'VerkehrsAG Nürnberg', to: ['Fürth Hardhöhe', 'Langwasser Süd'], at: [49.44428, 11.05986] }], stops: [], nearby: [] });
   ask(3, 'nürnberg', { limits: { towns: 3, lines: 3, stops: 1 } });
   assert.deepEqual((await answered()).stops.map((stop) => stop.name), ['Nürnberg Hbf']);
   // the nearer one first, for whoever has their position shown
   ask(4, 'nürnberg', { near: { lat: 49.4481, lon: 11.0648 } });
   assert.deepEqual((await answered()).stops.map((stop) => stop.name), ['Nürnberg Plärrer', 'Nürnberg Hbf']);
-  // nothing typed: a question for the list alone
+  // nothing typed: no favourites, and the stations near the map suggested, as many as the list has room for (#257)
   ask(5, '');
-  assert.deepEqual(await answered(), { turn: 5, towns: [], lines: [], stops: [] });
+  assert.deepEqual(await answered(), {
+    turn: 5,
+    towns: [],
+    lines: [],
+    stops: [],
+    nearby: [
+      { name: 'Nürnberg Hbf', lat: 49.44561, lon: 11.08299, modes: ['subway', 'tram', 'bus', 'regional'] },
+      { name: 'Nürnberg Plärrer', lat: 49.44809, lon: 11.0648, modes: ['subway', 'tram', 'bus'] },
+      { name: 'Fürth Rathaus', lat: 49.47765, lon: 10.98859, modes: ['subway', 'bus'] },
+    ],
+  });
   assert.deepEqual(server.requests, ['api/search']);
 });
 
@@ -102,7 +114,7 @@ test('of the questions that come in while it is busy, the last one is answered',
   ask(9, 'p');
   ask(10, 'pl');
   ask(11, 'plä');
-  assert.deepEqual(await answered(), { turn: 11, towns: [], lines: [], stops: [{ name: 'Nürnberg Plärrer', lat: 49.44809, lon: 11.0648, modes: ['subway', 'tram', 'bus'] }] });
+  assert.deepEqual(await answered(), { turn: 11, towns: [], lines: [], stops: [{ name: 'Nürnberg Plärrer', lat: 49.44809, lon: 11.0648, modes: ['subway', 'tram', 'bus'] }], nearby: [] });
   await sleep(30);
   assert.equal(answers.at(-1).turn, 11);
 });
@@ -138,4 +150,19 @@ test('told that its list is not the one of the server any more, it fetches the l
   ask(16, 'hbf');
   assert.deepEqual((await answered()).stops.map((stop) => stop.name), ['Nürnberg Hbf']);
   assert.equal(server.requests.length, before + 1);
+});
+
+test('with nothing typed, the favourites come first, those on the map before the others, and the stations suggested below them are none of them (#257)', async () => {
+  const kept = { stops: [{ name: 'Fürth Rathaus', lat: 49.47765, lon: 10.98859 }, { name: 'Nürnberg Hbf', lat: 49.44561, lon: 11.08299 }], lines: [] };
+  // (the map over Nürnberg: the Hbf is on it, Fürth is not)
+  ask(17, '', { favourites: kept, view: [49.43, 11.05, 49.46, 11.1] });
+  const answer = await answered();
+  assert.deepEqual(answer.stops.map((stop) => [stop.name, stop.favourite]), [['Nürnberg Hbf', true], ['Fürth Rathaus', true]]);
+  assert.deepEqual(answer.nearby.map((stop) => stop.name), ['Nürnberg Plärrer']);
+  // without a view, in the order they were marked
+  ask(18, '', { favourites: kept });
+  assert.deepEqual((await answered()).stops.map((stop) => stop.name), ['Fürth Rathaus', 'Nürnberg Hbf']);
+  // where no stops are wanted, none are suggested either
+  ask(19, '', { limits: { towns: 0, lines: 3, stops: 0 } });
+  assert.deepEqual((await answered()).nearby, []);
 });

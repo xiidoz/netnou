@@ -551,16 +551,17 @@ function matchOf(index, i, form, level) {
   return town === BEGINNING ? BEGINNING : Math.min(town, nameMatch(index, i, form, level));
 }
 
-const kilometres = (lat1, lon1, lat2, lon2) => Math.hypot(lat1 - lat2, (lon1 - lon2) * Math.cos((lat1 * Math.PI) / 180)) * 111.2;
+export const kilometres = (lat1, lon1, lat2, lon2) => Math.hypot(lat1 - lat2, (lon1 - lon2) * Math.cos((lat1 * Math.PI) / 180)) * 111.2;
 
 /**
  * What the service of a stop or a line counts for: all of it, or less the
  * further it is from `near`. Near what the map shows (#154), what is in view
  * counts in full and what is outside the less the further it is, at the
  * scale of the view: as far again out as the view reaches from its middle,
- * a sixteenth. With all of the country in view, service decides.
+ * a sixteenth. With all of the country in view, service decides. The
+ * stations suggested near the map (nearby.js) are weighed the same way.
  */
-const weigh = (service, lat, lon, near) => {
+export const weigh = (service, lat, lon, near) => {
   if (!near) return service;
   const km = kilometres(near.lat, near.lon, lat, lon);
   if (near.km === undefined) return service / (km + NEAR_KM) ** 2;
@@ -683,27 +684,37 @@ export function favouritesIn(index, { stops = [], lines = [] } = {}) {
 }
 
 /**
+ * A stop of the list as the page shows it: { name, lat, lon, modes, town },
+ * `town` only where one is known and the name does not say it.
+ */
+export function stopOf(index, i) {
+  const town = townToShow(nameOf(index, i), index.towns.names[index.townOf[i]]);
+  return { name: nameOf(index, i), lat: index.lat[i], lon: index.lon[i], modes: index.modes.filter((_, bit) => index.kinds[i] & (1 << bit)), ...(town ? { town } : {}) };
+}
+
+/**
  * The stops that match what was typed, the most likely first: the closer
  * matches before the others, and among equally close ones those with more
  * service. Service counts for less the further a stop is from `near`. The
  * favourites among them come before all others, and with nothing typed
- * they are the stops listed.
+ * they are the stops listed: those on the map first, then the others, each
+ * in the order they were marked (#257).
  * @param index from buildIndex
  * @param near { lat, lon } of the visitor, if they have it shown; else of
  *   the middle of what the map shows, with `km`, how far it reaches from there
+ * @param view what the map shows, [south, west, north, east], null if not known
  * @param favourites the numbers of the stops that are favourites (favouritesIn)
- * @returns up to `limit` of { name, lat, lon, modes, town, favourite }, and
- *   more where more favourites match; `town` only where one is known and
- *   the name does not say it, `favourite` only where it is one
+ * @returns up to `limit` of { name, lat, lon, modes, town, favourite } (stopOf),
+ *   and more where more favourites match; `favourite` only where it is one
  */
-export function search(index, query, { near = null, limit = 8, favourites = [] } = {}) {
+export function search(index, query, { near = null, view = null, limit = 8, favourites = [] } = {}) {
   if (limit < 1) return [];
-  const result = (i) => {
-    const town = townToShow(nameOf(index, i), index.towns.names[index.townOf[i]]);
-    return { name: nameOf(index, i), lat: index.lat[i], lon: index.lon[i], modes: index.modes.filter((_, bit) => index.kinds[i] & (1 << bit)), ...(town ? { town } : {}), ...(favourites.includes(i) ? { favourite: true } : {}) };
-  };
+  const result = (i) => ({ ...stopOf(index, i), ...(favourites.includes(i) ? { favourite: true } : {}) });
   const forms = wordsOf(query).sort((a, b) => b.length - a.length).map(formsOf);
-  if (!forms.length) return favourites.map(result);
+  if (!forms.length) {
+    const onMap = (i) => view !== null && index.lat[i] >= view[0] && index.lat[i] <= view[2] && index.lon[i] >= view[1] && index.lon[i] <= view[3];
+    return [...favourites.filter(onMap), ...favourites.filter((i) => !onMap(i))].map(result);
+  }
   // Single letters first by what begins with them alone: that fills the
   // list as a rule, and then nothing found another way would be on it.
   let level = BEGINNING;

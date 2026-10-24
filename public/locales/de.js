@@ -61,6 +61,7 @@ export default {
   'search.towns': 'Orte',
   'search.lines': 'Linien',
   'search.stops': 'Haltestellen',
+  'search.nearby': 'In der Nähe',
   'search.favourite': 'Favorit',
   'search.none': 'Kein Ort, keine Haltestelle und keine Linie mit diesem Namen.',
   'search.loading': 'Haltestellen und Linien werden geladen …',

@@ -554,6 +554,9 @@ test('the page says what and where the instance is before any script runs', asyn
   assert.match(page, /<title>ÖPNV-Live-Karte: Testland – Netnou<\/title>/);
   assert.match(page, /<meta name="description" content="Testland: Busse, /);
   assert.match(page, /<p id="area-name">Testland<\/p>/);
+  // the stations its search suggests near the first view, each a link to its page (#257): Beta, at which more kinds stop, before Alpha
+  assert.equal(/<ul class="search-results" id="search-results"[^>]*>(.*?)<\/ul>/s.exec(page)[1], '<li class="search-heading" role="presentation">In der Nähe</li>'
+    + '<li role="option" aria-selected="false"><a href="stop/beta@49.5000,11.0000">Beta</a></li><li role="option" aria-selected="false"><a href="stop/alpha@49.4000,11.0000">Alpha</a></li>');
   // (and the header card, which a visitor sees before the scripts have run)
   assert.ok(page.includes('<span id="status-text" data-i18n="status.connecting">Verbinde …</span>'));
   assert.ok(page.includes(`<link rel="canonical" href="${address}">`));

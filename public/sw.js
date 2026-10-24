@@ -21,6 +21,7 @@ const SHELL = [
   'display.js',
   'favourites.js',
   'i18n.js',
+  'nearby.js',
   'panel.js',
   'search.js',
   'search-worker.js',

@@ -543,6 +543,9 @@ test('with nothing typed, the favourites are what is listed, in the order they w
   const marked = favourites('Hersbruck Plärrer', 'Nürnberg Hbf');
   assert.deepEqual(search(index, '', { favourites: marked }).map((stop) => [stop.name, stop.favourite]), [['Hersbruck Plärrer', true], ['Nürnberg Hbf', true]]);
   assert.deepEqual(search(index, ' , ', { favourites: marked }).length, 2);
+  // with what the map shows, those on it first, then the others, each in the order they were marked (#257)
+  assert.deepEqual(search(index, '', { favourites: marked, view: [49.4, 11.0, 49.5, 11.1] }).map((stop) => stop.name), ['Nürnberg Hbf', 'Hersbruck Plärrer']);
+  assert.deepEqual(search(index, '', { favourites: marked, view: [49.4, 11.3, 49.6, 11.5] }).map((stop) => stop.name), ['Hersbruck Plärrer', 'Nürnberg Hbf']);
   // (none where no stops are wanted, as where a stop is added to a board no lines are)
   assert.deepEqual(search(index, '', { favourites: marked, limit: 0 }), []);
   const line = favouritesIn(index, { lines: [keptLine('U1', 'VerkehrsAG Nürnberg')] }).lines;

@@ -125,6 +125,7 @@ Page (`public/`):
 | `favourites.js` | the stops and lines a visitor marks with the heart (#245): what is kept of them in the browser, and when a stop or a line of another timetable is the one kept |
 | `panel.js` | what the details of a stop and of a line list, as a tree of elements: the page makes it into its own, the server writes it into the page of an address as it is at that moment (#254); for the page and the server |
 | `search.js` | finding stops, lines and towns by name: matching and order, the favourites first, without the page around it |
+| `nearby.js` | the stations the search suggests near the map before anything is typed (#257): stations close together as one place, the biggest places near the map or the busiest towns in view; for the page and the server |
 | `search-worker.js` | the thread that loads the list of stops, lines and towns and searches it |
 | `i18n.js`, `locales/` | texts in the visitor's language, see [translating.md](translating.md) |
 | `first.js` | what is settled before the page is drawn: light or dark, by the visitor's choice or else the scheme of the device, whether the header card shows at once and in which language, and where the instance is (the base of the page) |
@@ -854,7 +855,10 @@ otherwise a server would load a file written by older code:
   up in its list as `/api/address` would, the stop of the name nearest the
   place within 1 km, and the line nearest within 10 km; one that a timetable
   no longer has is not listed. With nothing typed, the search lists the
-  favourites, under the headings it has; while typing, a favourite that
+  favourites, under the headings it has, the stops among them that are on
+  the map first, then the others, each in the order they were marked
+  ([#257](https://github.com/xiidoz/netnou/issues/257)): with thirty of
+  them, those of the town on the map are at the top. While typing, a favourite that
   matches as closely as the search goes comes first among the stops or the
   lines, with a heart at the end of its row. The order of towns, lines and
   stops stays as it is. On the map a favourite stop is a heart in place of
@@ -866,6 +870,32 @@ otherwise a server would load a file written by older code:
   has no stations to take them from when zoomed out. An open favourite has
   its ring in the shape of the heart, at the same distance all round, cut
   once on a canvas of its own. A screen on a wall shows none.
+- **Stations near the map**
+  ([#257](https://github.com/xiidoz/netnou/issues/257)). Below the
+  favourites, with nothing typed, the search suggests stations a rider is
+  likely to look for, under "In der Nähe": five, as many fewer as there are
+  favourites beyond two, and two from five favourites on, so that together
+  they fill the seven rows the list shows on a phone. Trips alone would
+  bring up bus stations: the feed splits most main stations into several
+  stations, Hamburg Hbf into seven, and the one with the long-distance
+  trains has the fewest trips of them. So the stations within 300 m of each
+  other are one place, which counts their trips, each station's times the
+  number of kinds that stop there, so that an interchange outweighs a bus
+  station; and a place is suggested by its station with the
+  furthest-reaching kind, long distance first. Zoomed out further than a
+  town (the view reaches more than 15 km from its middle) the towns with the
+  most trips near the map are suggested, each by its biggest place: Berlin,
+  Hamburg, München, Frankfurt and Düsseldorf Hbf for all of Germany; zoomed
+  in, the biggest places near the map, at least 600 m apart or a tenth of
+  how far the view reaches. Near is what it is for the order of the search,
+  the visitor where their position is shown. `nearby.js` holds the rule,
+  for the search thread, which works out the places once for its list
+  (0.4 s for all of Germany on a desktop, a few milliseconds for each
+  question then), and for the server, which writes the suggestions of the
+  instance's first view into every page it sends, as links to their pages
+  in the list of the search, not shown until the search is opened: from
+  them a search engine finds its way to the lines of each and on to all
+  their stops (#254).
 - **What a line is.** The trips of a name, mode and operator that share
   stations, also through others
   ([#152](https://github.com/xiidoz/netnou/issues/152)): DB Regio runs an
