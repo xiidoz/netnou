@@ -610,12 +610,19 @@ otherwise a server would load a file written by older code:
 
 - **Map.** MapLibre GL JS draws the map with WebGL, from the vector tiles of
   the configured style or from raster tiles. Everything else is drawn by
-  `app.js` on one canvas lying on top: the veil outside the area, stations,
-  the route of the selected trip or line, the visitor's own position,
+  `app.js` on one canvas lying on top: the veil outside the area, the route
+  of the selected trip or line, stations, the visitor's own position,
   vehicles. The route of a line is where its trips of the day run, each
   stretch between two stops once
   ([#148](https://github.com/xiidoz/netnou/issues/148)): the page asks for it
   once, when it opens the line, and shows it as far as it lies in the area.
+  A route lies under the stops and their names, and its stops are the marks
+  of the stations it calls at, each in a ring of the colour of its mode: the
+  platform where a trip stops is not where the mark of its station is, the
+  middle of its platforms, a median 21 m away at a bus stop, and a dot of
+  its own would stand beside the mark or cover it. Where the map has no
+  mark of a station, as zoomed out, a dot shows where the route stops; a
+  station it passes keeps its mark as it is.
   The map is never rotated or tilted.
 - **Polling.** Every 10 seconds the page asks for the vehicles in the visible
   section plus a margin, in full detail from zoom level 12 and in a reduced
