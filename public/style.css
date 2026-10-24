@@ -826,10 +826,9 @@ button:focus-visible, select:focus-visible, .row:focus-visible, .panel:focus-vis
   background: var(--bg);
   border: 2px solid var(--rail);
 }
-.line-stops .branch-part { position: relative; }
-/* (the line beside a branch: not beside one that is apart from it) */
-.line-stops .branch-part::before { content: ""; position: absolute; left: 34.5px; top: 0; bottom: 0; width: 3px; background: var(--rail); opacity: 0.85; }
-.line-stops .branch-part.apart::before { display: none; }
+/* The line beside a branch, not beside one that is apart from it: in the background of each of its rows, over the colour
+   a row has under the pointer, as a row of the line keeps its own (a line beside them would be covered by it). */
+.line-stops .branch-part:not(.apart) .row.on-line { background-image: linear-gradient(color-mix(in srgb, var(--rail) 85%, transparent) 0 0); background-repeat: no-repeat; background-position: 34.5px 0; background-size: 3px 100%; }
 .line-stops .branch { position: relative; }
 .line-stops .branch .row.on-line { padding-left: 32px; }
 .line-stops .branch::before, .line-stops .branch::after { content: ""; position: absolute; box-sizing: border-box; left: 34.5px; width: 21px; height: 34px; border: 0 solid var(--rail); opacity: 0.85; }
