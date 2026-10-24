@@ -808,8 +808,8 @@ export class Timetable extends Schedule {
     // all hops are one column, in 1e-5 degrees: the first point of a hop as it
     // is, each of the others as its step from the one before, so a hop is
     // gone through from its first point on (Walk). For every point there is
-    // also the share of the hop's length covered so far – a vehicle is
-    // assumed to move along the hop at constant speed.
+    // also the share of the hop's time gone by, from the speeds of its roads
+    // or tracks (#264).
     this.routeNets = this.routeModes.map((mode) => NETS.indexOf(NET_OF_MODE[mode]));
     const segments = data.segments;
     this.segmentKey = segments?.key ?? new Float64Array(0);

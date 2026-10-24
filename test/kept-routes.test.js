@@ -14,7 +14,8 @@ function tempDir(t) {
 
 const NETWORKS = { fetchedAt: '2026-10-01T00:00:00.000Z', scope: 'area-1' };
 const [A, B, C] = [[49.4, 11.0], [49.45, 11.002], [49.5, 11.0001]];
-const ROUTE = [4940000, 1100000, 4942500, 1100150, 4945000, 1100200];
+// (each point its latitude, its longitude and the share of the hop's time up to it, #264)
+const ROUTE = [4940000, 1100000, 0, 4942500, 1100150, 41000, 4945000, 1100200, 65535];
 const found = (kept, ...hop) => {
   const route = kept.find(...hop);
   return route ? Array.from(route) : route;
@@ -68,9 +69,9 @@ test('what was routed before a stop is kept, but for a route cut short', (t) => 
   const after = new KeptRoutes(dir, NETWORKS);
   assert.deepEqual([found(after, 0, A, B), after.find(0, B, C)], [ROUTE, undefined]);
   // and goes on from there
-  after.add(0, B, C, ROUTE.slice(0, 4));
+  after.add(0, B, C, ROUTE.slice(0, 6));
   after.flush();
-  assert.deepEqual(found(new KeptRoutes(dir, NETWORKS), 0, B, C), ROUTE.slice(0, 4));
+  assert.deepEqual(found(new KeptRoutes(dir, NETWORKS), 0, B, C), ROUTE.slice(0, 6));
 });
 
 test('what is kept at the end are the routes of the hops of the timetable', (t) => {

@@ -6,10 +6,10 @@ import { test } from 'node:test';
 import { Area } from '../server/lib/area.js';
 import { readDataset, writeDataset } from '../server/lib/dataset.js';
 import { packDataset } from '../server/lib/importer.js';
-import { Network, buildNetworks, classifyWay, pathLength, simplify, tilesOf, windowOf } from '../server/lib/network.js';
+import { Network, buildNetworks, classifyWay, maxspeedOf, pathLength, simplify, tilesOf, windowOf } from '../server/lib/network.js';
 import { readPbfWays } from '../server/lib/osmpbf.js';
 import { KeptRoutes } from '../server/lib/kept-routes.js';
-import { buildSegments } from '../server/lib/shapes.js';
+import { buildSegments, timedPoints } from '../server/lib/shapes.js';
 import { serviceDayStart } from '../server/lib/time.js';
 import { Timetable, positionAt } from '../server/lib/timetable.js';
 import { makePbf } from './helpers.js';
@@ -46,7 +46,8 @@ test('the reader takes the ways that classify keeps, and then the places of just
   for (const options of [{}, { sorted: true }, { backwards: true }]) {
     const read = readMade(dir, EXTRACT.nodes, EXTRACT.ways, { keepNode: inside, ...options });
     const label = JSON.stringify(options);
-    assert.deepEqual(read.kinds, [{ net: 'road', factor: 1.3, dir: 3 }, { net: 'tram', factor: 1, dir: 1, shared: ['subway', 'rail'] }, { net: 'road', factor: 1.6, dir: 3 }], label);
+    // (with how fast a vehicle goes there, as half its km/h: #264)
+    assert.deepEqual(read.kinds, [{ net: 'road', factor: 1.3, dir: 3, speed: 9 }, { net: 'tram', factor: 1, dir: 1, shared: ['subway', 'rail'], speed: 20 }, { net: 'road', factor: 1.6, dir: 3, speed: 6 }], label);
     assert.deepEqual(Array.from(read.ways.id), [100, 102, 104], label);
     assert.deepEqual(Array.from(read.ways.kind), [0, 1, 2], label);
     // the nodes of a way as places, by their ids: none for one that is not kept or not there
@@ -93,6 +94,7 @@ test('the part of a network in some tiles has their nodes and the edges between 
     b: Int32Array.of(1, 2, 3, 4, 5),
     f: Uint16Array.of(100, 130, 100, 100, 160),
     d: Uint8Array.of(3, 3, 1, 3, 3),
+    s: Uint8Array.of(15, 9, 15, 15, 6),
   };
   const tiles = tilesOf(graph, 0.01);
   assert.equal(tiles.keys.length, 5);
@@ -102,7 +104,7 @@ test('the part of a network in some tiles has their nodes and the edges between 
   const part = windowOf(graph, tiles, around, scratch);
   // the nodes of the columns 11.00, 11.01 and 11.02, and the edges between them
   assert.deepEqual(Array.from(part.global), [0, 1, 2, 3]);
-  assert.deepEqual([part.a, part.b, part.f, part.d].map((list) => Array.from(list)), [[0, 1, 2], [1, 2, 3], [100, 130, 100], [3, 3, 1]]);
+  assert.deepEqual([part.a, part.b, part.f, part.d, part.s].map((list) => Array.from(list)), [[0, 1, 2], [1, 2, 3], [100, 130, 100], [3, 3, 1], [15, 9, 15]]);
   assert.deepEqual(Array.from(part.lon), [110000000, 110050000, 110120000, 110250000]);
   assert.ok(scratch.every((x) => x === -1));
   // and to the east of it
@@ -112,7 +114,8 @@ test('the part of a network in some tiles has their nodes and the edges between 
 
 test('classifyWay: networks, access, one-way rules and bus exceptions', () => {
   // the main roads, on which the long hops of a country are routed, with their links (#131)
-  assert.deepEqual(classifyWay({ highway: 'primary' }), { net: 'road', factor: 1, dir: 3, main: true });
+  // (each with how fast a vehicle goes there, as half its km/h: see below)
+  assert.deepEqual(classifyWay({ highway: 'primary' }), { net: 'road', factor: 1, dir: 3, main: true, speed: 15 });
   for (const highway of ['motorway', 'motorway_link', 'trunk', 'primary_link']) assert.equal(classifyWay({ highway }).main, true, highway);
   for (const highway of ['secondary', 'tertiary', 'residential', 'busway']) assert.equal(classifyWay({ highway }).main, undefined, highway);
   assert.equal(classifyWay({ highway: 'residential', oneway: 'yes' }).dir, 1);
@@ -128,28 +131,65 @@ test('classifyWay: networks, access, one-way rules and bus exceptions', () => {
   assert.equal(classifyWay({ highway: 'pedestrian' }), null);
   assert.equal(classifyWay({ highway: 'pedestrian', psv: 'yes' }).net, 'road');
   // the U-Bahn and trams share each other's tracks and those of the light rail (#128), and trains those of trams (#248)
-  assert.deepEqual(classifyWay({ railway: 'subway' }), { net: 'subway', factor: 1, dir: 3, shared: ['tram'] });
-  assert.deepEqual(classifyWay({ railway: 'tram' }), { net: 'tram', factor: 1, dir: 3, shared: ['subway', 'rail'] });
-  assert.deepEqual(classifyWay({ railway: 'light_rail' }), { net: 'rail', factor: 1, dir: 3, shared: ['subway', 'tram'] });
-  assert.deepEqual(classifyWay({ railway: 'rail' }), { net: 'rail', factor: 1, dir: 3 });
+  assert.deepEqual(classifyWay({ railway: 'subway' }), { net: 'subway', factor: 1, dir: 3, shared: ['tram'], speed: 30 });
+  assert.deepEqual(classifyWay({ railway: 'tram' }), { net: 'tram', factor: 1, dir: 3, shared: ['subway', 'rail'], speed: 20 });
+  assert.deepEqual(classifyWay({ railway: 'light_rail' }), { net: 'rail', factor: 1, dir: 3, shared: ['subway', 'tram'], speed: 35 });
+  assert.deepEqual(classifyWay({ railway: 'rail' }), { net: 'rail', factor: 1, dir: 3, speed: 50 });
   assert.equal(classifyWay({ railway: 'rail', oneway: 'yes' }).dir, 3);
   assert.equal(classifyWay({ railway: 'tram', oneway: 'yes' }).dir, 1);
   assert.equal(classifyWay({ railway: 'rail', service: 'yard' }).factor, 3);
   assert.equal(classifyWay({ railway: 'abandoned' }), null);
   // ferries on their routes across the water, both ways
-  assert.deepEqual(classifyWay({ route: 'ferry' }), { net: 'ferry', factor: 1, dir: 3 });
+  assert.deepEqual(classifyWay({ route: 'ferry' }), { net: 'ferry', factor: 1, dir: 3, speed: 10 });
   // cable cars and monorails together with funiculars and rack railways, whole narrow gauge and the track of a tram with a rack among them
   for (const tags of [{ railway: 'monorail' }, { railway: 'funicular', gauge: '1000' }, { railway: 'narrow_gauge', rack: 'abt' }, { railway: 'tram', rack: 'riggenbach' }, { railway: 'rail', rack: 'abt' }, { aerialway: 'gondola' }, { aerialway: 'cable_car' }, { aerialway: 'chair_lift' }]) {
-    assert.deepEqual(classifyWay(tags), { net: 'cable', factor: 1, dir: 3 }, JSON.stringify(tags));
+    const { speed, ...kind } = classifyWay(tags);
+    assert.deepEqual(kind, { net: 'cable', factor: 1, dir: 3 }, JSON.stringify(tags));
+    assert.ok(speed > 0, JSON.stringify(tags));
   }
   assert.equal(classifyWay({ railway: 'monorail', service: 'yard' }).factor, 3);
   // narrow gauge without a rack is shared with trains, which run on it as well (the Harz, #248)
-  for (const tags of [{ railway: 'narrow_gauge' }, { railway: 'narrow_gauge', rack: 'no' }]) assert.deepEqual(classifyWay(tags), { net: 'cable', factor: 1, dir: 3, shared: ['rail'] }, JSON.stringify(tags));
+  for (const tags of [{ railway: 'narrow_gauge' }, { railway: 'narrow_gauge', rack: 'no' }]) assert.deepEqual(classifyWay(tags), { net: 'cable', factor: 1, dir: 3, shared: ['rail'], speed: 20 }, JSON.stringify(tags));
   // a track that has no rack stays that of the trains, and not every lift carries people as a line does
   assert.equal(classifyWay({ railway: 'rail', rack: 'no' }).net, 'rail');
   assert.equal(classifyWay({ railway: 'tram' }).net, 'tram');
   assert.equal(classifyWay({ aerialway: 'drag_lift' }), null);
   assert.equal(classifyWay({ aerialway: 'station' }), null);
+});
+
+// A vehicle takes the time of a hop by how fast it goes on each part of it
+// (#264): the speed of a way is what OpenStreetMap says (maxspeed), else
+// one by its kind; a bus no faster than a bus may, and in town slower than
+// the limit. A speed is kept as half its km/h, in a byte.
+test('how fast a vehicle goes on a way: as it is tagged, else by its kind, a bus slower in town', () => {
+  assert.deepEqual([{ maxspeed: '50' }, { maxspeed: '100 mph' }, { maxspeed: 'DE:urban' }, { maxspeed: 'DE:rural' }, { maxspeed: 'none' }, { maxspeed: 'walk' }, { 'maxspeed:forward': '70' }, { maxspeed: 'signals' }, {}].map(maxspeedOf), [50, 160.9, 50, 100, 130, 7, 70, null, null]);
+  const speedOf = (tags) => classifyWay(tags).speed * 2;
+  // a bus: in town at 60 % of a limit of up to 50 and 80 % of one of 60 or 70, on the open road at the limit, no faster than 80 there and 100 on a motorway or a trunk road
+  assert.deepEqual([{ highway: 'residential' }, { highway: 'primary' }, { highway: 'primary', maxspeed: '70' }, { highway: 'primary', maxspeed: '100' }, { highway: 'motorway' }, { highway: 'motorway', maxspeed: 'none' }, { highway: 'trunk', maxspeed: '120' }].map(speedOf), [18, 30, 56, 80, 100, 100, 100]);
+  // a train as fast as its track is tagged, up to 300 and beyond; else by the kind of track
+  assert.deepEqual([{ railway: 'rail', maxspeed: '300' }, { railway: 'rail', maxspeed: '160' }, { railway: 'rail' }, { railway: 'tram', maxspeed: '50' }, { railway: 'tram' }, { railway: 'subway' }].map(speedOf), [300, 160, 100, 50, 40, 60]);
+});
+
+test('a vehicle takes the time of a hop by how fast it goes on each part of its route (#264)', () => {
+  // a straight line of 3 km: the first kilometre at 100, the second at 50, the third at 100
+  const network = { toLatLon: (x, y) => [49 + y / 111_320, 11 + x / 111_320] };
+  const path = [0, 0, 1000, 0, 2000, 0, 3000, 0];
+  path.speeds = [50, 25, 50];
+  // simplifying keeps the points where the speed changes, though they lie on the line
+  assert.deepEqual(simplify(path, 1.5), path);
+  assert.deepEqual(simplify(path, 1.5).speeds, [50, 25, 50]);
+  const same = [0, 0, 1000, 0, 2000, 0];
+  same.speeds = [50, 50];
+  assert.deepEqual([Array.from(simplify(same, 1.5)), simplify(same, 1.5).speeds], [[0, 0, 2000, 0], [50]]);
+  // the first kilometre a quarter of the time, the second half of it (to the metre the places are kept at)
+  const shares = (points) => points.filter((_, i) => i % 3 === 2);
+  const about = (actual, expected) => assert.ok(actual.every((v, i) => Math.abs(v - expected[i]) <= 30), `${actual}`);
+  about(shares(timedPoints(network, path)), [0, 16384, 49151, 65535]);
+  // without speeds, and where none is known, by the length
+  about(shares(timedPoints(network, [0, 0, 1000, 0, 2000, 0, 3000, 0])), [0, 21845, 43690, 65535]);
+  const unknown = [0, 0, 1000, 0, 2000, 0, 3000, 0];
+  unknown.speeds = [0, 25, 0];
+  about(shares(timedPoints(network, unknown)), [0, 21845, 43690, 65535]);
 });
 
 test('ferries follow their routes across the water, cable cars and monorails their own ways', (t) => {
@@ -327,6 +367,9 @@ test('routing follows the network, respects one-way streets and the detour limit
   const direct = road.route(snap('mainWest'), snap('mainEast'), 2000);
   assert.ok(Math.abs(lengthOf(direct) - 0.003 * 111320 * Math.cos((LAT * Math.PI) / 180)) < 2, `direct ${lengthOf(direct)} m`);
   assert.equal(direct.length / 2, 3);
+  // with how fast a bus goes on each piece: a secondary road, 30 km/h in town (#264)
+  assert.deepEqual(direct.speeds, [15, 15]);
+  assert.deepEqual(road.route(snap('mainWest'), snap('north'), 5000).speeds, [15, 9, 9]);
 
   // B → E may use the one-way link, E → B has to go around the block
   const up = lengthOf(road.route(snap('atB'), snap('onLink'), 5000));
@@ -339,6 +382,7 @@ test('routing follows the network, respects one-way streets and the detour limit
   // two stops on the same edge need no search
   const short = road.route(road.candidates(LAT, LON + 0.0005), road.candidates(LAT, LON + 0.0015), 500);
   assert.equal(short.length, 4);
+  assert.deepEqual(short.speeds, [15]);
   // a stop too far from any road has no candidates
   assert.deepEqual(road.candidates(LAT + 0.01, LON), []);
 
@@ -549,33 +593,36 @@ test('vehicles and trip paths follow the routed geometry', () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'netnou-kept-'));
   try {
     const networks = { fetchedAt: 'then', scope: 'x' };
-    const keptRoute = [Math.round(STOP.mainWest[0] * 1e5), Math.round(STOP.mainWest[1] * 1e5), Math.round(STOP.north[0] * 1e5), Math.round(STOP.north[1] * 1e5)];
+    // (each point with the share of the hop's time up to it, #264)
+    const keptRoute = [Math.round(STOP.mainWest[0] * 1e5), Math.round(STOP.mainWest[1] * 1e5), 0, Math.round(STOP.north[0] * 1e5), Math.round(STOP.north[1] * 1e5), 65535];
+    const placesOf = (points) => Array.from(points).filter((_, i) => i % 3 < 2);
     const made = new KeptRoutes(dir, networks);
     made.add(0, STOP.mainWest, STOP.north, keptRoute);
     made.flush();
     const kept = new KeptRoutes(dir, networks);
     const fromKept = buildSegments(dataset, graphs, area, (line) => log.push(line), { kept });
-    assert.deepEqual(pointsOf(fromKept), keptRoute);
+    assert.deepEqual(pointsOf(fromKept), placesOf(keptRoute));
     assert.equal(log.at(-2), 'routing 0 hops, 1 kept from before');
     // A step longer than 16 bits take is cut into shorter ones, with points on the
     // straight line between: here a degree to the north and back, in 1e-5 degrees.
-    const [lat0, lon0] = keptRoute;
-    const roundabout = [lat0, lon0, lat0 + 100000, lon0, ...keptRoute.slice(2)];
+    const [lat0, lon0, , lat1] = keptRoute;
+    // (the turn at the share of the time that is its share of the length, as at one speed)
+    const roundabout = [lat0, lon0, 0, lat0 + 100000, lon0, Math.round((100000 / (2 * 100000 - (lat1 - lat0))) * 65535), ...keptRoute.slice(3)];
     const far = new KeptRoutes(dir, { ...networks, fetchedAt: 'far' });
     far.add(0, STOP.mainWest, STOP.north, roundabout);
     const long = buildSegments(dataset, graphs, area, () => {}, { kept: far });
     const decoded = pointsOf(long);
-    assert.deepEqual([decoded.slice(0, 2), decoded.slice(8, 10), decoded.slice(-2)], [roundabout.slice(0, 2), roundabout.slice(2, 4), roundabout.slice(-2)]);
+    assert.deepEqual([decoded.slice(0, 2), decoded.slice(8, 10), decoded.slice(-2)], [roundabout.slice(0, 2), roundabout.slice(3, 5), roundabout.slice(6, 8)]);
     assert.deepEqual(decoded.filter((_, i) => i % 2 === 0).slice(0, 5), [0, 25000, 50000, 75000, 100000].map((d) => lat0 + d));
     assert.ok(Array.from(long.step).every((value) => Math.abs(value) <= 32000));
     // the shares go up with the length: a quarter of the way north at the first cut, then half of it …
     const shares = Array.from(long.share);
     assert.ok(shares.every((value, i) => !i || value >= shares[i - 1]) && shares[0] === 0 && shares.at(-1) === 65535);
-    assert.ok(Math.abs(shares[1] / 65535 - 25000 / (2 * 100000 - (keptRoute[2] - lat0))) < 0.002, `${shares}`);
+    assert.ok(Math.abs(shares[1] / 65535 - 25000 / (2 * 100000 - (lat1 - lat0))) < 0.002, `${shares}`);
     // and one that is routed is kept
     const routedNow = new KeptRoutes(dir, { ...networks, fetchedAt: 'now' });
     buildSegments(dataset, graphs, area, () => {}, { kept: routedNow });
-    assert.deepEqual([...new KeptRoutes(dir, { ...networks, fetchedAt: 'now' }).find(0, STOP.mainWest, STOP.north)], pointsOf(dataset.segments));
+    assert.deepEqual(placesOf(new KeptRoutes(dir, { ...networks, fetchedAt: 'now' }).find(0, STOP.mainWest, STOP.north)), pointsOf(dataset.segments));
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
   }
@@ -592,7 +639,7 @@ test('vehicles and trip paths follow the routed geometry', () => {
 
   const start = serviceDayStart('20261003') + 36000;
   const [vehicle] = timetable.vehicles(start + 300, null);
-  // Halfway in time is halfway along the route: on the one-way link between B and E.
+  // Halfway in time it is on the one-way link between B and E.
   const [lat, lon] = positionAt(vehicle.knots, start + 300);
   assert.ok(Math.abs(lon - corner('B')[1]) < 1e-5, `lon ${lon}`);
   assert.ok(lat > corner('B')[0] && lat < corner('E')[0], `lat ${lat}`);

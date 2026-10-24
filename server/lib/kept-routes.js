@@ -19,12 +19,16 @@ import { Numbers } from './dataset.js';
 
 // Bump when the rules of routing change (network.js, shapes.js): the kept
 // routes are then found anew.
-const KEPT_VERSION = 2;
+// (3: each point with the share of the hop's time up to it, #264)
+const KEPT_VERSION = 3;
 
 const FILE = 'osm-routes.bin';
 // A record: the network (1 byte), the places of the two stops (4 × 4 bytes),
-// the number of points of the route (4 bytes, 0 for none), then the points.
+// the number of points of the route (4 bytes, 0 for none), then the points:
+// each its latitude, its longitude and the share of the hop's time up to it
+// (4 bytes each, VALUES).
 const RECORD = 21;
+const VALUES = 3;
 // New routes are added to the file in batches of this many.
 const BATCH = 2000;
 
@@ -65,13 +69,13 @@ export class KeptRoutes {
     let at = end + 1;
     while (at + RECORD <= bytes.length) {
       const count = bytes.readUInt32LE(at + 17);
-      if (at + RECORD + 8 * count > bytes.length) break;
+      if (at + RECORD + 4 * VALUES * count > bytes.length) break;
       const net = bytes[at];
       const places = [1, 5, 9, 13].map((offset) => bytes.readInt32LE(at + offset));
-      const points = new Int32Array(2 * count);
-      for (let k = 0; k < 2 * count; k++) points[k] = bytes.readInt32LE(at + RECORD + 4 * k);
+      const points = new Int32Array(VALUES * count);
+      for (let k = 0; k < VALUES * count; k++) points[k] = bytes.readInt32LE(at + RECORD + 4 * k);
       this.remember(`${net} ${places.join(' ')}`, count ? points : null);
-      at += RECORD + 8 * count;
+      at += RECORD + 4 * VALUES * count;
     }
     // (a record cut short where routing was stopped is no route: the file ends before it, and goes on from there)
     if (at < bytes.length) fs.truncateSync(this.file, at);
@@ -81,14 +85,15 @@ export class KeptRoutes {
   /** Keeps a route in memory; of a hop that comes up twice, as after a restart, the later route counts. */
   remember(key, points) {
     this.index.set(key, this.start.length);
-    this.start.push(points ? this.points.length / 2 : -1);
-    this.count.push(points ? points.length / 2 : 0);
+    this.start.push(points ? this.points.length / VALUES : -1);
+    this.count.push(points ? points.length / VALUES : 0);
     if (points) for (const value of points) this.points.push(value);
   }
 
   /**
-   * The route of a hop, if it is kept: its points as latitude, longitude, …
-   * in 1e-5 degrees (to be used at once: they lie in a list that grows), or
+   * The route of a hop, if it is kept: its points as latitude, longitude and
+   * share of the time, … (latitude and longitude in 1e-5 degrees, the share
+   * in 65,535ths; to be used at once: they lie in a list that grows), or
    * null for a hop that has none; undefined if it is not kept.
    * @param net the number of its network in NETS
    * @param from, to the places of its stops, [lat, lon] in degrees
@@ -99,7 +104,7 @@ export class KeptRoutes {
     if (route === undefined) return undefined;
     this.used.add(key);
     const start = this.start.array[route];
-    return start < 0 ? null : this.points.array.subarray(2 * start, 2 * (start + this.count.array[route]));
+    return start < 0 ? null : this.points.array.subarray(VALUES * start, VALUES * (start + this.count.array[route]));
   }
 
   /** Keeps the route of a hop that was routed: its points as find gives them, or null for none. */
@@ -128,7 +133,7 @@ export class KeptRoutes {
     for (const key of this.used) {
       const route = this.index.get(key);
       const start = this.start.array[route];
-      const points = start < 0 ? null : this.points.array.subarray(2 * start, 2 * (start + this.count.array[route]));
+      const points = start < 0 ? null : this.points.array.subarray(VALUES * start, VALUES * (start + this.count.array[route]));
       const [net, ...places] = key.split(' ').map(Number);
       parts.push(record(net, places, points));
     }
@@ -141,11 +146,11 @@ export class KeptRoutes {
 
 /** A hop and its route as a record of the file. */
 function record(net, places, points) {
-  const count = points ? points.length / 2 : 0;
-  const bytes = Buffer.alloc(RECORD + 8 * count);
+  const count = points ? points.length / VALUES : 0;
+  const bytes = Buffer.alloc(RECORD + 4 * VALUES * count);
   bytes[0] = net;
   places.forEach((value, i) => bytes.writeInt32LE(value, 1 + 4 * i));
   bytes.writeUInt32LE(count, 17);
-  for (let k = 0; k < 2 * count; k++) bytes.writeInt32LE(points[k], RECORD + 4 * k);
+  for (let k = 0; k < VALUES * count; k++) bytes.writeInt32LE(points[k], RECORD + 4 * k);
   return bytes;
 }
