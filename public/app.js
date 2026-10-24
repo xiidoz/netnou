@@ -90,6 +90,9 @@ const PLACE_R = 5; // the dot that marks such a place, under the bubble with the
 const RING_GAP = 5;
 const RING_WIDTH = 2.5;
 const RING_EDGE = 1;
+// The ring of a stop of the selected trip or line (routeRing): closer to its mark than that of an open stop. And the zoom from which its stops are shown.
+const ROUTE_RING_GAP = 3;
+const ROUTE_STOPS_ZOOM = 11;
 // The details as a sheet on a narrow screen: the share of the screen it takes
 // at its middle height (as .panel in style.css), how far a finger has to
 // move to drag and not to tap, how far below its lowest height the sheet
@@ -956,6 +959,54 @@ function stationShown(station, zoom) {
   return false;
 }
 
+/**
+ * The route the map draws for what is selected (#148): of a trip, its path
+ * and its stops at their platforms; of a line, the paths of its trips of the
+ * day and the stations they call at. Each stop has a key by which the
+ * stations of the map are told to be one of them (`calls`, `keyOf`): the id
+ * of its station, or for a line, whose route has the places of its stations
+ * alone, that place, as api/stations has it too. Null where nothing with a
+ * route is selected.
+ * @param selection state.selection
+ * @returns { paths, mode, stops: [{ lat, lon, key }], keyOf, calls } or null
+ */
+function routeShown(selection) {
+  let route = null;
+  if (selection?.type === 'trip' && selection.data) {
+    const { path, stops, mode } = selection.data;
+    route = { paths: [path], mode, stops: stops.map(({ lat, lon, station }) => ({ lat, lon, key: station })), keyOf: (station) => station.id };
+  } else if (selection?.type === 'line' && selection.route) {
+    const { paths, stations } = selection.route;
+    const keyOf = (station) => `${station.lat},${station.lon}`;
+    const stops = [];
+    for (let i = 0; i < stations.length; i += 2) stops.push({ lat: stations[i], lon: stations[i + 1], key: keyOf({ lat: stations[i], lon: stations[i + 1] }) });
+    route = { paths, mode: selection.line.mode, stops, keyOf };
+  }
+  if (!route) return null;
+  const keys = new Set(route.stops.map((stop) => stop.key));
+  return { ...route, calls: (station) => keys.has(route.keyOf(station)) };
+}
+
+/**
+ * The ring of the mark of a stop of the selected route: in the colour of its
+ * mode, ROUTE_RING_GAP out from the pill and with white edges, as the ring of
+ * an open stop has them; round a heart, the heart's own ring.
+ */
+function routeRing(mark, mode, big) {
+  if (mark.favourite) {
+    heartRing(mark.x, mark.y, [mode], big);
+    return;
+  }
+  const pill = stopMark(mark.kinds.length, big);
+  roundedBox(mark.x - pill.w / 2 - ROUTE_RING_GAP, mark.y - pill.h / 2 - ROUTE_RING_GAP, pill.w + 2 * ROUTE_RING_GAP, pill.h + 2 * ROUTE_RING_GAP, pill.corner + ROUTE_RING_GAP);
+  ctx.strokeStyle = '#fff';
+  ctx.lineWidth = RING_WIDTH + 2 * RING_EDGE;
+  ctx.stroke();
+  ctx.strokeStyle = colors.mode[mode] ?? colors.mode.other;
+  ctx.lineWidth = RING_WIDTH;
+  ctx.stroke();
+}
+
 function draw() {
   const time = now();
   // The time the markers glide by (ease, below). Where vehicles have just
@@ -1021,6 +1072,35 @@ function draw() {
   // (#245). Below ALL_STATIONS_ZOOM, where the map has no stops of its own,
   // it lies above the vehicles, which would hide it there (`lifted`, drawn
   // after them); from there with the other stops, under them.
+  // The route of the selected trip, or that of the selected line: where its
+  // trips of the day run (#148). Lines in the colour of the mode, one stroke
+  // for all, so that where they lie on each other they are no darker; under
+  // the stops and their names. Its stops are the marks of the stations it
+  // calls at, from zoom 11, each in a ring of its colour (routeRing): one
+  // mark for a stop, where a dot of its own would stand beside the mark –
+  // the platform of a trip is not where the mark of its station is, between
+  // its platforms – or on it. Where the map has no mark of the station, a dot
+  // where the route stops; a station it passes keeps its mark as it is.
+  const route = routeShown(selection);
+  if (route) {
+    ctx.beginPath();
+    for (const path of route.paths) {
+      for (let i = 0; i < path.length; i += 2) {
+        const [x, y] = project(path[i], path[i + 1]);
+        if (i) ctx.lineTo(x, y);
+        else ctx.moveTo(x, y);
+      }
+    }
+    ctx.lineJoin = 'round';
+    ctx.lineCap = 'round';
+    ctx.strokeStyle = colors.mode[route.mode] ?? colors.mode.other;
+    ctx.globalAlpha = 0.8;
+    ctx.lineWidth = 4;
+    ctx.stroke();
+    ctx.globalAlpha = 1;
+  }
+  const routeStops = route !== null && zoom >= ROUTE_STOPS_ZOOM;
+
   const big = zoom >= 15;
   const above = zoom < ALL_STATIONS_ZOOM;
   const shownFavourites = FIXED ? [] : favourites.stops; // (a screen on a wall shows what its address says)
@@ -1036,14 +1116,36 @@ function draw() {
     if (!parts.some(({ x, y }) => onScreen(x, y))) continue;
     drawn.add(station.id);
     for (const [a, b] of joiningLines(parts)) joins.push([parts[a], parts[b]]);
+    // (of a station the route calls at, the mark of the place of its mode: those of its other modes stay as they are)
+    const calledAt = routeStops && route.calls(station);
     for (const part of parts) {
       const hit = { x: part.x, y: part.y, r: STOP_HIT_PX, station };
       hits.push(hit);
-      marks.push({ x: part.x, y: part.y, kinds: part.modes, id: station.id, name: station.name, modes: station.modes, favourite, hit });
+      const ringed = calledAt && part.modes.includes(route.mode);
+      marks.push({ x: part.x, y: part.y, kinds: part.modes, id: station.id, name: station.name, modes: station.modes, favourite, hit, ...(ringed ? { ringed, key: route.keyOf(station), space: ROUTE_RING_GAP + RING_WIDTH + 4 } : {}) });
+    }
+  }
+  // (the dots where the route stops, of the stations whose mark is not on the map: under the marks of others)
+  if (routeStops) {
+    const marked = new Set(marks.filter((mark) => mark.ringed).map((mark) => mark.key));
+    ctx.lineWidth = 2;
+    ctx.strokeStyle = colors.mode[route.mode] ?? colors.mode.other;
+    for (const stop of route.stops) {
+      if (marked.has(stop.key)) continue;
+      const [x, y] = project(stop.lat, stop.lon);
+      if (!onScreen(x, y)) continue;
+      ctx.beginPath();
+      ctx.arc(x, y, 3.5, 0, 2 * Math.PI);
+      ctx.fillStyle = colors.bg;
+      ctx.fill();
+      ctx.stroke();
     }
   }
   drawJoins(joins);
-  for (const mark of marks) Object.assign(mark, (mark.favourite ? drawHeartStop : drawStop)(mark.x, mark.y, mark.kinds, big));
+  for (const mark of marks) {
+    if (mark.ringed) routeRing(mark, route.mode, big);
+    Object.assign(mark, (mark.favourite ? drawHeartStop : drawStop)(mark.x, mark.y, mark.kinds, big));
+  }
   // The station whose departures are open, at any zoom, and the further stops
   // of its board: on top of the others, each of their marks in a ring in the
   // colours of its kinds (kindsRing), as the chosen vehicle has one in its
@@ -1135,42 +1237,6 @@ function draw() {
       else for (const other of marks) if (other.id === mark.id && Math.abs(other.x - mark.x) < 4 && Math.abs(other.y - mark.y) < 4) other.hit.named = true;
     }
   }
-
-  // The route of the selected trip, or that of the selected line: where its
-  // trips of the day run (#148). Lines in the colour of the mode, one stroke
-  // for all, so that where they lie on each other they are no darker; from
-  // zoom 11 a dot at each stop.
-  const drawRoute = (paths, stops, mode) => {
-    ctx.beginPath();
-    for (const path of paths) {
-      for (let i = 0; i < path.length; i += 2) {
-        const [x, y] = project(path[i], path[i + 1]);
-        if (i) ctx.lineTo(x, y);
-        else ctx.moveTo(x, y);
-      }
-    }
-    ctx.lineJoin = 'round';
-    ctx.lineCap = 'round';
-    ctx.strokeStyle = colors.mode[mode] ?? colors.mode.other;
-    ctx.globalAlpha = 0.8;
-    ctx.lineWidth = 4;
-    ctx.stroke();
-    ctx.globalAlpha = 1;
-    if (zoom >= 11) {
-      ctx.lineWidth = 2;
-      for (let i = 0; i < stops.length; i += 2) {
-        const [x, y] = project(stops[i], stops[i + 1]);
-        if (!onScreen(x, y)) continue;
-        ctx.beginPath();
-        ctx.arc(x, y, 3.5, 0, 2 * Math.PI);
-        ctx.fillStyle = colors.bg;
-        ctx.fill();
-        ctx.stroke();
-      }
-    }
-  };
-  if (selection?.type === 'trip' && selection.data) drawRoute([selection.data.path], selection.data.stops.flatMap((stop) => [stop.lat, stop.lon]), selection.data.mode);
-  if (selection?.type === 'line' && selection.route) drawRoute(selection.route.paths, selection.route.stations, selection.line.mode);
 
   // While a line is looked at, its vehicles are the only ones, whatever the filters say.
   const only = selection?.type === 'line' ? selection.ids : null;
