@@ -8,6 +8,14 @@ This file is written by
 messages when a release is made. Do not edit it by hand; see
 [Releases](CONTRIBUTING.md#releases).
 
+## [0.20.1](https://github.com/xiidoz/netnou/compare/v0.20.0...v0.20.1) (2026-10-24)
+
+
+### Bug Fixes
+
+* **page:** the line beside a branch stays drawn under the pointer ([#265](https://github.com/xiidoz/netnou/issues/265)) ([8584df6](https://github.com/xiidoz/netnou/commit/8584df60e25cd669637b76c804823943169f38d1))
+* **page:** the stops of a selected trip or line are the map's own marks, in a ring of its colour ([#267](https://github.com/xiidoz/netnou/issues/267)) ([c380dad](https://github.com/xiidoz/netnou/commit/c380dadf5228b2b6c0b2f37813f4da0db719f5e2))
+
 ## [0.20.0](https://github.com/xiidoz/netnou/compare/v0.19.0...v0.20.0) (2026-10-24)
 
 
