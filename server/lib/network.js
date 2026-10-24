@@ -10,9 +10,38 @@ export const NETS = ['road', 'rail', 'subway', 'tram', 'ferry', 'cable'];
 // change: the cached networks are then built again from a fresh OSM download
 // instead of being used for up to NETNOU_OSM_MAX_AGE_DAYS more, and routes
 // found on older ones are found anew (shapes.js, feed.js).
-export const NETWORKS_VERSION = 7;
+export const NETWORKS_VERSION = 8;
 
 const M_PER_DEG = 111_320;
+
+// How fast a vehicle goes on a way, in km/h, where it does not say
+// (maxspeed): by the kind of road or track (#264). Only how these compare
+// within one hop counts, as the timetable says how long the hop takes; a
+// bus or a coach goes no faster than BUS_MOST, on a motorway or a trunk road
+// BUS_MOST_FAST. In town a bus is much slower than its limit, for the lights,
+// the junctions and the traffic, and on the open road close to it: it goes
+// at the share of TOWN_SHARE of a limit up to that many km/h, else at it.
+const ROAD_SPEED = {
+  motorway: 100, trunk: 80, primary: 50, secondary: 50, tertiary: 50,
+  unclassified: 40, residential: 30, living_street: 10, service: 20,
+  busway: 50, bus_guideway: 60, pedestrian: 10,
+};
+const BUS_MOST = 80;
+const BUS_MOST_FAST = 100;
+const TOWN_SHARE = [[50, 0.6], [70, 0.8]];
+const RAIL_SPEED = { rail: 100, light_rail: 70, subway: 60, tram: 40, narrow_gauge: 40, monorail: 40, funicular: 15 };
+const OTHER_SPEED = 20;
+// What a maxspeed of the German traffic rules stands for.
+const IMPLIED_SPEED = { 'DE:urban': 50, 'DE:rural': 100, 'DE:motorway': 130, 'DE:living_street': 7, 'DE:zone30': 30, 'DE:zone:30': 30, walk: 7, none: 130 };
+
+/** The maxspeed of a way in km/h, or null where it has none that can be read. */
+export function maxspeedOf(tags) {
+  const raw = tags.maxspeed ?? tags['maxspeed:forward'] ?? tags['maxspeed:backward'];
+  if (raw === undefined) return null;
+  if (raw in IMPLIED_SPEED) return IMPLIED_SPEED[raw];
+  const number = /^(\d+(?:\.\d+)?)\s*(mph)?/.exec(raw);
+  return number ? Number(number[1]) * (number[2] ? 1.609 : 1) : null;
+}
 
 // Cost per metre relative to a main road. Buses prefer main roads; the factors
 // must stay >= 1 so that straight-line distance remains a valid A* heuristic.
@@ -63,7 +92,7 @@ export function classifyWay(tags) {
   if (tags.area === 'yes') return null;
 
   // Ferries go where their routes are drawn across the water, both ways.
-  if (tags.route === 'ferry') return { net: 'ferry', factor: 1, dir: BOTH };
+  if (tags.route === 'ferry') return { net: 'ferry', factor: 1, dir: BOTH, speed: speedOf(OTHER_SPEED) };
 
   const railway = tags.railway;
   // Cable cars and monorails, funiculars and rack railways: in the feed of
@@ -75,18 +104,19 @@ export function classifyWay(tags) {
   const rack = tags.rack !== undefined && tags.rack !== 'no';
   if (railway === 'monorail' || railway === 'funicular' || railway === 'narrow_gauge' || AERIALWAYS.includes(tags.aerialway)
     || (rack && (railway === 'rail' || railway === 'light_rail' || railway === 'tram'))) {
-    const kind = { net: 'cable', factor: SERVICE_FACTOR[tags.service] ?? 1, dir: BOTH };
+    const kind = { net: 'cable', factor: SERVICE_FACTOR[tags.service] ?? 1, dir: BOTH, speed: speedOf(maxspeedOf(tags) ?? RAIL_SPEED[railway] ?? OTHER_SPEED) };
     return railway === 'narrow_gauge' && !rack ? { ...kind, shared: ['rail'] } : kind;
   }
 
   if (railway === 'rail' || railway === 'light_rail' || railway === 'subway' || railway === 'tram') {
     const factor = SERVICE_FACTOR[tags.service] ?? 1;
-    if (railway === 'subway') return { net: 'subway', factor, dir: onewayDirection(tags, false), shared: ['tram'] };
+    const speed = speedOf(maxspeedOf(tags) ?? RAIL_SPEED[railway]);
+    if (railway === 'subway') return { net: 'subway', factor, dir: onewayDirection(tags, false), shared: ['tram'], speed };
     // (the tracks of trams carry tram-trains too, whose lines are of the route type of rail: Karlsruhe, Kassel, #248)
-    if (railway === 'tram') return { net: 'tram', factor, dir: onewayDirection(tags, false), shared: ['subway', 'rail'] };
+    if (railway === 'tram') return { net: 'tram', factor, dir: onewayDirection(tags, false), shared: ['subway', 'rail'], speed };
     // Mainline tracks are signalled for a usual direction but can be used both ways.
-    if (railway === 'light_rail') return { net: 'rail', factor, dir: BOTH, shared: ['subway', 'tram'] };
-    return { net: 'rail', factor, dir: BOTH };
+    if (railway === 'light_rail') return { net: 'rail', factor, dir: BOTH, shared: ['subway', 'tram'], speed };
+    return { net: 'rail', factor, dir: BOTH, speed };
   }
 
   const highway = tags.highway?.replace(/_link$/, '');
@@ -107,8 +137,15 @@ export function classifyWay(tags) {
     isYes(tags['bus:backward']) || isYes(tags['psv:backward']) ||
     [tags.busway, tags['busway:left'], tags['busway:right']].includes('opposite_lane');
   if (dir !== BOTH && contraflow) dir = BOTH;
-  return MAIN_ROADS.includes(highway) ? { net: 'road', factor, dir, main: true } : { net: 'road', factor, dir };
+  // (how fast a bus goes there: as the way says, else by its kind, and no faster than a bus may)
+  const fast = highway === 'motorway' || highway === 'trunk';
+  const limit = Math.min(maxspeedOf(tags) ?? ROAD_SPEED[highway], fast ? BUS_MOST_FAST : BUS_MOST);
+  const speed = speedOf(limit * (TOWN_SHARE.find(([most]) => limit <= most)?.[1] ?? 1));
+  return MAIN_ROADS.includes(highway) ? { net: 'road', factor, dir, main: true, speed } : { net: 'road', factor, dir, speed };
 }
+
+/** A speed as it is kept, in a byte: half its km/h, from 3 to 255 (5 to 510 km/h). Only how speeds compare counts. */
+const speedOf = (kmh) => Math.min(255, Math.max(3, Math.round(kmh / 2)));
 
 /** Where a number is among numbers in order, or -1 if it is not. */
 function indexIn(numbers, number) {
@@ -178,8 +215,8 @@ export function buildNetworks(readings) {
   return Object.fromEntries(NETS.map((net) => {
     // What each kind of way is on this network: its own, shared with it, or nothing.
     const asOf = readings.map(({ kinds }) => kinds.map((kind) => {
-      if (kind.net === net) return { factor: kind.factor, dir: kind.main ? kind.dir | MAIN : kind.dir };
-      return kind.shared?.includes(net) ? { factor: kind.factor * SHARED_FACTOR, dir: kind.dir | SHARED } : null;
+      if (kind.net === net) return { factor: kind.factor, dir: kind.main ? kind.dir | MAIN : kind.dir, speed: kind.speed };
+      return kind.shared?.includes(net) ? { factor: kind.factor * SHARED_FACTOR, dir: kind.dir | SHARED, speed: kind.speed } : null;
     }));
     // (as long as it can be at most: as many nodes and edges as the ways of the network have nodes)
     let most = 0;
@@ -188,12 +225,12 @@ export function buildNetworks(readings) {
     });
     const lat = new Int32Array(most);
     const lon = new Int32Array(most);
-    const [a, b, f, d] = [new Int32Array(most), new Int32Array(most), new Uint16Array(most), new Uint8Array(most)];
+    const [a, b, f, d, sp] = [new Int32Array(most), new Int32Array(most), new Uint16Array(most), new Uint8Array(most), new Uint8Array(most)];
     let [nodeCount, edgeCount] = [0, 0];
     numberOf.fill(-1);
     const run = [];
     /** A run of nodes that were kept, as places: its edges, and its nodes as they first come up. */
-    const flush = (factor, dir) => {
+    const flush = (factor, dir, speed) => {
       if (run.length >= 2) {
         let previous = -1;
         for (const place of run) {
@@ -208,6 +245,7 @@ export function buildNetworks(readings) {
             b[edgeCount] = node;
             f[edgeCount] = Math.round(factor * 100);
             d[edgeCount] = dir;
+            sp[edgeCount] = speed;
             edgeCount++;
           }
           previous = node;
@@ -219,17 +257,17 @@ export function buildNetworks(readings) {
       for (let w = 0; w < ways.id.length; w++) {
         const as = asOf[r][ways.kind[w]];
         if (!as || (counts[r] && !counts[r][w])) continue;
-        const { factor, dir } = as;
+        const { factor, dir, speed } = as;
         for (let k = ways.start[w]; k < ways.start[w + 1]; k++) {
           const place = nodes[k] < 0 || !numbers[r] ? nodes[k] : numbers[r][nodes[k]];
           if (place >= 0) run.push(place);
-          else flush(factor, dir);
+          else flush(factor, dir, speed);
         }
-        flush(factor, dir);
+        flush(factor, dir, speed);
       }
     });
     // (the part that was filled, without a copy)
-    return [net, { lat: lat.subarray(0, nodeCount), lon: lon.subarray(0, nodeCount), a: a.subarray(0, edgeCount), b: b.subarray(0, edgeCount), f: f.subarray(0, edgeCount), d: d.subarray(0, edgeCount) }];
+    return [net, { lat: lat.subarray(0, nodeCount), lon: lon.subarray(0, nodeCount), a: a.subarray(0, edgeCount), b: b.subarray(0, edgeCount), f: f.subarray(0, edgeCount), d: d.subarray(0, edgeCount), s: sp.subarray(0, edgeCount) }];
   }));
 }
 
@@ -321,6 +359,7 @@ export function windowOf(graph, tiles, keys, scratch) {
     b: new Int32Array(count),
     f: new Uint16Array(count),
     d: new Uint8Array(count),
+    s: graph.s ? new Uint8Array(count) : undefined,
     global,
   };
   for (let i = 0; i < global.length; i++) {
@@ -333,6 +372,7 @@ export function windowOf(graph, tiles, keys, scratch) {
     part.b[k] = scratch[graph.b[e]];
     part.f[k] = graph.f[e];
     part.d[k] = graph.d[e];
+    if (graph.s) part.s[k] = graph.s[e];
   }
   for (let i = 0; i < global.length; i++) scratch[global[i]] = -1;
   return part;
@@ -366,6 +406,7 @@ export function partOf(graph, keep, scratch) {
     b: new Int32Array(count),
     f: new Uint16Array(count),
     d: new Uint8Array(count),
+    s: graph.s ? new Uint8Array(count) : undefined,
     global: new Int32Array(nodeCount),
   };
   for (let i = 0, n = 0; i < scratch.length; i++) {
@@ -381,6 +422,7 @@ export function partOf(graph, keep, scratch) {
     part.b[k] = scratch[graph.b[e]];
     part.f[k] = graph.f[e];
     part.d[k] = graph.d[e];
+    if (graph.s) part.s[k] = graph.s[e];
     k++;
   }
   for (const i of part.global) scratch[i] = -1;
@@ -513,6 +555,8 @@ export class Network {
     // `in` to search backwards from the stop a vehicle arrives at.
     this.turnCos = maxTurn === null ? null : Math.cos((maxTurn * Math.PI) / 180);
     this.sharedLast = sharedLast;
+    // (how fast a vehicle goes on each edge, as speedOf keeps it, where the network says: #264)
+    this.speed = graph.s ? new Uint8Array(graph.s) : null;
     this.out = this.adjacency(FORWARD, BACKWARD);
     this.in = this.adjacency(BACKWARD, FORWARD);
 
@@ -593,23 +637,26 @@ export class Network {
     const arcCost = new Float64Array(start[nodeCount]);
     const from = arcs ? new Int32Array(start[nodeCount]) : null;
     const shared = this.sharedLast ? new Uint8Array(start[nodeCount]) : null;
+    const speed = this.speed ? new Uint8Array(start[nodeCount]) : null;
     const ab = arcs ? new Int32Array(a.length).fill(-1) : null;
     const ba = arcs ? new Int32Array(a.length).fill(-1) : null;
     for (let e = 0; e < a.length; e++) {
       if (dir[e] & viaA) {
         if (arcs) { from[fill[a[e]]] = a[e]; ab[e] = fill[a[e]]; }
         if (shared && dir[e] & SHARED) shared[fill[a[e]]] = 1;
+        if (speed) speed[fill[a[e]]] = this.speed[e];
         to[fill[a[e]]] = b[e];
         arcCost[fill[a[e]]++] = cost[e];
       }
       if (dir[e] & viaB) {
         if (arcs) { from[fill[b[e]]] = b[e]; ba[e] = fill[b[e]]; }
         if (shared && dir[e] & SHARED) shared[fill[b[e]]] = 1;
+        if (speed) speed[fill[b[e]]] = this.speed[e];
         to[fill[b[e]]] = a[e];
         arcCost[fill[b[e]]++] = cost[e];
       }
     }
-    return { start, to, cost: arcCost, from, ab, ba, shared };
+    return { start, to, cost: arcCost, from, ab, ba, shared, speed };
   }
 
   toXY(lat, lon) {
@@ -860,7 +907,7 @@ export class Network {
         const total = ca.penalty + cb.penalty + Math.abs(cb.t - ca.t) * this.cost[ca.edge];
         if (total < best) {
           best = total;
-          bestPath = [ca.x, ca.y, cb.x, cb.y];
+          bestPath = this.timed([ca.x, ca.y, cb.x, cb.y], ca.edge);
         }
       }
     }
@@ -902,8 +949,44 @@ export class Network {
       bestPath = [from[candidate].x, from[candidate].y];
       for (const u of nodes) bestPath.push(this.x[u], this.y[u]);
       bestPath.push(to[bestTarget].x, to[bestTarget].y);
+      if (this.speed) bestPath = this.timed(bestPath, from[candidate].edge, this.between(nodes), to[bestTarget].edge);
     }
     return bestPath && pathLength(bestPath) <= maxLength ? bestPath : null;
+  }
+
+  /**
+   * How fast a vehicle goes between the nodes of a path one after the other,
+   * as speedOf keeps it: on the cheapest arc from the one to the other (either way), as
+   * the search took it; 0 where none is found.
+   */
+  between(nodes) {
+    const { start, to, cost, speed } = this.out;
+    const on = (u, v) => {
+      let best = -1;
+      for (let k = start[u]; k < start[u + 1]; k++) if (to[k] === v && (best < 0 || cost[k] < cost[best])) best = k;
+      return best;
+    };
+    const speeds = [];
+    for (let i = 1; i < nodes.length; i++) {
+      const k = on(nodes[i - 1], nodes[i]);
+      const back = k < 0 ? on(nodes[i], nodes[i - 1]) : -1;
+      speeds.push(k >= 0 ? speed[k] : back >= 0 ? speed[back] : 0);
+    }
+    return speeds;
+  }
+
+  /**
+   * A path with how fast a vehicle goes on each of its pieces, as the
+   * network keeps a speed (speedOf, #264): `path.speeds`, one for each piece from one point to the next; 0
+   * where it is not known. A path of a network without speeds has none.
+   * @param first the edge the first piece is on, `last` that of the last one
+   *   (-1 for none), and between them the pieces between nodes (between)
+   */
+  timed(path, first, middle = [], last = first) {
+    if (!this.speed) return path;
+    const of = (e) => (e >= 0 ? this.speed[e] : 0);
+    path.speeds = path.length === 4 ? [of(first)] : [of(first), ...middle, of(last)];
+    return path;
   }
 
   /**
@@ -952,10 +1035,16 @@ export class Network {
     const path = [candidates[candidate].x, candidates[candidate].y];
     for (const u of nodes) path.push(x[u], y[u]);
     path.push(farX, farY);
+    // (beyond the network, mostly abroad on a long hop, as fast as on the fastest part of the route)
+    if (this.speed) {
+      const speeds = [this.speed[candidates[candidate].edge], ...this.between(nodes)];
+      path.speeds = [...speeds, Math.max(...speeds)];
+    }
     if (!arriving) return path;
     // Searched backwards from the stop, so the points are in reverse travel order.
     const reversed = [];
     for (let i = path.length - 2; i >= 0; i -= 2) reversed.push(path[i], path[i + 1]);
+    if (path.speeds) reversed.speeds = path.speeds.reverse();
     return reversed;
   }
 }
@@ -966,12 +1055,19 @@ export function pathLength(path) {
   return length;
 }
 
-/** Douglas-Peucker: drops points that deviate less than `tolerance` metres. */
+/**
+ * Douglas-Peucker: drops points that deviate less than `tolerance` metres.
+ * Of a path with speeds (Network.timed) it keeps every point where the speed
+ * changes, and the speeds of the pieces between those it keeps, so that a
+ * vehicle still changes its speed where it did (#264).
+ */
 export function simplify(path, tolerance) {
   const n = path.length / 2;
   if (n <= 2) return path;
   const keep = new Uint8Array(n);
   keep[0] = keep[n - 1] = 1;
+  const { speeds } = path;
+  if (speeds) for (let i = 1; i < n - 1; i++) if (speeds[i] !== speeds[i - 1]) keep[i] = 1;
   const stack = [0, n - 1];
   while (stack.length) {
     const last = stack.pop();
@@ -1000,5 +1096,7 @@ export function simplify(path, tolerance) {
   }
   const out = [];
   for (let i = 0; i < n; i++) if (keep[i]) out.push(path[2 * i], path[2 * i + 1]);
+  // (between two points that are kept the speed does not change: that of the piece from the first)
+  if (speeds) out.speeds = speeds.filter((_, i) => keep[i] && i < n - 1);
   return out;
 }
