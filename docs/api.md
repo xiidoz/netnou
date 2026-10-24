@@ -643,6 +643,7 @@ without a station.
   "now": 1791148705,
   "id": "184578",
   "name": "Nürnberg Obere Turnstr.",
+  "town": "Nürnberg",
   "lat": 49.45108,
   "lon": 11.066786,
   "notes": [],
@@ -664,6 +665,9 @@ departure stays on the board until 30 seconds after its expected time.
 `to` is where it goes from this station, as the operator gives it for this
 stop: it can be another place than where the trip set out for, such as
 where a "via" is behind it.
+`town` is the town the station is in, as in [`/api/search`](#get-apisearch), or `null` where
+none is known; the page shows it below the name where the name does not say
+it (#254).
 `cancelled` is true when the run is cancelled or skips this station. `notes`
 are notes of the feed about the station, such as a lift out of order, each
 with a `title`, a `text` and a `severity` as for [a trip](#get-apitrip).

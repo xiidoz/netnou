@@ -194,6 +194,8 @@ export default {
 
   // the page of an address of a stop or a line (#37), for search engines and previews
   'address.stopTitle': 'Abfahrten {stop} live',
+  'address.stopWithTown': '{stop}, {town}',
+  'address.stopInTown': '{stop} in {town}',
   'address.stopDescription': 'Abfahrten an der Haltestelle {stop} in Echtzeit: {lines}, live auf der Karte.',
   'address.stopDescriptionNone': 'Abfahrten an der Haltestelle {stop} in Echtzeit, live auf der Karte.',
   'address.more': '{lines}, dazu {kinds}',

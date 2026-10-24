@@ -291,14 +291,24 @@ therefore gets to read the title and the description for English, whatever
 page's own.
 
 At the address of a stop or a line, the page is that stop or line as it is
-when the page is sent ([#254](https://github.com/xiidoz/netnou/issues/254)):
-its name is the main heading, and its details are open with what they show,
-the departures of the stop (when, which line, where to, from which
-platform) or the vehicles of the line under way. That is what a search
-engine reads, and what a visitor sees before the script has run; the script
-then keeps it live. The sitemap dates each address with the timetable it
-was made from, the day its feed was published, so a search engine knows
-when to come back. Telling search engines of a change as it happens is left
+when the page is sent ([#254](https://github.com/xiidoz/netnou/issues/254)),
+which is what a search engine reads and a visitor sees before the script
+has run; the script then keeps it live:
+
+- **A stop:** its name as the main heading of the page, with its town below
+  it where the name does not say it, as in its title and description
+  ("Abfahrten Bruck/ER Rotes Kreuz, Erlangen live"); its next departures
+  (when, which line, where to, from which platform); and every line that
+  calls there, each a link to the page of that line.
+- **A line:** its name as the main heading, and its stops in order, each a
+  link to the page of that stop, with its vehicles where they are.
+- **The page itself:** the stations near where the map first opens, in the
+  search before anything is typed, each a link to its page.
+
+So a search engine that reads only the plain page finds its way from there
+to every stop and line that is linked. The sitemap dates each address with
+the timetable it was made from, the day its feed was published, so a
+search engine knows when to come back. Telling search engines of a change as it happens is left
 to the operator: it is about particular search engines and not about
 transit, and can be done beside the instance from its sitemap.
 

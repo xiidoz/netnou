@@ -11,7 +11,7 @@
 // Without the page around it, so that it runs on the server and in the tests
 // as it is (test/panel.test.js).
 
-import { townsAlong } from './stops.js';
+import { townToShow, townsAlong } from './stops.js';
 import { mdiAlert, mdiChevronRight, mdiClose, mdiFilterVariant } from './vendor/material-design-icons/icons.js';
 
 // The kinds of transport, as the API names them; any other is drawn as "other".
@@ -291,6 +291,17 @@ export function departuresSub(view, chip, { t }) {
       VIEWS.map((one) => h('button', { type: 'button', 'aria-pressed': String(one === view), 'data-view': one }, names[one])))
     : h('span', {}, t('departures.title'));
   return h('p', { class: 'sub with-choice' }, label, view === 'lines' ? null : chip);
+}
+
+/**
+ * The name of a stop as the heading of its details, with its town below it
+ * where the name does not say it (#254), as the search and the stops of a
+ * trip show it (townToShow in stops.js).
+ * @param town the town it is in, null where none is known
+ */
+export function stopHeading(name, town) {
+  const shown = townToShow(name, town);
+  return shown ? [h('span', { class: 'stop' }, name), h('span', { class: 'town' }, shown)] : name;
 }
 
 /**

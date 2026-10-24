@@ -6,7 +6,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { t as translate } from '../public/i18n.js';
 import en from '../public/locales/en.js';
-import { badge, choiceChip, delayClass, delayFlag, delayText, departureLists, departuresSub, directionSign, h, lineHead, lineLists, lineStops, panelHead, toHtml, trackAt, vehicleLabel } from '../public/panel.js';
+import { badge, choiceChip, delayClass, delayFlag, delayText, departureLists, departuresSub, directionSign, h, lineHead, lineLists, lineStops, panelHead, stopHeading, toHtml, trackAt, vehicleLabel } from '../public/panel.js';
 
 const NOW = Date.parse('2026-10-23T10:00:00Z') / 1000;
 // (times of day and dates in UTC, so that the test reads the same anywhere)
@@ -71,6 +71,13 @@ test('where the next day begins among the departures, a line says so between two
   assert.deepEqual(parts.map((node) => node.tag), ['ul', 'h3', 'ul']);
   assert.equal(toHtml(parts[1]), `<h3 class="rows-head day-head">${en['departures.tomorrow']}</h3>`);
   assert.deepEqual(parts.map((node) => node.children.length), [1, 1, 2]);
+});
+
+test('a stop whose name does not say its town has the town below its name, in the main heading (#254)', () => {
+  assert.equal(toHtml(panelHead(stopHeading('Bruck/ER Rotes Kreuz', 'Erlangen'))), '<div class="panel-head"><h1><span class="stop">Bruck/ER Rotes Kreuz</span><span class="town">Erlangen</span></h1></div>');
+  // a name that says its town, and one whose town is not known: the name alone
+  assert.equal(toHtml(panelHead(stopHeading('Erlangen Neuer Markt / Rathaus', 'Erlangen'))), '<div class="panel-head"><h1>Erlangen Neuer Markt / Rathaus</h1></div>');
+  assert.equal(toHtml(panelHead(stopHeading('Basel SBB', null))), '<div class="panel-head"><h1>Basel SBB</h1></div>');
 });
 
 test('the head of the details has the name as the main heading, the switch between the departures and the lines, and the chip of the lines to show', () => {

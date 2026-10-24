@@ -3,6 +3,9 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { after, before, test } from 'node:test';
+import de from '../public/locales/de.js';
+import en from '../public/locales/en.js';
+import { Addresses } from '../server/lib/addresses.js';
 import { Area, scopeId } from '../server/lib/area.js';
 import { eachLine, parseCsvLine } from '../server/lib/csv.js';
 import { readDataset, writeDataset } from '../server/lib/dataset.js';
@@ -329,19 +332,31 @@ test('a trip goes where its operator says at each stop, and what is said at its 
   assert.deepEqual(signed.lines.find((line) => line.name === 'U1').headsigns, new Map([['Gamma über Beta', 1], ['Alpha', 1]]));
 });
 
-test('a stop of a trip has the town of its station, where one is known (#246)', async () => {
+test('a stop of a trip has the town of its station, where one is known (#246), and so has the page of a stop (#254)', async () => {
   const zipPath = path.join(dir, 'towns.zip');
   fs.writeFileSync(zipPath, makeZip(FEED, { store: ['agency.txt'] }));
   const data = await buildDataset({ zipPath, area: AREA });
-  // (as import-worker.js adds them: Alpha's station and Beta in towns, Gamma beyond the extracts)
+  // (as import-worker.js adds them: Alpha's station and Beta in towns, Gamma beyond the extracts; "Beta, Markt" says its town, Alpha does not)
   const of = { SA: 0, B: 1 };
   const town = data.stops.town.map((_, i) => of[data.stops.id.get(i)] ?? -1);
   const file = path.join(dir, 'towns.dataset');
-  writeDataset(file, { ...data, towns: ['Nürnberg', 'Fürth'], districts: ['', ''], stops: { ...data.stops, town } });
+  writeDataset(file, { ...data, towns: ['Nürnberg', 'Beta'], districts: ['', ''], stops: { ...data.stops, town } });
   const placed = new Timetable(readDataset(file));
   // the platform A has the town of its station
-  assert.deepEqual(placed.trip('T1', DAY, null).stops.map((stop) => [stop.name, stop.town]), [['Alpha', 'Nürnberg'], ['Beta, Markt', 'Fürth'], ['Gamma', null]]);
+  assert.deepEqual(placed.trip('T1', DAY, null).stops.map((stop) => [stop.name, stop.town]), [['Alpha', 'Nürnberg'], ['Beta, Markt', 'Beta'], ['Gamma', null]]);
   assert.deepEqual(timetable.trip('T1', DAY, null).stops.map((stop) => stop.town), [null, null, null]);
+  // the departures of a station name its town
+  assert.deepEqual(['SA', 'B', 'C'].map((id) => placed.departures(id, at('09:55'), null).town), ['Nürnberg', 'Beta', null]);
+  assert.equal(timetable.departures('SA', at('09:55'), null).town, null);
+  // and the title and description of its page have it, where its name does not say it
+  const words = new Addresses(placed);
+  const station = (name) => placed.stations.findIndex((one) => one.name === name);
+  const alpha = words.stationWords(station('Alpha'), 'de', de);
+  assert.deepEqual([alpha.title, alpha.description], ['Abfahrten Alpha, Nürnberg live', 'Abfahrten an der Haltestelle Alpha in Nürnberg in Echtzeit: U1, live auf der Karte.']);
+  const english = words.stationWords(station('Alpha'), 'en', en);
+  assert.deepEqual([english.title, english.description], ['Alpha, Nürnberg departures live', 'Departures at Alpha in Nürnberg in real time: U1, live on the map.']);
+  assert.equal(words.stationWords(station('Beta, Markt'), 'de', de).title, 'Abfahrten Beta, Markt live');
+  assert.equal(words.stationWords(station('Gamma'), 'de', de).title, 'Abfahrten Gamma live');
 });
 
 test('a trip whose rows come in two runs is put together, where the feed first names it', async () => {

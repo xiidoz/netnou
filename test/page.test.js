@@ -481,6 +481,9 @@ test('the page of a stop or a line has its details in it as they are, with their
   const board = { name: 'Plärrer', departures: [departure], lines };
   const at = { language: 'de', texts: de, timeZone: 'Europe/Berlin', now };
   const stop = panelHtml('stop', board, at);
+  // (its town below its name where the name does not say it, #254)
+  assert.ok(panelHtml('stop', { ...board, town: 'Nürnberg' }, at).head.startsWith('<div class="panel-head"><h1><span class="stop">Plärrer</span><span class="town">Nürnberg</span></h1><p class="sub with-choice">'));
+  assert.ok(panelHtml('stop', { ...board, name: 'Nürnberg Plärrer', town: 'Nürnberg' }, at).head.startsWith('<div class="panel-head"><h1>Nürnberg Plärrer</h1>'));
   assert.ok(stop.head.startsWith('<div class="panel-head"><h1>Plärrer</h1><p class="sub with-choice"><span class="view-switch" role="group" aria-label="Ansicht"><button type="button" aria-pressed="true" data-view="departures">Nächste Abfahrten</button><button type="button" aria-pressed="false" data-view="lines">Alle Linien</button></span><span class="choice"><button type="button" class="choice-open" aria-label="Filter"'));
   // the times as the page shows them until the visitor chooses otherwise, both: the time of day where the area is, and the minutes
   assert.equal(stop.body, '<ul class="rows"><li><button type="button" class="row departure times-both" data-trip="T1_20261023"><span class="time">12:04</span><span class="delay" data-delay="ok">+1</span><span class="badge" data-mode="subway">U1</span><span class="name" title="Langwasser Süd">Langwasser Süd</span><span class="platform">Gl. 2</span>'

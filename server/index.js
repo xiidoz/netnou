@@ -770,7 +770,7 @@ function handleApi(req, res, url) {
       if (!board) return sendJson(req, res, 404, { error: 'station not found' });
       realtime.touch();
       // (its address as the page writes it into its own: by the name and the place of the station)
-      visitOpened(req, res, url, stopPath(board.name, board.lat, board.lon), (language, words) => stopTitle(board.name, words));
+      visitOpened(req, res, url, stopPath(board.name, board.lat, board.lon), (language, words) => stopTitle(board.name, words, townToShow(board.name, board.town)));
       // (and what there is to choose from, where the page asks for it: once, as it does not change with the minute)
       const directions = url.searchParams.get('directions') === '1' ? { directions: timetable.directions(board.id) } : {};
       // (and every line of it with its next departure each way, while the page shows them: of all, whatever is chosen, #255)

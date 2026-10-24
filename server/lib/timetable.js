@@ -1613,6 +1613,8 @@ export class Timetable extends Schedule {
     return {
       id: stationId,
       name: this.stops.name[station],
+      // (the town it is in, where one is known: its details show it where the name does not say it, #254)
+      town: this.towns[this.stops.town[station]]?.name ?? null,
       lat: this.stops.lat[station],
       lon: this.stops.lon[station],
       notes: realtime?.notesOfStation(station) ?? [],
