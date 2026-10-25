@@ -11,4 +11,9 @@ export default {
     'body-max-line-length': [0],
     'footer-max-line-length': [0],
   },
+  // Dependabot begins the subject of an update of several packages at once
+  // with a capital ("Bump the minor-and-patch group with 3 updates"), its
+  // other subjects in lower case, and its settings name only the prefix.
+  // Just that wording is let through.
+  ignores: [(message) => /^\w+\(deps(-dev)?\): Bump the \S+ group /.test(message)],
 };
