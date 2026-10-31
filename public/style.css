@@ -186,16 +186,22 @@ button { font: inherit; color: inherit; }
    details have one at their head, and part of the card. A tap or a pull
    folds the card to its title row and the line that positions are
    calculated, and unfolds it (app.js); on a phone it folds by itself while
-   details are open. The eye is there only to leave display mode. */
-.card-grip { position: relative; display: block; width: calc(100% + 28px); height: 18px; margin: -6px -14px -12px; padding: 0; border: 0; border-radius: 0 0 12px 12px; background: none; color: var(--text-muted); cursor: pointer; touch-action: none; }
-.card-grip::before { content: ""; position: absolute; left: calc(50% - 18px); top: 5px; width: 36px; height: 4px; border-radius: 2px; background: var(--border); }
+   details are open. The eye is there only to leave display mode.
+   For a finger it reaches from 8 px below the line above it (the link "How
+   it works" ends there) to 40 px below that: the row in the card, and under
+   the pill a tab of 160 px over the map. The card is as high as without it,
+   and the pill where it would be. */
+.card-grip { position: relative; display: block; width: calc(100% + 28px); height: 11px; margin: 1px -14px -12px; padding: 0; border: 0; border-radius: 0 0 12px 12px; background: none; color: var(--text-muted); cursor: pointer; touch-action: none; }
+.card-grip::before { content: ""; position: absolute; left: calc(50% - 18px); top: -2px; width: 36px; height: 4px; border-radius: 2px; background: var(--border); }
+.card-grip::after { content: ""; position: absolute; left: calc(50% - 80px); top: 100%; width: 160px; height: 29px; touch-action: none; }
 .card-grip .icon { display: none; }
 /* (held, the pill darkens at once, on this grip as on that of the details) */
 .card-grip:active::before, .card-grip.grabbed::before, .handle:active::before { background: var(--text-muted); }
 /* With a mouse a pill says little: there the grip is a row with a chevron,
    which points the way the card goes, and lights up under the pointer. */
 @media (hover: hover) and (pointer: fine) {
-  .card-grip { height: 22px; margin-bottom: -12px; }
+  .card-grip { height: 22px; margin: -6px -14px -12px; }
+  .card-grip::after { display: none; }
   .controls.sized { padding-bottom: 26px; }
   .card-grip::before { display: none; }
   .card-grip .icon { display: block; width: 18px; height: 18px; margin: 0 auto; transition: transform 0.2s; }
