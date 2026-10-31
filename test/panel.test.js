@@ -36,14 +36,20 @@ test('a delay is shown in whole minutes, and its colour is that of what it shows
 
 test('the departures of a stop: a row each that opens its trip, with its time, delay, line, destination and platform', () => {
   const board = { name: 'Plärrer', departures: [departure(4, { delay: 120, platform: '2' }), departure(70, { line: '4', mode: 'tram', to: 'Gibitzenhof' })] };
+  // the time it leaves, and beside it the delay as a sum with the planned time, which a screen reader is told is planned
   assert.equal(html(departureLists(board, drawing('time'))), '<ul class="rows">'
-    + '<li><button type="button" class="row departure times-time" data-trip="T4_20261023"><span class="time">10:04</span><span class="delay" data-delay="minor">+2</span><span class="badge" data-mode="subway">U1</span><span class="name" title="Langwasser Süd">Langwasser Süd</span><span class="platform">Plat. 2</span></button></li>'
+    + '<li><button type="button" class="row departure times-time" data-trip="T4_20261023"><span class="time">10:06</span><span class="delay" data-delay="minor"><span class="planned"><span aria-hidden="true">10:04</span><span class="spoken">planned 10:04 </span></span>+2</span><span class="badge" data-mode="subway">U1</span><span class="name" title="Langwasser Süd">Langwasser Süd</span><span class="platform">Plat. 2</span></button></li>'
     + '<li><button type="button" class="row departure times-time" data-trip="T70_20261023"><span class="time">11:10</span><span class="delay" data-delay="none"></span><span class="badge" data-mode="tram">4</span><span class="name" title="Gibitzenhof">Gibitzenhof</span><span class="platform"></span></button></li>'
     + '</ul>');
-  // in minutes, which the page counts down by themselves: with its delay, and beyond the hour its time of day
-  const minutes = html(departureLists(board, drawing('minutes')));
-  assert.ok(minutes.includes(`<span class="minutes" data-leaves="${NOW + 6 * 60}" data-planned="${NOW + 4 * 60}" data-far="time">6 min</span>`));
-  assert.ok(minutes.includes(`<span class="minutes" data-leaves="${NOW + 70 * 60}" data-planned="${NOW + 70 * 60}" data-far="time">11:10</span>`));
+  // on time, "±0" alone where the delays stand (the planned time would say the same); early, a sum with a minus
+  const early = html(departureLists({ name: 'Plärrer', departures: [departure(4, { delay: 20 }), departure(5, { delay: -60 })] }, drawing('time')));
+  assert.ok(early.includes('<span class="time">10:04</span><span class="delay" data-delay="ok"><span class="planned"></span>±0</span>'));
+  assert.ok(early.includes('<span class="time">10:04</span><span class="delay" data-delay="early"><span class="planned"><span aria-hidden="true">10:05</span><span class="spoken">planned 10:05 </span></span>−1</span>'));
+  // in minutes, which the page counts down by themselves: with the delay alone, and beyond the hour the time it leaves
+  const minutes = html(departureLists({ ...board, departures: [...board.departures, departure(80, { delay: 180 })] }, drawing('minutes')));
+  assert.ok(minutes.includes(`<span class="minutes" data-leaves="${NOW + 6 * 60}" data-far="time">6 min</span><span class="delay" data-delay="minor">+2</span>`));
+  assert.ok(minutes.includes(`<span class="minutes" data-leaves="${NOW + 70 * 60}" data-far="time">11:10</span>`));
+  assert.ok(minutes.includes(`<span class="minutes" data-leaves="${NOW + 83 * 60}" data-far="time">11:23</span><span class="delay" data-delay="minor">+3</span>`));
   // both: the time of day first, the minutes at the end, and nothing there beyond the hour
   const both = html(departureLists(board, drawing('both')));
   assert.ok(both.includes('<span class="platform">Plat. 2</span><span class="minutes" data-leaves'));
@@ -115,7 +121,7 @@ test('all lines of a stop: the badge of each leading to it, beside its ways with
   // the badge is a link to the line's page, which the page opens itself by what data-line says
   assert.ok(out.startsWith(`<h3 class="rows-head">${en['mode.subway']}</h3><ul class="line-rows"><li><a class="to-line" href="line/vag/subway/u1" aria-label="To line U1" title="To line U1" data-line="{&#34;name&#34;:&#34;U1&#34;,&#34;mode&#34;:&#34;subway&#34;,&#34;agency&#34;:&#34;VAG&#34;,&#34;at&#34;:[49.45,11.07]}"><span class="badge" data-mode="subway">U1<svg class="icon"`));
   // a way: its next departure as a row without the badge, which opens its trip, going where that trip goes
-  assert.ok(out.includes(`<ul><li><button type="button" class="row departure times-both by-line" data-trip="T4_20261023"><span class="time">10:04</span><span class="delay" data-delay="minor">+2</span><span class="name" title="Messe">Messe</span><span class="platform"></span><span class="minutes" data-leaves="${NOW + 6 * 60}"`));
+  assert.ok(out.includes(`<ul><li><button type="button" class="row departure times-both by-line" data-trip="T4_20261023"><span class="time">10:06</span><span class="delay" data-delay="minor"><span class="planned"><span aria-hidden="true">10:04</span><span class="spoken">planned 10:04 </span></span>+2</span><span class="name" title="Messe">Messe</span><span class="platform"></span><span class="minutes" data-leaves="${NOW + 6 * 60}"`));
   // one with no departure in the next 24 hours: in short where the time stands, in full under a mouse; it opens nothing
   assert.ok(out.includes(`<li><div class="row departure times-both by-line resting"><abbr class="later" title="${en['lines.laterLong']}">${en['lines.later']}</abbr><span class="name" title="Fürth Hardhöhe">Fürth Hardhöhe</span></div></li></ul></li></ul>`));
   // of another day: it says so where the minutes stand; and the kind and name are the line's
@@ -124,7 +130,7 @@ test('all lines of a stop: the badge of each leading to it, beside its ways with
   // of one kind only, no heading; in minutes, the minutes where the time stands; none at all, as the departures say it
   const minutes = html(lineLists({ lines: [u1] }, drawing('minutes')));
   assert.ok(minutes.startsWith('<ul class="line-rows"><li>'));
-  assert.ok(minutes.includes(`<button type="button" class="row departure times-minutes by-line" data-trip="T4_20261023"><span class="minutes" data-leaves="${NOW + 6 * 60}" data-planned="${NOW + 4 * 60}" data-far="time">6 min</span>`));
+  assert.ok(minutes.includes(`<button type="button" class="row departure times-minutes by-line" data-trip="T4_20261023"><span class="minutes" data-leaves="${NOW + 6 * 60}" data-far="time">6 min</span>`));
   assert.ok(minutes.includes('<div class="row departure times-minutes by-line resting">'));
   assert.equal(html(lineLists({ lines: [] }, drawing())), `<p class="panel-empty">${en['departures.none']}</p>`);
   // a list with a train that has something wrong with it keeps the place of the sign in every row

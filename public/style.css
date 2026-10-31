@@ -778,13 +778,15 @@ button:focus-visible, select:focus-visible, .row:focus-visible, .panel:focus-vis
    notes. */
 .row .late { white-space: nowrap; }
 .row .late .delay { display: inline-block; width: 32px; }
-.rows.signed .row.departure { grid-template-columns: var(--time-width) 45px auto 1fr auto; }
+/* (with the planned time in it, see --late-width) */
+.row:not(.times-minutes) .late .delay { width: calc((var(--time-chars, 5) + 3) * 1ch + 2px); }
+.rows.signed .row.departure { grid-template-columns: var(--time-width) calc(var(--late-width) + 15px) auto 1fr auto; }
 /* Departure times as minutes (#81): in place of the time of day, or with both at the end of the row, after a platform. */
 .row .minutes { font-variant-numeric: tabular-nums; font-weight: 650; white-space: nowrap; }
 .row.departure.times-minutes { grid-template-columns: var(--minutes-width) 30px auto 1fr auto; }
 .rows.signed .row.departure.times-minutes { grid-template-columns: var(--minutes-width) 45px auto 1fr auto; }
-.row.departure.times-both { grid-template-columns: var(--time-width) 30px auto 1fr auto auto; }
-.rows.signed .row.departure.times-both { grid-template-columns: var(--time-width) 45px auto 1fr auto auto; }
+.row.departure.times-both { grid-template-columns: var(--time-width) var(--late-width) auto 1fr auto auto; }
+.rows.signed .row.departure.times-both { grid-template-columns: var(--time-width) calc(var(--late-width) + 15px) auto 1fr auto auto; }
 .row.departure.times-both .minutes { text-align: right; }
 .row.cancelled .minutes { text-decoration: line-through; color: var(--text-muted); font-weight: 400; }
 
@@ -909,22 +911,24 @@ button.line-vehicle { position: absolute; left: -18px; top: -18px; width: 36px; 
 .line-rows > li + li { margin-top: 4px; }
 .line-rows .to-line { justify-self: start; margin: 0; padding: 6px 10px 6px 14px; color: inherit; text-decoration: none; }
 .line-rows ul { list-style: none; margin: 0; padding: 0; min-width: 0; }
-.row.departure.by-line { padding-left: 0; grid-template-columns: var(--time-width) 30px minmax(0, 1fr) auto auto; }
+.row.departure.by-line { padding-left: 0; grid-template-columns: var(--time-width) var(--late-width) minmax(0, 1fr) auto auto; }
 .row.departure.by-line.times-minutes { grid-template-columns: var(--minutes-width) 30px minmax(0, 1fr) auto auto; }
-.line-rows.signed .row.departure.by-line { grid-template-columns: var(--time-width) 45px minmax(0, 1fr) auto auto; }
+.line-rows.signed .row.departure.by-line { grid-template-columns: var(--time-width) calc(var(--late-width) + 15px) minmax(0, 1fr) auto auto; }
 .line-rows.signed .row.departure.by-line.times-minutes { grid-template-columns: var(--minutes-width) 45px minmax(0, 1fr) auto auto; }
 .row.by-line .day { color: var(--text-muted); white-space: nowrap; }
-.row.departure.by-line.resting { grid-template-columns: calc(var(--time-width) + 38px) minmax(0, 1fr); cursor: default; }
+.row.departure.by-line.resting { grid-template-columns: calc(var(--time-width) + var(--late-width) + 8px) minmax(0, 1fr); cursor: default; }
 .row.departure.by-line.resting.times-minutes { grid-template-columns: calc(var(--minutes-width) + 38px) minmax(0, 1fr); }
-.line-rows.signed .row.departure.by-line.resting { grid-template-columns: calc(var(--time-width) + 53px) minmax(0, 1fr); }
+.line-rows.signed .row.departure.by-line.resting { grid-template-columns: calc(var(--time-width) + var(--late-width) + 23px) minmax(0, 1fr); }
 .line-rows.signed .row.departure.by-line.resting.times-minutes { grid-template-columns: calc(var(--minutes-width) + 53px) minmax(0, 1fr); }
 .row.resting:hover { background: none; }
 .row.resting .later { color: var(--text-muted); font-size: 12.5px; white-space: nowrap; text-decoration: none; }
 
-/* --time-chars: how many characters a clock time has at most in the visitor's language (app.js sets it) */
-.row { --time-width: calc(var(--time-chars, 5) * 1ch + 4px); --minutes-width: calc(var(--minutes-chars, 7) * 1ch + 4px); }
-.row.departure { grid-template-columns: var(--time-width) 30px auto 1fr auto; }
-.row.stop { grid-template-columns: 14px var(--time-width) 30px 1fr auto; }
+/* --time-chars: how many characters a clock time has at most in the visitor's language (app.js sets it).
+   --late-width: the delay as a sum with the planned time, "13:36+12": a clock
+   time and three characters more, in the delay's 12.5 px (0.9 of the row's ch). */
+.row { --time-width: calc(var(--time-chars, 5) * 1ch + 4px); --minutes-width: calc(var(--minutes-chars, 7) * 1ch + 4px); --late-width: calc((var(--time-chars, 5) + 3) * 0.9ch + 2px); }
+.row.departure { grid-template-columns: var(--time-width) var(--late-width) auto 1fr auto; }
+.row.stop { grid-template-columns: 14px var(--time-width) var(--late-width) 1fr auto; }
 .row.stop.past { color: var(--text-muted); }
 .row.stop.next .name { font-weight: 650; }
 
@@ -959,6 +963,11 @@ li:last-child > .row.stop .rail::before { bottom: 50%; }
 
 /* As text a delay is one class "hotter" than as a dot: the yellow is too pale to read on the card. */
 .delay { font-size: 12.5px; font-weight: 650; font-variant-numeric: tabular-nums; white-space: nowrap; }
+/* The planned time before a delay, as a sum with it: grey, and as wide as any
+   clock time, so that the signs line up down a list; empty where on time (delaySum in panel.js). */
+.delay .planned { display: inline-block; width: calc(var(--time-chars, 5) * 1ch); margin-right: 1px; text-align: right; color: var(--text-muted); font-weight: 400; }
+/* (said by a screen reader, not seen) */
+.spoken { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 .delay[data-delay="early"] { color: var(--delay-early-text); }
 .delay[data-delay="ok"] { color: var(--delay-ok-text); }
 .delay[data-delay="minor"] { color: var(--delay-major-text); }

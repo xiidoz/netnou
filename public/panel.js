@@ -81,6 +81,24 @@ export const badge = (line, mode, ...more) => h('span', { class: 'badge', 'data-
 
 export const delayNode = (delay) => h('span', { class: 'delay', 'data-delay': delayClass(delay) }, delayText(delay));
 
+/**
+ * The delay where a list shows the time a train leaves or arrives: as a sum
+ * with the planned time, "13:36+1" after "13:37", the planned time grey and
+ * as wide as any clock time, so that the signs line up down the list
+ * (style.css). On time the planned time is left out and "±0" stands
+ * in its place; without a delay known, nothing. A screen reader hears
+ * "planned 13:36" before the delay.
+ * @param context { t, time }: the texts and the time of day of a moment
+ */
+export function delaySum(planned, delay, { t, time }) {
+  const text = delayText(delay);
+  if (!text) return delayNode(delay);
+  const shown = leavesAt({ planned, delay }) !== planned;
+  return h('span', { class: 'delay', 'data-delay': delayClass(delay) },
+    h('span', { class: 'planned' }, shown ? [h('span', { 'aria-hidden': 'true' }, time(planned)), h('span', { class: 'spoken' }, `${t('departures.planned', { time: time(planned) })} `)] : null),
+    text);
+}
+
 /** Whether a note of the feed warns: of what is wrong with a trip or a stop right now, such as the reason for a delay. */
 export const warns = (note) => note.severity === 'warning' || note.severity === 'severe';
 
@@ -125,21 +143,21 @@ export const leavesAt = (dep) => dep.planned + Math.round((dep.delay ?? 0) / 60)
 
 /**
  * How long until a departure leaves: "4 min", "now" under a minute. Further
- * off than an hour its time of day says more (#165): that, or nothing where
- * the row has it already.
+ * off than an hour the time it leaves says more (#165): that, or nothing
+ * where the row has it already.
  * @param far 'time' or 'none': what stands there beyond the hour
  * @param context { t, time, now }: the texts, the time of day of a moment, and now (epoch seconds)
  */
-export function untilText(leaves, planned, far, { t, time, now }) {
+export function untilText(leaves, far, { t, time, now }) {
   const minutes = Math.floor(leaves / 60) - Math.floor(now / 60);
-  if (minutes > MINUTES_MAX) return far === 'time' ? time(planned) : '';
+  if (minutes > MINUTES_MAX) return far === 'time' ? time(leaves) : '';
   return minutes < 1 ? t('departures.now') : t('departures.minutes', { count: minutes });
 }
 
 /** The minutes until a departure leaves, which the page counts down by themselves between two answers of the server (tickTimes in app.js). */
 export function minutesNode(dep, far, context) {
   const leaves = leavesAt(dep);
-  return h('span', { class: 'minutes', 'data-leaves': leaves, 'data-planned': dep.planned, 'data-far': far }, untilText(leaves, dep.planned, far, context));
+  return h('span', { class: 'minutes', 'data-leaves': leaves, 'data-far': far }, untilText(leaves, far, context));
 }
 
 /**
@@ -175,8 +193,10 @@ export function departureLists(board, context) {
 }
 
 /**
- * The row of a departure, which opens its trip: the time of day first, or
- * the minutes in its place; with both, the minutes at the end of the row.
+ * The row of a departure, which opens its trip: the time it leaves first,
+ * with the planned time and the delay beside it as a sum (delaySum), or the
+ * minutes in its place with the delay alone; with both, the minutes at the
+ * end of the row.
  * @param signed whether a train of its list has something wrong with it (delayCell)
  * @param byLine whether it is the next departure of a way in the list of a
  *   stop's lines (lineLists): without the badge, which its line has, and
@@ -186,8 +206,8 @@ function departureRow(dep, signed, context, byLine = false) {
   const { t, time, day, now, times } = context;
   const later = byLine && day(dep.planned) > day(now);
   return h('button', { type: 'button', class: `row departure times-${times}${byLine ? ' by-line' : ''}${dep.cancelled ? ' cancelled' : ''}`, 'data-trip': dep.trip },
-    times === 'minutes' ? minutesNode(dep, 'time', context) : h('span', { class: 'time' }, time(dep.planned)),
-    delayCell(dep.cancelled ? h('span', { class: 'delay' }) : delayNode(dep.delay), dep.warnings, signed, context),
+    times === 'minutes' ? minutesNode(dep, 'time', context) : h('span', { class: 'time' }, time(leavesAt(dep))),
+    delayCell(dep.cancelled ? h('span', { class: 'delay' }) : times === 'minutes' ? delayNode(dep.delay) : delaySum(dep.planned, dep.delay, context), dep.warnings, signed, context),
     byLine ? null : badge(dep.line, dep.mode),
     h('span', { class: 'name', title: dep.to }, dep.to),
     h('span', { class: 'platform' }, dep.cancelled ? t('departures.cancelled') : dep.platform ? t('stop.platform', { platform: dep.platform }) : ''),
