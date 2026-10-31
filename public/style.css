@@ -1466,6 +1466,10 @@ li:last-child > .row.stop .rail::before { bottom: 50%; }
   .board-rows.times-both .when > .delay,
   .board-rows.times-both .when > .late { grid-row: 2; font-size: max(11.5px, 0.7em); }
   .board-rows.times-both .when > :not(:empty, .at) { margin-left: 0.35em; }
+  /* (under the minutes, which say when it leaves, a late one has the sum alone,
+     "13:36+1": with the time it leaves before it the column would take the
+     destinations' room) */
+  .board-rows.times-both li:has(.planned > span) .at { display: none; }
 }
 
 /* A board of several stops (#163): its blocks one under the other, each
