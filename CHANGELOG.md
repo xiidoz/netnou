@@ -8,6 +8,13 @@ This file is written by
 messages when a release is made. Do not edit it by hand; see
 [Releases](CONTRIBUTING.md#releases).
 
+## [0.22.0](https://github.com/xiidoz/netnou/compare/v0.21.0...v0.22.0) (2026-10-31)
+
+
+### Features
+
+* **page:** the card folds away for the map, and a wall screen starts in the settings ([#274](https://github.com/xiidoz/netnou/issues/274)) ([5c31965](https://github.com/xiidoz/netnou/commit/5c3196594325fba96d18b966c72a44ff7af9b366))
+
 ## [0.21.0](https://github.com/xiidoz/netnou/compare/v0.20.1...v0.21.0) (2026-10-24)
 
 
