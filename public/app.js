@@ -15,7 +15,7 @@ import { favouritesFrom, isFavourite, lineFavourite, sameStop, stopFavourite, wi
 import { choiceValue, readChoice, toggled } from './choice.js';
 import { DELAY_MAJOR_S, DELAY_MINOR_S, DELAY_SEVERE_S, MINUTES_MAX, NOTE_CHARS, badge as badgeOf, choiceChip as choiceChipOf, clockOf, delayCell as delayCellOf, delayClass, delayNode as delayNodeOf, delaySum as delaySumOf, delayFlag, delayText, departureLists, departuresSub as departuresSubOf, directionSign as directionSignOf, leavesAt, lineHead, lineLists, lineStops, minutesNode as minutesNodeOf, trackAt, VEHICLE_R, panelHead as panelHeadOf, stopHeading, tomorrowAt as tomorrowAtOf, untilText as untilTextOf, vehicleLabel, warningSign as warningSignOf, warns } from './panel.js';
 import { BOARD_MAX, BOARD_SHARE, BOARD_STOPS, boardBlocks, boardQuery, boardShare, displayQuery, ledBy, readBoard, readDisplay, readStops } from './display.js';
-import { mdiArrowCollapse, mdiArrowExpand, mdiChevronRight, mdiCityVariantOutline, mdiFullscreen, mdiFullscreenExit, mdiHeart, mdiHeartOutline, mdiMinusCircleOutline, mdiPlaylistPlus, mdiPlus } from './vendor/material-design-icons/icons.js';
+import { mdiChevronRight, mdiCityVariantOutline, mdiFullscreen, mdiFullscreenExit, mdiHeart, mdiHeartOutline, mdiMinusCircleOutline, mdiPlus } from './vendor/material-design-icons/icons.js';
 import { AttributionControl, MapLibreMap, NavigationControl } from './vendor/maplibre-gl/maplibre-gl.mjs';
 
 // The modes, each with a chip where the timetable has it. Same ids as MODES in
@@ -785,7 +785,8 @@ function directionName(direction, list) {
  * is to choose there.
  */
 function departuresSub(board = false) {
-  return toDom(departuresSubOf(FIXED || board ? null : state.view, FIXED ? null : choiceChip(), drawing()));
+  // (the chip of the board, there and back, not on a wall)
+  return toDom(departuresSubOf(FIXED || board ? null : state.view, FIXED ? null : choiceChip(), drawing(), FIXED ? null : board ? 'board' : 'details'));
 }
 
 /** Shows the stops of the open line in its other direction (#256), with what the last answer had of them. */
@@ -2747,17 +2748,14 @@ addEventListener('popstate', () => {
 // a computer it is copied, and a note says so for a moment.
 const shareButton = $('panel-share');
 const copiedNote = $('panel-copied');
-// (and beside it the button that enlarges the details of a stop into a board, see "the board")
-const boardButton = $('panel-board');
 let copiedTimer = null;
 
 /**
  * Shows the share button where what is open has an address, a stop or a
- * line, and for a stop the button that enlarges it into a board.
+ * line; a stop can be a board as well (boardable, see "the board").
  */
 function shareable(yes, board = false) {
   shareButton.hidden = !yes;
-  boardButton.hidden = !board;
   if (!yes) copiedNote.hidden = true;
   panel.classList.toggle('shareable', yes);
   panel.classList.toggle('boardable', board);
@@ -3032,6 +3030,7 @@ panel.addEventListener('click', (event) => {
   else if (view) showView(view.dataset.view);
   else if (event.target.closest('.choice-open')) openChoice();
   else if (event.target.closest('.choice-clear')) applyChoice([]);
+  else if (event.target.closest('.board-open')) setBoard(state.board === null ? boardWas : null);
 });
 
 const platformText = (platform) => (platform ? t('stop.platform', { platform }) : '');
@@ -3674,10 +3673,6 @@ function setBoard(share, written = true) {
     root.dataset.board = share === 100 ? 'alone' : '';
     root.style.setProperty('--board', `${share}%`);
   }
-  const label = share === null ? t('panel.enlarge') : t('panel.shrink');
-  boardButton.title = label;
-  boardButton.setAttribute('aria-label', label);
-  boardButton.replaceChildren(icon(share === null ? mdiArrowExpand : mdiArrowCollapse));
   if ((was === null) !== (share === null)) {
     // (a sheet has a height of its own, a board its share; in the map's corner there is room for the map's own buttons)
     setSheetHeight(null);
@@ -3698,7 +3693,6 @@ function writeBoard() {
   else history.replaceState(null, '', `${location.pathname}${boardQuery(location.search, state.board, state.extra, state.lines)}`);
 }
 
-boardButton.addEventListener('click', () => setBoard(state.board === null ? boardWas : null));
 
 /**
  * The departures of a stop as a board: the line, where it goes and when it
@@ -3732,11 +3726,50 @@ function renderBoard(board) {
   fillPanel(
     [el('div', { class: `panel-head board-head${columns > 1 ? ' columns' : ''}` }, head)],
     blocksNode,
-    // (another stop, as a block of its own: up to BOARD_STOPS, and not on a wall)
-    ...(controls && entries.length < BOARD_STOPS ? [el('button', { type: 'button', class: 'board-add', data: { focus: 'add' }, onclick: () => startAdding(null) }, [icon(mdiPlus), el('span', { text: t('board.another') })])] : []),
+    // (another stop: up to BOARD_STOPS, and not on a wall)
+    ...(controls && entries.length < BOARD_STOPS ? addStop(blocks) : []),
     credits,
   );
   fitBoard();
+}
+
+// Whether the question of "Weitere Haltestelle" is open: the board is drawn anew with every answer of the server.
+let addingAsked = false;
+
+/**
+ * "Weitere Haltestelle" at the foot of a board (#163): it asks how, as a list
+ * of its own or together with a stop the board has (in its list), and then
+ * the search finds the stop (startAdding).
+ */
+function addStop(blocks) {
+  const close = () => {
+    addingAsked = false;
+    menu.hidden = true;
+    button.setAttribute('aria-expanded', 'false');
+  };
+  const choose = (block) => () => {
+    addingAsked = false;
+    startAdding(block);
+  };
+  const menu = el('div', { class: 'board-add-menu', id: 'board-add-menu' }, [
+    el('button', { type: 'button', data: { focus: 'add-own' }, onclick: choose(null) }, [el('span', { text: t('board.own') })]),
+    ...blocks.map((block, i) => el('button', { type: 'button', data: { focus: `add-into:${i}` }, onclick: choose(i) }, [el('span', { text: t('board.mergeTitle', { stop: namesOf(block).full[0] }) })])),
+  ]);
+  menu.hidden = !addingAsked;
+  menu.addEventListener('keydown', (event) => {
+    if (event.key !== 'Escape') return;
+    event.stopPropagation();
+    close();
+    button.focus();
+  });
+  const button = el('button', { type: 'button', class: 'board-add', 'aria-expanded': String(addingAsked), 'aria-controls': 'board-add-menu', data: { focus: 'add' }, onclick: () => {
+    if (addingAsked) return close();
+    addingAsked = true;
+    menu.hidden = false;
+    button.setAttribute('aria-expanded', 'true');
+    menu.querySelector('button').focus();
+  } }, [icon(mdiPlus), el('span', { text: t('board.another') })]);
+  return [button, menu];
 }
 
 /** One departure on a board; in a list of several stops, with the stop it leaves from under where it goes. */
@@ -4011,8 +4044,8 @@ function mergedDepartures(entries) {
 /**
  * The heading of a block: the names of its stops, after the first without
  * what they all begin with. With the controls, a minus after each name takes
- * that stop away (once the board has several), and the list button adds a
- * stop to the block. Its name for a screen reader is the names alone.
+ * that stop away (once the board has several). Its name for a screen reader
+ * is the names alone. A stop is added to the block at the foot (addStop).
  */
 function blockHeading(block, index, tag, controls, total) {
   const { full: names, short } = namesOf(block);
@@ -4026,7 +4059,6 @@ function blockHeading(block, index, tag, controls, total) {
     const minus = control(mdiMinusCircleOutline, t('board.remove', { stop: names[i] }), `remove:${entry.path}`, () => removeBoardStop(entry.path), 'remove');
     return el('span', { class: 'stop' }, [letters.slice(0, -1).join(''), el('span', { class: 'end' }, [letters.at(-1), minus])]);
   });
-  if (controls && total < BOARD_STOPS) parts.push(control(mdiPlaylistPlus, t('board.merge', { stop: names[0] }), `merge:${index}`, () => startAdding(index), 'merge'));
   const heading = el(tag, { class: 'board-heading' }, parts);
   if (block.length > 1 || controls) heading.setAttribute('aria-label', new Intl.ListFormat(language, { type: 'conjunction' }).format(names));
   return heading;

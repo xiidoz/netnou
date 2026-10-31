@@ -770,9 +770,10 @@ otherwise a server would load a file written by older code:
   closes. A tap on the bar takes it one height up, and from the highest
   back to the middle. The height holds while the details stay open, and
   what is chosen on the map is moved into the part the sheet leaves free.
-  There is no button to close in sight: the one there is, is for the
-  keyboard and for screen readers and shows itself with the focus. "How it
-  works" is such a sheet too and closes when it is dragged down. All of
+  Its button to close is in sight, as on a wide screen, beside the share
+  button and the heart; "Tafel" below the name of a stop makes the details
+  its board. "How it works" is such a sheet too, with its button to close,
+  and closes when it is dragged down as well. All of
   this is plain pointer events in `app.js`.
 - **The header card folds.** A grip at its foot folds it to its title row
   and the line that says positions are calculated, and unfolds it again: a
@@ -844,8 +845,9 @@ otherwise a server would load a file written by older code:
   transform set every frame, a layer of its own or an animation moved it;
   a canvas draws it where it is. Each opens its trip, and from a trip the
   line opens in its direction.
-- **The board of a stop.** A button beside the share button enlarges the
-  details of a stop into a board of its departures
+- **The board of a stop.** The chip "Tafel" below the name of a stop makes
+  its details a board of its departures, and pressed there, the details
+  again
   ([#81](https://github.com/xiidoz/netnou/issues/81)), the same on every
   screen: beside the map on a screen wider than high, below it on one
   standing upright, a phone among them. The map gives the board its share of

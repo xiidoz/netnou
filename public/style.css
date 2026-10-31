@@ -563,10 +563,11 @@ button:focus-visible, select:focus-visible, .row:focus-visible, .panel:focus-vis
 .handle { display: none; }
 
 /* The details of a stop or a line can be shared (#37): beside the close
-   button, and for a stop beside the button that enlarges them into a board
-   (#81) between the two. Before the share button the heart, which makes the
-   stop or the line a favourite (#245): red and filled where it is one. */
-.close, .share, .enlarge, .heart {
+   button. Before the share button the heart, which makes the stop or the line
+   a favourite (#245): red and filled where it is one. The chip "Tafel" below
+   the name makes the details of a stop its board (#81), and the board the
+   details again (.board-open). */
+.close, .share, .heart {
   position: absolute;
   z-index: 2;
   top: 8px;
@@ -581,10 +582,8 @@ button:focus-visible, select:focus-visible, .row:focus-visible, .panel:focus-vis
   background: var(--bg-subtle);
   cursor: pointer;
 }
-.share, .enlarge { right: 46px; }
-.panel.boardable .share { right: 84px; }
+.share { right: 46px; }
 .heart { right: 84px; }
-.panel.boardable .heart { right: 122px; }
 .heart.on { color: var(--delay-severe); }
 /* (what says that the address was copied, where there is nothing to share it with: under the button, for a moment) */
 .copied {
@@ -599,16 +598,13 @@ button:focus-visible, select:focus-visible, .row:focus-visible, .panel:focus-vis
   color: var(--bg);
   font-size: 12.5px;
 }
-.panel.boardable .copied { right: 84px; }
 /* (what says where a favourite is to be found: under the row of buttons, to its edge) */
 .panel .copied.favourited { right: 8px; }
 
 .panel-head { padding: 14px 48px 10px 14px; border-bottom: 1px solid var(--border); }
 /* (the heading beside the two buttons; what is below it is clear of them) */
 .panel.shareable .panel-head h1, .panel.shareable .panel-head h2 { padding-right: 38px; }
-.panel.boardable .panel-head h1, .panel.boardable .panel-head h2 { padding-right: 76px; }
 .panel.favourable .panel-head h1, .panel.favourable .panel-head h2 { padding-right: 76px; }
-.panel.favourable.boardable .panel-head h1, .panel.favourable.boardable .panel-head h2 { padding-right: 114px; }
 /* the main heading of the page while the details are open (#254); a board has h2 */
 .panel-head h1, .panel-head h2 {
   margin: 0;
@@ -636,6 +632,12 @@ button:focus-visible, select:focus-visible, .row:focus-visible, .panel:focus-vis
 .choice.chosen .choice-open { padding-right: 0.15em; }
 .choice-open > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .choice .icon { width: 1.1em; height: 1.1em; }
+/* "Tafel": a chip as "Filter" is, which makes the details of a stop its board, with the sign the board has for going back */
+.board-open { display: inline-flex; align-items: center; gap: 0.35em; padding: 0.2em 0.7em 0.2em 0.55em; border: 1px solid var(--border); border-radius: 999px; background: var(--bg); color: var(--text); font: inherit; font-size: 0.96em; white-space: nowrap; cursor: pointer; }
+.board-open .icon { width: 1.1em; height: 1.1em; }
+.board-open:hover { border-color: var(--accent); }
+/* (on the board: pressed, as a switch that is on, and its sign points back) */
+.board-open[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--bg); font-weight: 600; }
 /* (as large as in the sheet, the chip no higher for it) */
 .choice-open .direction-sign { width: 2.4em; height: 2.4em; margin: -0.6em -0.15em -0.6em -0.2em; }
 /* (the focus ring around the whole pill, as the badge of a trip has it: the button is only its larger part) */
@@ -1229,38 +1231,20 @@ li:last-child > .row.stop .rail::before { bottom: 50%; }
   }
   /* (a finger on these moves the sheet, not the page under it) */
   .handle, #panel-head, #about-title, #notes-title { touch-action: none; }
-  /* No button to close on the sheets: they are dragged down, or the map
-     beside them is tapped. The button is still there for a screen reader and
-     for the keyboard, and shows itself when it has the focus. */
-  .panel .close, .dialog .close {
-    top: 18px;
-    width: 1px;
-    height: 1px;
-    overflow: hidden;
-    clip-path: inset(50%);
-  }
-  .panel .close:focus-visible, .dialog .close:focus-visible {
-    width: 32px;
-    height: 32px;
-    overflow: visible;
-    clip-path: none;
-  }
+  /* The button to close is in sight on the sheets, as on a board and on a
+     wide screen; they are also dragged down, or the map beside them is
+     tapped. Beside it the share button and the heart. */
+  .panel .close { top: 14px; right: 12px; }
   /* (so what is at their top has the whole width) */
   .panel .panel-head { padding-right: 14px; }
-  /* (the share button alone at the top of the sheet, where the close button is not shown) */
-  .panel .share { top: 14px; right: 12px; }
-  .panel .copied { top: 52px; right: 12px; }
-  .panel.shareable .panel-head h1, .panel.shareable .panel-head h2 { padding-right: 36px; }
-  /* (for a stop the button that enlarges it is the one at the edge, the share button beside it) */
-  .panel .enlarge { top: 14px; right: 12px; }
-  .panel.boardable .share, .panel.boardable .copied { right: 50px; }
-  .panel.boardable .panel-head h1, .panel.boardable .panel-head h2 { padding-right: 74px; }
+  .panel .panel-head h1, .panel .panel-head h2 { padding-right: 36px; }
+  .panel .share { top: 14px; right: 50px; }
+  .panel .copied { top: 52px; right: 50px; }
+  .panel.shareable .panel-head h1, .panel.shareable .panel-head h2 { padding-right: 74px; }
   /* (the heart before the share button) */
-  .panel .heart { top: 14px; right: 50px; }
-  .panel.boardable .heart { right: 88px; }
+  .panel .heart { top: 14px; right: 88px; }
   .panel .copied.favourited { top: 52px; right: 12px; }
-  .panel.favourable .panel-head h1, .panel.favourable .panel-head h2 { padding-right: 74px; }
-  .panel.favourable.boardable .panel-head h1, .panel.favourable.boardable .panel-head h2 { padding-right: 112px; }
+  .panel.favourable .panel-head h1, .panel.favourable .panel-head h2 { padding-right: 112px; }
   .panel-head .notes, .panel-head .sub.with-choice { margin-right: 0; }
   /* A sheet has little room: every note is one line there, cut where it does
      not fit. app.js makes a button of what is cut, and keeps all notes to a
@@ -1390,12 +1374,10 @@ li:last-child > .row.stop .rail::before { bottom: 50%; }
 /* Its buttons are at its top on every screen, the one that closes it
    among them: a board is no sheet that is dragged away. */
 :root[data-board] .panel .close,
-:root[data-board] .panel .share,
-:root[data-board] .panel .enlarge { top: 8px; width: 32px; height: 32px; overflow: visible; clip-path: none; }
+:root[data-board] .panel .share { top: 8px; width: 32px; height: 32px; }
 :root[data-board] .panel .close { right: calc(8px + var(--safe-right)); }
-:root[data-board] .panel .enlarge { right: calc(46px + var(--safe-right)); }
-:root[data-board] .panel .share { right: calc(84px + var(--safe-right)); }
-:root[data-board] .panel .copied { top: 46px; right: calc(84px + var(--safe-right)); }
+:root[data-board] .panel .share { right: calc(46px + var(--safe-right)); }
+:root[data-board] .panel .copied { top: 46px; right: calc(46px + var(--safe-right)); }
 
 /* The type of a board grows with it: a share of its height, or of its width
    where that is less, from a little more than the details have to that of a
@@ -1417,7 +1399,7 @@ li:last-child > .row.stop .rail::before { bottom: 50%; }
   padding: 0.6em 0.9em 0.3em;
   border-bottom: 0;
 }
-.panel.boardable .board-head h2 { grid-area: title; font-size: 1.3em; padding-right: 116px; }
+.panel.boardable .board-head h2 { grid-area: title; font-size: 1.3em; padding-right: 78px; }
 .board-head .sub { grid-area: sub; margin: 0.1em 0 0; font-size: max(13px, 0.6em); }
 .board-clock { grid-area: clock; margin: 0; font-size: 1.3em; font-weight: 700; font-variant-numeric: tabular-nums; line-height: 1.15; }
 .board-head .notes { grid-area: notes; margin: 0.4em 0 0; font-size: max(12.5px, 0.55em); }
@@ -1498,7 +1480,7 @@ li:last-child > .row.stop .rail::before { bottom: 50%; }
 .board-block > .sub { flex: none; margin: 0.1em 0 0; color: var(--text-muted); font-size: max(13px, 0.6em); }
 .board-block > .notes { flex: none; margin: 0.4em 0 0; font-size: max(12.5px, 0.55em); }
 .panel .board-head.columns { grid-template-areas: "notes clock"; min-height: 32px; }
-.panel.boardable .board-head.columns { padding-right: calc(0.9em + 116px); }
+.panel.boardable .board-head.columns { padding-right: calc(0.9em + 78px); }
 :root[data-display="fixed"] .panel.boardable .board-head.columns { padding-right: 0.9em; }
 /* The names of its stops, and with the controls a minus after each and the
    button that adds a stop to its list. */
@@ -1525,7 +1507,6 @@ li:last-child > .row.stop .rail::before { bottom: 50%; }
   cursor: pointer;
 }
 .board-control .icon { width: 0.8em; height: 0.8em; min-width: 16px; min-height: 16px; }
-.board-control.merge { margin-left: 0.2em; background: var(--bg-subtle); color: var(--text); }
 .board-control:hover, .board-control:focus-visible { color: var(--accent); }
 /* (at the foot of the board: another stop, as a block of its own) */
 .board-add {
@@ -1545,8 +1526,12 @@ li:last-child > .row.stop .rail::before { bottom: 50%; }
 }
 .board-add .icon { width: 1.3em; height: 1.3em; }
 .board-add:hover, .board-add:focus-visible { border-color: var(--accent); }
+/* (what "Weitere Haltestelle" asks: as a list of its own, or together with a stop the board has) */
+.board-add-menu { flex: none; display: grid; gap: 6px; margin: 0 0 0.6em; padding: 8px; border: 1px solid var(--border); border-radius: 12px; background: var(--bg); box-shadow: var(--shadow); font-size: max(13px, 0.6em); }
+.board-add-menu button { padding: 0.45em 0.8em; border: 1px solid var(--border); border-radius: 8px; background: var(--bg); color: var(--text); font: inherit; text-align: left; cursor: pointer; }
+.board-add-menu button:hover, .board-add-menu button:focus-visible { border-color: var(--accent); }
 /* (a display is read, not operated: drawn anew, the board has none of them, see setDisplay) */
-:root[data-display] .board-control, :root[data-display] .board-add { display: none; }
+:root[data-display] .board-control, :root[data-display] :is(.board-add, .board-add-menu) { display: none; }
 /* (a list of several stops: under where it goes, the stop it leaves from) */
 .board-rows .name.from { display: flex; flex-direction: column; }
 .board-rows .name.from > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
