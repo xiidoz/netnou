@@ -779,7 +779,7 @@ button:focus-visible, select:focus-visible, .row:focus-visible, .panel:focus-vis
 .row .late { white-space: nowrap; }
 .row .late .delay { display: inline-block; width: 32px; }
 /* (with the planned time in it, see --late-width) */
-.row:not(.times-minutes) .late .delay { width: calc((var(--time-chars, 5) + 3) * 1ch + 2px); }
+.row:not(.times-minutes) .late .delay { width: calc((var(--clock-chars, 5) + 3) * 1ch + 2px); }
 .rows.signed .row.departure { grid-template-columns: var(--time-width) calc(var(--late-width) + 15px) auto 1fr auto; }
 /* Departure times as minutes (#81): in place of the time of day, or with both at the end of the row, after a platform. */
 .row .minutes { font-variant-numeric: tabular-nums; font-weight: 650; white-space: nowrap; }
@@ -923,10 +923,11 @@ button.line-vehicle { position: absolute; left: -18px; top: -18px; width: 36px; 
 .row.resting:hover { background: none; }
 .row.resting .later { color: var(--text-muted); font-size: 12.5px; white-space: nowrap; text-decoration: none; }
 
-/* --time-chars: how many characters a clock time has at most in the visitor's language (app.js sets it).
+/* --time-chars: how many characters a clock time has at most in the visitor's language,
+   --clock-chars: the same without what it writes before or after the digits, such as "PM" (app.js sets both).
    --late-width: the delay as a sum with the planned time, "13:36+12": a clock
-   time and three characters more, in the delay's 12.5 px (0.9 of the row's ch). */
-.row { --time-width: calc(var(--time-chars, 5) * 1ch + 4px); --minutes-width: calc(var(--minutes-chars, 7) * 1ch + 4px); --late-width: calc((var(--time-chars, 5) + 3) * 0.9ch + 2px); }
+   time without "PM" and three characters more, in the delay's 12.5 px (0.9 of the row's ch). */
+.row { --time-width: calc(var(--time-chars, 5) * 1ch + 4px); --minutes-width: calc(var(--minutes-chars, 7) * 1ch + 4px); --late-width: calc((var(--clock-chars, 5) + 3) * 0.9ch + 2px); }
 .row.departure { grid-template-columns: var(--time-width) var(--late-width) auto 1fr auto; }
 .row.stop { grid-template-columns: 14px var(--time-width) var(--late-width) 1fr auto; }
 .row.stop.past { color: var(--text-muted); }
@@ -963,9 +964,9 @@ li:last-child > .row.stop .rail::before { bottom: 50%; }
 
 /* As text a delay is one class "hotter" than as a dot: the yellow is too pale to read on the card. */
 .delay { font-size: 12.5px; font-weight: 650; font-variant-numeric: tabular-nums; white-space: nowrap; }
-/* The planned time before a delay, as a sum with it: grey, and as wide as any
-   clock time, so that the signs line up down a list; empty where on time (delaySum in panel.js). */
-.delay .planned { display: inline-block; width: calc(var(--time-chars, 5) * 1ch); margin-right: 1px; text-align: right; color: var(--text-muted); font-weight: 400; }
+/* The planned time before a delay, as a sum with it: grey, without "PM", and as
+   wide as any clock time, so that the signs line up down a list; empty where on time (delaySum in panel.js). */
+.delay .planned { display: inline-block; width: calc(var(--clock-chars, 5) * 1ch); margin-right: 1px; text-align: right; color: var(--text-muted); font-weight: 400; }
 /* (said by a screen reader, not seen) */
 .spoken { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 .delay[data-delay="early"] { color: var(--delay-early-text); }

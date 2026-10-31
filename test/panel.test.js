@@ -6,7 +6,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { t as translate } from '../public/i18n.js';
 import en from '../public/locales/en.js';
-import { badge, choiceChip, delayClass, delayFlag, delayText, departureLists, departuresSub, directionSign, h, lineHead, lineLists, lineStops, panelHead, stopHeading, toHtml, trackAt, vehicleLabel } from '../public/panel.js';
+import { badge, choiceChip, clockOf, delayClass, delayFlag, delayText, departureLists, departuresSub, directionSign, h, lineHead, lineLists, lineStops, panelHead, stopHeading, toHtml, trackAt, vehicleLabel } from '../public/panel.js';
 
 const NOW = Date.parse('2026-10-23T10:00:00Z') / 1000;
 // (times of day and dates in UTC, so that the test reads the same anywhere)
@@ -28,6 +28,10 @@ test('a tree is written as HTML with what it says escaped, and without the attri
   assert.equal(toHtml(badge('X', 'airship')), '<span class="badge" data-mode="other">X</span>');
 });
 
+test('a clock time without what a language writes around its digits', () => {
+  assert.deepEqual(['13:34', '1:34 PM', '1:34\u202fPM', '午後1:34', '13 h 34', '09:05'].map(clockOf), ['13:34', '1:34', '1:34', '1:34', '13 h 34', '09:05']);
+});
+
 test('a delay is shown in whole minutes, and its colour is that of what it shows', () => {
   assert.deepEqual([null, -90, -29, 0, 29, 89, 119, 150, 299, 330, 599, 630].map((delay) => [delayText(delay), delayClass(delay)]), [
     ['', 'none'], ['−1', 'early'], ['±0', 'ok'], ['±0', 'ok'], ['±0', 'ok'], ['+1', 'ok'], ['+2', 'minor'], ['+3', 'minor'], ['+5', 'major'], ['+6', 'major'], ['+10', 'severe'], ['+11', 'severe'],
@@ -41,6 +45,11 @@ test('the departures of a stop: a row each that opens its trip, with its time, d
     + '<li><button type="button" class="row departure times-time" data-trip="T4_20261023"><span class="time">10:06</span><span class="delay" data-delay="minor"><span class="planned"><span aria-hidden="true">10:04</span><span class="spoken">planned 10:04 </span></span>+2</span><span class="badge" data-mode="subway">U1</span><span class="name" title="Langwasser Süd">Langwasser Süd</span><span class="platform">Plat. 2</span></button></li>'
     + '<li><button type="button" class="row departure times-time" data-trip="T70_20261023"><span class="time">11:10</span><span class="delay" data-delay="none"></span><span class="badge" data-mode="tram">4</span><span class="name" title="Gibitzenhof">Gibitzenhof</span><span class="platform"></span></button></li>'
     + '</ul>');
+  // with a 12-hour clock the planned time leaves out "AM", which the time before it says; a screen reader hears it all
+  const twelve = new Intl.DateTimeFormat('en-US', { timeStyle: 'short', timeZone: 'UTC' });
+  const at = (epoch) => twelve.format(epoch * 1000);
+  const english = html(departureLists(board, { ...drawing('time'), time: at }));
+  assert.ok(english.includes(`<span class="time">${at(NOW + 6 * 60)}</span><span class="delay" data-delay="minor"><span class="planned"><span aria-hidden="true">10:04</span><span class="spoken">planned ${at(NOW + 4 * 60)} </span></span>+2</span>`));
   // on time, "±0" alone where the delays stand (the planned time would say the same); early, a sum with a minus
   const early = html(departureLists({ name: 'Plärrer', departures: [departure(4, { delay: 20 }), departure(5, { delay: -60 })] }, drawing('time')));
   assert.ok(early.includes('<span class="time">10:04</span><span class="delay" data-delay="ok"><span class="planned"></span>±0</span>'));

@@ -82,12 +82,20 @@ export const badge = (line, mode, ...more) => h('span', { class: 'badge', 'data-
 export const delayNode = (delay) => h('span', { class: 'delay', 'data-delay': delayClass(delay) }, delayText(delay));
 
 /**
+ * A clock time without what a language writes before or after its digits:
+ * "1:34 PM" is "1:34", "13:34" stays. Beside the time a train leaves, the
+ * planned time needs no "PM": a delay is minutes, and the time before it
+ * says which half of the day it is.
+ */
+export const clockOf = (text) => text.replace(/^\D+|\D+$/g, '');
+
+/**
  * The delay where a list shows the time a train leaves or arrives: as a sum
- * with the planned time, "13:36+1" after "13:37", the planned time grey and
- * as wide as any clock time, so that the signs line up down the list
- * (style.css). On time the planned time is left out and "±0" stands
- * in its place; without a delay known, nothing. A screen reader hears
- * "planned 13:36" before the delay.
+ * with the planned time, "13:36+1" after "13:37" ("1:36+1" after "1:37 PM"),
+ * the planned time grey and as wide as any clock time, so that the signs line
+ * up down the list (style.css). On time the planned time is left out and
+ * "±0" stands in its place; without a delay known, nothing. A screen reader
+ * hears the planned time in full, "planned 1:36 PM", before the delay.
  * @param context { t, time }: the texts and the time of day of a moment
  */
 export function delaySum(planned, delay, { t, time }) {
@@ -95,7 +103,7 @@ export function delaySum(planned, delay, { t, time }) {
   if (!text) return delayNode(delay);
   const shown = leavesAt({ planned, delay }) !== planned;
   return h('span', { class: 'delay', 'data-delay': delayClass(delay) },
-    h('span', { class: 'planned' }, shown ? [h('span', { 'aria-hidden': 'true' }, time(planned)), h('span', { class: 'spoken' }, `${t('departures.planned', { time: time(planned) })} `)] : null),
+    h('span', { class: 'planned' }, shown ? [h('span', { 'aria-hidden': 'true' }, clockOf(time(planned))), h('span', { class: 'spoken' }, `${t('departures.planned', { time: time(planned) })} `)] : null),
     text);
 }
 

@@ -862,8 +862,10 @@ otherwise a server would load a file written by older code:
   two answers of the server, or both; on the board a clock can be switched
   off. Every time shown is when the train leaves or arrives, the planned
   time moved by its delay: beside it the delay is a sum with the planned
-  time, "13:37 13:36+1", the planned time grey, so that a rider sees when to
-  be there, and that the delay is already in it; on time "±0" alone. Beside
+  time, "13:37 13:36+1", the planned time grey and without the "PM" of a
+  12-hour clock, which the time before it says ("1:37 PM 1:36+1"), so that a
+  rider sees when to be there, and that the delay is already in it; on time
+  "±0" alone. Beside
   minutes the delay stands alone. Minutes go up to an hour; a train further
   off shows the time it leaves in their place, and where the next day
   begins, a line says "morgen". A board has up to four stops
