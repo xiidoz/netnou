@@ -2,9 +2,10 @@
 // address for what is shown. Without the page around it, so that it can be
 // tested as it is (test/display.test.js).
 //
-// Display mode is the page without its controls. A visitor gets there with
-// the button with the eye in the title row and back the same way: of the card
-// that row stays, and the map is moved and what is on it chosen as before.
+// Display mode is the page without its controls. It comes from the address
+// alone; the page makes such an address at "As a wall screen" in its settings
+// (display=fixed). Of the card the title row stays, with an eye that brings
+// the controls back, and the map is moved and what is on it chosen as before.
 // While it lasts, the address of the page says what is shown, in place of
 // what the browser has stored:
 //   display                   the mode itself. display=fixed is for a screen

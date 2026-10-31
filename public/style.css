@@ -182,6 +182,44 @@ button { font: inherit; color: inherit; }
 }
 .settings-open, .display-toggle, .search-open { margin: -4px 0; color: var(--text-muted); }
 .settings-open:hover, .settings-open[aria-expanded="true"], .display-toggle:hover { color: var(--text); }
+/* The grip of the header card: a row at its foot with a pill across, as the
+   details have one at their head, and part of the card. A tap or a pull
+   folds the card to its title row and the line that positions are
+   calculated, and unfolds it (app.js); on a phone it folds by itself while
+   details are open. The eye is there only to leave display mode.
+   For a finger it reaches from 8 px below the line above it (the link "How
+   it works" ends there) to 40 px below that: the row in the card, and under
+   the pill a tab of 160 px over the map. The card is as high as without it,
+   and the pill where it would be. */
+.card-grip { position: relative; display: block; width: calc(100% + 28px); height: 11px; margin: 1px -14px -12px; padding: 0; border: 0; border-radius: 0 0 12px 12px; background: none; color: var(--text-muted); cursor: pointer; touch-action: none; }
+.card-grip::before { content: ""; position: absolute; left: calc(50% - 18px); top: -2px; width: 36px; height: 4px; border-radius: 2px; background: var(--border); }
+.card-grip::after { content: ""; position: absolute; left: calc(50% - 80px); top: 100%; width: 160px; height: 29px; touch-action: none; }
+.card-grip .icon { display: none; }
+/* (held, the pill darkens at once, on this grip as on that of the details) */
+.card-grip:active::before, .card-grip.grabbed::before, .handle:active::before { background: var(--text-muted); }
+/* With a mouse a pill says little: there the grip is a row with a chevron,
+   which points the way the card goes, and lights up under the pointer. */
+@media (hover: hover) and (pointer: fine) {
+  .card-grip { height: 22px; margin: -6px -14px -12px; }
+  .card-grip::after { display: none; }
+  .controls.sized { padding-bottom: 26px; }
+  .card-grip::before { display: none; }
+  .card-grip .icon { display: block; width: 18px; height: 18px; margin: 0 auto; transition: transform 0.2s; }
+  .card-grip[aria-expanded="false"] .icon { transform: rotate(180deg); }
+  .card-grip:hover { background: var(--bg-subtle); color: var(--text); }
+}
+/* While it is pulled, and gliding to where it rests, the card is as high as
+   it is given, its grip at its foot, what does not fit cut off. */
+.controls.sized { overflow: hidden; padding-bottom: 22px; transition: height 0.2s ease; }
+.controls.sized .card-grip { position: absolute; left: 0; bottom: 0; width: 100%; margin: 0; }
+.controls.dragging { transition: none; }
+:root[data-board] .card-grip, :root[data-display] .card-grip, :root:not([data-display]) .display-toggle { display: none; }
+:root[data-fold]:not([data-board]) .controls > :not(.title, .status, .bubble, .hint, .card-grip),
+:root[data-fold]:not([data-board]) .status:not([data-state="outage"], [data-state="error"]) { display: none; }
+:root[data-fold]:not([data-board]) .search-open,
+:root[data-fold]:not([data-board]) .search-close { display: grid; }
+:root[data-fold]:not([data-board]) .controls.searching :is(.title, .hint) { display: none; }
+:root[data-fold]:not([data-board]) .controls.searching .search { display: flex; }
 
 /* The settings: a small box that hangs at the gear, with a tip that points to
    it, over the rest of the card. (The gear is 30 wide and ends where the card's
@@ -222,6 +260,18 @@ button { font: inherit; color: inherit; }
 .setting { display: grid; gap: 4px; margin-top: 10px; }
 .setting > :first-child { color: var(--text-muted); }
 .setting .segmented button { padding: 5px 6px; }
+/* At the foot, below a line, what is not a setting but something to do: the page as a screen on a wall. */
+.setting.wall { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border); }
+.setting.wall > :first-child { color: var(--text); }
+.wall-start {
+  padding: 5px 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg);
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+}
 .language {
   padding: 5px 6px;
   border: 1px solid var(--border);
@@ -374,8 +424,8 @@ button { font: inherit; color: inherit; }
 }
 @media (prefers-reduced-motion: reduce) {
   .status .dot::after { display: none; }
-  /* the sheets come to rest at once */
-  .panel, .dialog { transition: none !important; }
+  /* the sheets and the header card come to rest at once */
+  .panel, .dialog, .controls.sized { transition: none !important; }
   .chips { scroll-behavior: auto !important; }
   /* the icon that turns while the visitor's position is looked for */
   .maplibregl-ctrl-geolocate-waiting .maplibregl-ctrl-icon { animation: none !important; }
@@ -386,59 +436,6 @@ button { font: inherit; color: inherit; }
 /* (min-width: or the card would grow as wide as the row instead of the row scrolling) */
 .chips-row { position: relative; min-width: 0; }
 .chips-more { display: none; }
-/* On a wide screen, chips that take more than two rows fold to a row and a
-   half (#139): the second row fades out under an arrow, and a click on the
-   faded row or on the arrow opens them downwards. Open, the arrow at the end
-   of the last row folds them again. What the visitor chose is on the root
-   (data-chips-open, set by first.js before the first paint); app.js marks a
-   row that is not to fold (.whole) and says how high a chip is
-   (--chip-height). The arrow is for eyes and fingers only, as on a phone. */
-.chips-fold { display: none; }
-@media (min-width: 721px) {
-  .chips-row:not(.whole) .chips-fold {
-    display: flex;
-    align-items: center;
-    margin-left: auto;
-    padding: 0;
-    border: 0;
-    background: none;
-    color: var(--text);
-    cursor: pointer;
-  }
-  .chips-fold span {
-    width: 28px;
-    height: 28px;
-    display: grid;
-    place-items: center;
-    border: 1px solid var(--border);
-    border-radius: 50%;
-    background: var(--bg);
-    box-shadow: 0 1px 4px rgb(0 0 0 / 0.2);
-  }
-  .chips-fold .icon { transform: rotate(-90deg); }
-  /* (clip, with a margin: the ring of a chip with the keyboard focus stays whole) */
-  :root:not([data-chips-open]) .chips-row:not(.whole) .chips { max-height: calc(1.5 * var(--chip-height, 28px) + 6px); overflow: clip; overflow-clip-margin: 3px; }
-  /* (from just above the faded row to where it is cut, and on over the margin
-     of the clip: there the middle of its texts would show, not faded) */
-  :root:not([data-chips-open]) .chips-row:not(.whole) .chips-fold {
-    position: absolute;
-    left: 0;
-    right: 0;
-    bottom: -3px;
-    height: calc(var(--chip-height, 28px) / 2 + 5px);
-    margin: 0;
-    background: linear-gradient(to bottom, transparent, var(--bg) calc(100% - 3px));
-  }
-  /* (half below the faded row: in it, as high as a chip, it would cover the row above) */
-  :root:not([data-chips-open]) .chips-row:not(.whole) .chips-fold span { position: absolute; right: 0; bottom: -5px; }
-  /* Folded, only the chips of the first row take a click: the faded row lies
-     under the arrow's button, and what is further down is cut off. Said so,
-     the chips cut off do not count as lying over the buttons below the row
-     where tools such as Lighthouse measure how much of a button can be
-     pressed (app.js marks the chips of the rows below, .below). */
-  :root:not([data-chips-open]) .chips-row:not(.whole) .chip.below { pointer-events: none; }
-  :root:not([data-chips-open]) .chips-fold .icon { transform: rotate(90deg); }
-}
 
 .chip {
   display: inline-flex;

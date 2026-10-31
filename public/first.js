@@ -85,6 +85,4 @@ window.applyColorScheme();
       // a browser that cannot: the card comes with app.js, as it did
     });
   }
-  // Chips that fold on a wide screen (style.css) are open where the visitor opened them.
-  if (setting('chipsOpen') === true) root.dataset.chipsOpen = '';
 }

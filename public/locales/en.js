@@ -107,7 +107,8 @@ export default {
 
 
   // the button with the eye next to the settings: it takes the controls of the page away, and brings them back
-  'display.enter': 'Hide the controls',
+  'display.wall': 'As a wall screen',
+  'controls.fold': 'Fold or unfold the controls',
   'display.leave': 'Show the controls',
 
   'delay.early': 'early',

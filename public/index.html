@@ -35,8 +35,8 @@
       <h1>Netnou</h1>
       <p id="area-name"></p>
       <button type="button" class="search-open" id="search-open" aria-label="Search" data-i18n-aria-label="search.open" title="Search" data-i18n-title="search.open" data-icon="mdiMagnify"></button>
-      <!-- Takes the controls away and brings them back: of the card this row stays (see "display mode" in app.js, which opens the eye while they are away). -->
-      <button type="button" class="display-toggle" id="display-toggle" aria-label="Hide the controls" data-i18n-aria-label="display.enter" data-icon="mdiEyeOff"></button>
+      <!-- Brings the controls back on a display: of the card this row stays (see "display mode" in app.js; the style sheet shows the eye only there). -->
+      <button type="button" class="display-toggle" id="display-toggle" aria-label="Show the controls" data-i18n-aria-label="display.leave" title="Show the controls" data-i18n-title="display.leave" data-icon="mdiEye"></button>
       <button type="button" class="settings-open" id="settings-open" aria-label="Settings" data-i18n-aria-label="settings.title" title="Settings" data-i18n-title="settings.title" aria-expanded="false" aria-controls="settings" data-icon="mdiCog"></button>
     </div>
     <!-- What a visitor can set for themselves, kept in their browser: the
@@ -44,7 +44,9 @@
          dark, how the vehicles show their delay (as a number in a flag, as
          their colour, or not at all), how departure times show and whether
          the board of a stop has a clock. A small box that hangs at the gear,
-         which opens and shuts it. -->
+         which opens and shuts it. At its foot, below a line as it is not a
+         setting, the way to make the page a screen on a wall (see "display
+         mode" in app.js). -->
     <div class="bubble" id="settings" role="group" aria-label="Settings" data-i18n-aria-label="settings.title" hidden>
       <div class="setting">
         <label for="language" data-i18n="language.label">Language</label>
@@ -81,6 +83,9 @@
           <button type="button" data-clock-choice="off" aria-pressed="false" data-i18n="clock.off">Hide</button>
         </div>
       </div>
+      <div class="setting wall">
+        <button type="button" class="wall-start" id="wall-start" data-i18n="display.wall">As a wall screen</button>
+      </div>
     </div>
     <!-- The search for stops and lines, under the title row. Above a board on
          a narrow screen, where the card is its title row, it is shut until the
@@ -103,10 +108,9 @@
          its vehicles once the server has told it. Of those that only some
          timetables have, the chips are hidden: the server shows the chips of the
          kinds its timetable has (server/lib/page.js), and app.js follows the
-         timetable from then on. On a wide screen chips that take more than two
-         rows fold to a row and a half, under an arrow that opens them
-         (#modes-fold, see style.css). On a narrow screen the chips
-         are one row that scrolls sideways. The two arrows show where it goes on
+         timetable from then on. On a wide screen they wrap onto as many rows as
+         they need (the card folds as a whole, see the grip at its foot). On a
+         narrow screen the chips are one row that scrolls sideways. The two arrows show where it goes on
          and move it there. They are for eyes and fingers only: the keyboard and
          a screen reader reach every chip itself. The arrow at the end is there
          from the start, as the row does not fit on a phone; app.js takes it
@@ -123,7 +127,6 @@
         <button type="button" class="chip" data-mode="ferry" aria-pressed="true" hidden><span class="swatch"></span><span class="name" data-i18n="mode.ferry">Ferry</span><span class="count">0</span></button>
         <button type="button" class="chip" data-mode="cable" aria-pressed="true" hidden><span class="swatch"></span><span class="name" data-i18n="mode.cable">Cable car &#38; monorail</span><span class="count">0</span></button>
         <button type="button" class="chip" data-mode="other" aria-pressed="true" hidden><span class="swatch"></span><span class="name" data-i18n="mode.other">Other</span><span class="count">0</span></button>
-        <button type="button" class="chips-fold" id="modes-fold" tabindex="-1" aria-hidden="true"><span data-icon="mdiChevronRight"></span></button>
       </div>
       <button type="button" class="chips-more" id="modes-on" tabindex="-1" aria-hidden="true"><span data-icon="mdiChevronRight"></span></button>
     </div>
@@ -136,6 +139,8 @@
          treats personal data. The server writes them in here (NETNOU_LINKS in
          docs/configuration.md); without any, this stays hidden. -->
     <nav class="links" id="links" aria-label="About this service" data-i18n-aria-label="links.label" hidden></nav>
+    <!-- The grip of the card: folds it to its title row and the line above, and unfolds it (see "the header card folds" in app.js). -->
+    <button type="button" class="card-grip" id="card-grip" aria-expanded="true" aria-controls="controls" aria-label="Fold or unfold the controls" data-i18n-aria-label="controls.fold" title="Fold or unfold the controls" data-i18n-title="controls.fold" data-icon="mdiChevronUp"></button>
   </header>
 
   <!-- The details of a trip, a stop or a line: what they are stays at the top

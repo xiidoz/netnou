@@ -774,6 +774,15 @@ otherwise a server would load a file written by older code:
   keyboard and for screen readers and shows itself with the focus. "How it
   works" is such a sheet too and closes when it is dragged down. All of
   this is plain pointer events in `app.js`.
+- **The header card folds.** A grip at its foot folds it to its title row
+  and the line that says positions are calculated, and unfolds it again: a
+  tap or a click, or pulled and pushed as the bar of the sheet is, coming to
+  rest folded or unfolded. Folded, a lens in the title row opens the search
+  in its place. With a mouse the grip is a row with a chevron. On a phone
+  the card folds by itself while details are open, so that the map between
+  card and sheet has room; the grip unfolds it over the map for the search
+  and the filters, and a touch on the map or the details folds it again and
+  does nothing else. The fold lasts as long as the page is open.
 - **The lines of a stop to show** ([#164](https://github.com/xiidoz/netnou/issues/164)).
   Beside the departures a chip says which lines they are of, all ("Filter",
   #255) or only those chosen, and opens a sheet to choose them in: the directions of
@@ -1056,9 +1065,7 @@ otherwise a server would load a file written by older code:
   sight until `app.js` has made it so: it would change under the eyes of
   who reads it otherwise. What `app.js` adds to a card that shows already
   is what its buttons do, the numbers on the chips and the state of the
-  connection. On a wide screen the chips come folded (`style.css`), or open
-  where the visitor opened them (`first.js`): the card has its height from
-  the first paint.
+  connection.
 - **The page paints as soon as it has arrived.** Its style sheets and
   `first.js` are what a browser has to have before it paints, and each
   would be a request of its own, most of a second on a phone. The server
@@ -1093,11 +1100,9 @@ otherwise a server would load a file written by older code:
   search is the way to a station without a pointer. On the canvas, vehicles
   and stations can be selected with a pointer only.
   On a narrow screen the filters are one row that scrolls sideways; arrows at
-  its ends show that it goes on and move it. On a wide screen filters that
-  take more than two rows fold to a row and a half, and the faded row or an
-  arrow opens them; a filter beyond the first row that gets the focus opens
-  them as well. The arrows are left out of the tab order and hidden from
-  screen readers, which reach every filter directly.
+  its ends show that it goes on and move it. On a wide screen they wrap onto
+  as many rows as they need. The arrows are left out of the tab order and
+  hidden from screen readers, which reach every filter directly.
 
 ## Known limits
 
