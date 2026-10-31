@@ -255,6 +255,7 @@ export default {
   'departures.cancelled': 'cancelled',
   // how long until a departure leaves: under a minute, and in whole minutes
   'departures.now': 'now',
+  'departures.planned': 'planned {time}',
   'departures.minutes': '{count} min',
   // the line in a list of departures where the next day begins
   'departures.tomorrow': 'tomorrow',

@@ -13,7 +13,7 @@ import { APP_NAME, READMES, dayOf, formatNumber, formatTime, languagePicker, loa
 import { FAVOURITE_NAME_ZOOM, HEART_MIDDLE, PLACES_ZOOM, RAIL_MODES, heartMark, joiningLines, mergePlaces, namePrecedence, namedAt, placeNames, stopMark, townToShow, townsAlong, withoutStyleStops } from './stops.js';
 import { favouritesFrom, isFavourite, lineFavourite, sameStop, stopFavourite, withChoice, withFavourite } from './favourites.js';
 import { choiceValue, readChoice, toggled } from './choice.js';
-import { DELAY_MAJOR_S, DELAY_MINOR_S, DELAY_SEVERE_S, MINUTES_MAX, NOTE_CHARS, badge as badgeOf, choiceChip as choiceChipOf, delayCell as delayCellOf, delayClass, delayNode as delayNodeOf, delayFlag, delayText, departureLists, departuresSub as departuresSubOf, directionSign as directionSignOf, leavesAt, lineHead, lineLists, lineStops, minutesNode as minutesNodeOf, trackAt, VEHICLE_R, panelHead as panelHeadOf, stopHeading, tomorrowAt as tomorrowAtOf, untilText as untilTextOf, vehicleLabel, warningSign as warningSignOf, warns } from './panel.js';
+import { DELAY_MAJOR_S, DELAY_MINOR_S, DELAY_SEVERE_S, MINUTES_MAX, NOTE_CHARS, badge as badgeOf, choiceChip as choiceChipOf, clockOf, delayCell as delayCellOf, delayClass, delayNode as delayNodeOf, delaySum as delaySumOf, delayFlag, delayText, departureLists, departuresSub as departuresSubOf, directionSign as directionSignOf, leavesAt, lineHead, lineLists, lineStops, minutesNode as minutesNodeOf, trackAt, VEHICLE_R, panelHead as panelHeadOf, stopHeading, tomorrowAt as tomorrowAtOf, untilText as untilTextOf, vehicleLabel, warningSign as warningSignOf, warns } from './panel.js';
 import { BOARD_MAX, BOARD_SHARE, BOARD_STOPS, boardBlocks, boardQuery, boardShare, displayQuery, ledBy, readBoard, readDisplay, readStops } from './display.js';
 import { mdiArrowCollapse, mdiArrowExpand, mdiChevronRight, mdiCityVariantOutline, mdiFullscreen, mdiFullscreenExit, mdiHeart, mdiHeartOutline, mdiMinusCircleOutline, mdiPlaylistPlus, mdiPlus } from './vendor/material-design-icons/icons.js';
 import { AttributionControl, MapLibreMap, NavigationControl } from './vendor/maplibre-gl/maplibre-gl.mjs';
@@ -3238,8 +3238,8 @@ function renderTrip(trip, scrollToNext) {
     if (towns[i]) classes.push('in-town');
     const row = el('button', { type: 'button', class: classes.join(' '), onclick: () => select('station', stop.station) }, [
       el('span', { class: 'rail' }),
-      el('span', { class: 'time', text: formatTime(planned) }),
-      stop.skipped ? el('span') : delayNode(delay),
+      el('span', { class: 'time', text: formatTime(leavesAt({ planned, delay })) }),
+      stop.skipped ? el('span') : delaySum(planned, delay),
       nameInTown(stop.name, towns[i], { title: stop.name }),
       el('span', { class: 'platform', text: stop.skipped ? t('stop.skipped') : platformText(stop.platform) }),
     ]);
@@ -3382,8 +3382,13 @@ function renderLine(line, first) {
 const minutesUntil = (leaves) => Math.floor(leaves / 60) - Math.floor(now() / 60);
 
 /** How long until a departure leaves (panel.js). */
-function untilText(leaves, planned, far) {
-  return untilTextOf(leaves, planned, far, drawing());
+function untilText(leaves, far) {
+  return untilTextOf(leaves, far, drawing());
+}
+
+/** A delay beside the time a train leaves or arrives, as a sum with the planned time (panel.js). */
+function delaySum(planned, delay) {
+  return toDom(delaySumOf(planned, delay, drawing()));
 }
 
 /** The minutes until a departure leaves, which count down by themselves between two answers of the server (tickTimes). */
@@ -3402,7 +3407,7 @@ function tickTimes() {
   const update = (node, text) => {
     if (node.textContent !== text) node.textContent = text;
   };
-  for (const node of panel.querySelectorAll('.minutes[data-leaves]')) update(node, untilText(Number(node.dataset.leaves), Number(node.dataset.planned), node.dataset.far));
+  for (const node of panel.querySelectorAll('.minutes[data-leaves]')) update(node, untilText(Number(node.dataset.leaves), node.dataset.far));
   const clock = panel.querySelector('.board-clock');
   if (clock) update(clock, formatTime(now()));
 }
@@ -3738,10 +3743,11 @@ function renderBoard(board) {
 function boardRow(dep, times, from = null) {
   // (a delay shows where there is one: on time the board says nothing)
   const delay = Math.round((dep.delay ?? 0) / 60) === 0 ? null : dep.delay;
-  const late = delayCell(delayNode(delay), dep.warnings, dep.warnings.length > 0);
+  // (with the time it leaves, as a sum with the planned time; before the minutes, alone)
+  const late = delayCell(times === 'minutes' ? delayNode(delay) : delaySum(dep.planned, delay), dep.warnings, dep.warnings.length > 0);
   // (further off than an hour, the time of day stands where the minutes do, and with both not twice)
   const far = minutesUntil(leavesAt(dep)) > MINUTES_MAX;
-  const at = (shown = true) => el('span', { class: 'at', text: shown ? formatTime(dep.planned) : '' });
+  const at = (shown = true) => el('span', { class: 'at', text: shown ? formatTime(leavesAt(dep)) : '' });
   const when = dep.cancelled ? [el('span', { class: 'gone', text: t('departures.cancelled') })]
     : times === 'time' ? [at(), late]
       : times === 'minutes' ? [late, minutesNode(dep, 'time')]
@@ -4604,6 +4610,8 @@ function init() {
   // The lists have a column for the time, as wide as the language writes it (14:05 or 12:05 PM).
   const hours = Array.from({ length: 24 }, (_, hour) => formatTime(hour * 3600));
   document.documentElement.style.setProperty('--time-chars', Math.max(...hours.map((text) => text.length)));
+  // (and one for the planned time beside a delay, which leaves out "PM" and the like, see clockOf in panel.js)
+  document.documentElement.style.setProperty('--clock-chars', Math.max(...hours.map((text) => clockOf(text).length)));
   // (and one for the minutes until a departure leaves, up to an hour, and the time of day in their place beyond it)
   const minutes = [t('departures.now'), t('departures.minutes', { count: MINUTES_MAX }), ...hours];
   document.documentElement.style.setProperty('--minutes-chars', Math.max(...minutes.map((text) => text.length)));

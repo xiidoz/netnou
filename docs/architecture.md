@@ -858,11 +858,21 @@ otherwise a server would load a file written by older code:
   the address of the stop (`board=<share>`), also with the controls, so that
   the address opens it again and `display=fixed` puts it on a wall. How
   departure times show is one setting for every list of them: the time of
-  day, the minutes until a train leaves, counted from when it actually
-  leaves and counting down between two answers of the server, or both; on
-  the board a clock can be switched off. Minutes go up to an hour; a train
-  further off shows its time of day in their place, and where the next day
-  begins, a line says "morgen". A board has up to four stops
+  day a train leaves, the minutes until it leaves, counting down between
+  two answers of the server, or both; on the board a clock can be switched
+  off. Every time shown is when the train leaves or arrives, the planned
+  time moved by its delay: beside it the delay is a sum with the planned
+  time, "13:37 13:36+1", the planned time grey and without the "PM" of a
+  12-hour clock, which the time before it says ("1:37 PM 1:36+1"), so that a
+  rider sees when to be there, and that the delay is already in it; on time
+  "±0" alone. Beside
+  minutes the delay stands alone. Minutes go up to an hour; a train further
+  off shows the time it leaves in their place, and where the next day
+  begins, a line says "morgen". A departure in the details is a row in two
+  lines, in the order of the board: the line's badge, where it goes and on
+  the right when it leaves, the minutes or the time; below where it goes, in
+  small print, the time it leaves, the delay and the platform. Where it goes
+  has the width of the row, and a row is a finger high. A board has up to four stops
   ([#163](https://github.com/xiidoz/netnou/issues/163)), each in a block of
   its own or merged into the list of the block before it, the address naming
   them in the board's order (`with=`, `block=`). A merged list orders the

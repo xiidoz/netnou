@@ -190,6 +190,7 @@ export default {
   'departures.none': 'Keine Abfahrten in den nächsten 24 Stunden.',
   'departures.cancelled': 'fällt aus',
   'departures.now': 'jetzt',
+  'departures.planned': 'geplant {time}',
   'departures.minutes': '{count} min',
   'departures.tomorrow': 'morgen',
 
