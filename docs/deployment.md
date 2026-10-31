@@ -280,10 +280,10 @@ Worth watching:
   browser and the site they came from, which it passes on, with the address
   and the title of the page, to the analytics service named there, and
   keeps nothing of either
-  ([Counting visits](configuration.md#counting-visits)). The page stores nine settings in the browser's
+  ([Counting visits](configuration.md#counting-visits)). The page stores eight settings in the browser's
   `localStorage` (`netnou.lang`, `netnou.theme`, `netnou.flags`,
   `netnou.hiddenModes`, `netnou.colorBy`, `netnou.view`, `netnou.times`,
-  `netnou.clock`, `netnou.chipsOpen`), whether it has shown its one tip
+  `netnou.clock`), whether it has shown its one tip
   (`netnou.tipped`), the stops and lines the visitor made favourites
   (`netnou.favourites`: their names, places, modes and operators, and the
   lines chosen of a stop), and its own files in a browser cache whose name begins
@@ -333,10 +333,11 @@ https://example.org/?display=fixed&view=49.4478,11.0765,13.4&theme=dark&lang=de
 | `lang=de` | the language | the language of the browser |
 
 The quick way to such an address: open the page, set it up as the screen
-should show it, and press the button with the eye next to the settings. That
-hides the controls, and from then on the address says what is shown and
-follows the map as you move it. Copy it and write `display=fixed` in place
-of `display`.
+should show it, open the settings with the gear and press "Als
+Wandbildschirm" ("As a wall screen") at their foot. The page opens again as
+the display, and its address says what is shown: open it on the screen, or
+copy it from there. A touch, a click or a key brings up the button that
+brings the controls back.
 
 The screen can also show the departures of one stop, as a board beside the
 map or on all of the screen. The address is then that of the stop, with the
@@ -353,7 +354,7 @@ https://example.org/stop/nuernberg-plaerrer@49.4481,11.0648?display=fixed&board=
 To set it up, open the stop and press the button with the two arrows in its
 details. Drag the edge between map and board to where it should be, and set
 how the times show and whether the board has a clock behind the gear. Then
-press the eye and copy the address as above.
+press "Als Wandbildschirm" there, as above.
 
 A board can show up to four stops: the bus in front of the house and the
 U-Bahn around the corner. Each stop is in a block of its own, or in one list

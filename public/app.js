@@ -15,7 +15,7 @@ import { favouritesFrom, isFavourite, lineFavourite, sameStop, stopFavourite, wi
 import { choiceValue, readChoice, toggled } from './choice.js';
 import { DELAY_MAJOR_S, DELAY_MINOR_S, DELAY_SEVERE_S, MINUTES_MAX, NOTE_CHARS, badge as badgeOf, choiceChip as choiceChipOf, delayCell as delayCellOf, delayClass, delayNode as delayNodeOf, delayFlag, delayText, departureLists, departuresSub as departuresSubOf, directionSign as directionSignOf, leavesAt, lineHead, lineLists, lineStops, minutesNode as minutesNodeOf, trackAt, VEHICLE_R, panelHead as panelHeadOf, stopHeading, tomorrowAt as tomorrowAtOf, untilText as untilTextOf, vehicleLabel, warningSign as warningSignOf, warns } from './panel.js';
 import { BOARD_MAX, BOARD_SHARE, BOARD_STOPS, boardBlocks, boardQuery, boardShare, displayQuery, ledBy, readBoard, readDisplay, readStops } from './display.js';
-import { mdiArrowCollapse, mdiArrowExpand, mdiChevronRight, mdiCityVariantOutline, mdiEye, mdiEyeOff, mdiFullscreen, mdiFullscreenExit, mdiHeart, mdiHeartOutline, mdiMinusCircleOutline, mdiPlaylistPlus, mdiPlus } from './vendor/material-design-icons/icons.js';
+import { mdiArrowCollapse, mdiArrowExpand, mdiChevronRight, mdiCityVariantOutline, mdiFullscreen, mdiFullscreenExit, mdiHeart, mdiHeartOutline, mdiMinusCircleOutline, mdiPlaylistPlus, mdiPlus } from './vendor/material-design-icons/icons.js';
 import { AttributionControl, MapLibreMap, NavigationControl } from './vendor/maplibre-gl/maplibre-gl.mjs';
 
 // The modes, each with a chip where the timetable has it. Same ids as MODES in
@@ -1686,7 +1686,8 @@ map.on('mouseout', hideTooltip);
 map.on('movestart', hideTooltip);
 
 map.on('click', (event) => {
-  if (FIXED) return;
+  // (the tap that folds the unfolded card does only that: see "the card while details are open")
+  if (FIXED || performance.now() - cardFoldedAt < 700) return;
   hideTooltip();
   const hit = hitTest(event.point);
   if (hit?.vehicle) select('trip', hit.vehicle.id);
@@ -2067,7 +2068,7 @@ searchField.addEventListener('keydown', (event) => {
 });
 
 /** Whether the search is behind the button with the lens: above a board on a narrow screen, as style.css has it. */
-const searchBehindLens = () => narrowScreen.matches && state.board !== null;
+const searchBehindLens = () => (narrowScreen.matches && state.board !== null) || document.documentElement.dataset.fold !== undefined;
 
 /**
  * Shuts the search without choosing anything. The focus stays in the field;
@@ -2099,8 +2100,6 @@ $('search-close').addEventListener('click', cancelSearch);
 // ---------- controls ----------
 
 const chipCounts = new Map();
-// (see watchChipFold: what to call once the chips have changed)
-let foldChips = () => {};
 
 /**
  * Shows where the row of chips goes on. On a narrow screen it is one row that
@@ -2124,48 +2123,6 @@ function watchChipRow(row, back, on) {
   const sizes = new ResizeObserver(update);
   for (const node of [row, ...row.children]) sizes.observe(node);
   update();
-}
-
-/**
- * On a wide screen, chips that take more than two rows fold to a row and a
- * half (#139, style.css). A click on the faded row or its arrow opens them,
- * the arrow at the end of the last row folds them again, and the browser
- * keeps which. They stay whole where they take two rows or fewer, and while a
- * kind beyond the first row is switched off: what is off stays in sight.
- * @returns what to call once the chips have changed: their kinds, numbers or what is switched on
- */
-function watchChipFold(row, chips, fold) {
-  const root = document.documentElement;
-  const wide = matchMedia('(min-width: 721px)');
-  const open = (yes) => {
-    root.toggleAttribute('data-chips-open', yes);
-    saveSetting('chipsOpen', yes);
-  };
-  fold.addEventListener('click', () => open(!root.hasAttribute('data-chips-open')));
-  // The keyboard reaches every chip: one beyond the first row that gets the focus opens them.
-  chips.addEventListener('focusin', (event) => {
-    const first = chips.querySelector('.chip:not([hidden])');
-    if (event.target.classList.contains('chip') && event.target.offsetTop > first.offsetTop && !row.classList.contains('whole')) open(true);
-  });
-  const update = () => {
-    const shown = [...chips.querySelectorAll('.chip')].filter((chip) => !chip.hidden);
-    if (!wide.matches || !shown.length) return;
-    row.style.setProperty('--chip-height', `${shown[0].offsetHeight}px`);
-    const first = shown[0].offsetTop;
-    // (those that a click cannot reach while they are folded, see style.css)
-    for (const chip of shown) chip.classList.toggle('below', chip.offsetTop > first);
-    // (how many rows they take is known once they carry their numbers: before, they are narrower)
-    if (!state.online) return;
-    const rows = new Set(shown.map((chip) => chip.offsetTop)).size;
-    const offBelow = shown.some((chip) => chip.offsetTop > first && chip.getAttribute('aria-pressed') === 'false');
-    row.classList.toggle('whole', rows <= 2 || offBelow);
-  };
-  // (until then a kind switched off keeps them whole, so that they do not open under the eyes of who reads them)
-  if (MODES.some((mode) => !state.enabled.has(mode))) row.classList.add('whole');
-  const sizes = new ResizeObserver(update);
-  for (const node of chips.children) sizes.observe(node);
-  wide.addEventListener('change', update);
-  return update;
 }
 
 function buildControls() {
@@ -2192,7 +2149,6 @@ function buildControls() {
     });
   }
   watchChipRow(container, $('modes-back'), $('modes-on'));
-  foldChips = watchChipFold(container.parentElement, container, $('modes-fold'));
 
   const from = (seconds) => t('delay.from', { minutes: seconds / 60 });
   const legend = [['early', t('delay.early')], ['ok', t('delay.onTime')], ['minor', from(DELAY_MINOR_S)], ['major', from(DELAY_MAJOR_S)], ['severe', from(DELAY_SEVERE_S)], ['none', t('delay.none')]];
@@ -2212,7 +2168,6 @@ function updateStatus() {
   // A chip for each kind the timetable has, and for no other: the page came
   // with those of the timetable the server had then (server/lib/page.js).
   if (state.kinds) for (const [mode, node] of chipCounts) node.parentElement.hidden = !state.kinds.includes(mode);
-  foldChips();
 
   // Without realtime data all positions are by the timetable alone. While it
   // may still be on its way that is said calmly, after that as a warning.
@@ -2459,6 +2414,146 @@ let panelTimer = null;
 // (what had the keyboard focus when the details opened: see closePanel)
 let panelOpener = null;
 
+// The header card folds (data-fold, style.css) to its title row and the line
+// that positions are calculated. Its grip, a row at its foot, folds and
+// unfolds it, with a tap or a pull. On a phone it folds by itself while the
+// details of a stop, a line or a trip are open, so that the map has the room
+// between it and them; unfolded there, it folds again when the map or the
+// details are touched.
+const card = { folded: false, unfolded: false }; // folded by the visitor; unfolded while details are open on a phone
+let cardFoldedAt = -Infinity; // (when a touch on the map folded the card last)
+const sheetOpen = () => narrowScreen.matches && !panel.hidden;
+function showFold() {
+  const fold = sheetOpen() ? !card.unfolded : card.folded;
+  if (fold) document.documentElement.dataset.fold = '';
+  else delete document.documentElement.dataset.fold;
+  $('card-grip').setAttribute('aria-expanded', String(!fold));
+}
+function setFold(fold) {
+  if (sheetOpen()) card.unfolded = !fold;
+  else card.folded = fold;
+  showFold();
+}
+// (also as the page comes: at the address of a stop or a line its details are open from the start)
+new MutationObserver(() => {
+  if (panel.hidden) card.unfolded = false;
+  showFold();
+}).observe(panel, { attributes: true, attributeFilter: ['hidden'] });
+narrowScreen.addEventListener('change', showFold);
+showFold();
+// The grip works as that of the details: a tap takes the card to its other
+// height, gliding; pulled, the card's foot follows the finger, and let go it
+// comes to rest folded or unfolded, the nearer or the one it was flicked to.
+const controls = $('controls');
+const grip = $('card-grip');
+const folded = () => document.documentElement.dataset.fold !== undefined;
+/** The card's height folded and unfolded, in px, as it is by itself: measured with the other state put on for a moment. */
+function cardHeights() {
+  const was = folded();
+  const given = controls.classList.contains('sized') ? controls.style.height : null;
+  controls.classList.remove('sized');
+  controls.style.height = '';
+  setFoldAttribute(true);
+  const low = controls.offsetHeight;
+  setFoldAttribute(false);
+  const high = controls.offsetHeight;
+  setFoldAttribute(was);
+  if (given !== null) {
+    controls.classList.add('sized');
+    controls.style.height = given;
+  }
+  return [low, high];
+}
+function setFoldAttribute(fold) {
+  if (fold) document.documentElement.dataset.fold = '';
+  else delete document.documentElement.dataset.fold;
+}
+/** Gives the card a height of its own, all of it shown and what does not fit cut off; null takes that away. */
+function sizeCard(height) {
+  if (height === null) {
+    controls.classList.remove('sized');
+    controls.style.height = '';
+    return;
+  }
+  controls.classList.add('sized');
+  controls.style.height = `${Math.round(height)}px`;
+}
+let cardRest = null; // (the end of a glide under way)
+/** Glides the card from the height it has to folded or unfolded, then leaves it as it is by itself. */
+function restCard(fold) {
+  clearTimeout(cardRest);
+  const [low, high] = cardHeights();
+  if (!controls.classList.contains('sized')) sizeCard(folded() ? low : high);
+  setFoldAttribute(false);
+  void controls.offsetHeight;
+  sizeCard(fold ? low : high);
+  const done = () => {
+    sizeCard(null);
+    setFold(fold);
+  };
+  if (matchMedia('(prefers-reduced-motion: reduce)').matches) done();
+  else cardRest = setTimeout(done, 220);
+}
+grip.addEventListener('click', () => restCard(!folded()));
+{
+  let drag = null; // as for the details: where it began, the height then, and whether it has moved enough to be a pull
+  grip.addEventListener('pointerdown', (event) => {
+    if (!event.isPrimary || event.button !== 0) return;
+    grip.classList.add('grabbed');
+    drag = { id: event.pointerId, y: event.clientY, height: controls.offsetHeight, moved: false, last: [[event.timeStamp, event.clientY]] };
+  });
+  grip.addEventListener('pointermove', (event) => {
+    if (!drag || event.pointerId !== drag.id) return;
+    const by = event.clientY - drag.y;
+    if (!drag.moved) {
+      if (Math.abs(by) < SHEET_DRAG_PX) return;
+      drag.moved = true;
+      clearTimeout(cardRest);
+      grip.setPointerCapture(drag.id);
+      drag.heights = cardHeights();
+      controls.classList.add('dragging');
+      sizeCard(drag.height);
+      setFoldAttribute(false);
+    }
+    const [low, high] = drag.heights;
+    sizeCard(Math.max(low - 12, Math.min(high + 12, drag.height + by)));
+    drag.last.push([event.timeStamp, event.clientY]);
+    if (drag.last.length > 5) drag.last.shift();
+  });
+  const end = (event) => {
+    grip.classList.remove('grabbed');
+    if (!drag || event.pointerId !== drag.id) return;
+    const { moved, last, heights: [low, high] = [] } = drag;
+    drag = null;
+    if (!moved) return;
+    controls.classList.remove('dragging');
+    // (a pull ends without the click a tap ends in)
+    const swallow = (click) => {
+      click.stopPropagation();
+      click.preventDefault();
+    };
+    grip.addEventListener('click', swallow, { capture: true, once: true });
+    setTimeout(() => grip.removeEventListener('click', swallow, { capture: true }), 300);
+    const [[t0, y0]] = last;
+    const [t1, y1] = last.at(-1);
+    const speed = t1 > t0 ? (y1 - y0) / (t1 - t0) : 0; // px per ms, downwards
+    const now = controls.offsetHeight;
+    const fold = event.type === 'pointercancel' ? now < (low + high) / 2 : speed > SHEET_FLICK ? false : speed < -SHEET_FLICK ? true : now < (low + high) / 2;
+    restCard(fold);
+  };
+  grip.addEventListener('pointerup', end);
+  grip.addEventListener('pointercancel', end);
+}
+// (a touch on the map folds the card and is not a tap on the map as well: as outside an open box)
+for (const surface of [$('map'), panel]) {
+  surface.addEventListener('pointerdown', () => {
+    if (!sheetOpen() || !card.unfolded) return;
+    card.unfolded = false;
+    showFold();
+    if (surface !== panel) cardFoldedAt = performance.now();
+  });
+}
+
 function closePanel() {
   // (asked before a board that closes builds the details anew: see below)
   const keyboard = panel.contains(document.activeElement) && document.activeElement.matches(':focus-visible');
@@ -2502,7 +2597,7 @@ document.addEventListener('keydown', (event) => {
   } else if (state.selection) {
     closePanel();
   } else if (state.display && !FIXED) {
-    setDisplay(false);
+    leaveDisplay();
   }
 });
 
@@ -4355,13 +4450,20 @@ window.addEventListener('online', poll);
 
 // ---------- display mode ----------
 
-// The button with the eye in the title row takes the controls away and brings them back.
+// A display comes from its address alone (display.js). The page makes one at
+// "As a wall screen", at the foot of the settings: it opens again as a screen
+// on a wall, with what is set here in its address. While a display that is
+// not fixed shows, the button with the eye in the title row brings the
+// controls back, as the button at the foot does on a fixed one (startFixed).
 const displayButton = $('display-toggle');
-displayButton.addEventListener('click', () => setDisplay(!state.display));
+displayButton.addEventListener('click', leaveDisplay);
+$('wall-start').addEventListener('click', () => {
+  // (with the path: the stop or the line that is open stays in it; a query alone would be taken from the base of the page, where the instance is)
+  location.href = `${location.pathname}${displaySearch(true)}`;
+});
 
-/** Puts what is shown into the address, in place of the address so far: the page is not loaded again. */
-function writeAddress() {
-  if (!state.areaKnown) return;
+/** The query of an address for what is shown, as a display. */
+function displaySearch(fixed) {
   const center = map.getCenter();
   const settings = {
     view: { lat: center.lat, lon: center.lng, zoom: map.getZoom() },
@@ -4372,51 +4474,29 @@ function writeAddress() {
     times: state.times,
     clock: state.clock,
   };
-  // (with the path: the stop or the line that is open stays in it; a query alone would be taken from the base of the page, where the instance is)
-  history.replaceState(null, '', `${location.pathname}${displayQuery({ fixed: FIXED, language, board: state.board, stops: state.extra, lines: state.lines, settings }, MODES)}`);
+  return displayQuery({ fixed, language, board: state.board, stops: state.extra, lines: state.lines, settings }, MODES);
 }
 
-/** Brings the page in line with whether it is a display. */
+/** Puts what is shown into the address, in place of the address so far: the page is not loaded again. */
+function writeAddress() {
+  if (!state.areaKnown) return;
+  // (with the path, as above)
+  history.replaceState(null, '', `${location.pathname}${displaySearch(FIXED)}`);
+}
+
+/** Marks the page as a display, for the style sheet. */
 function showDisplay() {
-  const root = document.documentElement;
-  if (state.display) root.dataset.display = FIXED ? 'fixed' : '';
-  else delete root.dataset.display;
-  // The button says what it does: a struck-through eye hides, an open eye shows.
-  const label = state.display ? t('display.leave') : t('display.enter');
-  displayButton.title = label;
-  displayButton.setAttribute('aria-label', label);
-  displayButton.replaceChildren(icon(state.display ? mdiEye : mdiEyeOff));
+  if (state.display) document.documentElement.dataset.display = FIXED ? 'fixed' : '';
 }
 
-/** Takes the controls away or brings them back. The map stays as it is: nothing is loaded again. */
-function setDisplay(on) {
-  if (!on && OPENED_AS_DISPLAY) {
-    // What is set came with the address and not from this browser: the page
-    // with its controls starts afresh, with what is stored here.
-    location.search = boardQuery(ASKED.language ? `?lang=${encodeURIComponent(ASKED.language)}` : '', state.board, state.extra, state.lines);
-    return;
-  }
-  state.display = on;
-  if (on) {
-    // (what hangs at the row that stays, or takes its place, goes with the rest)
-    showSettings(false);
-    closeSearch();
-  }
-  showDisplay();
-  // (the buttons of a board are part of the controls)
-  if (state.board !== null) showSelection();
-  if (on) {
-    writeAddress();
-    return;
-  }
-  // (with the board that is open, which the page was perhaps opened with, or not)
-  history.replaceState(null, '', `${location.pathname}${boardQuery(OWN_SEARCH, state.board, state.extra, state.lines)}`);
-  // (where the map was moved to meanwhile is what the browser keeps again)
-  const center = map.getCenter();
-  saveSetting('view', { lat: center.lat, lon: center.lng, zoom: map.getZoom() });
+/**
+ * Brings the controls back. What is set came with the address and not from
+ * this browser: the page with its controls starts afresh, with what is stored
+ * here, and with the board that is open.
+ */
+function leaveDisplay() {
+  location.search = boardQuery(ASKED.language ? `?lang=${encodeURIComponent(ASKED.language)}` : '', state.board, state.extra, state.lines);
 }
-// (the address the page with its controls was opened with)
-const OWN_SEARCH = OPENED_AS_DISPLAY ? '' : location.search;
 
 /**
  * What a display on a wall does besides showing the map: nobody operates it,
@@ -4433,7 +4513,7 @@ function startFixed() {
   };
   document.addEventListener('pointerdown', showLeave);
   document.addEventListener('keydown', showLeave);
-  leave.addEventListener('click', () => setDisplay(false));
+  leave.addEventListener('click', leaveDisplay);
 
   // The screen stays on where the browser lets a page ask for that; the
   // browser takes it back whenever the page is hidden.

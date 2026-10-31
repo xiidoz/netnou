@@ -79,7 +79,8 @@ export default {
   'mode.other': 'Sonstige',
 
 
-  'display.enter': 'Bedienung ausblenden',
+  'display.wall': 'Als Wandbildschirm',
+  'controls.fold': 'Bedienung ein- oder ausklappen',
   'display.leave': 'Bedienung einblenden',
 
   'delay.early': 'zu früh',
