@@ -778,16 +778,8 @@ button:focus-visible, select:focus-visible, .row:focus-visible, .panel:focus-vis
    notes. */
 .row .late { white-space: nowrap; }
 .row .late .delay { display: inline-block; width: 32px; }
-/* (with the planned time in it, see --late-width) */
-.row:not(.times-minutes) .late .delay { width: calc((var(--clock-chars, 5) + 3) * 1ch + 2px); }
-.rows.signed .row.departure { grid-template-columns: var(--time-width) calc(var(--late-width) + 15px) auto 1fr auto; }
 /* Departure times as minutes (#81): in place of the time of day, or with both at the end of the row, after a platform. */
 .row .minutes { font-variant-numeric: tabular-nums; font-weight: 650; white-space: nowrap; }
-.row.departure.times-minutes { grid-template-columns: var(--minutes-width) 30px auto 1fr auto; }
-.rows.signed .row.departure.times-minutes { grid-template-columns: var(--minutes-width) 45px auto 1fr auto; }
-.row.departure.times-both { grid-template-columns: var(--time-width) var(--late-width) auto 1fr auto auto; }
-.rows.signed .row.departure.times-both { grid-template-columns: var(--time-width) calc(var(--late-width) + 15px) auto 1fr auto auto; }
-.row.departure.times-both .minutes { text-align: right; }
 .row.cancelled .minutes { text-decoration: line-through; color: var(--text-muted); font-weight: 400; }
 
 /* The stops of a line in one direction (#256): a line in the colour of its
@@ -911,15 +903,9 @@ button.line-vehicle { position: absolute; left: -18px; top: -18px; width: 36px; 
 .line-rows > li + li { margin-top: 4px; }
 .line-rows .to-line { justify-self: start; margin: 0; padding: 6px 10px 6px 14px; color: inherit; text-decoration: none; }
 .line-rows ul { list-style: none; margin: 0; padding: 0; min-width: 0; }
-.row.departure.by-line { padding-left: 0; grid-template-columns: var(--time-width) var(--late-width) minmax(0, 1fr) auto auto; }
-.row.departure.by-line.times-minutes { grid-template-columns: var(--minutes-width) 30px minmax(0, 1fr) auto auto; }
-.line-rows.signed .row.departure.by-line { grid-template-columns: var(--time-width) calc(var(--late-width) + 15px) minmax(0, 1fr) auto auto; }
-.line-rows.signed .row.departure.by-line.times-minutes { grid-template-columns: var(--minutes-width) 45px minmax(0, 1fr) auto auto; }
+.row.departure.by-line { padding-left: 0; grid-template-columns: minmax(0, 1fr) auto; }
 .row.by-line .day { color: var(--text-muted); white-space: nowrap; }
-.row.departure.by-line.resting { grid-template-columns: calc(var(--time-width) + var(--late-width) + 8px) minmax(0, 1fr); cursor: default; }
-.row.departure.by-line.resting.times-minutes { grid-template-columns: calc(var(--minutes-width) + 38px) minmax(0, 1fr); }
-.line-rows.signed .row.departure.by-line.resting { grid-template-columns: calc(var(--time-width) + var(--late-width) + 23px) minmax(0, 1fr); }
-.line-rows.signed .row.departure.by-line.resting.times-minutes { grid-template-columns: calc(var(--minutes-width) + 53px) minmax(0, 1fr); }
+.row.departure.by-line.resting { cursor: default; }
 .row.resting:hover { background: none; }
 .row.resting .later { color: var(--text-muted); font-size: 12.5px; white-space: nowrap; text-decoration: none; }
 
@@ -928,7 +914,20 @@ button.line-vehicle { position: absolute; left: -18px; top: -18px; width: 36px; 
    --late-width: the delay as a sum with the planned time, "13:36+12": a clock
    time without "PM" and three characters more, in the delay's 12.5 px (0.9 of the row's ch). */
 .row { --time-width: calc(var(--time-chars, 5) * 1ch + 4px); --minutes-width: calc(var(--minutes-chars, 7) * 1ch + 4px); --late-width: calc((var(--clock-chars, 5) + 3) * 0.9ch + 2px); }
-.row.departure { grid-template-columns: var(--time-width) var(--late-width) auto 1fr auto; }
+/* A departure in two lines, in the order of a board (departureRow in panel.js):
+   the badge, where it goes and on the right when it leaves, the minutes or,
+   with times of day, the time; below where it goes, in the small print of a
+   town under a stop, the time it leaves, the delay as a sum with the planned
+   time, the platform. A row is then a finger high, 47 px. */
+.row.departure { grid-template-columns: auto minmax(0, 1fr) auto; grid-template-rows: auto auto; row-gap: 0; padding-block: 5px; }
+.row.departure > .badge { grid-column: 1; grid-row: 1 / 3; }
+.row.departure > .name { grid-row: 1; }
+.row.departure > .details { grid-row: 2; display: flex; align-items: baseline; gap: 6px; min-width: 0; overflow: hidden; color: var(--text-muted); font-size: 12.5px; white-space: nowrap; }
+.row.departure > .details > :empty { display: none; }
+.row.departure > .details .time { color: var(--text); }
+.row.departure .late .delay { width: auto; }
+.row.departure > :is(.minutes, .time, .day, .later) { grid-column: -2; grid-row: 1 / 3; justify-self: end; }
+.row.departure > .time { font-weight: 650; }
 .row.stop { grid-template-columns: 14px var(--time-width) var(--late-width) 1fr auto; }
 .row.stop.past { color: var(--text-muted); }
 .row.stop.next .name { font-weight: 650; }

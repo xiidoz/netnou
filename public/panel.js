@@ -201,10 +201,12 @@ export function departureLists(board, context) {
 }
 
 /**
- * The row of a departure, which opens its trip: the time it leaves first,
- * with the planned time and the delay beside it as a sum (delaySum), or the
- * minutes in its place with the delay alone; with both, the minutes at the
- * end of the row.
+ * The row of a departure, which opens its trip, in two lines and in the
+ * order of a board: the line's badge, where it goes, and on the right when it
+ * leaves, the minutes until then or, where the visitor chose times of day,
+ * the time; below where it goes, in small print, the time it leaves where the
+ * minutes stand on the right, the delay as a sum with the planned time
+ * (delaySum; beside minutes alone), and the platform.
  * @param signed whether a train of its list has something wrong with it (delayCell)
  * @param byLine whether it is the next departure of a way in the list of a
  *   stop's lines (lineLists): without the badge, which its line has, and
@@ -213,13 +215,19 @@ export function departureLists(board, context) {
 function departureRow(dep, signed, context, byLine = false) {
   const { t, time, day, now, times } = context;
   const later = byLine && day(dep.planned) > day(now);
+  const leaves = () => h('span', { class: 'time' }, time(leavesAt(dep)));
+  // (on the right: one of another day says so; with both, beyond the hour nothing, as the time is below)
+  const when = later ? h('span', { class: 'day' }, t('departures.tomorrow'))
+    : times === 'time' ? leaves()
+      : minutesNode(dep, times === 'minutes' ? 'time' : 'none', context);
   return h('button', { type: 'button', class: `row departure times-${times}${byLine ? ' by-line' : ''}${dep.cancelled ? ' cancelled' : ''}`, 'data-trip': dep.trip },
-    times === 'minutes' ? minutesNode(dep, 'time', context) : h('span', { class: 'time' }, time(leavesAt(dep))),
-    delayCell(dep.cancelled ? h('span', { class: 'delay' }) : times === 'minutes' ? delayNode(dep.delay) : delaySum(dep.planned, dep.delay, context), dep.warnings, signed, context),
     byLine ? null : badge(dep.line, dep.mode),
     h('span', { class: 'name', title: dep.to }, dep.to),
-    h('span', { class: 'platform' }, dep.cancelled ? t('departures.cancelled') : dep.platform ? t('stop.platform', { platform: dep.platform }) : ''),
-    later ? h('span', { class: 'day' }, t('departures.tomorrow')) : times === 'both' ? minutesNode(dep, 'none', context) : null,
+    h('span', { class: 'details' },
+      times === 'both' || later ? leaves() : null,
+      delayCell(dep.cancelled ? h('span', { class: 'delay' }) : times === 'minutes' ? delayNode(dep.delay) : delaySum(dep.planned, dep.delay, context), dep.warnings, signed, context),
+      h('span', { class: 'platform' }, dep.cancelled ? t('departures.cancelled') : dep.platform ? t('stop.platform', { platform: dep.platform }) : '')),
+    when,
   );
 }
 
@@ -242,7 +250,7 @@ export function lineLink(line, { t }) {
  * Every line of a stop with each way it goes from there and its next
  * departure (#255), under the kinds where there are several: the badge of
  * the line, which leads to it, beside its ways. A way with no departure in
- * the next 24 hours says so where the time stands and opens nothing.
+ * the next 24 hours says so where the minutes stand and opens nothing.
  * @param board as api/departures?list=lines answers, with `lines`
  */
 export function lineLists(board, context) {
@@ -254,8 +262,8 @@ export function lineLists(board, context) {
   const way = (line, { to, departure }) => h('li', {}, departure
     ? departureRow({ ...departure, line: line.name, mode: line.mode }, signed, context, true)
     : h('div', { class: `row departure times-${times} by-line resting` },
-      h('abbr', { class: 'later', title: t('lines.laterLong') }, t('lines.later')),
-      h('span', { class: 'name', title: to }, to)));
+      h('span', { class: 'name', title: to }, to),
+      h('abbr', { class: 'later', title: t('lines.laterLong') }, t('lines.later'))));
   return kinds.flatMap((kind) => [
     kinds.length > 1 ? h('h3', { class: 'rows-head' }, t(`mode.${kind}`)) : null,
     h('ul', { class: `line-rows${signed ? ' signed' : ''}` }, lines.filter((line) => kindOf(line.mode) === kind).map((line) =>

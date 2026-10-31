@@ -868,7 +868,11 @@ otherwise a server would load a file written by older code:
   "±0" alone. Beside
   minutes the delay stands alone. Minutes go up to an hour; a train further
   off shows the time it leaves in their place, and where the next day
-  begins, a line says "morgen". A board has up to four stops
+  begins, a line says "morgen". A departure in the details is a row in two
+  lines, in the order of the board: the line's badge, where it goes and on
+  the right when it leaves, the minutes or the time; below where it goes, in
+  small print, the time it leaves, the delay and the platform. Where it goes
+  has the width of the row, and a row is a finger high. A board has up to four stops
   ([#163](https://github.com/xiidoz/netnou/issues/163)), each in a block of
   its own or merged into the list of the block before it, the address naming
   them in the board's order (`with=`, `block=`). A merged list orders the
