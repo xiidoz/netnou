@@ -158,7 +158,7 @@ test('the head of a line: its name and kind, its operator and vehicles, and the 
   const line = { name: 'U1', mode: 'subway', agency: 'VAG', vehicles: [{ id: 'a' }, { id: 'b' }, { id: 'c' }], ways: [{ to: 'Langwasser Süd' }, { to: 'Fürth Hardhöhe' }] };
   const head = `<div class="panel-head"><h1><span class="badge" data-mode="subway">U1</span><span>${en['mode.subway']}</span></h1><p class="sub">VAG · 3 vehicles under way</p>`;
   assert.equal(toHtml(lineHead(line, drawing(), 1)), `${head}<p class="sub with-choice line-ways"><span>${en['line.toward']}</span><span class="view-switch ways" role="group" aria-label="${en['line.ways']}">`
-    + '<button type="button" aria-pressed="false" data-way="0" title="to Langwasser Süd">Langwasser Süd</button><button type="button" aria-pressed="true" data-way="1" title="to Fürth Hardhöhe">Fürth Hardhöhe</button></span></p></div>');
+    + '<button type="button" aria-pressed="false" data-way="0" title="to Langwasser Süd"><span>Langwasser Süd</span></button><button type="button" aria-pressed="true" data-way="1" title="to Fürth Hardhöhe"><span>Fürth Hardhöhe</span></button></span></p></div>');
   // none to switch: without a way shown, or with one way only, as around a ring; none under way
   assert.equal(toHtml(lineHead(line, drawing())), `${head}</div>`);
   assert.equal(toHtml(lineHead({ ...line, ways: [{ to: 'Ring' }] }, drawing(), 0)), `${head}</div>`);

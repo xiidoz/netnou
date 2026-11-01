@@ -413,7 +413,7 @@ export function lineHead(line, { t }, way = null) {
     way !== null && ways.length > 1
       ? h('p', { class: 'sub with-choice line-ways' }, h('span', {}, t('line.toward')),
         h('span', { class: 'view-switch ways', role: 'group', 'aria-label': t('line.ways') },
-          ways.map((one, i) => h('button', { type: 'button', 'aria-pressed': String(i === way), 'data-way': i, title: t('line.to', { destination: one.to }) }, one.to))))
+          ways.map((one, i) => h('button', { type: 'button', 'aria-pressed': String(i === way), 'data-way': i, title: t('line.to', { destination: one.to }) }, h('span', {}, one.to)))))
       : null);
 }
 
