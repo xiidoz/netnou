@@ -8,6 +8,14 @@ This file is written by
 messages when a release is made. Do not edit it by hand; see
 [Releases](CONTRIBUTING.md#releases).
 
+## [0.22.2](https://github.com/xiidoz/netnou/compare/v0.22.1...v0.22.2) (2026-11-01)
+
+
+### Bug Fixes
+
+* **map:** a place whose icon the map's style lacks gets the style's plain circle, no warning ([#293](https://github.com/xiidoz/netnou/issues/293)) ([7651621](https://github.com/xiidoz/netnou/commit/76516216dcbaeaa8a458bd9b5379f90c7ced80a9))
+* **page:** a folded card is its title row alone, and a trip names its delay data once ([#292](https://github.com/xiidoz/netnou/issues/292)) ([b65c276](https://github.com/xiidoz/netnou/commit/b65c27619bdf9bd3aca331d0ea0bb363de985077))
+
 ## [0.22.1](https://github.com/xiidoz/netnou/compare/v0.22.0...v0.22.1) (2026-11-01)
 
 
