@@ -545,6 +545,8 @@ button:focus-visible, select:focus-visible, .row:focus-visible, .panel:focus-vis
   outline: 2px solid var(--accent);
   outline-offset: 2px;
 }
+/* (a row inside its edge: the list it is in scrolls and would cut off a ring outside it, at its sides and against the rows above and below) */
+.row:focus-visible { outline-offset: -2px; }
 
 /* ---------- detail panel ---------- */
 
