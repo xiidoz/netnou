@@ -15,7 +15,7 @@ import { favouritesFrom, isFavourite, lineFavourite, sameStop, stopFavourite, wi
 import { choiceValue, readChoice, toggled } from './choice.js';
 import { DELAY_MAJOR_S, DELAY_MINOR_S, DELAY_SEVERE_S, MINUTES_MAX, NOTE_CHARS, badge as badgeOf, choiceChip as choiceChipOf, clockOf, delayCell as delayCellOf, delayClass, delayNode as delayNodeOf, delaySum as delaySumOf, delayFlag, delayText, departureLists, departuresSub as departuresSubOf, directionSign as directionSignOf, leavesAt, lineHead, lineLists, lineStops, minutesNode as minutesNodeOf, trackAt, VEHICLE_R, panelHead as panelHeadOf, stopHeading, tomorrowAt as tomorrowAtOf, untilText as untilTextOf, vehicleLabel, warningSign as warningSignOf, warns } from './panel.js';
 import { BOARD_MAX, BOARD_SHARE, BOARD_STOPS, boardBlocks, boardQuery, boardShare, displayQuery, ledBy, readBoard, readDisplay, readStops } from './display.js';
-import { mdiChevronRight, mdiCityVariantOutline, mdiFullscreen, mdiFullscreenExit, mdiHeart, mdiHeartOutline, mdiMinusCircleOutline, mdiPlus } from './vendor/material-design-icons/icons.js';
+import { mdiChevronLeft, mdiChevronRight, mdiCityVariantOutline, mdiFullscreen, mdiFullscreenExit, mdiHeart, mdiHeartOutline, mdiMinusCircleOutline, mdiPlus } from './vendor/material-design-icons/icons.js';
 import { AttributionControl, MapLibreMap, NavigationControl } from './vendor/maplibre-gl/maplibre-gl.mjs';
 
 // The modes, each with a chip where the timetable has it. Same ids as MODES in
@@ -869,7 +869,7 @@ function applyChoice(keys) {
   state.lines = keys;
   state.selection.linesAsked = true;
   if (state.display) writeAddress();
-  else history.replaceState(null, '', `${location.pathname}${boardQuery(location.search, state.board, state.extra, state.lines)}`);
+  else history.replaceState(history.state, '', `${location.pathname}${boardQuery(location.search, state.board, state.extra, state.lines)}`);
   if (isFavourite(favourites, 'stops', data)) {
     favourites = withChoice(favourites, data, keys);
     keepFavourites();
@@ -2658,15 +2658,20 @@ let servedAt = sentInAnother() ? null : here();
  */
 const stopPathOf = ({ name, lat, lon }) => stopPath(name, Math.round(lat * 1e5) / 1e5, Math.round(lon * 1e5) / 1e5);
 
-/** Puts the address of what is open into the address bar, as a new step back, and gives the page its title. */
-function showAddress(path, title) {
+/**
+ * Puts the address of what is open into the address bar, as a new step back,
+ * and gives the page its title.
+ * @param from the name of the details this was opened from (sheetName), kept
+ *   with the step for the way back to them (see "the way back")
+ */
+function showAddress(path, title, from = null) {
   if (path !== servedAt) {
     document.title = title ?? pageTitle;
     servedAt = null;
   }
   if (path === here()) return;
   // (the settings of the page in its address stay; a board, with its further stops, only where one is shown)
-  history.pushState(null, '', new URL(`${path}${boardQuery(location.search, state.board, state.extra, state.lines)}`, document.baseURI));
+  history.pushState(from ? { from } : null, '', new URL(`${path}${boardQuery(location.search, state.board, state.extra, state.lines)}`, document.baseURI));
 }
 
 /**
@@ -2690,14 +2695,14 @@ async function openAddress(loaded = false) {
   const found = await res.json();
   // (a stop that has moved a little, or has another name: the address it has now; that of a line or a trip without a board, which only a stop has)
   const search = found.type === 'stop' ? location.search : boardQuery(location.search, null);
-  if (found.path !== path || search !== location.search) history.replaceState(null, '', new URL(`${found.path}${search}`, document.baseURI));
+  if (found.path !== path || search !== location.search) history.replaceState(history.state, '', new URL(`${found.path}${search}`, document.baseURI));
   if (found.type === 'line') {
-    selectLine(found, { counted: loaded });
+    selectLine(found, { counted: loaded, from: history.state?.from });
     return true;
   }
   // (a trip, #178: the map is brought to it once it is there, see renderTrip, unless a display's address says where the map is)
   if (found.type === 'trip') {
-    select('trip', found.id, { counted: loaded, fit: !(loaded && state.viewAsked) });
+    select('trip', found.id, { counted: loaded, fit: !(loaded && state.viewAsked), from: history.state?.from });
     return true;
   }
   // (the board of the stop, where the address has one: a line has none; and its further stops, read before the board is written into the address again)
@@ -2714,7 +2719,7 @@ async function openAddress(loaded = false) {
   const kept = loaded && state.viewAsked;
   if (!kept) map.easeTo({ center: [found.lon, found.lat], zoom: Math.max(map.getZoom(), SEARCH_ZOOM), offset: board === null ? stopOffset() : [0, 0], duration: 0 });
   // (landing here, not on a board: the one tip may follow, once the departures are there)
-  select('station', null, { at: found, counted: loaded, kept, stops, tip: loaded && board === null, ...(lines ? { lines } : {}) });
+  select('station', null, { at: found, counted: loaded, kept, stops, tip: loaded && board === null, from: history.state?.from, ...(lines ? { lines } : {}) });
   return true;
 }
 
@@ -2923,13 +2928,13 @@ async function loadSelection(first = false) {
         const kept = selection.linesAsked || state.lines.length ? null : favourites.stops.find((stop) => sameStop(stop, data));
         const again = kept?.lines !== undefined;
         if (again) state.lines = readChoice(choiceValue(kept.lines));
-        showAddress(stopPathOf(data), stopTitle(data.name, data.town));
+        showAddress(stopPathOf(data), stopTitle(data.name, data.town), selection.from);
         shareable(true, true);
         // (a board keeps the stop it shows in the middle of the map, or all of its stops in view, unless the address of a display says where the map is)
         if (state.board !== null && !selection.kept) showBoardStops(data);
         if (again) {
           // (in the address as well, which showAddress leaves where it is that of the stop already)
-          if (!state.display) history.replaceState(null, '', `${location.pathname}${boardQuery(location.search, state.board, state.extra, state.lines)}`);
+          if (!state.display) history.replaceState(history.state, '', `${location.pathname}${boardQuery(location.search, state.board, state.extra, state.lines)}`);
           loadSelection();
           return;
         }
@@ -2939,11 +2944,11 @@ async function loadSelection(first = false) {
         selection.line = { ...selection.line, at: data.at };
         // (opened from a trip, in the direction that trip goes)
         if (data.way !== undefined) selection.way = data.way;
-        showAddress(data.path, lineTitle(data));
+        showAddress(data.path, lineTitle(data), selection.from);
         shareable(true);
       }
       if (first && selection.type === 'trip') {
-        showAddress(data.address, tripTitle(data));
+        showAddress(data.address, tripTitle(data), selection.from);
         shareable(true);
       }
       showSelection(first);
@@ -2990,6 +2995,7 @@ function fillPanel(head, ...nodes) {
   const keyed = focusNext ?? (panel.contains(document.activeElement) ? document.activeElement.dataset?.focus : undefined);
   focusNext = null;
   panelHead.replaceChildren(...head);
+  showWayBack();
   panelBody.replaceChildren(...nodes);
   mainHeading();
   fitNotes();
@@ -3035,10 +3041,11 @@ panel.addEventListener('click', (event) => {
   // (a link to the page of a line or a stop: opened in the details, unless it is to open elsewhere)
   if ((toLine || station) && (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey)) return;
   if (toLine || station) event.preventDefault();
-  if (row) select('trip', row.dataset.trip, { fit: 'unseen' });
-  else if (station) select('station', station.dataset.station);
+  // (what these details open has the way back to them: see "the way back")
+  if (row) select('trip', row.dataset.trip, { fit: 'unseen', from: sheetName() });
+  else if (station) select('station', station.dataset.station, { from: sheetName() });
   else if (way) showWay(Number(way.dataset.way));
-  else if (toLine) selectLine(JSON.parse(toLine.dataset.line));
+  else if (toLine) selectLine(JSON.parse(toLine.dataset.line), { from: sheetName() });
   else if (view) showView(view.dataset.view);
   else if (event.target.closest('.choice-open')) openChoice();
   else if (event.target.closest('.choice-clear')) applyChoice([]);
@@ -3046,6 +3053,29 @@ panel.addEventListener('click', (event) => {
 });
 
 const platformText = (platform) => (platform ? t('stop.platform', { platform }) : '');
+
+// The way back. There always is one: the device's Back, through the steps
+// showAddress makes. What is opened from other details shows it above its
+// name, "‹ Nürnberg Plärrer", named after those details, and takes the same
+// step back: a trip from the departures of a stop, a stop from the stops of a
+// trip or a line, a line from its badge, a trip from the vehicles of a line.
+// Their name is kept with the step (history.state.from), so that it is there
+// again after a step forward or a reload. Not on a board, and not on a display.
+
+/** What the details show, by name: a stop's or a line's name, a trip's line and where it goes; null before it has come. */
+function sheetName() {
+  const { type, data } = state.selection ?? {};
+  if (!data) return null;
+  return type === 'trip' ? `${data.line} → ${data.to}` : data.name ?? null;
+}
+
+/** Puts the way back above the name in the head of the details, where they were opened from others. */
+function showWayBack() {
+  const from = state.selection?.from;
+  const head = panelHead.querySelector('.panel-head');
+  if (!from || !head || state.board !== null || state.display) return;
+  head.prepend(el('button', { type: 'button', class: 'panel-back', 'aria-label': t('panel.back', { name: from }), data: { focus: 'back' }, onclick: () => history.back() }, [icon(mdiChevronLeft), el('span', { text: from })]));
+}
 
 function badge(line, mode, ...more) {
   return toDom(badgeOf(line, mode, ...more));
@@ -3247,7 +3277,7 @@ function renderTrip(trip, scrollToNext) {
     if (isNext) classes.push('next');
     if (stop.skipped) classes.push('cancelled');
     if (towns[i]) classes.push('in-town');
-    const row = el('button', { type: 'button', class: classes.join(' '), onclick: () => select('station', stop.station) }, [
+    const row = el('button', { type: 'button', class: classes.join(' '), onclick: () => select('station', stop.station, { from: sheetName() }) }, [
       el('span', { class: 'rail' }),
       el('span', { class: 'time', text: formatTime(leavesAt({ planned, delay })) }),
       stop.skipped ? el('span') : delaySum(planned, delay),
@@ -3266,7 +3296,7 @@ function renderTrip(trip, scrollToNext) {
   // The badge leads to the line, whichever way the trip was chosen (#147),
   // with a sign in it: a finger cannot rest on it to find out.
   const line = { name: trip.line, mode: trip.mode, agency: trip.agency, at: trip.lineAt };
-  const toLine = el('button', { type: 'button', class: 'to-line', 'aria-label': t('line.open', { line: trip.line }), title: t('line.open', { line: trip.line }), onclick: () => selectLine(line, { fromTrip: trip.id }) }, [
+  const toLine = el('button', { type: 'button', class: 'to-line', 'aria-label': t('line.open', { line: trip.line }), title: t('line.open', { line: trip.line }), onclick: () => selectLine(line, { fromTrip: trip.id, from: sheetName() }) }, [
     badge(trip.line, trip.mode, icon(mdiChevronRight)),
   ]);
   fillPanel(
@@ -3702,7 +3732,7 @@ function setBoard(share, written = true) {
 /** Puts the board into the address of the page, or takes it out. */
 function writeBoard() {
   if (state.display) writeAddress();
-  else history.replaceState(null, '', `${location.pathname}${boardQuery(location.search, state.board, state.extra, state.lines)}`);
+  else history.replaceState(history.state, '', `${location.pathname}${boardQuery(location.search, state.board, state.extra, state.lines)}`);
 }
 
 
@@ -3980,7 +4010,7 @@ async function openNextStop(path) {
     // (the lists stay as the address has them, for when it is back)
     const rest = ledBy([{ path: first, joined: false }, ...stops], stop).slice(1);
     boardStopData.set(first, { gone: true, askedAt: Date.now() });
-    history.replaceState(null, '', new URL(`${found.path}${boardQuery(location.search, board, rest)}`, document.baseURI));
+    history.replaceState(history.state, '', new URL(`${found.path}${boardQuery(location.search, board, rest)}`, document.baseURI));
     return openAddress();
   }
   return false;
@@ -4193,7 +4223,7 @@ function applyBoardList(list, focus) {
     // (the lines chosen were of the stop that led)
     state.lines = [];
     // (in place of the address so far, not as a step back: then the title, which showAddress gives it without a step there)
-    history.replaceState(null, '', new URL(`stop/${list[0].path}${location.search}`, document.baseURI));
+    history.replaceState(history.state, '', new URL(`stop/${list[0].path}${location.search}`, document.baseURI));
     showAddress(`stop/${list[0].path}`, stopTitle(first.name, first.departures?.town));
   }
   state.extra = list.slice(1);
@@ -4531,7 +4561,7 @@ function displaySearch(fixed) {
 function writeAddress() {
   if (!state.areaKnown) return;
   // (with the path, as above)
-  history.replaceState(null, '', `${location.pathname}${displaySearch(FIXED)}`);
+  history.replaceState(history.state, '', `${location.pathname}${displaySearch(FIXED)}`);
 }
 
 /** Marks the page as a display, for the style sheet. */
