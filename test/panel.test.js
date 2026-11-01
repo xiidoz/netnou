@@ -119,10 +119,11 @@ test('the head of the details has the name as the main heading, the switch betwe
   const one = toHtml(choiceChip([{ line: 'U1', mode: 'subway', heading: 61, name: 'Langwasser Süd' }], context));
   assert.match(one, /^<span class="choice chosen"><button [^>]*aria-label="Only U1 Langwasser Süd"/);
   assert.ok(one.includes('<svg class="direction-sign" viewBox="-17 -17 34 34" aria-hidden="true" data-mode="subway"><path d="M0,-16L5.65,-8.25L-5.65,-8.25Z" transform="rotate(61)"></path><circle r="10"></circle><text y="3.2" text-anchor="middle">U1</text></svg><span>Langwasser Süd</span></button><button type="button" class="choice-clear" aria-label="Show all lines"'));
-  // five: four signs and how many more
+  // several: how many, without signs, whose arrowheads alone would tell their ways apart; a screen reader hears each
   const five = toHtml(choiceChip(['1', '2', '3', '4', '5'].map((line) => ({ line, mode: 'bus', heading: null, name: 'X' })), context));
-  assert.equal(five.match(/class="direction-sign"/g).length, 4);
-  assert.ok(five.includes('<span>+1</span>'));
+  assert.equal(five.match(/class="direction-sign"/g), null);
+  assert.ok(five.includes('<span>Only 5 directions</span>'));
+  assert.match(five, /aria-label="Only 1 X, 2 X, 3 X, 4 X, 5 X"/);
   // a long name of a line narrower, as on the map
   assert.ok(toHtml(directionSign({ line: 'N10A', mode: 'bus' })).includes('<text y="3.2" text-anchor="middle" textLength="17" lengthAdjust="spacingAndGlyphs">N10A</text>'));
 });

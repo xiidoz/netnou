@@ -292,14 +292,17 @@ export function directionSign({ line, mode, heading = null }) {
  * The chip beside the switch of a stop that says which lines its next
  * departures are of and opens the sheet to choose them (#164): "Filter"
  * while it shows every line (#255: "All lines" is the list beside it), or
- * "only" and the signs of the directions chosen, with the name of the one
- * where it is one, and a cross that shows all again.
+ * "only" and the one direction chosen, its sign and its name, or how many
+ * where they are several: which way each of them goes would be no more than
+ * the arrowhead of its sign there, and the departures below name it. With a
+ * cross that shows all again.
  * @param chosen the directions chosen, each with its `name` (directionName in app.js)
  */
 export function choiceChip(chosen, { t }) {
   const parts = !chosen.length
     ? [h('span', {}, t('choice.filter'))]
-    : [h('span', {}, t('choice.only')), chosen.slice(0, 4).map(directionSign), chosen.length === 1 ? h('span', {}, chosen[0].name) : chosen.length > 4 ? h('span', {}, t('choice.more', { count: chosen.length - 4 })) : null];
+    : chosen.length === 1 ? [h('span', {}, t('choice.only')), directionSign(chosen[0]), h('span', {}, chosen[0].name)]
+      : [h('span', {}, t('choice.several', { count: chosen.length }))];
   const label = chosen.length ? `${t('choice.only')} ${chosen.map((direction) => `${direction.line} ${direction.name}`).join(', ')}` : t('choice.filter');
   return h('span', { class: `choice${chosen.length ? ' chosen' : ''}` },
     h('button', { type: 'button', class: 'choice-open', 'aria-label': label, 'aria-haspopup': 'dialog', title: t('choice.title') }, iconOf(mdiFilterVariant), parts),
