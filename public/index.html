@@ -25,7 +25,30 @@
        i18n.js). data-icon names the icon the server draws into an element, one
        of vendor/material-design-icons. No inline scripts or styles: the
        Content-Security-Policy of the server forbids them. -->
-  <div id="map" role="application" aria-label="Map with the current positions of the vehicles" data-i18n-aria-label="map.label"></div>
+
+  <!-- In the order of the page, which is that of the keyboard and of a
+       screen reader: the details first where they are open, what is being
+       looked at, with its name as the main heading of the page; then the
+       card; then the map with its buttons and its sources. On the screen the
+       cards lie over the map whatever the order (z-index in style.css). In
+       the details the way back and the name come before the buttons in their
+       corner. -->
+  <!-- The details of a trip, a stop or a line: what they are stays at the top
+       (panel-head) and what is listed scrolls below it (panel-body). On a
+       narrow screen it is a sheet from the bottom that the bar at its top
+       and its head move, see "the details as a sheet" in app.js. -->
+  <aside class="card panel" id="panel" hidden tabindex="-1" aria-label="Details" data-i18n-aria-label="panel.label">
+    <button type="button" class="handle" id="panel-handle" aria-label="Make the details larger or smaller" data-i18n-aria-label="panel.resize"></button>
+    <p class="copied" id="panel-copied" role="status" hidden data-i18n="panel.copied">Address copied</p>
+    <p class="copied favourited" id="panel-favourited" role="status" hidden data-i18n="panel.favourited">Favourited: at the top of the search</p>
+    <div id="panel-head"></div>
+    <!-- a stop or a line as a favourite, first in the search (#245) -->
+    <button type="button" class="heart" id="panel-favourite" hidden aria-label="Add to favourites" data-i18n-aria-label="panel.favourite" title="Add to favourites" data-i18n-title="panel.favourite" data-icon="mdiHeartOutline"></button>
+    <!-- the address of a stop or a line, for others (#37) -->
+    <button type="button" class="share" id="panel-share" hidden aria-label="Share" data-i18n-aria-label="panel.share" title="Share" data-i18n-title="panel.share" data-icon="mdiShareVariant"></button>
+    <button type="button" class="close" id="panel-close" aria-label="Close" data-i18n-aria-label="panel.close" title="Close" data-i18n-title="panel.close" data-icon="mdiClose"></button>
+    <div id="panel-body"></div>
+  </aside>
 
   <!-- Out of sight until it is what this visitor gets (.controls in style.css):
        at once where the page came that way, which first.js finds out, else
@@ -143,22 +166,7 @@
     <button type="button" class="card-grip" id="card-grip" aria-expanded="true" aria-controls="controls" aria-label="Fold or unfold the controls" data-i18n-aria-label="controls.fold" title="Fold or unfold the controls" data-i18n-title="controls.fold" data-icon="mdiChevronUp"></button>
   </header>
 
-  <!-- The details of a trip, a stop or a line: what they are stays at the top
-       (panel-head) and what is listed scrolls below it (panel-body). On a
-       narrow screen it is a sheet from the bottom that the bar at its top
-       and its head move, see "the details as a sheet" in app.js. -->
-  <aside class="card panel" id="panel" hidden tabindex="-1" aria-label="Details" data-i18n-aria-label="panel.label">
-    <button type="button" class="handle" id="panel-handle" aria-label="Make the details larger or smaller" data-i18n-aria-label="panel.resize"></button>
-    <!-- a stop or a line as a favourite, first in the search (#245) -->
-    <button type="button" class="heart" id="panel-favourite" hidden aria-label="Add to favourites" data-i18n-aria-label="panel.favourite" title="Add to favourites" data-i18n-title="panel.favourite" data-icon="mdiHeartOutline"></button>
-    <!-- the address of a stop or a line, for others (#37) -->
-    <button type="button" class="share" id="panel-share" hidden aria-label="Share" data-i18n-aria-label="panel.share" title="Share" data-i18n-title="panel.share" data-icon="mdiShareVariant"></button>
-    <button type="button" class="close" id="panel-close" aria-label="Close" data-i18n-aria-label="panel.close" title="Close" data-i18n-title="panel.close" data-icon="mdiClose"></button>
-    <p class="copied" id="panel-copied" role="status" hidden data-i18n="panel.copied">Address copied</p>
-    <p class="copied favourited" id="panel-favourited" role="status" hidden data-i18n="panel.favourited">Favourited: at the top of the search</p>
-    <div id="panel-head"></div>
-    <div id="panel-body"></div>
-  </aside>
+  <div id="map" role="application" aria-label="Map with the current positions of the vehicles" data-i18n-aria-label="map.label"></div>
 
   <!-- How the page comes by what it shows, for whoever asks. A dialog over the
        page: in the middle of a wide screen, a sheet from the bottom on a
