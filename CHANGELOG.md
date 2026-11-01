@@ -8,6 +8,13 @@ This file is written by
 messages when a release is made. Do not edit it by hand; see
 [Releases](CONTRIBUTING.md#releases).
 
+## [0.22.1](https://github.com/xiidoz/netnou/compare/v0.22.0...v0.22.1) (2026-11-01)
+
+
+### Bug Fixes
+
+* **page:** the keyboard reaches the details first and the map last, and a row's ring is whole ([#290](https://github.com/xiidoz/netnou/issues/290)) ([a9c8704](https://github.com/xiidoz/netnou/commit/a9c8704ed65590e68f3fe8a97fabeda28a7a4cdd))
+
 ## [0.22.0](https://github.com/xiidoz/netnou/compare/v0.21.0...v0.22.0) (2026-11-01)
 
 
