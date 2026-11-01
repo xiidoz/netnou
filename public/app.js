@@ -2476,8 +2476,8 @@ let panelTimer = null;
 // (what had the keyboard focus when the details opened: see closePanel)
 let panelOpener = null;
 
-// The header card folds (data-fold, style.css) to its title row and the line
-// that positions are calculated. Its grip, a row at its foot, folds and
+// The header card folds (data-fold, style.css) to its title row: it has two
+// heights, that and all of it. Its grip, a row at its foot, folds and
 // unfolds it, with a tap or a pull. On a phone it folds by itself while the
 // details of a stop, a line or a trip are open, so that the map has the room
 // between it and them; unfolded there, it folds again when the map or the
@@ -3367,8 +3367,12 @@ function renderTrip(trip, scrollToNext) {
   const list = el('ul', { class: 'rows' }, rows);
   list.style.setProperty('--badge-color', `var(--mode-${trip.mode})`);
   const mode = t(`mode.${DRAW_ORDER.includes(trip.mode) ? trip.mode : 'other'}`);
-  // Who provides the realtime data shown leads the notes, which are feed content and stay as they are.
-  const source = trip.realtime && trip.source ? [t('trip.source', { source: trip.source })] : [];
+  // Who provides the realtime data shown leads the notes, which are feed
+  // content and stay as they are – where that is another than the operator
+  // named in the line below the name. Of its operator's own, that line says
+  // "with delay data": once, not twice.
+  const othersData = Boolean(trip.realtime && trip.source && trip.source !== trip.agency);
+  const source = othersData ? [t('trip.source', { source: trip.source })] : [];
   // The badge leads to the line, whichever way the trip was chosen (#147),
   // with a sign in it: a finger cannot rest on it to find out.
   const line = { name: trip.line, mode: trip.mode, agency: trip.agency, at: trip.lineAt };
@@ -3379,7 +3383,7 @@ function renderTrip(trip, scrollToNext) {
     [
       el('div', { class: 'panel-head' }, [
         el('h1', {}, [toLine, el('span', { text: `→ ${to}` })]),
-        el('p', { class: 'sub', text: [mode, trip.agency, trip.realtime ? t('trip.realtime') : t('trip.scheduleOnly')].filter(Boolean).join(' · ') }),
+        el('p', { class: 'sub', text: [mode, trip.agency, othersData ? null : trip.realtime ? t('trip.realtime') : t('trip.scheduleOnly')].filter(Boolean).join(' · ') }),
         notesList(trip.notes, source, trip.cancelled ? t('trip.cancelled') : null),
       ]),
     ],
