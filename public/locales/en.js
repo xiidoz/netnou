@@ -182,12 +182,12 @@ export default {
   'panel.favourited': 'Favourited: at the top of the search',
   // the button that enlarges the details of a stop into a board of its departures, and the one that makes the board the details again
   'panel.enlarge': 'Enlarge',
-  'panel.shrink': 'Make smaller',
+  'panel.board': 'Board',
   // a board of several stops (#163): the button at its foot that adds a stop as a block of its own, and what the search says while it adds one
   'board.another': 'Another stop',
   'board.addTitle': 'Add to the board',
   // the button at the heading of a block that adds a stop to its list (heard, not seen), and what the search says while it does
-  'board.merge': 'Show another stop together with {stop}',
+  'board.own': 'As a list of its own',
   'board.mergeTitle': 'Show together with {stop}',
   // the minus after the name of a stop on a board of several (heard, not seen)
   'board.remove': 'Take {stop} off the board',

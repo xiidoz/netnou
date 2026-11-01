@@ -351,17 +351,17 @@ https://example.org/stop/nuernberg-plaerrer@49.4481,11.0648?display=fixed&board=
 | --- | --- | --- |
 | `board=<share>` | the departures as a board that takes this share of the screen in percent, from 25 to 75: on the right of the map, or below it on a screen standing upright; `board=100` is all of the screen, without the map | the map alone |
 
-To set it up, open the stop and press the button with the two arrows in its
-details. Drag the edge between map and board to where it should be, and set
+To set it up, open the stop and press "Tafel" ("Board") below its name in
+its details; on the board the same chip, pressed, goes back. Drag the edge between map and board to where it should be, and set
 how the times show and whether the board has a clock behind the gear. Then
 press "Als Wandbildschirm" there, as above.
 
 A board can show up to four stops: the bus in front of the house and the
 U-Bahn around the corner. Each stop is in a block of its own, or in one list
 with others, their departures together in the order they leave and the stop
-under each. "Weitere Haltestelle" at the foot of the board adds a stop as a
-block of its own; the button with the list at the heading of a block adds one
-to that list; the minus after a name takes that stop away. On a wide board the
+under each. "Weitere Haltestelle" at the foot of the board asks how to add a
+stop: "Als eigene Liste" as a block of its own, or "Mit … zusammen zeigen" into
+the list of a stop the board has; the minus after a name takes that stop away. On a wide board the
 blocks stand side by side. The address names the further stops after the
 board, in its order:
 

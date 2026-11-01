@@ -493,6 +493,8 @@ test('the page of a stop or a line has its details in it as they are, with their
     + '<span class="badge" data-mode="subway">U1<svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M8.59,16.58L13.17,12L8.59,7.41L10,6L16,12L10,18L8.59,16.58Z"></path></svg></span></a>'
     + '<ul><li><button type="button" class="row departure times-both by-line" data-trip="T1_20261023"><span class="name" title="Langwasser Süd">Langwasser Süd</span><span class="details"><span class="time">12:05</span><span class="delay" data-delay="ok"><span class="planned"><span aria-hidden="true">12:04</span><span class="spoken">geplant 12:04 </span></span>+1</span><span class="platform">Gl. 2</span></span>'
     + `<span class="minutes" data-leaves="${now + 300}" data-far="none">5 min</span></button></li></ul></li></ul></div>`);
+  // and "Tafel", which makes the details the board
+  assert.ok(stop.head.includes('<button type="button" class="board-open" aria-pressed="false" aria-label="Als Tafel zeigen" title="Als Tafel zeigen">'));
   // a screen on a wall set up for one purpose has neither switch nor chip, nor the lines
   const fixed = panelHtml('stop', board, { ...at, fixed: true });
   assert.equal(fixed.head, '<div class="panel-head"><h1>Plärrer</h1><p class="sub">Abfahrten</p></div>');

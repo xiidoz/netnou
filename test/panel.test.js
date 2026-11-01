@@ -94,7 +94,7 @@ test('a stop whose name does not say its town has the town below its name, in th
   assert.equal(toHtml(panelHead(stopHeading('Basel SBB', null))), '<div class="panel-head"><h1>Basel SBB</h1></div>');
 });
 
-test('the head of the details has the name as the main heading, the switch between the departures and the lines, and the chip of the lines to show', () => {
+test('the head of the details has the name as the main heading, the switch between the departures and the lines, the chip of the lines to show, and the one of the board', () => {
   const context = drawing();
   assert.equal(toHtml(panelHead('Plärrer', h('p', { class: 'sub' }, 'Departures'))), '<div class="panel-head"><h1>Plärrer</h1><p class="sub">Departures</p></div>');
   // every line: "Filter", as "All lines" is the list beside it (#255)
@@ -104,6 +104,14 @@ test('the head of the details has the name as the main heading, the switch betwe
   const views = (view) => `<span class="view-switch" role="group" aria-label="View"><button type="button" aria-pressed="${view === 'departures'}" data-view="departures">Next departures</button><button type="button" aria-pressed="${view === 'lines'}" data-view="lines">All lines</button></span>`;
   assert.equal(toHtml(departuresSub('departures', all, context)), `<p class="sub with-choice">${views('departures')}${toHtml(all)}</p>`);
   assert.equal(toHtml(departuresSub('lines', all, context)), `<p class="sub with-choice">${views('lines')}</p>`);
+  // where there can be a board, "Board" after the chips, in either view, which a screen reader hears as what it does;
+  // on the board the same chip, pressed, with the sign that points back
+  const chip = (pressed) => new RegExp(`<button type="button" class="board-open" aria-pressed="${pressed}" aria-label="Enlarge" title="Enlarge"><svg class="icon" [^>]*><path d="[^"]+"></path></svg><span>Board</span></button></p>$`);
+  assert.match(toHtml(departuresSub('departures', all, context, 'details')), chip(false));
+  assert.match(toHtml(departuresSub('lines', all, context, 'details')), chip(false));
+  assert.match(toHtml(departuresSub(null, all, context, 'board')), chip(true));
+  const sign = (board) => toHtml(departuresSub(null, all, context, board)).match(/<path d="([^"]+)"><\/path><\/svg><span>Board/)[1];
+  assert.notEqual(sign('board'), sign('details'));
   // a board has no switch, and a screen on a wall not even the chip
   assert.equal(toHtml(departuresSub(null, all, context)), `<p class="sub with-choice"><span>Departures</span>${toHtml(all)}</p>`);
   assert.equal(toHtml(departuresSub(null, null, context)), '<p class="sub">Departures</p>');
