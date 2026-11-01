@@ -210,20 +210,37 @@ export class FeedUpdater {
           downloadTimeoutMs: this.downloadTimeoutMs,
         },
       });
+      // It is over when the worker has stopped, not before: by then every
+      // message it sent has been handled. An error it throws comes on a way
+      // of its own and may overtake the progress it reported just before
+      // (Node hands the worker's messages over before 'exit', not before
+      // 'error'); such a message would set the status to loading again after
+      // check() had said the import failed. And where the dataset it saved
+      // cannot be loaded, the worker is stopped, so that it does not go on to
+      // the routes and report that.
       let done = false;
+      let failure = null;
       worker.on('message', (msg) => {
+        if (failure) return;
         if (msg.progress) this.progress(msg.step, msg.progress);
         if (msg.done) done = true;
         if (msg.saved) {
           try {
             this.load();
           } catch (err) {
-            reject(err);
+            failure = err;
+            worker.terminate();
           }
         }
       });
-      worker.on('error', reject);
-      worker.on('exit', (code) => (done ? resolve() : reject(new Error(`import worker stopped (exit code ${code})`))));
+      worker.on('error', (err) => {
+        failure ??= err;
+      });
+      worker.on('exit', (code) => {
+        if (failure) reject(failure);
+        else if (done) resolve();
+        else reject(new Error(`import worker stopped (exit code ${code})`));
+      });
     });
   }
 }
