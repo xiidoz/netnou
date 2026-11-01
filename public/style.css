@@ -184,9 +184,8 @@ button { font: inherit; color: inherit; }
 .settings-open:hover, .settings-open[aria-expanded="true"], .display-toggle:hover { color: var(--text); }
 /* The grip of the header card: a row at its foot with a pill across, as the
    details have one at their head, and part of the card. A tap or a pull
-   folds the card to its title row and the line that positions are
-   calculated, and unfolds it (app.js); on a phone it folds by itself while
-   details are open. The eye is there only to leave display mode.
+   folds the card to its title row and unfolds it (app.js); on a phone it
+   folds by itself while details are open. The eye is there only to leave display mode.
    For a finger it reaches from 8 px below the line above it (the link "How
    it works" ends there) to 40 px below that: the row in the card, and under
    the pill a tab of 160 px over the map. The card is as high as without it,
@@ -215,11 +214,11 @@ button { font: inherit; color: inherit; }
 .controls.sized .card-grip { position: absolute; left: 0; bottom: 0; width: 100%; margin: 0; }
 .controls.dragging { transition: none; }
 :root[data-board] .card-grip, :root[data-display] .card-grip, :root:not([data-display]) .display-toggle { display: none; }
-:root[data-fold]:not([data-board]) .controls > :not(.title, .status, .bubble, .hint, .card-grip),
+:root[data-fold]:not([data-board]) .controls > :not(.title, .status, .bubble, .card-grip),
 :root[data-fold]:not([data-board]) .status:not([data-state="outage"], [data-state="error"]) { display: none; }
 :root[data-fold]:not([data-board]) .search-open,
 :root[data-fold]:not([data-board]) .search-close { display: grid; }
-:root[data-fold]:not([data-board]) .controls.searching :is(.title, .hint) { display: none; }
+:root[data-fold]:not([data-board]) .controls.searching .title { display: none; }
 :root[data-fold]:not([data-board]) .controls.searching .search { display: flex; }
 
 /* The settings: a small box that hangs at the gear, with a tip that points to
