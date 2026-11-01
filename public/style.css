@@ -193,7 +193,8 @@ button { font: inherit; color: inherit; }
    and the pill where it would be. */
 .card-grip { position: relative; display: block; width: calc(100% + 28px); height: 11px; margin: 1px -14px -12px; padding: 0; border: 0; border-radius: 0 0 12px 12px; background: none; color: var(--text-muted); cursor: pointer; touch-action: none; }
 .card-grip::before { content: ""; position: absolute; left: calc(50% - 18px); top: -2px; width: 36px; height: 4px; border-radius: 2px; background: var(--border); }
-.card-grip::after { content: ""; position: absolute; left: calc(50% - 80px); top: 100%; width: 160px; height: 29px; touch-action: none; }
+/* (as far as there is map below the card: not onto the details, whose bar may be right there, app.js sets --reach) */
+.card-grip::after { content: ""; position: absolute; left: calc(50% - 80px); top: 100%; width: 160px; height: var(--reach, 29px); touch-action: none; }
 .card-grip .icon { display: none; }
 /* (held, the pill darkens at once, on this grip as on that of the details) */
 .card-grip:active::before, .card-grip.grabbed::before, .handle:active::before { background: var(--text-muted); }
