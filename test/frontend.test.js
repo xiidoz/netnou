@@ -256,7 +256,7 @@ test('index.html carries the English texts and marks them for translation', () =
 // one that is not there.
 test('what app.js writes into the address bar keeps the stop or the line that is open', () => {
   // (the page has a base, where the instance is: an address of a query alone would be taken from there, without the path)
-  const writes = [...withoutComments(read('app.js')).matchAll(/history\.(?:push|replace)State\(null, '', ([^;]*)\);/g)];
+  const writes = [...withoutComments(read('app.js')).matchAll(/history\.(?:push|replace)State\([^,]+, '', ([^;]*)\);/g)];
   assert.ok(writes.length >= 4, `only ${writes.length} writes found`);
   for (const [call, address] of writes) assert.match(address, /^(`\$\{location\.pathname\}|new URL\()/, call);
 });
@@ -277,7 +277,8 @@ test('what is opened or closed after a board or a vehicle on the map leaves a st
   const app = withoutComments(read('app.js'));
   assert.deepEqual(app.match(/setBoard\(null\b[^)]*\)/g), ['setBoard(null, false)', 'setBoard(null, false)']);
   // (the next address has a board where one is shown, not where the address before had one; and the lines chosen of a stop that is open, #164)
-  assert.match(app, /history\.pushState\(null, '', new URL\(`\$\{path\}\$\{boardQuery\(location\.search, state\.board, state\.extra, state\.lines\)\}`/);
+  // (with the name of the details it was opened from, where it was, for the way back to them)
+  assert.match(app, /history\.pushState\(from \? \{ from \} : null, '', new URL\(`\$\{path\}\$\{boardQuery\(location\.search, state\.board, state\.extra, state\.lines\)\}`/);
   // (a vehicle chosen on the map goes straight to its trip, not by the map alone)
   const click = app.slice(app.indexOf("map.on('click'"));
   assert.doesNotMatch(click.slice(0, click.indexOf('});')), /showAddress/);

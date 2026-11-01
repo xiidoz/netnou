@@ -773,7 +773,11 @@ otherwise a server would load a file written by older code:
   Its button to close is in sight, as on a wide screen, beside the share
   button and the heart; "Tafel" below the name of a stop makes the details
   its board. "How it works" is such a sheet too, with its button to close,
-  and closes when it is dragged down as well. All of
+  and closes when it is dragged down as well. Details opened from other
+  details have the way back to them above their name, named after them
+  ("‹ Nürnberg Plärrer", "‹ 84 → Dr. Erler Kliniken"): the step back the
+  device's Back takes too, whose entry in the history keeps the name
+  (`history.state.from`), also after a reload. All of
   this is plain pointer events in `app.js`.
 - **The header card folds.** A grip at its foot folds it to its title row
   and the line that says positions are calculated, and unfolds it again: a

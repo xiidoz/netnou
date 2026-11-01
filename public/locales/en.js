@@ -170,6 +170,7 @@ export default {
 
   'panel.label': 'Details',
   'panel.close': 'Close',
+  'panel.back': 'Back to {name}',
   // on the bar at the top of the details where they are a sheet from the bottom: a tap makes it one step higher, and lower again from the highest
   'panel.resize': 'Make the details larger or smaller',
   'panel.loading': 'Loading …',

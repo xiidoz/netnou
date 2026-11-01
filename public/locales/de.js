@@ -131,6 +131,7 @@ export default {
 
   'panel.label': 'Details',
   'panel.close': 'Schließen',
+  'panel.back': 'Zurück zu {name}',
   'panel.resize': 'Details größer oder kleiner machen',
   'panel.loading': 'Lade …',
   'panel.noData': 'Dazu liegen gerade keine Daten vor.',

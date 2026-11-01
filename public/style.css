@@ -603,6 +603,11 @@ button:focus-visible, select:focus-visible, .row:focus-visible, .panel:focus-vis
 .panel .copied.favourited { right: 8px; }
 
 .panel-head { padding: 14px 48px 10px 14px; border-bottom: 1px solid var(--border); }
+/* The way back to the details these were opened from, above their name (app.js, "the way back"): it keeps clear of the buttons at the top. */
+.panel-back { display: inline-flex; align-items: center; gap: 2px; max-width: calc(100% - 116px); margin: -4px 0 4px -6px; padding: 2px 8px 2px 2px; border: 0; border-radius: 999px; background: none; color: var(--accent); font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; }
+.panel-back .icon { flex: none; width: 18px; height: 18px; }
+.panel-back span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.panel-back:hover span { text-decoration: underline; }
 /* (the heading beside the two buttons; what is below it is clear of them) */
 .panel.shareable .panel-head h1, .panel.shareable .panel-head h2 { padding-right: 38px; }
 .panel.favourable .panel-head h1, .panel.favourable .panel-head h2 { padding-right: 76px; }
