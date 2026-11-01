@@ -70,6 +70,8 @@ const MIN_ZOOM = 5;
 const MAX_ZOOM = 17;
 // From LABEL_ZOOM vehicles carry their line and follow their route.
 const LABEL_ZOOM = 12;
+// The radius of a vehicle that carries its line, at LABEL_ZOOM.
+const LABEL_R = 10;
 // Stations appear from STATION_ZOOM (rail only) and from ALL_STATIONS_ZOOM (all).
 const STATION_ZOOM = 12;
 const ALL_STATIONS_ZOOM = 14;
@@ -287,6 +289,7 @@ const state = {
   view: 'departures', // what the open stop shows, of VIEWS in panel.js: its next departures or all its lines (#255)
   hits: [], // what can be pointed at on the map: { x, y, r, vehicle or station; named: a stop with its name on the map }, see draw()
   covers: [], // the boxes of the bubbles, which hide what is under them: [x, y, width, height]
+  peek: null, // the id of the vehicle a pointer rests on while vehicles are dots: drawn as zoomed in, see "the peek"
   chosenAt: null, // where on the screen the chosen vehicle is drawn, if it is in view: { x, y, … }
   position: null, // the visitor's own while they have it shown: { lat, lon, accuracy in metres, stale }
   follow: false, // the map stays centred on it
@@ -1244,7 +1247,7 @@ function draw() {
   // How large the vehicles are. Those of a line that is looked at are few and
   // what the map is about: they carry their name at any zoom.
   const labeled = zoom >= LABEL_ZOOM || Boolean(only);
-  const r = labeled ? (zoom >= 14 ? 11 : 10) : 4.5;
+  const r = labeled ? (zoom >= 14 ? 11 : LABEL_R) : 4.5;
   // A vehicle without a reported delay carries a sign of that – while others
   // have one. Without any realtime data the card says so once (updateStatus).
   const live = realtimeState() === 'live';
@@ -1296,6 +1299,14 @@ function draw() {
   let chosen = null;
   const isChosen = (v) => selection?.type === 'trip' && selection.id === v.id;
   const named = []; // those that are drawn with their name: { v, x, y, a }
+  let peeked = null; // the one a pointer rests on, zoomed out: { v, x, y, a }
+  // under way: the direction, towards the next stop
+  const headingAt = (v, target) => {
+    if (target.k <= 0) return null;
+    const [ax, ay] = project(v.knots[target.k - 2], v.knots[target.k - 1]);
+    const [bx, by] = project(v.knots[target.k + 1], v.knots[target.k + 2]);
+    return Math.atan2(by - ay, bx - ax);
+  };
 
   for (const v of state.drawList) {
     if (only ? !only.has(v.id) : !state.enabled.has(v.mode)) continue;
@@ -1313,24 +1324,42 @@ function draw() {
     if (!settling && Math.abs(target.lat - v.lat) * pxPerLat + Math.abs(target.lon - v.lon) * pxPerLon > STILL_PX) settling = true;
 
     if (!labeled) {
+      // (the one a pointer rests on after the loop, over the others: see "the peek")
+      if (v.id === state.peek) {
+        peeked = { v, x, y, a: headingAt(v, target) };
+        continue;
+      }
       hits.push({ x, y, r: Math.max(r + 3, 10), vehicle: v });
       // (the chosen one after the loop)
       if (isChosen(v)) chosen = { x, y, dot: v };
       else drawDisc(x, y, r, v, false);
       continue;
     }
-    // under way: the direction, towards the next stop
-    let a = null;
-    if (target.k > 0) {
-      const [ax, ay] = project(v.knots[target.k - 2], v.knots[target.k - 1]);
-      const [bx, by] = project(v.knots[target.k + 1], v.knots[target.k + 2]);
-      a = Math.atan2(by - ay, bx - ax);
-    }
-    named.push({ v, x, y, a });
+    named.push({ v, x, y, a: headingAt(v, target) });
   }
   if (chosen?.dot) {
     drawRing(chosen.x, chosen.y, r, 0, vehicleColor(chosen.dot));
     drawDisc(chosen.x, chosen.y, r, chosen.dot, false);
+  }
+  // The peek: the dot a pointer rests on is drawn as it is zoomed in, with
+  // its line, the arrowhead of where it heads and its delay, over the dots
+  // around it, for as long as the pointer stays. A finger does not rest: a
+  // tap opens the trip.
+  if (peeked) {
+    const { v, x, y, a } = peeked;
+    const big = LABEL_R;
+    if (isChosen(v)) {
+      drawRing(x, y, big, 0, vehicleColor(v));
+      chosen = { x, y };
+    }
+    ctx.strokeStyle = '#fff';
+    ctx.fillStyle = vehicleColor(v);
+    ctx.lineWidth = 1.5;
+    if (a !== null) drawArrow(x, y, big, a);
+    drawDisc(x, y, big, v, true);
+    const flag = flagOf(v, live);
+    if (flag) drawFlag(x + big * 0.55, y - big - 5, flag);
+    hits.push({ x, y, r: big + 3, vehicle: v });
   }
 
   // Which of them are at one place: so close that one would hide the other,
@@ -1669,12 +1698,19 @@ function vehicleSummary(v) {
 // (`hovering`, above): its tap arrives as a pointer that moved there, and
 // would leave the tooltip standing.
 const hideTooltip = () => { tooltip.hidden = true; };
+/** The vehicle drawn as zoomed in while a pointer rests on it (see "the peek" in draw), or none. */
+function peekAt(id) {
+  if (id === state.peek) return;
+  state.peek = id;
+  askDraw();
+}
 
 map.on('mousemove', (event) => {
   // (a display on a wall has nothing to point at: the map tells of the pointer all the same)
   if (FIXED) return;
   const hit = hitTest(event.point);
   map.getContainer().classList.toggle('clickable', !!hit);
+  peekAt(hovering.matches && map.getZoom() < LABEL_ZOOM ? hit?.vehicle?.id ?? null : null);
   tooltip.hidden = !hit || !hovering.matches || Boolean(hit.named);
   if (tooltip.hidden) return;
   tooltip.textContent = hit.vehicle ? vehicleSummary(hit.vehicle) : hit.station.name;
@@ -1683,8 +1719,8 @@ map.on('mousemove', (event) => {
 // It goes when the pointer leaves the map, when the map moves away under it,
 // and when what it names is chosen: the details say more, and may come to lie
 // right where it stood.
-map.on('mouseout', hideTooltip);
-map.on('movestart', hideTooltip);
+map.on('mouseout', () => { hideTooltip(); peekAt(null); });
+map.on('movestart', () => { hideTooltip(); peekAt(null); });
 
 map.on('click', (event) => {
   // (the tap that folds the unfolded card does only that: see "the card while details are open")
