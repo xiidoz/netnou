@@ -583,15 +583,15 @@ button:focus-visible, select:focus-visible, .row:focus-visible, .panel:focus-vis
   background: var(--bg-subtle);
   cursor: pointer;
 }
-.share { right: 46px; }
-.heart { right: 84px; }
+.share { right: 52px; }
+.heart { right: 96px; }
 .heart.on { color: var(--delay-severe); }
 /* (what says that the address was copied, where there is nothing to share it with: under the button, for a moment) */
 .copied {
   position: absolute;
   z-index: 3;
   top: 46px;
-  right: 46px;
+  right: 52px;
   margin: 0;
   padding: 4px 10px;
   border-radius: 999px;
@@ -603,14 +603,14 @@ button:focus-visible, select:focus-visible, .row:focus-visible, .panel:focus-vis
 .panel .copied.favourited { right: 8px; }
 
 .panel-head { padding: 14px 48px 10px 14px; border-bottom: 1px solid var(--border); }
-/* The way back to the details these were opened from, above their name (app.js, "the way back"): it keeps clear of the buttons at the top. */
-.panel-back { display: inline-flex; align-items: center; gap: 2px; max-width: calc(100% - 116px); margin: -4px 0 4px -6px; padding: 2px 8px 2px 2px; border: 0; border-radius: 999px; background: none; color: var(--accent); font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; }
+/* The way back to the details these were opened from, above their name (app.js, "the way back"): it keeps clear of the buttons at the top, and of the name below as far as a finger needs (see "room for a finger"). */
+.panel-back { display: inline-flex; align-items: center; gap: 2px; max-width: calc(100% - 128px); margin: -4px 0 16px -6px; padding: 2px 8px 2px 2px; border: 0; border-radius: 999px; background: none; color: var(--accent); font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; }
 .panel-back .icon { flex: none; width: 18px; height: 18px; }
 .panel-back span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .panel-back:hover span { text-decoration: underline; }
 /* (the heading beside the two buttons; what is below it is clear of them) */
-.panel.shareable .panel-head h1, .panel.shareable .panel-head h2 { padding-right: 38px; }
-.panel.favourable .panel-head h1, .panel.favourable .panel-head h2 { padding-right: 76px; }
+.panel.shareable .panel-head h1, .panel.shareable .panel-head h2 { padding-right: 44px; }
+.panel.favourable .panel-head h1, .panel.favourable .panel-head h2 { padding-right: 88px; }
 /* the main heading of the page while the details are open (#254); a board has h2 */
 .panel-head h1, .panel-head h2 {
   margin: 0;
@@ -682,8 +682,9 @@ button:focus-visible, select:focus-visible, .row:focus-visible, .panel:focus-vis
 
 /* the sheet: every line a row of its directions */
 .choice-list { margin-top: 12px; }
-.choice-lines { list-style: none; margin: 10px 0 0; padding: 0; display: grid; gap: 8px; }
-.choice-lines li { display: flex; flex-wrap: wrap; gap: 6px; }
+/* (as far apart, one below the other, as a finger needs: see "room for a finger") */
+.choice-lines { list-style: none; margin: 10px 0 0; padding: 0; display: grid; gap: 15px; }
+.choice-lines li { display: flex; flex-wrap: wrap; gap: 15px 6px; }
 .choice-list .chip { white-space: normal; text-align: left; }
 .choice-list .chip .direction-sign { margin: -5px -2px -5px -4px; }
 /* (the notes go out to the edge the rows below end at: the button that closes is above them) */
@@ -798,7 +799,9 @@ button:focus-visible, select:focus-visible, .row:focus-visible, .panel:focus-vis
    beside it. */
 .panel-head .sub.line-ways { margin-top: 10px; }
 .view-switch.ways { min-width: 0; max-width: calc(100% - 3em); }
-.view-switch.ways button { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+/* (the name cut where it does not fit is in a span: the button itself does not cut off the room for a finger around it) */
+.view-switch.ways button { min-width: 0; }
+.view-switch.ways button > span { display: block; overflow: hidden; text-overflow: ellipsis; }
 .line-body { position: relative; }
 .line-stops { list-style: none; margin: 0; padding: 6px 0; --rail: var(--mode-other); }
 .line-stops[data-mode="subway"] { --rail: var(--mode-subway); }
@@ -880,14 +883,15 @@ button.line-vehicle { position: absolute; left: -18px; top: -18px; width: 36px; 
 .day-head { display: flex; align-items: center; gap: 8px; padding-right: 14px; }
 .day-head::after { content: ""; flex: 1; border-top: 1px solid var(--border); }
 /* The badge at the top of a trip leads to its line (#147): the sign in it
-   says so, and under a mouse a ring. A finger has 40 px of height to hit it,
+   says so, and under a mouse a ring. A finger has 44 px of height to hit it,
    which the margins take back from the line of the head; above the line
-   below, and on a phone above the end of the bar on top of the sheet. */
+   below, and on a phone above the end of the bar on top of the sheet, or
+   below the way back. */
 .to-line {
   position: relative;
   display: inline-flex;
-  margin: -10px -4px;
-  padding: 10px 4px;
+  margin: -12px -4px;
+  padding: 12px 4px;
   border: 0;
   background: none;
   cursor: pointer;
@@ -1124,6 +1128,51 @@ li:last-child > .row.stop .rail::before { bottom: 50%; }
 .note-full .sign { margin-right: 6px; }
 .note-full + .note-full { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border); }
 
+/* ---------- room for a finger ---------- */
+
+/* A button takes a finger over 44 by 44 px, as Apple and the enhanced level
+   of WCAG ask, though most of them look smaller: what is around one takes
+   the taps that land beside it (::after), as far as the next button. Buttons
+   side by side keep room enough between them that these areas meet but do
+   not overlap, so a finger meant for one never reaches the other: share and
+   close (.share, .heart), the lens and the gear (.search-open). Where there is
+   not that room the area is as large as there is room. The sizes are for the
+   places the buttons have; each says what is next to it. */
+.settings-open, .search-open, .search-close, .chips-more span, .segmented button, .wall-start,
+.view-switch button, .choice-open, .choice-clear, .board-open, .panel-back, .maplibregl-ctrl-group button { position: relative; }
+.settings-open::after, .search-open::after, .search-close::after, .close::after, .share::after, .heart::after,
+.chips-more span::after, .segmented button::after, .wall-start::after, .view-switch button::after,
+.choice-open::after, .choice-clear::after, .board-open::after, .panel-back::before, .panel-back::after,
+.maplibregl-ctrl-group button::after, .maplibregl-ctrl-attrib-button::after { content: ""; position: absolute; }
+/* (the round buttons of the title row: the gear and the lens; above them the edge of the screen, below them the field of the search or the line that positions are calculated) */
+.settings-open::after, .search-open::after { inset: -11px -7px -3px; }
+.search-open { margin-right: 6px; }
+.search-close::after { inset: -5px; }
+/* (the buttons in the corner of the details and the sheets, 44 px apart) */
+.close::after, .share::after, .heart::after { inset: -6px; }
+/* (the switches of the settings and the button below them, with what they are called between them) */
+.segmented button::after, .wall-start::after { left: 0; right: 0; top: calc(50% - 22px); height: 44px; }
+/* (the way back: below it the name or the badge of a trip; above it the bar of the sheet, which keeps its stroke in the middle for a finger) */
+.panel-back::after { left: 0; right: 0; top: 0; bottom: -6px; }
+.panel-back::before { left: 0; top: -16px; width: min(100%, calc(50vw - 40px)); height: 16px; }
+/* (the chips of the lines to choose, in rows 15 px apart and 6 px side by side) */
+.choice-list .chip { position: relative; }
+.choice-list .chip::after { content: ""; position: absolute; top: calc(50% - 22px); left: -3px; right: -3px; height: 44px; }
+/* (the round arrows at the ends of the chips, over the chip under them) */
+.chips-more span::after { top: calc(50% - 22px); left: calc(50% - 22px); width: 44px; height: 44px; }
+/* (the buttons of the map, one above the other and 10 px apart, the two of the zoom in one block: under a mouse as large as MapLibre draws them, with 44 px of width and as much height as there is room; for a finger 40 px, with 44 by 44) */
+.maplibregl-ctrl-group button::after { left: -7px; right: -8px; top: 0; bottom: 0; }
+.maplibregl-ctrl-group button:first-child::after { top: -5px; }
+.maplibregl-ctrl-group button:last-child::after { bottom: -5px; }
+@media (pointer: coarse) {
+  .maplibregl-ctrl-group button { width: 40px; height: 40px; }
+  .maplibregl-ctrl-group button::after { left: -2px; right: -2px; }
+  .maplibregl-ctrl-group button:first-child::after { top: -4px; }
+  .maplibregl-ctrl-group button:last-child::after { bottom: -4px; }
+}
+/* (the button that shows the sources of the map, in the corner of the screen) */
+.maplibregl-ctrl-attrib-button::after { inset: -10px; }
+
 /* ---------- small screens: controls on top, details as bottom sheet ---------- */
 
 @media (max-width: 720px) {
@@ -1155,7 +1204,10 @@ li:last-child > .row.stop .rail::before { bottom: 50%; }
   /* One row of chips that scrolls sideways, out to the edges of the card. */
   .chips-row { margin: 0 -12px; }
   /* (scroll-padding: a chip that gets the keyboard focus comes to rest clear of the arrows) */
-  .chips { flex-wrap: nowrap; overflow-x: auto; padding: 0 12px 2px; scrollbar-width: none; scroll-behavior: smooth; scroll-padding-inline: 64px; }
+  /* (the room above and below the chips is the row's too, as much as it gives back: a finger takes a chip there, see "room for a finger") */
+  .chips { flex-wrap: nowrap; overflow-x: auto; margin: -9px 0; padding: 9px 12px 11px; scrollbar-width: none; scroll-behavior: smooth; scroll-padding-inline: 64px; }
+  .chips .chip { position: relative; }
+  .chips .chip::after { content: ""; position: absolute; top: calc(50% - 22px); left: -3px; right: -3px; height: 44px; }
   .chips::-webkit-scrollbar { display: none; }
   /* Where the row goes on (app.js knows), the chips fade out under an arrow
      that moves the row on: without it nothing shows that there are more. */
@@ -1244,13 +1296,20 @@ li:last-child > .row.stop .rail::before { bottom: 50%; }
   /* (so what is at their top has the whole width) */
   .panel .panel-head { padding-right: 14px; }
   .panel .panel-head h1, .panel .panel-head h2 { padding-right: 36px; }
-  .panel .share { top: 14px; right: 50px; }
-  .panel .copied { top: 52px; right: 50px; }
-  .panel.shareable .panel-head h1, .panel.shareable .panel-head h2 { padding-right: 74px; }
+  .panel .share { top: 14px; right: 56px; }
+  .panel .copied { top: 52px; right: 56px; }
+  .panel.shareable .panel-head h1, .panel.shareable .panel-head h2 { padding-right: 80px; }
   /* (the heart before the share button) */
-  .panel .heart { top: 14px; right: 88px; }
+  .panel .heart { top: 14px; right: 100px; }
   .panel .copied.favourited { top: 52px; right: 12px; }
-  .panel.favourable .panel-head h1, .panel.favourable .panel-head h2 { padding-right: 112px; }
+  .panel.favourable .panel-head h1, .panel.favourable .panel-head h2 { padding-right: 124px; }
+  /* (for a finger, see "room for a finger": the buttons from the bar of the sheet down, the chips under them, side by side, from there to the departures) */
+  .panel .close::after, .panel .share::after, .panel .heart::after { inset: -12px -6px 0; }
+  .panel-head .view-switch button::after, .panel-head .choice-open::after, .panel-head .choice-clear::after, .panel-head .board-open::after { left: 0; right: 0; top: calc(50% - 20px); height: 44px; }
+  /* (and where they take two lines, as with directions chosen, the second as far below the first as these areas need) */
+  .panel-head .sub.with-choice { row-gap: 20px; }
+  /* (the cross that shows all lines again is narrow: its area takes the end of the chip it is in, and half the room beside it) */
+  .panel-head .choice-clear::after { left: -15px; right: -6px; }
   .panel-head .notes, .panel-head .sub.with-choice { margin-right: 0; }
   /* A sheet has little room: every note is one line there, cut where it does
      not fit. app.js makes a button of what is cut, and keeps all notes to a
@@ -1382,8 +1441,8 @@ li:last-child > .row.stop .rail::before { bottom: 50%; }
 :root[data-board] .panel .close,
 :root[data-board] .panel .share { top: 8px; width: 32px; height: 32px; }
 :root[data-board] .panel .close { right: calc(8px + var(--safe-right)); }
-:root[data-board] .panel .share { right: calc(46px + var(--safe-right)); }
-:root[data-board] .panel .copied { top: 46px; right: calc(46px + var(--safe-right)); }
+:root[data-board] .panel .share { right: calc(52px + var(--safe-right)); }
+:root[data-board] .panel .copied { top: 46px; right: calc(52px + var(--safe-right)); }
 
 /* The type of a board grows with it: a share of its height, or of its width
    where that is less, from a little more than the details have to that of a
