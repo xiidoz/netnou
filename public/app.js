@@ -2448,6 +2448,18 @@ showFold();
 const controls = $('controls');
 const grip = $('card-grip');
 const folded = () => document.documentElement.dataset.fold !== undefined;
+// The grip's strip below the card (style.css), a finger's worth, reaches into
+// the map and stops short of the details: on a phone the sheet comes up to
+// just below the card, and its own bar is then where the strip would be.
+const GRIP_REACH_PX = 29; // (as high as the strip is in style.css)
+function gripReach() {
+  const room = sheetOpen() ? panel.getBoundingClientRect().top - grip.getBoundingClientRect().bottom - 4 : Infinity;
+  grip.style.setProperty('--reach', `${Math.max(0, Math.min(GRIP_REACH_PX, Math.floor(room)))}px`);
+}
+const reaching = new ResizeObserver(gripReach);
+reaching.observe(panel);
+reaching.observe(controls);
+narrowScreen.addEventListener('change', gripReach);
 /** The card's height folded and unfolded, in px, as it is by itself: measured with the other state put on for a moment. */
 function cardHeights() {
   const was = folded();
