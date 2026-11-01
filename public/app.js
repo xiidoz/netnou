@@ -4467,6 +4467,18 @@ async function loadArea() {
   // style names its sources itself; what the server adds for the map and for
   // the data is HTML and may contain links.
   map.setStyle(area.styleUrl ?? rasterStyle(area.tileUrl), { transformStyle: (previous, next) => withoutStyleStops(localizedStyle(next)) });
+  // A style may name icons its own set lacks: OpenFreeMap's names that of a
+  // place after its kind and has none for some kinds, such as sports_centre,
+  // office or recycling. Such a place gets the style's plain circle, in the
+  // colour of its other icons, instead of no icon and a warning; in a style
+  // without one, an empty image, which ends the warning. (MapLibre asks
+  // before it warns, once for each name.)
+  map.setMissingStyleImageResolver((id) => {
+    if (map.hasImage(id)) return;
+    const plain = ['circle_11', 'circle', 'dot_9'].map((name) => map.getImage(name)).find(Boolean);
+    if (plain) map.addImage(id, plain.data, { pixelRatio: plain.pixelRatio, sdf: plain.sdf });
+    else map.addImage(id, { width: 1, height: 1, data: new Uint8Array(4) });
+  });
   // The version goes into one credit with the data: MapLibre puts the credits
   // in the order of their length, and this way the version is always the last
   // thing in the corner, with a marker or without.
