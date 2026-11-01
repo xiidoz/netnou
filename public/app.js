@@ -2633,15 +2633,24 @@ function stopTitle(name, town = null) {
   return `${t('address.stopTitle', { stop: shown ? t('address.stopWithTown', { stop: name, town: shown }) : name })} – ${siteName}`;
 }
 
+/**
+ * A line as a rider says it: a name that is a number with the kind of the
+ * line before it, "Tram 10", "Bus 36"; "U1" or "RE 31" as they are. As the
+ * server names it (labelled in server/lib/addresses.js).
+ */
+function lineSaid(name, mode) {
+  return /^\d/.test(name) ? `${t(`address.kind.${mode}`)} ${name}` : name;
+}
+
 function lineTitle({ name, mode }) {
-  const line = /^\d/.test(name) ? `${t(`address.kind.${mode}`)} ${name}` : name;
+  const line = lineSaid(name, mode);
   const words = t('address.lineTitle', { line, route: '' }).replace(/\s+/g, ' ').trim();
   return `${words.charAt(0).toUpperCase()}${words.slice(1)} – ${siteName}`;
 }
 
 /** The title of the page of a trip (#178), as the server writes it (tripWords in server/lib/addresses.js). */
 function tripTitle({ line: name, mode, to }) {
-  const line = /^\d/.test(name) ? `${t(`address.kind.${mode}`)} ${name}` : name;
+  const line = lineSaid(name, mode);
   const words = t('address.tripTitle', { line, to });
   return `${words.charAt(0).toUpperCase()}${words.slice(1)} – ${siteName}`;
 }
@@ -3062,11 +3071,17 @@ const platformText = (platform) => (platform ? t('stop.platform', { platform }) 
 // Their name is kept with the step (history.state.from), so that it is there
 // again after a step forward or a reload. Not on a board, and not on a display.
 
-/** What the details show, by name: a stop's or a line's name, a trip's line and where it goes; null before it has come. */
+/**
+ * What the details show, by name: a stop's name, a line as a rider says it
+ * ("Tram 10": a 10 alone could be a bus as well), a trip's line so and where
+ * it goes; null before it has come.
+ */
 function sheetName() {
   const { type, data } = state.selection ?? {};
   if (!data) return null;
-  return type === 'trip' ? `${data.line} → ${data.to}` : data.name ?? null;
+  const said = (name, mode) => { const words = lineSaid(name, mode); return `${words.charAt(0).toUpperCase()}${words.slice(1)}`; };
+  if (type === 'trip') return `${said(data.line, data.mode)} → ${data.to}`;
+  return type === 'line' ? said(data.name, data.mode) : data.name ?? null;
 }
 
 /** Puts the way back above the name in the head of the details, where they were opened from others. */
