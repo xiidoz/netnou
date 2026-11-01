@@ -246,7 +246,7 @@ export default {
   // the button in that sheet that shows all of them again
   'choice.all': 'All lines',
   'choice.only': 'Only',
-  'choice.more': '+{count}',
+  'choice.several': 'Only {count} directions',
   'choice.clear': 'Show all lines',
   'choice.title': 'Which departures?',
   'choice.hint': 'Tap a direction to show only it. Tap again to take it out.',

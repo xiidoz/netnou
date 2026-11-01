@@ -182,7 +182,7 @@ export default {
   'choice.filter': 'Filter',
   'choice.all': 'Alle Linien',
   'choice.only': 'Nur',
-  'choice.more': '+{count}',
+  'choice.several': 'Nur {count} Richtungen',
   'choice.clear': 'Alle Linien zeigen',
   'choice.title': 'Welche Abfahrten?',
   'choice.hint': 'Eine Richtung antippen zeigt nur sie. Noch einmal antippen nimmt sie wieder heraus.',
