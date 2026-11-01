@@ -8,6 +8,32 @@ This file is written by
 messages when a release is made. Do not edit it by hand; see
 [Releases](CONTRIBUTING.md#releases).
 
+## [0.22.0](https://github.com/xiidoz/netnou/compare/v0.21.0...v0.22.0) (2026-11-01)
+
+
+### Features
+
+* **page:** a close button on every sheet, the board as a chip there and back, one way to add ([#278](https://github.com/xiidoz/netnou/issues/278)) ([46c6884](https://github.com/xiidoz/netnou/commit/46c6884aef66cdc6d655c2dafa2eee710f585dd7))
+* **page:** a dot of the zoomed-out map shows its vehicle in full while a mouse rests on it ([#285](https://github.com/xiidoz/netnou/issues/285)) ([178e554](https://github.com/xiidoz/netnou/commit/178e554499bc0cb75b5c7eaa4b845420b76d8c71))
+* **page:** departures in two lines, with when a train leaves and its delay as a sum ([#276](https://github.com/xiidoz/netnou/issues/276)) ([dd08573](https://github.com/xiidoz/netnou/commit/dd08573b6fb63e323fc2f5e4ccebd79422c773ae))
+* **page:** details opened from other details have the way back to them above their name ([#280](https://github.com/xiidoz/netnou/issues/280)) ([dfb6bc3](https://github.com/xiidoz/netnou/commit/dfb6bc3a02c209bf48efa7d1e0606d54c2d369c7))
+* **page:** the card folds away for the map, and a wall screen starts in the settings ([#274](https://github.com/xiidoz/netnou/issues/274)) ([5c31965](https://github.com/xiidoz/netnou/commit/5c3196594325fba96d18b966c72a44ff7af9b366))
+
+
+### Bug Fixes
+
+* **page:** a board on a phone shows the sum alone under the minutes, so destinations have room ([#277](https://github.com/xiidoz/netnou/issues/277)) ([113e9fd](https://github.com/xiidoz/netnou/commit/113e9fdc5918e6fa796d09180725ee92f54a60a7))
+* **page:** on a phone every button takes a finger over 44 by 44 px, share and close apart ([#281](https://github.com/xiidoz/netnou/issues/281)) ([2463ef2](https://github.com/xiidoz/netnou/commit/2463ef2d0f41294e6a390a4804ed720ec0920c88))
+* **page:** the card grip's strip stops short of the details, whose bar is the sheet's again ([#279](https://github.com/xiidoz/netnou/issues/279)) ([19fed85](https://github.com/xiidoz/netnou/commit/19fed850a7c2a86f7fe923a3987be7cb7e125faf))
+* **page:** the way back says Tram 10 or Bus 36 where the name of a line is a number ([#282](https://github.com/xiidoz/netnou/issues/282)) ([bad82a1](https://github.com/xiidoz/netnou/commit/bad82a15fe4b13c9fbb0c2c3c38e23fce88d1070))
+* **page:** with several directions chosen, the chip says how many, not just their signs ([#284](https://github.com/xiidoz/netnou/issues/284)) ([5ae9191](https://github.com/xiidoz/netnou/commit/5ae91912608cffa944533bace935adb5902c3a19))
+* **timetable:** a failed import stays failed: a late report of its worker cannot undo that ([#286](https://github.com/xiidoz/netnou/issues/286)) ([2d57b51](https://github.com/xiidoz/netnou/commit/2d57b51c76d33717cf07f9eb5ae3c68a3dd47cc2))
+
+
+### Performance Improvements
+
+* **page:** the map draws as often as its fastest vehicle in view moves half a screen pixel ([#283](https://github.com/xiidoz/netnou/issues/283)) ([de4f58c](https://github.com/xiidoz/netnou/commit/de4f58cef741872f3d94f51c99b9f88e31f59812))
+
 ## [0.21.0](https://github.com/xiidoz/netnou/compare/v0.20.1...v0.21.0) (2026-10-24)
 
 
