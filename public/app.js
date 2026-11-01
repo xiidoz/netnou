@@ -50,14 +50,20 @@ const QUICK_RETRIES = 5; // so often in a row; the realtime feed may also be dow
 const PANEL_REFRESH_MS = 15_000;
 const MOVE_SETTLE_MS = 150; // wait this long after the map was moved before reloading
 const FRAME_MS = 80;
-// Between two frames the vehicles move on by the time alone. Zoomed out that
-// is less than the eye can tell: no frame is drawn before the fastest of
-// them (FASTEST_M_S, a train at full speed) could have moved STILL_PX, half a
-// pixel – seconds on a map of the whole country, where a frame draws
-// thousands of markers. And a marker gliding to where it belongs stands
-// there, as far as the eye is concerned, once it is nearer than that. See frame().
+// Between two frames the vehicles move on by the time alone. Mostly that is
+// less than the eye can tell: no frame is drawn before the fastest of those
+// on the screen has moved half a pixel of the screen (STILL_PX on a screen
+// of one pixel to the pixel of the page, a third of that on most phones) –
+// on a phone as often as a frame can come where vehicles carry their lines,
+// up to a second on a map of the whole country, where a frame draws
+// thousands of markers. Not sooner than any could have moved half a pixel of
+// the page (FASTEST_M_S, a train at full speed): never more often than that.
+// And not later than QUIET_MAX_MS, so that one that sets off does so in time.
+// A marker gliding to where it belongs stands there, as far as the eye is
+// concerned, once it is nearer than that. See frame().
 const FASTEST_M_S = 100;
 const STILL_PX = 0.5;
+const QUIET_MAX_MS = 1000;
 const EASE_MS = 300;
 const JUMP_DEG = 0.02; // a marker further off than this (1–2 km) jumps instead of gliding
 // Share of the map section loaded beyond each of its edges.
@@ -540,7 +546,7 @@ function applyVehicles(list) {
 let lastDraw = 0;
 // When the next frame is due, see frame(): at once where something has
 // changed that the canvas shows, or a marker is still gliding; else after
-// the fastest vehicle could have moved half a pixel at this zoom (quietMs).
+// the fastest vehicle on the screen has moved half a pixel (quietMs).
 let drawAsked = true;
 let settling = false;
 let quietMs = FRAME_MS;
@@ -1036,7 +1042,11 @@ function draw() {
   const centreLat = map.getCenter().lat;
   const pxPerLon = (512 * 2 ** zoom) / 360;
   const pxPerLat = pxPerLon / Math.cos((centreLat * Math.PI) / 180);
-  quietMs = Math.max(FRAME_MS, (1000 * STILL_PX * metresPerPixel(centreLat, zoom)) / FASTEST_M_S);
+  // (the soonest the next quiet frame could be needed, by the fastest there could be; see quietMs after the vehicles)
+  const soonest = Math.max(FRAME_MS, (1000 * STILL_PX * metresPerPixel(centreLat, zoom)) / FASTEST_M_S);
+  let fastest = 0; // pixels a second, of the fastest vehicle on the screen
+  // (half a pixel of the screen, in pixels of the page)
+  const still = STILL_PX / (window.devicePixelRatio || 1);
   // (with a margin: a marker whose centre is just outside still reaches in)
   const onScreen = (x, y) => x > -30 && y > -30 && x < viewSize.x + 30 && y < viewSize.y + 30;
   const hits = [];
@@ -1290,8 +1300,14 @@ function draw() {
 
   // vehicles
   // Ease towards the computed position so that a changed delay does not make
-  // the marker jump.
+  // the marker jump. That also smooths its speed, which the server lets change
+  // from one stretch of its way to the next: it follows its vehicle a little
+  // behind, the faster the further. That distance is where it belongs, as
+  // far as frames are concerned (see `behind`): a marker that only moves on
+  // with its vehicle needs no frame before it has moved STILL_PX (quietMs).
   const ease = 1 - Math.exp(-dt / EASE_MS);
+  // (how far behind its vehicle a marker follows at a speed, in pixels a second, frames dt apart)
+  const behind = (speed) => (ease > 1e-6 ? (speed * (dt / 1000) * (1 - ease)) / ease : (speed * EASE_MS) / 1000);
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
   // The chosen one has a ring around it and is drawn after the others of its
@@ -1320,8 +1336,16 @@ function draw() {
     }
     const [x, y] = project(v.lat, v.lon);
     if (!onScreen(x, y)) continue;
-    // (still on its way to where it belongs: the next frame follows at once)
-    if (!settling && Math.abs(target.lat - v.lat) * pxPerLat + Math.abs(target.lon - v.lon) * pxPerLon > STILL_PX) settling = true;
+    // (how fast it moves here: along the stretch of its way it is on)
+    let speed = 0;
+    if (target.k > 0) {
+      const { knots } = v, k = target.k;
+      const seconds = knots[k] - knots[k - 3];
+      if (seconds > 0) speed = Math.hypot((knots[k + 1] - knots[k - 2]) * pxPerLat, (knots[k + 2] - knots[k - 1]) * pxPerLon) / seconds;
+    }
+    fastest = Math.max(fastest, speed);
+    // (still on its way to where it belongs, further than it follows its vehicle at this speed: the next frame follows at once)
+    if (!settling && Math.hypot((target.lat - v.lat) * pxPerLat, (target.lon - v.lon) * pxPerLon) > still + 1.5 * behind(speed)) settling = true;
 
     if (!labeled) {
       // (the one a pointer rests on after the loop, over the others: see "the peek")
@@ -1337,6 +1361,7 @@ function draw() {
     }
     named.push({ v, x, y, a: headingAt(v, target) });
   }
+  quietMs = Math.max(soonest, Math.min(Math.max(soonest, QUIET_MAX_MS), fastest > 0 ? (1000 * still) / fastest : Infinity));
   if (chosen?.dot) {
     drawRing(chosen.x, chosen.y, r, 0, vehicleColor(chosen.dot));
     drawDisc(chosen.x, chosen.y, r, chosen.dot, false);
@@ -1570,8 +1595,8 @@ function draw() {
 // A frame draws every vehicle in view: thousands on a map of the whole
 // country, which on a slow device takes longer than a frame lasts. So frames
 // come as often as they are needed and no oftener: FRAME_MS apart while a
-// marker glides or something has changed, else quietMs apart, as the zoom
-// has it (see draw). Moving the map draws by itself (map.on('move')).
+// marker glides or something has changed, else quietMs apart, as the
+// vehicles on the screen have it (see draw). Moving the map draws by itself (map.on('move')).
 // Between two, the page asks the browser for no frame at all, but waits for
 // the next with a timer: a frame asked for draws the page anew, also where
 // nothing on it has changed.
