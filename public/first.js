@@ -70,7 +70,8 @@ window.applyColorScheme();
   // (which languages there are, the server says: it wrote the page in one of them)
   const languages = (root.dataset.languages ?? '').split(' ');
   const preferred = (navigator.languages ?? []).map((tag) => tag.toLowerCase().split('-')[0]);
-  const language = [stored('lang'), address.get('lang'), ...preferred].find((code) => languages.includes(code)) ?? 'en';
+  // (as i18n.js picks it: the one chosen, else the one the address asks for, else the one the server sent the page in, #287)
+  const language = [stored('lang'), address.get('lang'), root.lang, ...preferred].find((code) => languages.includes(code)) ?? 'en';
   const hiddenModes = setting('hiddenModes');
   const asSentButLanguage = !address.has('display') && setting('colorBy') !== 'delay' && !(Array.isArray(hiddenModes) && hiddenModes.length);
   if (asSentButLanguage && language === root.lang) root.dataset.controls = 'shown';

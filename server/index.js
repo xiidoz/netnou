@@ -238,7 +238,7 @@ function pageLanguage(req, url) {
 /** index.html as it is sent (renderPage), in a language: the page itself, or at the address of a stop or a line. */
 function pageBody(language, asked, address = null) {
   const file = path.join(config.publicDir, 'index.html');
-  return Buffer.from(renderPage(fs.readFileSync(file, 'utf8'), { language, asked, texts: texts[language], siteName: config.siteName, areaName: config.areaName, siteTitle: config.siteTitle[language], siteDescription: config.siteDescription[language], links: config.links, preview: own.preview, previewSize, publicUrl: config.publicUrl, listed: config.searchEngines, styleUrl: config.styleUrl, mapOrigins: config.mapOrigins, kinds: timetable?.kinds ?? null, nearby: nearbySent(), address, inline: pageInline().inline, fileVersions }));
+  return Buffer.from(renderPage(fs.readFileSync(file, 'utf8'), { language, main: config.language, asked, texts: texts[language], siteName: config.siteName, areaName: config.areaName, siteTitle: config.siteTitle[language], siteDescription: config.siteDescription[language], links: config.links, preview: own.preview, previewSize, publicUrl: config.publicUrl, listed: config.searchEngines, styleUrl: config.styleUrl, mapOrigins: config.mapOrigins, kinds: timetable?.kinds ?? null, nearby: nearbySent(), address, inline: pageInline().inline, fileVersions }));
 }
 
 const etagOf = (body) => `"${crypto.createHash('sha1').update(body).digest('hex').slice(0, 16)}"`;
@@ -376,8 +376,15 @@ function cleanPath(pathname) {
  * instance may be at a path of its own behind a proxy.
  */
 function moved(res, from, to) {
-  res.writeHead(301, { ...SECURITY_HEADERS, Location: `${'../'.repeat(from.split('/').length - 2)}${to.slice(1)}`, 'Cache-Control': 'no-cache' });
+  // (relative, as the public address of the instance may have a path of its own; the top of it is ./)
+  res.writeHead(301, { ...SECURITY_HEADERS, Location: `${'../'.repeat(from.split('/').length - 2)}${to.slice(1) || './'}`, 'Cache-Control': 'no-cache' });
   res.end();
+}
+
+/** The query of an address without the language it asks for, the rest as it was written: "?lang=de&board=x" → "?board=x". */
+function withoutLanguage(search) {
+  const rest = search.slice(1).split('&').filter((part) => part && decodeURIComponent(part.split('=')[0]) !== 'lang');
+  return rest.length ? `?${rest.join('&')}` : '';
 }
 
 /** Whether a request is a browser's for a page: it takes HTML, which a script, a picture or a style sheet does not. */
@@ -412,7 +419,7 @@ function timetableDate() {
 }
 
 function serveSitemap(req, res, part) {
-  if (sitemaps.of !== timetable) sitemaps = { of: timetable, files: sitemapFiles(sitemapAt, timetable ? addressesNow().paths() : [], undefined, timetableDate()).map((xml) => keep(Buffer.from(xml))) };
+  if (sitemaps.of !== timetable) sitemaps = { of: timetable, files: sitemapFiles(sitemapAt, timetable ? addressesNow().paths() : [], undefined, timetableDate(), config.language).map((xml) => keep(Buffer.from(xml))) };
   const kept = sitemaps.files[part];
   if (!kept) return send(req, res, 404, MIME['.txt'], Buffer.from('not found\n'), { 'Cache-Control': 'no-cache' });
   return send(req, res, 200, MIME['.xml'], kept.body, { 'Cache-Control': 'no-cache' }, kept);
@@ -794,6 +801,11 @@ const server = http.createServer((req, res) => {
     const clean = cleanPath(url.pathname);
     if (clean !== url.pathname) return moved(res, url.pathname, `${clean}${url.search}`);
     if (url.pathname.startsWith('/api/')) return handleApi(req, res, url);
+    // The page in the main language has one address, the plain one (#287): an
+    // address that asks for it by ?lang= sends the browser there, with the
+    // rest of what it asks as it was written.
+    const page = url.pathname === '/' || url.pathname === '/index.html' || /^\/(stop|line|trip)\//i.test(url.pathname);
+    if (page && url.searchParams.get('lang') === config.language) return moved(res, url.pathname, `${url.pathname}${withoutLanguage(url.search)}`);
     if (url.pathname === '/' || url.pathname === '/index.html') return servePage(req, res, url);
     if (url.pathname === '/manifest.webmanifest') return serveManifest(req, res);
     // Where a page names no icon, browsers and search engines ask for this
