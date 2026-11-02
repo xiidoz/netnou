@@ -167,6 +167,11 @@ export default {
   // The one tip, once, on landing at the address of a stop, above its departures; with a mouse the second.
   'tip.departure': 'Tap a row to go straight to its vehicle on the map',
   'tip.departureMouse': 'Click a row to go straight to its vehicle on the map',
+  // Where the address asks for another language than the visitor's browser (#287): written in this language, offering it
+  // on a page in another one. The switch does what choosing the language in the settings does; the other ends the offer.
+  'offer.text': 'This page is also available in English.',
+  'offer.switch': 'Switch to English',
+  'offer.never': 'Don’t ask again',
 
   'panel.label': 'Details',
   'panel.close': 'Close',

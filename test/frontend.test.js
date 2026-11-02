@@ -7,7 +7,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import { test } from 'node:test';
 import vm from 'node:vm';
-import { ATTRIBUTES, LANGUAGES, READMES, dayOf, formatNumber, formatTime, loadLanguage, pageTexts, pickLanguage, sentInAnother, setTimeZone, t } from '../public/i18n.js';
+import { ATTRIBUTES, LANGUAGES, READMES, dayOf, formatNumber, formatTime, languageToOffer, loadLanguage, pageTexts, pickLanguage, sentInAnother, setTimeZone, t, textsOf } from '../public/i18n.js';
 import en from '../public/locales/en.js';
 import { tomorrowAt as nextDayAt } from '../public/panel.js';
 import { PAGE_INLINE, PAGE_MODULES } from '../server/lib/page.js';
@@ -526,6 +526,31 @@ test('an address that asks for a language gets it, unless the visitor chose one 
   assert.equal(pickLanguage(null, ['de-DE'], 'xx'), 'de');
   assert.equal(pickLanguage(null, ['de-DE'], ''), 'de');
   assert.equal(pickLanguage(null, ['xx'], null), 'en');
+});
+
+// A link to the English page opened by a German browser (#287): the page
+// offers German, in German. Not where the visitor chose a language, and not
+// where the address names none or one there is not: the page is then in the
+// browser's language already, or the browser's is not here at all.
+test('the page offers the browser\'s language where the address asks for another one, unless one was chosen', async () => {
+  assert.equal(languageToOffer(null, ['de-DE', 'en'], 'en'), 'de');
+  assert.equal(languageToOffer(null, ['xx', 'en-GB'], 'de'), 'en');
+  assert.equal(languageToOffer(null, ['de-AT'], 'de'), null);
+  assert.equal(languageToOffer('en', ['de-DE'], 'en'), null);
+  assert.equal(languageToOffer('de', ['de-DE'], 'en'), null);
+  assert.equal(languageToOffer('xx', ['de-DE'], 'en'), 'de'); // stored by another version of the page
+  assert.equal(languageToOffer(null, ['de-DE'], null), null);
+  assert.equal(languageToOffer(null, ['de-DE'], 'xx'), null);
+  assert.equal(languageToOffer(null, ['fr-FR'], 'de'), null);
+  assert.equal(languageToOffer(null, [], 'de'), null);
+  // (in the language it offers, whatever the page is in)
+  await loadLanguage('en', []);
+  for (const [code] of LANGUAGES) {
+    const texts = await textsOf(code);
+    for (const key of ['offer.text', 'offer.switch', 'offer.never', 'panel.close']) assert.ok(texts[key], `${code}: ${key}`);
+  }
+  assert.equal(t('offer.switch', {}, await textsOf('de')), 'Zu Deutsch wechseln');
+  assert.equal(t('offer.switch'), 'Switch to English');
 });
 
 // The server writes the title and the description into the page in the

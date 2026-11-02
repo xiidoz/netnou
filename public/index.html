@@ -27,12 +27,27 @@
        Content-Security-Policy of the server forbids them. -->
 
   <!-- In the order of the page, which is that of the keyboard and of a
-       screen reader: the details first where they are open, what is being
-       looked at, with its name as the main heading of the page; then the
-       card; then the map with its buttons and its sources. On the screen the
+       screen reader: where the page offers the browser's language, that
+       first; the details where they are open, what is being looked at, with
+       its name as the main heading of the page; then the card; then the map
+       with its buttons and its sources. On the screen the
        cards lie over the map whatever the order (z-index in style.css). In
        the details the way back and the name come before the buttons in their
        corner. -->
+  <!-- The offer of the browser's language where the address asks for another
+       one ("the offer of a language" in app.js): in the language it offers,
+       so its texts come from there and not from data-i18n. -->
+  <div class="tip offer" id="offer" hidden>
+    <div class="offer-head">
+      <p id="offer-text" role="status"></p>
+      <button type="button" class="offer-close" id="offer-close" aria-label="Close" title="Close" data-icon="mdiClose"></button>
+    </div>
+    <div class="offer-actions">
+      <button type="button" class="offer-switch" id="offer-switch"></button>
+      <button type="button" class="offer-never" id="offer-never"></button>
+    </div>
+  </div>
+
   <!-- The details of a trip, a stop or a line: what they are stays at the top
        (panel-head) and what is listed scrolls below it (panel-body). On a
        narrow screen it is a sheet from the bottom that the bar at its top

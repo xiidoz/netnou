@@ -9,7 +9,7 @@
 // lines, stops and operators, and the notes of the feed.
 
 import { parseAddress, stopPath, wordsOf } from './address.js';
-import { APP_NAME, READMES, dayOf, formatNumber, formatTime, languagePicker, loadLanguage, pageTexts, sentInAnother, setTimeZone, t, translatePage } from './i18n.js';
+import { APP_NAME, READMES, chooseLanguage, dayOf, formatNumber, formatTime, languagePicker, languageToOffer, loadLanguage, pageTexts, sentInAnother, setTimeZone, t, textsOf, translatePage } from './i18n.js';
 import { FAVOURITE_NAME_ZOOM, HEART_MIDDLE, PLACES_ZOOM, RAIL_MODES, heartMark, joiningLines, mergePlaces, namePrecedence, namedAt, placeNames, stopMark, townToShow, townsAlong, withoutStyleStops } from './stops.js';
 import { favouritesFrom, isFavourite, lineFavourite, sameStop, stopFavourite, withChoice, withFavourite } from './favourites.js';
 import { choiceValue, readChoice, toggled } from './choice.js';
@@ -2308,27 +2308,45 @@ function loadingText({ state: phase, step }) {
 // departures says that a departure leads to its vehicle (#226): the thing a
 // visitor from a search engine cannot guess. Not in a display, on a board,
 // while a stop is added to one, or while a notice, a dialog or the settings
-// are up. It goes with the next tap, click or key, or after a while.
+// are up, nor on a visit that offers another language: one bubble at a time.
+// It goes with the next tap, click or key, or after a while.
 const tip = $('tip');
 const TIP_MS = 9000;
 let tipTimer = null;
 
 function offerTip() {
-  if (ASKED || state.display || state.board !== null || state.adding || state.banner || state.note) return;
+  if (ASKED || state.display || state.board !== null || state.adding || state.banner || state.note || OFFERING) return;
   if (aboutDialog.open || notesDialog.open || choiceDialog.open || settingsButton.getAttribute('aria-expanded') === 'true') return;
   if (loadSetting('tipped', false) === true) return;
   saveSetting('tipped', true);
   tip.textContent = matchMedia('(pointer: coarse)').matches ? t('tip.departure') : t('tip.departureMouse');
   tip.hidden = false;
-  // On a phone above the details, which may still be gliding up (as in clearOfCards); else at the foot of the map beside the details.
+  placeBubble(tip);
+  tipTimer = setTimeout(hideTip, TIP_MS);
+}
+
+/**
+ * Puts a bubble (the tip, the offer of a language) where it is seen: on a
+ * phone above the details, which may still be gliding up (as in
+ * clearOfCards), else at the foot of the map, in the middle of what the
+ * details leave of it. Without details as style.css has it, but above the
+ * credits where they are open: on a phone they take three lines.
+ */
+function placeBubble(bubble) {
+  bubble.style.bottom = '';
+  bubble.style.left = '';
+  if (panel.hidden || state.board !== null) {
+    const credits = map.getContainer().querySelector('.maplibregl-ctrl-attrib')?.getBoundingClientRect();
+    if (credits?.height && viewSize.y - credits.top + 10 > parseFloat(getComputedStyle(bubble).bottom)) bubble.style.bottom = `${viewSize.y - credits.top + 10}px`;
+    return;
+  }
   const details = panel.getBoundingClientRect();
   if (narrowScreen.matches) {
     const sheetTop = panel.classList.contains('sized') ? details.top : Math.min(details.top, viewSize.y * (1 - SHEET_MIDDLE));
-    tip.style.bottom = `${viewSize.y - sheetTop + 10}px`;
+    bubble.style.bottom = `${viewSize.y - sheetTop + 10}px`;
   } else {
-    tip.style.left = `${details.left / 2}px`;
+    bubble.style.left = `${details.left / 2}px`;
   }
-  tipTimer = setTimeout(hideTip, TIP_MS);
 }
 
 function hideTip() {
@@ -2337,6 +2355,56 @@ function hideTip() {
 }
 for (const type of ['click', 'keydown']) document.addEventListener(type, () => tip.hidden || hideTip(), true);
 addEventListener('resize', () => tip.hidden || hideTip());
+
+// ---------- the offer of a language ----------
+
+// An address may ask for a language (?lang=en: a link someone shared, or
+// one a search engine found) that is not the one the visitor's browser asks
+// for (#287). Once what the address names is open, a bubble in the browser's
+// language offers to switch to it, which is choosing it in the settings. Its
+// ✕, a tap elsewhere or Escape put it away for the visit; "Don't ask again"
+// for good. Not in a display or on a board, not while a dialog or the
+// settings are up, and not where a language was chosen in the settings. It
+// waits for an answer: no timer, and the keyboard reaches its buttons first
+// (index.html). Once a visit.
+const offer = $('offer');
+const OFFERED = languageToOffer();
+const OFFERING = Boolean(OFFERED) && !OPENED_AS_DISPLAY && loadSetting('offerLanguage', true) !== false;
+let offerMade = false;
+
+async function offerLanguage() {
+  if (!OFFERING || offerMade || state.board !== null) return;
+  if (aboutDialog.open || notesDialog.open || choiceDialog.open || settingsButton.getAttribute('aria-expanded') === 'true') return;
+  offerMade = true;
+  const texts = await textsOf(OFFERED).catch(() => null);
+  if (!texts) return;
+  offer.lang = OFFERED;
+  $('offer-switch').textContent = t('offer.switch', {}, texts);
+  $('offer-never').textContent = t('offer.never', {}, texts);
+  for (const attribute of ['aria-label', 'title']) $('offer-close').setAttribute(attribute, t('panel.close', {}, texts));
+  offer.hidden = false;
+  // (after it is there, so that a screen reader reads it out)
+  $('offer-text').textContent = t('offer.text', {}, texts);
+  placeBubble(offer);
+  // (it moves with the sheet, and with the window)
+  new ResizeObserver(() => offer.hidden || placeBubble(offer)).observe(panel);
+  addEventListener('resize', () => offer.hidden || placeBubble(offer));
+}
+
+const hideOffer = () => { offer.hidden = true; };
+$('offer-switch').addEventListener('click', () => chooseLanguage(OFFERED, true));
+$('offer-never').addEventListener('click', () => {
+  saveSetting('offerLanguage', false);
+  hideOffer();
+});
+$('offer-close').addEventListener('click', hideOffer);
+document.addEventListener('click', (event) => offer.hidden || offer.contains(event.target) || hideOffer(), true);
+document.addEventListener('keydown', (event) => {
+  if (offer.hidden || event.key !== 'Escape') return;
+  // (the bubble is on top: Escape is for it, not for what is under it)
+  event.stopPropagation();
+  hideOffer();
+}, true);
 
 // ---------- how it works ----------
 
@@ -4558,6 +4626,7 @@ async function poll() {
         state.addressOpened = true;
         openAddress(true).then((done) => {
           if (!done) state.addressOpened = false;
+          else offerLanguage();
         }).catch((err) => {
           console.warn('address not opened:', err);
           state.addressOpened = false;

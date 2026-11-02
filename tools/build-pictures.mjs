@@ -365,9 +365,10 @@ ${names.map((name) => `<img src="${name}.png" alt="">`).join('\n')}
 
 /**
  * The page of a new browser, set up as every picture starts: a first visit,
- * with the one tip seen and the search where the view is kept, in the light
- * scheme, and the clock of the page held at the moment, as that of the server
- * is, so that every vehicle is where it is then. It counts the requests on the
+ * with the one tip seen and no offer of another language (the pictures ask
+ * for English, whatever the browser speaks), the search where the view is
+ * kept, in the light scheme, and the clock of the page held at the moment, as
+ * that of the server is, so that every vehicle is where it is then. It counts the requests on the
  * way, to see when the map has its tiles and the page its answers.
  */
 async function openPage() {
@@ -383,7 +384,7 @@ async function openPage() {
     await page.send('Page.enable');
     await page.send('Network.enable');
     await page.send('Page.addScriptToEvaluateOnNewDocument', {
-      source: `try { localStorage.clear(); localStorage.setItem('netnou.tipped', 'true'); localStorage.setItem('netnou.view', ${JSON.stringify(JSON.stringify(SEARCH_VIEW))}); } catch {}
+      source: `try { localStorage.clear(); localStorage.setItem('netnou.tipped', 'true'); localStorage.setItem('netnou.offerLanguage', 'false'); localStorage.setItem('netnou.view', ${JSON.stringify(JSON.stringify(SEARCH_VIEW))}); } catch {}
 Date.now = () => ${at};`,
     });
     await page.send('Emulation.setEmulatedMedia', { features: [{ name: 'prefers-color-scheme', value: 'light' }] });
