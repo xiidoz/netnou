@@ -69,7 +69,7 @@ needs `NETNOU_PORT` set to the same number.
 | `NETNOU_AREA_NAME` | `Großraum Nürnberg (VGN)`, for Germany `Deutschland`; empty for a custom area | text | shown next to the title of the page, and what search engines find the instance by, see [Being found](#being-found) |
 | `NETNOU_BRAND_DIR` | – (`/brand` in the image) | path | a folder with icons and a preview picture of your own, see [Icons of your own](#icons-of-your-own) |
 | `NETNOU_LINKS` | – | `Text=address`, separated by commas | links of the operator at the foot of the header card, see [Links of your own](#links-of-your-own) |
-| `NETNOU_LANGUAGE` | `de` | a language of the page: `de`, `en` | the main language of the instance: the page is sent in it to whoever asks without naming a language, as search engines do. Visitors get the language of their browser, see [Being found](#being-found) |
+| `NETNOU_LANGUAGE` | `de` | a language of the page: `de`, `en` | the main language of the instance: the page is sent in it to whoever asks without naming a language, as search engines do, and in it the page has the plain address, without `?lang=`. Visitors get the language of their browser, see [Being found](#being-found) |
 | `NETNOU_PUBLIC_URL` | – | http(s) URL | the address under which visitors reach the instance, e.g. `https://transit.example.org/`, see [Being found](#being-found) |
 | `NETNOU_SEARCH_ENGINES` | `on` if `NETNOU_PUBLIC_URL` is set, otherwise `off` | `on` or `off` | whether search engines may list the instance, see [Being found](#being-found) |
 | `NETNOU_VIEW` | Nürnberg, Fürth and Erlangen, for Germany the whole country; the whole area for a custom one | `south,west,north,east` | map section on a visitor's first visit; afterwards the browser remembers the last one |
@@ -272,7 +272,13 @@ into it what the instance is:
   languages of its user with every request, and gets the page in the first
   of them the page has, in English if it has none of them. A preview of a
   link is in the main language where the service that fetches the page for
-  it names no language, and in the one it names where it does.
+  it names no language, and in the one it names where it does. The page in
+  the main language has one address, the plain one: it is the version in
+  that language and the one for whoever names none (`hreflang="x-default"`);
+  the other languages have `?lang=<code>`, and `?lang=` with the main
+  language sends the browser to the plain address (301), with the rest of
+  the address kept. The page's own script keeps to the language the page
+  was sent in, unless the visitor chose another in the settings.
 - **`NETNOU_PUBLIC_URL`** is the address of the instance as visitors type it, with
   the path if it lives under one (`https://example.org/netnou/`). With it
   the page names its canonical address, its versions in the other languages

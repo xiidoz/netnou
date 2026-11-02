@@ -224,13 +224,23 @@ function iconSvg(name) {
 /** The address of the page in one language, or without one in that of the visitor's browser. */
 const addressIn = (publicUrl, language) => (language ? `${publicUrl}?lang=${language}` : publicUrl);
 
-/** The versions of the page in each language and the one that follows the browser, as [hreflang, address]. */
-const versions = (publicUrl) => [...LANGUAGE_CODES.map((code) => [code, addressIn(publicUrl, code)]), ['x-default', publicUrl]];
+/**
+ * The versions of the page in each language and the one for whoever names
+ * none, as [hreflang, address]. The page in the main language of the
+ * instance has one address, the plain one (#287): that is its version, and
+ * the one for whoever names none, which a search engine is. Another language
+ * has ?lang=<code>, and ?lang=<main> sends the browser to the plain address
+ * (index.js).
+ * @param main the main language of the instance (NETNOU_LANGUAGE)
+ */
+const versions = (publicUrl, main) => [...LANGUAGE_CODES.map((code) => [code, addressIn(publicUrl, code === main ? null : code)]), ['x-default', publicUrl]];
 
 /**
  * index.html as it is sent.
  * @param html the file
  * @param language what its texts are to be in
+ * @param main the main language of the instance (NETNOU_LANGUAGE), whose page
+ *   has the plain address
  * @param asked the language the address asked for, null if it named none:
  *   the page is then the one that follows the browser, whatever it is in
  * @param texts the texts of that language (a module of public/locales)
@@ -267,7 +277,7 @@ const versions = (publicUrl) => [...LANGUAGE_CODES.map((code) => [code, addressI
  *   index.html (PAGE_INLINE), to be written into the page in place of the
  *   tags that name them; null leaves the tags
  */
-export function renderPage(html, { language, asked, texts, siteName, areaName, siteTitle = null, siteDescription = null, links = [], preview = null, previewSize = null, publicUrl, listed, styleUrl = null, mapOrigins = [], kinds = null, nearby = [], address = null, inline = null, fileVersions = {} }) {
+export function renderPage(html, { language, main, asked, texts, siteName, areaName, siteTitle = null, siteDescription = null, links = [], preview = null, previewSize = null, publicUrl, listed, styleUrl = null, mapOrigins = [], kinds = null, nearby = [], address = null, inline = null, fileVersions = {} }) {
   const worded = pageTexts(areaName, texts, siteName);
   const named = Boolean(address?.title);
   const title = named ? addressTitle(address.title, siteName) : siteTitle ?? worded.title;
@@ -345,11 +355,11 @@ export function renderPage(html, { language, asked, texts, siteName, areaName, s
   if (!listed || (address && !named) || address?.unlisted) tags.push('<meta name="robots" content="noindex">');
   if (publicUrl) {
     const own = publicUrl + (named ? address.path : '');
-    const canonical = escapeHtml(addressIn(own, asked));
+    const canonical = escapeHtml(addressIn(own, asked === main ? null : asked));
     if (listed && (!address || named) && !address?.unlisted) {
       tags.push(
         `<link rel="canonical" href="${canonical}">`,
-        ...versions(own).map(([code, href]) => `<link rel="alternate" hreflang="${code}" href="${escapeHtml(href)}">`),
+        ...versions(own, main).map(([code, href]) => `<link rel="alternate" hreflang="${code}" href="${escapeHtml(href)}">`),
       );
     }
     tags.push(`<meta property="og:url" content="${canonical}">`);
@@ -455,15 +465,16 @@ export const SITEMAP_MAX = 50_000;
  * (#254), where that is known: what a stop or a line lists comes from it.
  * @param paths the addresses of the stops and lines, from where the instance is
  * @param lastmod that date, YYYY-MM-DD, or null
+ * @param main the main language of the instance, whose page has the plain address (see versions)
  * @returns the files: sitemap.xml, then sitemap-1.xml on if there are more
  */
-export function sitemapFiles(publicUrl, paths = [], max = SITEMAP_MAX, lastmod = null) {
+export function sitemapFiles(publicUrl, paths = [], max = SITEMAP_MAX, lastmod = null, main = null) {
   const escapeXml = (text) => text.replace(/[&<>"']/g, (char) => `&#${char.charCodeAt(0)};`);
-  const all = versions(publicUrl);
+  const all = versions(publicUrl, main);
   const links = all.map(([code, href]) => `    <xhtml:link rel="alternate" hreflang="${code}" href="${escapeXml(href)}"/>`).join('\n');
-  // (the one that follows the browser first: it is the address people pass on)
+  // (each address of the page once, the plain one first: it is the address people pass on)
   const dated = lastmod ? `<lastmod>${lastmod}</lastmod>` : '';
-  const urls = [all.at(-1), ...all.slice(0, -1)].map(([, href]) => `  <url>\n    <loc>${escapeXml(href)}</loc>${dated ? `\n    ${dated}` : ''}\n${links}\n  </url>`);
+  const urls = [...new Set([all.at(-1), ...all.slice(0, -1)].map(([, href]) => href))].map((href) => `  <url>\n    <loc>${escapeXml(href)}</loc>${dated ? `\n    ${dated}` : ''}\n${links}\n  </url>`);
   for (const path of paths) urls.push(`  <url><loc>${escapeXml(publicUrl + path)}</loc>${dated}</url>`);
   const head = '<?xml version="1.0" encoding="UTF-8"?>\n';
   const urlset = (listed) => `${head}<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:xhtml="http://www.w3.org/1999/xhtml">\n${listed.join('\n')}\n</urlset>\n`;
