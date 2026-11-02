@@ -613,9 +613,11 @@ test('the page says what and where the instance is before any script runs', asyn
   assert.deepEqual([unchanged.status, unchanged.headers.vary], [304, 'Accept-Language, Accept-Encoding']);
   assert.equal((await asking('/', 'de', { 'If-None-Match': forEnglish.headers.etag })).status, 200);
   // the address wins over the browser, and its page is the same for all
-  const askedGerman = await asking('/?lang=de', 'en-US,en;q=0.9');
-  assert.match(askedGerman.body.toString(), /<html lang="de"[ >]/);
-  assert.equal(askedGerman.headers.vary, 'Accept-Encoding');
+  const askedEnglish = await asking('/?lang=en', 'de-DE,de;q=0.9');
+  assert.match(askedEnglish.body.toString(), /<html lang="en"[ >]/);
+  assert.equal(askedEnglish.headers.vary, 'Accept-Encoding');
+  // (the main language's page is at the plain address, #287)
+  assert.equal((await asking('/?lang=de', 'en-US,en;q=0.9')).status, 301);
   assert.equal(english.headers.vary, 'Accept-Encoding');
   assert.equal((await request('/?lang=en', { headers: { 'If-None-Match': english.headers.etag } })).headers.vary, 'Accept-Encoding');
 
@@ -632,7 +634,7 @@ test('the page says what and where the instance is before any script runs', asyn
   assert.equal(robots.body.toString(), `User-agent: *\nAllow: /\n\nSitemap: ${address}sitemap.xml\n`);
   const sitemap = await request('/sitemap.xml');
   assert.deepEqual([sitemap.status, sitemap.headers['content-type']], [200, 'application/xml; charset=utf-8']);
-  assert.deepEqual([...sitemap.body.toString().matchAll(/<loc>([^<]*)<\/loc>/g)].map(([, loc]) => loc), [address, `${address}?lang=de`, `${address}?lang=en`, `${address}stop/alpha@49.4000,11.0000`, `${address}stop/beta@49.5000,11.0000`, `${address}line/testbetrieb/subway/u1`, `${address}line/testbetrieb/longdistance/ice-5`]);
+  assert.deepEqual([...sitemap.body.toString().matchAll(/<loc>([^<]*)<\/loc>/g)].map(([, loc]) => loc), [address, `${address}?lang=en`, `${address}stop/alpha@49.4000,11.0000`, `${address}stop/beta@49.5000,11.0000`, `${address}line/testbetrieb/subway/u1`, `${address}line/testbetrieb/longdistance/ice-5`]);
 
   // data may be read by a search engine that runs the page, but is not for its results
   for (const pathname of ['/api/area', '/api/status', '/api/vehicles', '/api/search', '/api/stations', '/api/nothing']) {
@@ -652,6 +654,13 @@ test('the address of a stop or a line is a page of its own, found again by its n
   assert.match(page, /<meta name="description" content="Abfahrten an der Haltestelle Alpha in Echtzeit: U1, live auf der Karte\.">/);
   assert.ok(page.includes(`<link rel="canonical" href="${address}stop/alpha@49.4000,11.0000">`));
   assert.ok(page.includes(`<link rel="alternate" hreflang="en" href="${address}stop/alpha@49.4000,11.0000?lang=en">`));
+  // in the main language it has one address, the plain one (#287): asked for in it, it sends the browser there, with the rest of the address
+  assert.ok(page.includes(`<link rel="alternate" hreflang="de" href="${address}stop/alpha@49.4000,11.0000">`));
+  for (const [asked, to] of [['/stop/alpha@49.4000,11.0000?lang=de', '../stop/alpha@49.4000,11.0000'], ['/stop/alpha@49.4000,11.0000?board=&lang=de&display', '../stop/alpha@49.4000,11.0000?board=&display'], ['/?lang=de', './'], ['/?lang=de&display=fixed', '?display=fixed']]) {
+    const moved = await request(asked);
+    assert.deepEqual([moved.status, moved.headers.location], [301, to], asked);
+  }
+  assert.equal((await request('/stop/alpha@49.4000,11.0000?lang=en')).status, 200);
   assert.match(page, /<aside class="card panel" id="panel" tabindex/);
   // its details as the page shows them, its departures at this moment (#254): its name the main heading of the page, not the instance's
   assert.ok(page.includes('<div id="panel-head"><div class="panel-head"><h1>Alpha</h1><p class="sub with-choice"><span class="view-switch" role="group" aria-label="Ansicht"><button type="button" aria-pressed="true" data-view="departures">Nächste Abfahrten</button><button type="button" aria-pressed="false" data-view="lines">Alle Linien</button></span><span class="choice"><button type="button" class="choice-open" aria-label="Filter"'));

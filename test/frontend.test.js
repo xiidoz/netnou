@@ -370,18 +370,20 @@ test('the header card shows at once where the page came as this visitor gets it'
       for (const stored of [null, ...codes, 'xx']) {
         for (const asked of [null, ...codes, 'xx', '']) {
           const situation = { lang, browser, stored: stored === null ? {} : { 'netnou.lang': stored }, search: asked === null ? '' : `?lang=${asked}` };
-          assert.equal(shown(situation), pickLanguage(stored, browser, asked) === lang, JSON.stringify(situation));
+          assert.equal(shown(situation), pickLanguage(stored, browser, asked, lang) === lang, JSON.stringify(situation));
         }
       }
     }
   }
+  // (the page keeps the language it was sent in, #287: the server picked it from the languages the browser named with its request)
   assert.ok(shown({ lang: 'de', browser: ['de-DE'] }));
-  assert.ok(!shown({ lang: 'de', browser: ['en-US'] }));
+  assert.ok(shown({ lang: 'de', browser: ['en-US'] }));
+  assert.ok(!shown({ lang: 'de', browser: ['en-US'], stored: { 'netnou.lang': 'en' } }));
   // (a browser of no language the page has gets English)
   assert.ok(shown({ lang: 'en', browser: ['xx'] }));
   // (a browser that keeps nothing has chosen nothing)
   assert.ok(shown({ lang: 'de', browser: ['de'], blocked: true }));
-  assert.ok(!shown({ lang: 'en', browser: ['de'], blocked: true }));
+  assert.ok(shown({ lang: 'en', browser: ['de'], blocked: true }));
   // the key the choice of a language is kept under
   assert.match(read('i18n.js'), /^const STORAGE_KEY = 'netnou\.lang';$/m);
 
@@ -501,7 +503,12 @@ test('what asks for the canvas to be drawn anew wakes the frames', () => {
 });
 
 // ('xx' stands for a language the page does not have, whatever is added to it)
-test('the language is the stored choice, else the first language of the browser that exists, else English', () => {
+test('the language is the stored choice, else the one the address asks for, else the one the page was sent in, else the first of the browser that exists, else English', () => {
+  // (#287: a page sent in the main language to whoever named none, as a search engine, stays in it in a browser of another language)
+  assert.equal(pickLanguage(null, ['en-US'], null, 'de'), 'de');
+  assert.equal(pickLanguage(null, ['en-US'], 'en', 'de'), 'en');
+  assert.equal(pickLanguage('en', ['de-DE'], null, 'de'), 'en');
+  assert.equal(pickLanguage(null, ['de-DE'], null, 'xx'), 'de');
   assert.equal(pickLanguage('de', ['en-US']), 'de');
   assert.equal(pickLanguage('en', ['de-DE']), 'en');
   assert.equal(pickLanguage(null, ['xx-XX', 'de-AT', 'en']), 'de');

@@ -75,19 +75,24 @@ function askedLanguage() {
 
 /**
  * The language to show: the one chosen with the picker, else the one the
- * address asks for, else the first of the browser's languages
- * (navigator.languages, most wanted first) that exists here, else English.
+ * address asks for, else the one the server sent the page in (`sent`), else
+ * the first of the browser's languages (navigator.languages, most wanted
+ * first) that exists here, else English. The server picks among the
+ * browser's languages too, as it names them with its request; a page that
+ * was asked for without any, as a search engine asks and then renders the
+ * page in a browser of its own, keeps the main language it came in (#287).
  */
-export function pickLanguage(stored, preferred, asked = null) {
+export function pickLanguage(stored, preferred, asked = null, sent = null) {
   const available = LANGUAGES.map(([code]) => code);
   if (available.includes(stored)) return stored;
   if (available.includes(asked)) return asked;
+  if (available.includes(sent)) return sent;
   return preferred.map(primary).find((code) => available.includes(code)) ?? FALLBACK;
 }
 
 /** Loads the texts of the visitor's language and returns its code. Before that, t() answers in English. */
-export async function loadLanguage(stored = storedLanguage(), preferred = navigator.languages ?? [], asked = askedLanguage()) {
-  language = pickLanguage(stored, preferred, asked);
+export async function loadLanguage(stored = storedLanguage(), preferred = navigator.languages ?? [], asked = askedLanguage(), sent = SENT) {
+  language = pickLanguage(stored, preferred, asked, sent);
   chosen = language === stored;
   messages = en;
   if (language !== FALLBACK) {
