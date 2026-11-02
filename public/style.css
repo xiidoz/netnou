@@ -1042,6 +1042,39 @@ li:last-child > .row.stop .rail::before { bottom: 50%; }
   text-align: center;
 }
 
+/* The offer of the browser's language (#287), in the look of the tip: its
+   line beside an ✕, below them the switch, filled, and the end of the offer,
+   quieter. In the bubble's colours, the rings of the keyboard as well. */
+.offer { text-align: left; padding: 12px 12px 10px 14px; }
+.offer-head { display: flex; align-items: flex-start; gap: 10px; margin-bottom: 8px; }
+.offer-head p { flex: 1; margin: 0; padding-top: 4px; }
+.offer-close {
+  flex: none;
+  width: 32px;
+  height: 32px;
+  margin: -4px -6px 0 0;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: none;
+  color: var(--bg);
+  cursor: pointer;
+}
+.offer-close .icon { width: 22px; height: 22px; }
+.offer-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.offer-switch, .offer-never {
+  min-height: 36px;
+  border: 0;
+  border-radius: 999px;
+  font: inherit;
+  cursor: pointer;
+}
+.offer-switch { padding: 6px 14px; background: var(--bg); color: var(--text); font-weight: 600; }
+.offer-never { padding: 6px 10px; background: none; color: var(--bg); text-decoration: underline; text-underline-offset: 3px; }
+.offer button:focus-visible { outline-color: var(--bg); }
+
 /* ---------- display mode ---------- */
 
 /* The controls hidden (see "display mode" in app.js): of the card its title
@@ -1140,17 +1173,23 @@ li:last-child > .row.stop .rail::before { bottom: 50%; }
    not that room the area is as large as there is room. The sizes are for the
    places the buttons have; each says what is next to it. */
 .settings-open, .search-open, .search-close, .chips-more span, .segmented button, .wall-start,
-.view-switch button, .choice-open, .choice-clear, .board-open, .panel-back, .maplibregl-ctrl-group button { position: relative; }
+.view-switch button, .choice-open, .choice-clear, .board-open, .panel-back, .maplibregl-ctrl-group button,
+.offer-close, .offer-switch, .offer-never { position: relative; }
 .settings-open::after, .search-open::after, .search-close::after, .close::after, .share::after, .heart::after,
 .chips-more span::after, .segmented button::after, .wall-start::after, .view-switch button::after,
 .choice-open::after, .choice-clear::after, .board-open::after, .panel-back::before, .panel-back::after,
-.maplibregl-ctrl-group button::after, .maplibregl-ctrl-attrib-button::after { content: ""; position: absolute; }
+.maplibregl-ctrl-group button::after, .maplibregl-ctrl-attrib-button::after,
+.offer-close::after, .offer-switch::after, .offer-never::after { content: ""; position: absolute; }
 /* (the round buttons of the title row: the gear and the lens; above them the edge of the screen, below them the field of the search or the line that positions are calculated) */
 .settings-open::after, .search-open::after { inset: -11px -7px -3px; }
 .search-open { margin-right: 6px; }
 .search-close::after { inset: -5px; }
 /* (the buttons in the corner of the details and the sheets, 44 px apart) */
 .close::after, .share::after, .heart::after { inset: -6px; }
+/* (the offer of a language: its ✕ up to the edge of the bubble and down to the
+   buttons below it, which are 8 px apart side by side) */
+.offer-close::after { inset: -6px -6px -4px; }
+.offer-switch::after, .offer-never::after { left: 0; right: 0; top: calc(50% - 22px); height: 44px; }
 /* (the switches of the settings and the button below them, with what they are called between them) */
 .segmented button::after, .wall-start::after { left: 0; right: 0; top: calc(50% - 22px); height: 44px; }
 /* (the way back: below it the name or the badge of a trip; above it the bar of the sheet, which keeps its stroke in the middle for a finger) */

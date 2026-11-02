@@ -104,6 +104,44 @@ export async function loadLanguage(stored = storedLanguage(), preferred = naviga
 }
 
 /**
+ * The language to offer a visitor whom the address shows the page in another
+ * one than their browser asks for (#287): the first of the browser's
+ * languages that exists here, where it is not the one the address asks for.
+ * Nothing where a language was chosen with the picker, or where the address
+ * asks for none (or for one there is not): then the page is in the browser's.
+ */
+export function languageToOffer(stored = storedLanguage(), preferred = navigator.languages ?? [], asked = askedLanguage()) {
+  const available = LANGUAGES.map(([code]) => code);
+  if (available.includes(stored) || !available.includes(asked)) return null;
+  const wanted = preferred.map(primary).find((code) => available.includes(code));
+  return wanted && wanted !== asked ? wanted : null;
+}
+
+/** The texts of a language, for t(): to say something in it on a page in another one. */
+export async function textsOf(code) {
+  return code === FALLBACK ? en : (await import(`./locales/${code}.js`)).default;
+}
+
+/**
+ * Chooses a language as the picker does: kept in the browser, and the page
+ * loaded again from its address without a language of its own, which would
+ * say something else than what was just chosen. Where it cannot be kept
+ * (private mode, blocked storage), nothing happens, unless `anyway`: the
+ * address without a language shows the page in the browser's.
+ */
+export function chooseLanguage(code, anyway = false) {
+  try {
+    localStorage.setItem(STORAGE_KEY, code);
+  } catch {
+    if (!anyway) return false;
+  }
+  const address = new URL(location.href);
+  address.searchParams.delete(ADDRESS_KEY);
+  location.replace(address);
+  return true;
+}
+
+/**
  * Whether the page is in a language chosen with the picker that the server
  * did not write it in: then the title and the description the server gave
  * it are in another language than the page.
@@ -177,11 +215,7 @@ export function translatePage() {
   }
 }
 
-/**
- * Fills the language picker. Choosing a language stores it and loads the page
- * again, which then starts in it – from the address without a language of its
- * own, which would say something else than what was just chosen.
- */
+/** Fills the language picker. Choosing a language keeps it and loads the page again in it (chooseLanguage). */
 export function languagePicker(select) {
   for (const [code, name] of LANGUAGES) {
     const option = new Option(name, code, false, code === language);
@@ -189,15 +223,7 @@ export function languagePicker(select) {
     select.append(option);
   }
   select.addEventListener('change', () => {
-    try {
-      localStorage.setItem(STORAGE_KEY, select.value);
-    } catch {
-      // private mode or blocked storage: the choice cannot be kept, so show what is in use
-      select.value = language;
-      return;
-    }
-    const address = new URL(location.href);
-    address.searchParams.delete(ADDRESS_KEY);
-    location.replace(address);
+    // (where the choice cannot be kept: show what is in use)
+    if (!chooseLanguage(select.value)) select.value = language;
   });
 }

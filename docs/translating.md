@@ -35,12 +35,21 @@ the one the address asks for; see
 [Being found](configuration.md#being-found). A new language is one of these
 addresses by itself.
 
+Where the address asks for one language and the browser for another the page
+has (by step 3), as when someone opens a link that was shared from the
+English page, the page offers the browser's language in a bubble, written in
+that language. Switching is choosing it in the page (step 1). "Don't ask
+again" ends the offer in that browser (`localStorage`, key
+`netnou.offerLanguage`); its ✕, a tap elsewhere or Escape put it away until
+the next visit.
+
 ## Adding a language
 
 Three steps, here for Dutch (`nl`):
 
 1. Copy `public/locales/en.js` to `public/locales/nl.js` and translate the
-   values. Keep the keys as they are.
+   values. Keep the keys as they are. The three `offer.` texts offer the
+   language itself, so they name Dutch, not English.
 2. Add the language to `LANGUAGES` in `public/i18n.js`, with its own name for
    itself:
 

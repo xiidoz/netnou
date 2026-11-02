@@ -128,6 +128,9 @@ export default {
   'about.useBoardText': 'Abfahrten als große Tafel, zum Beispiel für ein Display an der Wand, mit bis zu vier Haltestellen.',
   'tip.departure': 'Zeile antippen, um direkt zum Fahrzeug auf der Karte zu gelangen',
   'tip.departureMouse': 'Zeile anklicken, um direkt zum Fahrzeug auf der Karte zu gelangen',
+  'offer.text': 'Diese Seite gibt es auch auf Deutsch.',
+  'offer.switch': 'Zu Deutsch wechseln',
+  'offer.never': 'Nicht mehr fragen',
 
   'panel.label': 'Details',
   'panel.close': 'Schließen',
