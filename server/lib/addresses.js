@@ -1,20 +1,22 @@
 // The addresses of stops, lines (#37) and trips (#178), written and read by
 // public/address.js, as the timetable has them now. What an address names
 // is found again in a later timetable by what stays the same in it, which
-// the ids of the feed do not: a stop by its name and its place, a line by
-// its operator, its kind and its name, and by its place where lines of that
-// name are in places apart, a trip by its line and where and when it starts.
+// the ids of the feed do not: a stop by its name and its town, and by its
+// place where stops are named alike, a line by its operator, its kind and
+// its name, and by its place where lines of that name are in places apart,
+// a trip by its line and where and when it starts.
 
-import { linePath, slug, stopPath, tripPath } from '../../public/address.js';
+import { linePath, slug, stopPath, stopPathAt, tripPath } from '../../public/address.js';
 import { t } from '../../public/i18n.js';
 import { townToShow } from '../../public/stops.js';
 import { addDays, localClock, localDate, serviceDayStart, timeZone } from './time.js';
 import { MODES } from './timetable.js';
 
-// A stop of the name of an address is taken up to this far from its place.
-// Of the stations of January, October had one of the same name at the very
-// same place in 47.6 % of the cases, within 10 m in 80 %, within 1 km in
-// 94.1 % (measured for #105).
+// A stop of the name of an address with a place is taken up to this far
+// from it. Of the stations of January, October had one of the same name at
+// the very same place in 47.6 % of the cases, within 10 m in 80 %, within
+// 1 km in 94.1 % (measured for #105). The place in an address is one to two
+// decimals since #288, about 1 km, and to four before.
 const SAME_NAME_M = 1000;
 // Else a stop of any name this near the place: renamed, 1.6 % of them.
 const RENAMED_M = 10;
@@ -43,6 +45,19 @@ function firstAt(order, value, wanted) {
   return low;
 }
 
+/** Those in `order` whose value, as `value` has it, is `wanted`: [numbers], in that order. */
+function allAt(order, value, wanted) {
+  const found = [];
+  for (let k = firstAt(order, value, wanted); k < order.length && value(order[k]) === wanted; k++) found.push(order[k]);
+  return found;
+}
+
+/** Numbers 0 to values.length - 1 in the order of their values, and of the numbers where those are the same. */
+const orderOf = (values) => Int32Array.from(values.keys()).sort((a, b) => (values[a] < values[b] ? -1 : values[a] > values[b] ? 1 : a - b));
+
+/** A place in an address: latitude and longitude to that many decimals. */
+const placeOf = ({ lat, lon }, digits) => `${lat.toFixed(digits)},${lon.toFixed(digits)}`;
+
 export class Addresses {
   /** @param timetable a Timetable: its stations, lines and trips */
   constructor(timetable) {
@@ -66,18 +81,73 @@ export class Addresses {
     }
   }
 
+  /** Station number i as its address names it: { name, town }, town null where none is known. */
+  stationNamed(i) {
+    const { stations, towns, stationTown } = this.timetable;
+    return { name: stations[i].name, town: towns?.[stationTown?.[i]]?.name ?? null };
+  }
+
+  /** The name in the address of station number i: its own, with its town where it does not say it. */
+  keyOf(i) {
+    return stopPath(this.stationNamed(i)).slice('stop/'.length);
+  }
+
   /**
-   * The stations in the order of the names in their addresses (named), and
-   * in that of their cells (placed, with the cells of them in that order):
-   * lists of numbers, 4 MB for the quarter of a million of all of Germany,
-   * where maps of their names and cells would take more than 100. Made when
-   * a stop is first looked for: the lines need none of it.
+   * Of stations named alike the one whose address is the name alone: the
+   * busiest, of as busy ones the southernmost (#288). The others are told
+   * apart by their places.
+   */
+  firstOf(numbers) {
+    const { stations, stationService } = this.timetable;
+    const service = (i) => stationService?.[i] ?? 0;
+    const before = (a, b) => service(a) > service(b) || (service(a) === service(b) && (stations[a].lat < stations[b].lat || (stations[a].lat === stations[b].lat && stations[a].lon < stations[b].lon)));
+    return numbers.reduce((first, i) => (before(i, first) ? i : first));
+  }
+
+  /**
+   * The stations in the order of the names in their addresses (keyed), and
+   * of the names that stations share, which of them has it alone (alike), and
+   * for each of the others to how many decimals its place is written (digits,
+   * else 0): 0.5 % of the stations of all of Germany are such others. Lists
+   * of numbers, 1.5 MB for the quarter of a million of all of Germany, where
+   * a map of the names would take more than 100. Made when a stop is first
+   * looked for or written, in a second for all of Germany: the lines need
+   * none of it.
    */
   indexStations() {
+    if (this.keyed) return;
+    const { stations } = this.timetable;
+    const keys = stations.map((_, i) => this.keyOf(i));
+    this.keyed = orderOf(keys);
+    this.alike = new Map(); // a name in addresses → the station that has it alone
+    this.digits = new Uint8Array(stations.length);
+    for (let k = 0; k < this.keyed.length; ) {
+      let end = k + 1;
+      while (end < this.keyed.length && keys[this.keyed[end]] === keys[this.keyed[k]]) end++;
+      if (end - k > 1) {
+        const numbers = [...this.keyed.subarray(k, end)];
+        const plain = this.firstOf(numbers);
+        const others = numbers.filter((i) => i !== plain);
+        let digits = 2;
+        while (digits < 5 && new Set(others.map((i) => placeOf(stations[i], digits))).size < others.length) digits++;
+        for (const i of others) this.digits[i] = digits;
+        this.alike.set(keys[this.keyed[k]], plain);
+      }
+      k = end;
+    }
+  }
+
+  /**
+   * The stations in the order of their own names (named, as addresses had
+   * them before #288), and in that of their cells (placed, with the cells of
+   * them in that order): lists of numbers, 4 MB for all of Germany. Made when
+   * an address is first looked for that is no stop's own address now, in
+   * half a second.
+   */
+  indexNames() {
     if (this.named) return;
     const { stations } = this.timetable;
-    const names = stations.map((station) => slug(station.name));
-    this.named = Int32Array.from(names.keys()).sort((a, b) => (names[a] < names[b] ? -1 : names[a] > names[b] ? 1 : a - b));
+    this.named = orderOf(stations.map((station) => slug(station.name)));
     const cells = stations.map((station) => cellOf(station.lat, station.lon));
     this.placed = Int32Array.from(cells.keys()).sort((a, b) => cells[a] - cells[b] || a - b);
     this.cells = Float64Array.from(this.placed, (i) => cells[i]);
@@ -85,27 +155,43 @@ export class Addresses {
 
   /**
    * The station that an address names, as its number in timetable.stations,
-   * or -1: the one whose address it is; else the one of its name nearest its
-   * place, up to SAME_NAME_M away; else the nearest of any name up to
-   * RENAMED_M away. (Of two of a name either side of where the places of
-   * their addresses round apart, the place in the one's may be nearer the
-   * other.)
+   * or -1: the one whose address it is, or was before #288 (its name and its
+   * place to four decimals, stopPathAt). Else of those whose addresses have
+   * its name, where it has a place, the nearest up to SAME_NAME_M away, and
+   * where it has none, the one whose address is the name alone; else the same
+   * of those of that name, as addresses had it before. Else the nearest of
+   * any name up to RENAMED_M away from its place. (Of two of a name either
+   * side of where the places of their addresses round apart, the place in
+   * the one's may be nearer the other.)
    * @param asked a stop as parseAddress (public/address.js) has it
+   * @param path the address as asked for, to know it where it is a stop's own
    */
-  station({ name, lat, lon }) {
+  station({ name, lat, lon }, path = null) {
     this.indexStations();
     const { stations } = this.timetable;
-    const nameOf = (i) => slug(stations[i].name);
-    const path = stopPath(name, lat, lon);
-    let found = -1;
-    let nearest = SAME_NAME_M;
-    for (let k = firstAt(this.named, nameOf, name); k < this.named.length && nameOf(this.named[k]) === name; k++) {
-      const i = this.named[k];
-      const away = this.stationPath(i) === path ? 0 : metres(lat, lon, stations[i].lat, stations[i].lon);
-      if (away <= nearest) [found, nearest] = [i, away];
+    const placed = lat !== undefined;
+    const nearestOf = (numbers, within) => numbers.reduce(([found, best], i) => {
+      const away = metres(lat, lon, stations[i].lat, stations[i].lon);
+      return away <= best ? [i, away] : [found, best];
+    }, [-1, within])[0];
+    const keyed = allAt(this.keyed, (i) => this.keyOf(i), name);
+    const own = keyed.find((i) => this.stationPath(i) === path);
+    if (own !== undefined) return own;
+    this.indexNames();
+    const named = allAt(this.named, (i) => slug(stations[i].name), name);
+    const was = named.find((i) => stopPathAt(stations[i].name, stations[i].lat, stations[i].lon) === path);
+    if (was !== undefined) return was;
+    if (keyed.length) {
+      const found = placed ? nearestOf(keyed, SAME_NAME_M) : (this.alike.get(name) ?? keyed[0]);
+      if (found >= 0) return found;
     }
-    if (found >= 0) return found;
-    nearest = RENAMED_M;
+    if (named.length) {
+      const found = placed ? nearestOf(named, SAME_NAME_M) : this.firstOf(named);
+      if (found >= 0) return found;
+    }
+    if (!placed) return -1;
+    let found = -1;
+    let nearest = RENAMED_M;
     const [row, column] = [Math.floor(lat / CELL), Math.floor(lon / CELL)];
     for (let dLat = -1; dLat <= 1; dLat++) {
       for (let dLon = -1; dLon <= 1; dLon++) {
@@ -198,10 +284,27 @@ export class Addresses {
     return tripPath(line, `${day.slice(0, 4)}-${day.slice(4, 6)}-${day.slice(6)}`, localClock(leaves), tt.stops.name[tt.stopsOf(trip)[0]]);
   }
 
-  /** The address of station number i. */
+  /** The address of station number i: with its place where it is not the first of stations named alike. */
   stationPath(i) {
-    const { name, lat, lon } = this.timetable.stations[i];
-    return stopPath(name, lat, lon);
+    this.indexStations();
+    const digits = this.digits[i];
+    return stopPath(this.stationNamed(i), digits ? placeOf(this.timetable.stations[i], digits) : null);
+  }
+
+  /** The address of the station that is stop number s of the timetable (Timetable.stops), as answers name stops. */
+  stopAddress(s) {
+    if (!this.stationOfStop) {
+      const { stations, stopIndex, stops } = this.timetable;
+      this.stationOfStop = new Int32Array(stops.name.length).fill(-1);
+      stations.forEach((station, i) => {
+        this.stationOfStop[stopIndex.get(station.id)] = i;
+      });
+    }
+    const i = this.stationOfStop[s];
+    if (i >= 0) return this.stationPath(i);
+    // (one beyond the area, as a line that leaves it has: by its name, as the page of a stop would be named)
+    const { stops, towns } = this.timetable;
+    return stopPath({ name: stops.name[s], town: towns?.[stops.town[s]]?.name ?? null });
   }
 
   /** The address of line number i. */

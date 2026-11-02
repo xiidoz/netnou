@@ -35,7 +35,7 @@ import http from 'node:http';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { stopPath } from '../public/address.js';
+import { stopPathAt } from '../public/address.js';
 import { chromeArgs, findChrome } from './chrome.mjs';
 
 // The stop of the board, by its name in the timetable, and what is typed into the search.
@@ -178,7 +178,7 @@ try {
   };
   const stop = station(moment.stop);
   const boardStop = station(BOARD_STOP);
-  const stopAddress = `${stopPath(stop.name, stop.lat, stop.lon)}?lang=en`;
+  const stopAddress = `${stopPathAt(stop.name, stop.lat, stop.lon)}?lang=en`;
   // The delays in before the first vehicles: the departures of a stop start the
   // fetching of the realtime feed, and the server, whose clock stands still,
   // would keep vehicles worked out without them for good.
@@ -307,7 +307,7 @@ try {
   await settle();
   await shoot('wide');
   // The departures of a stop as a board beside the map, as on a screen on a wall.
-  await go(`${stopPath(boardStop.name, boardStop.lat, boardStop.lon)}?lang=en&board=50`);
+  await go(`${stopPathAt(boardStop.name, boardStop.lat, boardStop.lon)}?lang=en&board=50`);
   await waitFor("document.querySelectorAll('.board-rows > li').length > 0", 'The board');
   // (the map further out than the stop opens it: more of the city, and still the names of lines and stops)
   await zoomTo(USUAL_ZOOM);

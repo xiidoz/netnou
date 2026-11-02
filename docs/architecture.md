@@ -682,22 +682,41 @@ otherwise a server would load a file written by older code:
   is listed scrolls below it.
 - **Addresses.** A stop and a line each have an address of their own
   ([#37](https://github.com/xiidoz/netnou/issues/37)), to be passed on,
-  kept and found by a search: `stop/nuernberg-plaerrer@49.4481,11.0648`,
+  kept and found by a search: `stop/nuernberg-plaerrer`,
   `line/verkehrsag-nuernberg/subway/u1` (`address.js`). The ids of a feed
-  change with every timetable, so a stop is named by its name and its place
-  to four decimals, about 10 m, and a line by its operator, its kind and
-  its name. Where lines of that name are in places apart, the address of
-  each has its place as well, to two decimals, about 1 km:
-  `line/db-regio-ag-bayern/suburban/s1@49.56,11.14`. The words of an
-  address are English, the names in it as the timetable has them, in small
-  letters, ä as ae. Name and place tell every stop of the default area
-  apart, and all but 92 of the 245,439 of all of Germany, which stand twice
-  at the same place.
-- **Found again.** The server takes the stop whose address it is, else the
-  stop of that name nearest the place, up to 1 km away, else a stop of any
-  name within 10 m of it, renamed (`lib/addresses.js`). The first matters
-  where two stops of a name stand either side of where their places round
-  apart: the place in the address of the one may be nearer the other.
+  change with every timetable, so a stop is named by its name as the title
+  of its page has it, with its town after it where the name does not say it
+  (`stop/bruck-er-rotes-kreuz-erlangen`, #254), and a line by its operator,
+  its kind and its name. Where stops would have the same address, as two of
+  a name on either side of a street, the busiest has it and each of the
+  others its place as well, to two decimals, about 1 km, or as many as tell
+  them apart: `stop/sankt-augustin-ort@50.77,7.18`. So have lines of a name
+  in places apart: `line/db-regio-ag-bayern/suburban/s1@49.56,11.14`. The
+  words of an address are English, the names in it as the timetable has
+  them, in small letters, ä as ae. Of the 252,057 stops of all of Germany
+  (November 2026) each has an address of its own, 38 % have their town in
+  it and 0.5 % a place.
+- **Kept from one timetable to the next**
+  ([#288](https://github.com/xiidoz/netnou/issues/288)). Until then the
+  address of a stop had its place to four decimals, about 10 m, and a new
+  timetable moves many stops by a few metres: each such move gave the stop
+  a new address, which search engines took for a page that had moved. Of
+  the stations of January 2026 that had the same name in November, 70.7 %
+  kept that address; with its name and town, 99.8 % keep theirs. What
+  changes still is the address of a stop that gets a second one of its name
+  in its town, or loses it, or becomes the busier of the two; and a stop
+  that is renamed gets a new address either way (1.6 % of them).
+- **Found again.** The server takes the stop whose address it is, or was
+  before #288 (its name and its place to four decimals); else of the stops
+  whose addresses have that name, the one nearest the place in it, up to
+  1 km away, or without a place the one whose address is the name alone;
+  else the same of the stops of that name, as addresses had it before; else
+  a stop of any name within 10 m of the place, renamed (`lib/addresses.js`).
+  The first matters where two stops of a name stand either side of where
+  their places round apart: the place in the address of the one may be
+  nearer the other. The names in the addresses of all stations are sorted
+  once a timetable, in a second for all of Germany, the names of before
+  only when an address is first asked for that is not a stop's own.
   Measured from January to October 2026, that finds
   about 96 in 100 stops again after nine months. A line is found by its
   operator, kind and name; of lines of a name in places apart, the one

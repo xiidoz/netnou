@@ -1,9 +1,11 @@
 // The addresses of stops, lines (#37) and trips (#178), which the page shows
 // and passes on and the server answers. The ids of the feed change with every
-// timetable, so a stop is named by its name and its place, a line by its
+// timetable, so a stop is named by its name and its town, a line by its
 // operator, its kind and its name, and a trip by its line, its day and where
 // and when it starts. The words of an address are English, the names in
 // it as the timetable has them, written as one types them.
+
+import { townToShow } from './stops.js';
 
 /** The kinds of transport of a line's address, as the API names them (MODES in server/lib/timetable.js). */
 const KINDS = ['subway', 'tram', 'bus', 'suburban', 'regional', 'longdistance', 'ferry', 'cable', 'other'];
@@ -20,8 +22,23 @@ export function slug(name) {
   return words || '-';
 }
 
-/** The address of a stop: stop/<name>@<latitude>,<longitude>, the place to four decimals (about 10 m). */
-export const stopPath = (name, lat, lon) => `stop/${slug(name)}@${lat.toFixed(4)},${lon.toFixed(4)}`;
+/**
+ * The address of a stop (#288): stop/<name>, its name as its title has it,
+ * with its town after it where the name does not say it (townToShow, #254),
+ * and @<place> after that where stops would be named alike: on all of them
+ * but the busiest, as server/lib/addresses.js writes it. So a stop keeps its
+ * address when a new timetable moves it by some metres.
+ * @param stop { name, town }, town null where none is known
+ */
+export const stopPath = ({ name, town }, place = null) => `stop/${slug(townToShow(name, town) ? `${name} ${town}` : name)}${place ? `@${place}` : ''}`;
+
+/**
+ * An address of a stop by its name and its place to four decimals, as
+ * addresses of stops were written until #288. The server finds the stop by
+ * it still, and answers with the stop's address: the page writes one where
+ * it has none from the server, as for a favourite or a stop of the search.
+ */
+export const stopPathAt = (name, lat, lon) => `stop/${slug(name)}@${lat.toFixed(4)},${lon.toFixed(4)}`;
 
 /**
  * The address of a line: line/<operator>/<kind>/<name>, and @<place> where
@@ -40,14 +57,14 @@ export const tripPath = ({ agency, mode, name }, day, time, from) => `trip/${slu
 
 // (a place in an address: latitude and longitude, each to up to seven decimals)
 const PLACE = String.raw`@(-?\d{1,2}(?:\.\d{1,7})?),(-?\d{1,3}(?:\.\d{1,7})?)`;
-const STOP = new RegExp(String.raw`^stop\/([a-z0-9-]+)${PLACE}$`);
+const STOP = new RegExp(String.raw`^stop\/([a-z0-9-]+)(?:${PLACE})?$`);
 const LINE = new RegExp(String.raw`^line\/([a-z0-9-]+)\/([a-z]+)\/([a-z0-9-]+)(?:${PLACE})?$`);
 const TRIP = /^trip\/([a-z0-9-]+)\/([a-z]+)\/([a-z0-9-]+)\/(\d{4}-\d{2}-\d{2})\/((?:[01]\d|2[0-3])[0-5]\d)-([a-z0-9-]+)$/;
 
 /**
  * What an address names, given from where the instance is (`stop/…`,
- * `line/…`, `trip/…`): { type: 'stop', name, lat, lon }, { type: 'line',
- * agency, mode, name }, with lat and lon where it has a place, or { type:
+ * `line/…`, `trip/…`): { type: 'stop', name }, { type: 'line', agency,
+ * mode, name }, each with lat and lon where it has a place, or { type:
  * 'trip', agency, mode, name, day, time, from }; the names as the address
  * writes them; null for any other.
  */

@@ -119,7 +119,9 @@ test('the further stops of a board are read in the order of the address, merged 
   // without a board they mean nothing
   assert.deepEqual(readStops(`?with=${ROSENAU}`, PLAERRER), []);
   // what is no address of a stop, the first stop again and a stop twice are left out
-  assert.deepEqual(readStops(`?board=60&with=nuernberg+rosenau@49.4466,11.0619&block=line/vag/bus/36&with=${PLAERRER}&block=${ROSENAU}&with=${ROSENAU}&block=nowhere`, PLAERRER), [{ path: ROSENAU, joined: false }]);
+  assert.deepEqual(readStops(`?board=60&with=nuernberg+rosenau@49.4466,11.0619&block=line/vag/bus/36&with=${PLAERRER}&block=${ROSENAU}&with=${ROSENAU}&block=nowhere@91.0,11.0`, PLAERRER), [{ path: ROSENAU, joined: false }]);
+  // an address of a stop without a place is one as well (#288)
+  assert.deepEqual(readStops('?board=60&with=nuernberg-gostenhof', PLAERRER), [{ path: 'nuernberg-gostenhof', joined: true }]);
   // at most four stops in all
   assert.equal(BOARD_STOPS, 4);
   assert.deepEqual(readStops(`?board=60&with=${ROSENAU}&with=${GOSTENHOF}&block=${WEISSER_TURM}&block=nuernberg-opernhaus@49.4468,11.0749`, PLAERRER).map((stop) => stop.path), [ROSENAU, GOSTENHOF, WEISSER_TURM]);

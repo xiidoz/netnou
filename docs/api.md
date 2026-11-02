@@ -501,9 +501,9 @@ way they go.
   {
     "to": "Langwasser Süd",
     "stops": [
-      { "id": "1041", "name": "Fürth Hardhöhe", "town": "Fürth", "path": "stop/fuerth-hardhoehe@49.4802,10.9817", "start": false, "end": false },
+      { "id": "1041", "name": "Fürth Hardhöhe", "town": "Fürth", "path": "stop/fuerth-hardhoehe", "start": false, "end": false },
       …,
-      { "id": "384784", "name": "Nürnberg Eberhardshof", "town": "Nürnberg", "path": "stop/nuernberg-eberhardshof@49.4573,11.0306", "start": true, "end": false },
+      { "id": "384784", "name": "Nürnberg Eberhardshof", "town": "Nürnberg", "path": "stop/nuernberg-eberhardshof", "start": true, "end": false },
       …
     ],
     "branches": [],
@@ -647,6 +647,7 @@ without a station.
   "lat": 49.45108,
   "lon": 11.066786,
   "notes": [],
+  "path": "stop/nuernberg-obere-turnstr",
   "departures": [
     { "trip": "21032_20261004", "line": "4", "mode": "tram", "to": "Am Wegfeld", "platform": "", "planned": 1791148680, "delay": 0, "cancelled": false, "warnings": [] },
     { "trip": "671753_20261004", "line": "10", "mode": "tram", "to": "Dutzendteich", "platform": "", "planned": 1791148740, "delay": 41, "cancelled": false,
@@ -667,7 +668,8 @@ stop: it can be another place than where the trip set out for, such as
 where a "via" is behind it.
 `town` is the town the station is in, as in [`/api/search`](#get-apisearch), or `null` where
 none is known; the page shows it below the name where the name does not say
-it (#254).
+it (#254). `path` is the address of the station's page, as
+[`/api/address`](#get-apiaddress) describes it (#288).
 `cancelled` is true when the run is cancelled or skips this station. `notes`
 are notes of the feed about the station, such as a lift out of order, each
 with a `title`, a `text` and a `severity` as for [a trip](#get-apitrip).
@@ -736,16 +738,17 @@ none.
 What the address of a stop, a line or a trip names now. The page asks for
 it when it is opened at such an address ([Addresses](architecture.md#the-page)):
 the ids of a feed change with every timetable, so a stop is named by its
-name and its place, a line by its operator, its kind and its name, and by
-its place where lines of that name are in places apart, and a trip by its
-line, its day and when and where it starts.
+name and its town, and by its place where stops are named alike, a line by
+its operator, its kind and its name, and by its place where lines of that
+name are in places apart, and a trip by its line, its day and when and
+where it starts.
 
 | Parameter | Meaning |
 | --- | --- |
-| `path` | the address from where the instance is: `stop/<name>@<latitude>,<longitude>`; `line/<operator>/<kind>/<name>`, with `@<latitude>,<longitude>` after it where lines of the name are in places apart; or `trip/<operator>/<kind>/<line>/<YYYY-MM-DD>/<HHMM>-<first stop>`, the day and the time those of the clock where the instance is, of the planned departure from its first stop |
+| `path` | the address from where the instance is: `stop/<name>`, with `@<latitude>,<longitude>` after it where stops are named alike (see below), or as addresses of stops were written until #288, `stop/<name>@<latitude>,<longitude>` with the place to four decimals; `line/<operator>/<kind>/<name>`, with `@<latitude>,<longitude>` after it where lines of the name are in places apart; or `trip/<operator>/<kind>/<line>/<YYYY-MM-DD>/<HHMM>-<first stop>`, the day and the time those of the clock where the instance is, of the planned departure from its first stop |
 
 ```json
-{ "type": "stop", "name": "Nürnberg Plärrer", "lat": 49.44809, "lon": 11.0648, "path": "stop/nuernberg-plaerrer@49.4481,11.0648" }
+{ "type": "stop", "name": "Nürnberg Plärrer", "lat": 49.44809, "lon": 11.0648, "path": "stop/nuernberg-plaerrer" }
 ```
 
 ```json
@@ -756,8 +759,18 @@ line, its day and when and where it starts.
 { "type": "trip", "id": "671753_20261004", "path": "trip/verkehrsag-nuernberg/tram/10/2026-10-04/1546-nuernberg-am-wegfeld" }
 ```
 
-The stop is the one of that name nearest the place, up to 1 km away, else
-one of any name within 10 m of it; `lat` and `lon` are its place as
+The address of a stop is its name as the title of its page has it: with
+its town after it where the name does not say it, `stop/bruck-er-rotes-kreuz-erlangen`
+for "Bruck/ER Rotes Kreuz" in Erlangen. So it stays when a new timetable
+moves the stop by some metres (#288). Where stops would have the same
+address, as two of a name on either side of a street, the busiest has it
+and each of the others has its place after it, to two decimals, about 1
+km, or as many as tell them apart: `stop/sankt-augustin-ort@50.77,7.18`.
+The stop is the one whose address it is, or was before; else of those whose
+addresses have that name, the one nearest the place in it, up to 1 km
+away, or without a place the one whose address is the name alone; else the
+same of those of that name, as addresses had it before; else one of any
+name within 10 m of the place. `lat` and `lon` are its place as
 `/api/departures` takes it with `at`. Of lines of a name in places apart
 the line is the one whose address it is, else the one nearest the place in
 it, and without a place the busiest; `at` is its place as `/api/line`

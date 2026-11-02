@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { linePath, parseAddress, slug, stopPath, tripPath, wordsOf } from '../public/address.js';
+import { linePath, parseAddress, slug, stopPath, stopPathAt, tripPath, wordsOf } from '../public/address.js';
 import { Addresses } from '../server/lib/addresses.js';
 import { sitemapFiles } from '../server/lib/page.js';
 
@@ -18,9 +18,16 @@ test('a name as an address writes it: small letters, ä as ae, the words joined 
   assert.equal(slug('?!'), '-');
 });
 
-test('the address of a stop has its place to four decimals, that of a line its operator, kind and name', () => {
-  assert.equal(stopPath('Nürnberg Plärrer', 49.44812, 11.06483), 'stop/nuernberg-plaerrer@49.4481,11.0648');
-  assert.equal(stopPath('Rio', -22.9, -43.21), 'stop/rio@-22.9000,-43.2100');
+test('the address of a stop is its name as its title has it (#288), that of a line its operator, kind and name', () => {
+  assert.equal(stopPath({ name: 'Nürnberg Plärrer', town: 'Nürnberg' }), 'stop/nuernberg-plaerrer');
+  // with its town after a name that does not say it, as in its title (#254)
+  assert.equal(stopPath({ name: 'Bruck/ER Rotes Kreuz', town: 'Erlangen' }), 'stop/bruck-er-rotes-kreuz-erlangen');
+  assert.equal(stopPath({ name: 'Amsterdam Centraal', town: null }), 'stop/amsterdam-centraal');
+  // and with a place where stops are named alike
+  assert.equal(stopPath({ name: 'Rio', town: null }, '-22.90,-43.21'), 'stop/rio@-22.90,-43.21');
+  // as addresses were written before: by the name and the place to four decimals
+  assert.equal(stopPathAt('Nürnberg Plärrer', 49.44812, 11.06483), 'stop/nuernberg-plaerrer@49.4481,11.0648');
+  assert.equal(stopPathAt('Rio', -22.9, -43.21), 'stop/rio@-22.9000,-43.2100');
   assert.equal(linePath({ agency: 'VerkehrsAG Nürnberg', mode: 'subway', name: 'U1' }), 'line/verkehrsag-nuernberg/subway/u1');
   assert.equal(linePath({ agency: 'DB Fernverkehr AG', mode: 'longdistance', name: 'ICE 41' }), 'line/db-fernverkehr-ag/longdistance/ice-41');
   // (a kind the address does not know is "other")
@@ -30,16 +37,19 @@ test('the address of a stop has its place to four decimals, that of a line its o
 });
 
 test('what an address names, and what is not an address', () => {
+  assert.deepEqual(parseAddress('stop/nuernberg-plaerrer'), { type: 'stop', name: 'nuernberg-plaerrer' });
   assert.deepEqual(parseAddress('stop/nuernberg-plaerrer@49.4481,11.0648'), { type: 'stop', name: 'nuernberg-plaerrer', lat: 49.4481, lon: 11.0648 });
   assert.deepEqual(parseAddress('stop/rio@-22.9,-43.21'), { type: 'stop', name: 'rio', lat: -22.9, lon: -43.21 });
   assert.deepEqual(parseAddress('line/verkehrsag-nuernberg/subway/u1'), { type: 'line', agency: 'verkehrsag-nuernberg', mode: 'subway', name: 'u1' });
   assert.deepEqual(parseAddress('line/db-regio-ag-bayern/suburban/s1@49.56,11.14'), { type: 'line', agency: 'db-regio-ag-bayern', mode: 'suburban', name: 's1', lat: 49.56, lon: 11.14 });
   // read back as written
-  for (const path of [stopPath('Fürth Hbf', 49.4697, 10.9897), linePath({ agency: 'OVF', mode: 'bus', name: '113' })]) {
+  for (const path of [stopPath({ name: 'Fürth Hbf', town: 'Fürth' }), stopPath({ name: 'Kirche', town: 'Hausen' }, '48.30,11.70'), linePath({ agency: 'OVF', mode: 'bus', name: '113' })]) {
     const named = parseAddress(path);
-    assert.equal(named.type === 'stop' ? stopPath(named.name, named.lat, named.lon) : linePath(named), path);
+    assert.equal(named.type === 'stop' ? `stop/${named.name}${named.lat === undefined ? '' : `@${named.lat.toFixed(2)},${named.lon.toFixed(2)}`}` : linePath(named), path);
   }
-  for (const path of ['', 'stop/', 'stop/plaerrer', 'stop/plaerrer@49.4,', 'stop/plaerrer@91.0,11.0', 'stop/Plaerrer@49.4,11.0', 'stop/a@49.4,11.0/more', 'line/vag/u1', 'line/vag/airship/u1', 'line/vag/subway/', 'line/vag/subway/u1@49.4', 'line/vag/subway/u1@91,11', 'trip/1', 'api/area']) {
+  const old = stopPathAt('Fürth Hbf', 49.4697, 10.9897);
+  assert.equal(stopPathAt(parseAddress(old).name, parseAddress(old).lat, parseAddress(old).lon), old);
+  for (const path of ['', 'stop/', 'stop/plaerrer@49.4,', 'stop/plaerrer@91.0,11.0', 'stop/Plaerrer@49.4,11.0', 'stop/a@49.4,11.0/more', 'line/vag/u1', 'line/vag/airship/u1', 'line/vag/subway/', 'line/vag/subway/u1@49.4', 'line/vag/subway/u1@91,11', 'trip/1', 'api/area']) {
     assert.equal(parseAddress(path), null, path);
   }
   // its name, as the search takes it
@@ -57,38 +67,69 @@ test('the address of a trip is its line, its day, and when and where it starts (
   }
 });
 
-test('an address finds the stop of its name nearest its place, else one of any name right there', () => {
+test('the address of a stop is its name, with its town where the name does not say it, and its place where that is needed (#288)', () => {
   const stations = [
     { name: 'Ried', lat: 48.1, lon: 11.5 },
-    { name: 'Ried', lat: 48.2, lon: 11.6 },
-    { name: 'Ried', lat: 48.105, lon: 11.5 },
+    { name: 'Kirche', lat: 48.2, lon: 11.6 },
+    { name: 'Kirche', lat: 48.3, lon: 11.7 },
+    // three of a name in one town: on each side of the street, and in a village of it
+    { name: 'Rathaus', lat: 48.21, lon: 11.61 },
+    { name: 'Rathaus', lat: 48.21005, lon: 11.61008 },
+    { name: 'Rathaus', lat: 48.25, lon: 11.65 },
     { name: 'Hausen', lat: -33.9, lon: 18.4 },
     { name: 'Aachen Bushof', lat: 50.777, lon: 6.087 },
     { name: 'Zwickau', lat: 50.7, lon: 12.5 },
     { name: 'Nullpunkt', lat: -0.00001, lon: -0.00001 },
   ];
-  const addresses = new Addresses({ stations, lines: [], stationService: [1, 1, 1, 1, 1, 1, 0] });
-  // of three of a name the nearest, up to 1 km away
-  assert.equal(addresses.station({ name: 'ried', lat: 48.104, lon: 11.5 }), 2);
-  assert.equal(addresses.station({ name: 'ried', lat: 48.2001, lon: 11.6 }), 1);
-  assert.equal(addresses.station({ name: 'ried', lat: 48.15, lon: 11.55 }), -1);
-  // two of a name either side of where the places of their addresses round apart: each address names its own,
-  // though the other is the nearer to the place in it
+  const timetable = {
+    stations,
+    lines: [],
+    towns: [{ name: 'Musterstadt' }, { name: 'Ried' }, { name: 'Hausen' }],
+    stationTown: [1, 0, 2, 0, 0, 0, -1, -1, -1, -1],
+    stationService: [5, 5, 5, 90, 80, 10, 5, 5, 5, 0],
+  };
+  const addresses = new Addresses(timetable);
+  const paths = [
+    'stop/ried', 'stop/kirche-musterstadt', 'stop/kirche-hausen',
+    // the busiest has the name alone, the others have their places after it
+    'stop/rathaus-musterstadt', 'stop/rathaus-musterstadt@48.21,11.61', 'stop/rathaus-musterstadt@48.25,11.65',
+    'stop/hausen', 'stop/aachen-bushof', 'stop/zwickau', 'stop/nullpunkt',
+  ];
+  assert.deepEqual(stations.map((_, i) => addresses.stationPath(i)), paths);
+  // each names its own, though the place of the busiest is the very one in the second's
+  assert.deepEqual(paths.map((path) => addresses.station(parseAddress(path), path)), paths.map((_, i) => i));
+  // all in the sitemap, but for the stop no trip calls at
+  assert.deepEqual(addresses.paths(), paths.slice(0, -1));
+
+  // A new timetable that moves stops by some metres gives them the addresses they had; and with another stop
+  // of that name, less busy, the busiest keeps its address too.
+  const moved = stations.map((station) => ({ ...station, lat: station.lat + 0.00007, lon: station.lon + 0.00007 }));
+  const later = new Addresses({ ...timetable, stations: [...moved, { name: 'Rathaus', lat: 48.23, lon: 11.63 }], stationTown: [...timetable.stationTown, 0], stationService: [...timetable.stationService, 3] });
+  assert.deepEqual(moved.map((_, i) => later.stationPath(i)), paths);
+
+  // An address without its place, or with another: of the stops whose addresses have its name, the one whose
+  // address is the name alone, or the nearest up to 1 km away.
+  assert.equal(addresses.station(parseAddress('stop/rathaus-musterstadt@48.25,11.64')), 5);
+  assert.equal(addresses.station(parseAddress('stop/ried@48.15,11.55')), -1);
+  // An address as they were written before (#288), by the name and the place to four decimals: the stop of the name
+  // whose address that was, else the nearest up to 1 km away; without a place the busiest of the name.
+  assert.equal(addresses.station(parseAddress('stop/kirche@48.2000,11.6000'), 'stop/kirche@48.2000,11.6000'), 1);
+  assert.equal(addresses.station(parseAddress('stop/rathaus@48.2501,11.6499')), 5);
+  assert.equal(addresses.station(parseAddress('stop/kirche@48.15,11.55')), -1);
+  assert.equal(addresses.station(parseAddress('stop/kirche')), 1);
+  // of two of a name either side of where the places of such addresses round apart, each names its own, though
+  // the other is the nearer to the place in it
   const pair = new Addresses({ stations: [{ name: 'Lehmkaul', lat: 48.300049, lon: 11.500049 }, { name: 'Lehmkaul', lat: 48.300051, lon: 11.5 }], lines: [] });
-  assert.deepEqual([pair.stationPath(0), pair.stationPath(1)], ['stop/lehmkaul@48.3000,11.5000', 'stop/lehmkaul@48.3001,11.5000']);
-  assert.deepEqual([0, 1].map((i) => pair.station(parseAddress(pair.stationPath(i)))), [0, 1]);
+  assert.deepEqual([0, 1].map((i) => pair.stationPath(i)), ['stop/lehmkaul', 'stop/lehmkaul@48.30,11.50']);
+  assert.deepEqual(['stop/lehmkaul@48.3000,11.5000', 'stop/lehmkaul@48.3001,11.5000'].map((path) => pair.station(parseAddress(path), path)), [0, 1]);
   // the first and the last name, in the order of addresses
-  assert.equal(addresses.station({ name: 'aachen-bushof', lat: 50.78, lon: 6.09 }), 4);
-  assert.equal(addresses.station({ name: 'zwickau', lat: 50.7, lon: 12.5 }), 5);
-  // another name, up to 10 m away: south of the equator, and across it and the meridian of Greenwich
-  assert.equal(addresses.station({ name: 'kapstadt', lat: -33.90005, lon: 18.40005 }), 3);
-  assert.equal(addresses.station({ name: 'kapstadt', lat: -33.9002, lon: 18.4 }), -1);
-  assert.equal(addresses.station({ name: 'irgendwo', lat: 0.00002, lon: 0.00002 }), 6);
-  // all with their addresses, but for the stop no trip calls at
-  assert.deepEqual(addresses.paths(), [
-    'stop/ried@48.1000,11.5000', 'stop/ried@48.2000,11.6000', 'stop/ried@48.1050,11.5000', 'stop/hausen@-33.9000,18.4000',
-    'stop/aachen-bushof@50.7770,6.0870', 'stop/zwickau@50.7000,12.5000',
-  ]);
+  assert.equal(addresses.station(parseAddress('stop/aachen-bushof@50.78,6.09')), 7);
+  assert.equal(addresses.station(parseAddress('stop/zwickau@50.7,12.5')), 8);
+  // another name, up to 10 m from the place: south of the equator, and across it and the meridian of Greenwich
+  assert.equal(addresses.station(parseAddress('stop/kapstadt@-33.90005,18.40005')), 6);
+  assert.equal(addresses.station(parseAddress('stop/kapstadt@-33.9002,18.4')), -1);
+  assert.equal(addresses.station(parseAddress('stop/irgendwo@0.00002,0.00002')), 9);
+  assert.equal(addresses.station(parseAddress('stop/irgendwo')), -1);
 });
 
 test('lines of a name in places apart have the middle of their stations in their addresses (#152)', () => {

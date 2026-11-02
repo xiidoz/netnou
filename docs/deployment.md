@@ -344,7 +344,7 @@ map or on all of the screen. The address is then that of the stop, with the
 board in it:
 
 ```text
-https://example.org/stop/nuernberg-plaerrer@49.4481,11.0648?display=fixed&board=50&lang=de
+https://example.org/stop/nuernberg-plaerrer?display=fixed&board=50&lang=de
 ```
 
 | In the address | Meaning | Without it |
@@ -366,7 +366,7 @@ blocks stand side by side. The address names the further stops after the
 board, in its order:
 
 ```text
-https://example.org/stop/nuernberg-plaerrer@49.4481,11.0648?display=fixed&board=60&with=nuernberg-kohlenhof@49.4453,11.0688&block=nuernberg-gostenhof-ost@49.4501,11.0583
+https://example.org/stop/nuernberg-plaerrer?display=fixed&board=60&with=nuernberg-kohlenhof&block=nuernberg-gostenhof-ost
 ```
 
 | In the address | Meaning |
@@ -376,7 +376,8 @@ https://example.org/stop/nuernberg-plaerrer@49.4481,11.0648?display=fixed&board=
 
 Each is named as its own address names it, without `stop/`. A stop that a
 later timetable does not have stays in the address, and the board says so in
-its place until it is back.
+its place until it is back. The address of a display set up before #288,
+with the place of each stop in it, works as well.
 
 What a fixed display does by itself:
 

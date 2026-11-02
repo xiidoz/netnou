@@ -19,7 +19,6 @@
 //   knots    [time, lat, lon, …] along a vehicle's way ahead; the page
 //            interpolates between them
 
-import { stopPath } from '../../public/address.js';
 import { bearing, choiceKey, inChoice } from '../../public/choice.js';
 import { NETS } from './network.js';
 import { searchList } from './search-list.js';
@@ -1230,14 +1229,15 @@ export class Timetable extends Schedule {
    * go and how far they have got; with the place of the line, which asks for
    * it again among those of its name.
    * @param vehicles from vehicles()
+   * @param pathOf (stop number) => the address of that station (Addresses.stopAddress)
    */
-  lineVehicles(index, vehicles) {
+  lineVehicles(index, vehicles, pathOf) {
     const { name, mode, agency, place } = this.lines[index];
     const own = vehicles.filter((v) => v.lineIndex === index);
     const list = own
       .sort((a, b) => a.to.localeCompare(b.to) || a.stopsLeft - b.stopsLeft)
       .map((v) => ({ id: v.id, to: v.to, next: v.next, delay: v.delay, lat: round5(v.lat), lon: round5(v.lon), warnings: v.warnings }));
-    return { name, mode, agency, at: place, vehicles: list, ways: this.lineStops(index, own) };
+    return { name, mode, agency, at: place, vehicles: list, ways: this.lineStops(index, own, pathOf) };
   }
 
   /**
@@ -1255,9 +1255,10 @@ export class Timetable extends Schedule {
    *   stations it leaves the line at and joins it at; `track` where it will
    *   be when, on from there: [time, position, …], positions as `from`,
    *   for the page to move it between two answers
+   * @param pathOf (stop number) => the address of that station
    */
-  lineStops(index, vehicles) {
-    const stop = (s) => ({ id: this.stops.id.get(s), name: this.stops.name[s], town: this.towns[this.stops.town[s]]?.name ?? null, path: stopPath(this.stops.name[s], this.stops.lat[s], this.stops.lon[s]) });
+  lineStops(index, vehicles, pathOf) {
+    const stop = (s) => ({ id: this.stops.id.get(s), name: this.stops.name[s], town: this.towns[this.stops.town[s]]?.name ?? null, path: pathOf(s) });
     const ways = this.lineWays(index);
     const placed = ways.map(() => []);
     for (const v of vehicles) {
