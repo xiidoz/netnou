@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import http from 'node:http';
 import path from 'node:path';
 import zlib from 'node:zlib';
-import { parseAddress, stopPath } from '../public/address.js';
+import { parseAddress } from '../public/address.js';
 import { readChoice } from '../public/choice.js';
 import { readDisplay } from '../public/display.js';
 import { t } from '../public/i18n.js';
@@ -11,7 +11,7 @@ import { nearby, placesOf } from '../public/nearby.js';
 import { kilometres } from '../public/search.js';
 import { townToShow } from '../public/stops.js';
 import { loadConfig, parseBox, parsePlace } from './config.js';
-import { Addresses, stopTitle } from './lib/addresses.js';
+import { Addresses, KeptNumbers, stopTitle } from './lib/addresses.js';
 import { FeedUpdater } from './lib/feed.js';
 import { RealtimePoller } from './lib/realtime.js';
 import { addressTitle, inlineHashes, LANGUAGE_CODES, languageFor, ownFiles, PAGE_INLINE, panelHtml, pictureSize, renderManifest, renderPage, robotsTxt, securityPolicy, sitemapFiles, titleOf, versionsOfFiles } from './lib/page.js';
@@ -271,9 +271,14 @@ function servePage(req, res, url) {
 }
 
 // What the addresses of stops, lines (#37) and trips (#178) name, in the
-// timetable of the moment: looked up again in each new one.
+// timetable of the moment: looked up again in each new one, with the numbers
+// of stops of one name in a town kept from the one before, and that one's
+// addresses while they are there (#288).
 let addresses = null;
-const addressesNow = () => (addresses?.timetable === timetable ? addresses : (addresses = new Addresses(timetable)));
+const keptNumbers = new KeptNumbers(path.join(config.dataDir, 'stop-numbers.json'));
+const addressesNow = () => (addresses?.timetable === timetable ? addresses : (addresses = new Addresses(timetable, keptNumbers, addresses)));
+/** The address of the station that is stop number s of the timetable, as answers name it. */
+const stopAddress = (s) => addressesNow().stopAddress(s);
 
 /**
  * What an address of a stop, a line or a trip names in the timetable
@@ -282,13 +287,14 @@ const addressesNow = () => (addresses?.timetable === timetable ? addresses : (ad
  * now.
  */
 function addressed(asked) {
-  const named = parseAddress(asked.toLowerCase());
+  const path = asked.toLowerCase();
+  const named = parseAddress(path);
   if (!named || !timetable) return null;
   if (named.type === 'trip') {
     const run = addressesNow().trip(named);
     return run && { type: 'trip', found: run, path: addressesNow().tripPath(run.trip, run.date) };
   }
-  const found = named.type === 'stop' ? addressesNow().station(named) : addressesNow().line(named);
+  const found = named.type === 'stop' ? addressesNow().station(named, path) : addressesNow().line(named);
   if (found < 0) return null;
   return { type: named.type, found, path: named.type === 'stop' ? addressesNow().stationPath(found) : addressesNow().linePath(found) };
 }
@@ -343,7 +349,7 @@ function serveAddress(req, res, url) {
         const board = timetable.departures(timetable.stations[found].id, at.now, realtime.snapshot);
         if (board) address.panel = panelHtml('stop', { ...board, lines: linesOf(board.id, at.now) }, at);
       } else if (named.type === 'line') {
-        address.panel = panelHtml('line', timetable.lineVehicles(found, vehicles().all), at);
+        address.panel = panelHtml('line', timetable.lineVehicles(found, vehicles().all, stopAddress), at);
       }
     }
   }
@@ -735,7 +741,7 @@ function handleApi(req, res, url) {
       const way = trip === undefined ? {} : { way: Math.max(0, timetable.wayOfTrip(index, trip)) };
       const path = addressesNow().linePath(index);
       visitOpened(req, res, url, path, (language, words) => addressesNow().lineWords(index, language, words).title);
-      return sendJson(req, res, 200, { now: at, ...timetable.lineVehicles(index, all), path, ...route, ...way });
+      return sendJson(req, res, 200, { now: at, ...timetable.lineVehicles(index, all, stopAddress), path, ...route, ...way });
     }
 
     case '/api/trip': {
@@ -776,13 +782,14 @@ function handleApi(req, res, url) {
       const board = timetable.departures(station ?? '', now, realtime.snapshot, { lines: readChoice(url.searchParams.get('lines')) });
       if (!board) return sendJson(req, res, 404, { error: 'station not found' });
       realtime.touch();
-      // (its address as the page writes it into its own: by the name and the place of the station)
-      visitOpened(req, res, url, stopPath(board.name, board.lat, board.lon), (language, words) => stopTitle(board.name, words, townToShow(board.name, board.town)));
+      // (its address, which the page writes into its own, #288)
+      const path = stopAddress(timetable.stopIndex.get(board.id));
+      visitOpened(req, res, url, path, (language, words) => stopTitle(board.name, words, townToShow(board.name, board.town)));
       // (and what there is to choose from, where the page asks for it: once, as it does not change with the minute)
       const directions = url.searchParams.get('directions') === '1' ? { directions: timetable.directions(board.id) } : {};
       // (and every line of it with its next departure each way, while the page shows them: of all, whatever is chosen, #255)
       const lines = url.searchParams.get('list') === 'lines' ? { lines: linesOf(board.id, now) } : {};
-      return sendJson(req, res, 200, { now, ...board, ...directions, ...lines });
+      return sendJson(req, res, 200, { now, ...board, path, ...directions, ...lines });
     }
 
     default:

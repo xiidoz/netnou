@@ -311,6 +311,21 @@ has run; the script then keeps it live:
 - **The page itself:** the stations near where the map first opens, in the
   search before anything is typed, each a link to its page.
 
+The address of a stop is its name as the title of its page has it, with
+its town after it where the name does not say it:
+`/stop/bruck-er-rotes-kreuz-erlangen` (#288). A new timetable moves many
+stops by a few metres, and the address stays, so what a search engine knows
+of the page stays with it. Stops of a name in several towns have the town
+after the name, or its district where towns of one name are among them,
+and stops of a name in one town that are not the platforms of one stop
+(#299) have a number from the second on, kept from one timetable to the
+next: `/stop/lingen-moss/2` (fewer than 0.1 % of the stops of all of
+Germany). No address has a place in it. Addresses as they were written
+until then, with the place to
+four decimals (`/stop/nuernberg-plaerrer@49.4481,11.0648`), send the
+browser on to the address of that stop (301), as any address does that
+names it otherwise than its own does now.
+
 So a search engine that reads only the plain page finds its way from there
 to every stop and line that is linked. The sitemap dates each address with
 the timetable it was made from, the day its feed was published, so a
@@ -568,7 +583,7 @@ with a line that names the setting.
 | --- | --- |
 | `{address}` | the address of the page as the visitor opened it: `https://transit.example.org/?lang=en` |
 | `{host}` | its host: `transit.example.org` |
-| `{path}` | its path and query: `/?lang=en`, or `/stop/nuernberg-plaerrer@49.4481,11.0648` for the page of a stop |
+| `{path}` | its path and query: `/?lang=en`, or `/stop/nuernberg-plaerrer` for the page of a stop |
 | `{source}` | where the visitor came from: the `Referer` of the request, where it names another host than the instance |
 | `{language}` | the language the browser names first, as it sends it: `de-DE` |
 | `{browser}` | the `User-Agent` of the request, as it is sent |

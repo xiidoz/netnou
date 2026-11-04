@@ -1,21 +1,30 @@
 // The addresses of stops, lines (#37) and trips (#178), written and read by
 // public/address.js, as the timetable has them now. What an address names
 // is found again in a later timetable by what stays the same in it, which
-// the ids of the feed do not: a stop by its name and its place, a line by
-// its operator, its kind and its name, and by its place where lines of that
+// the ids of the feed do not: a stop by its name and its town, and by a
+// number where stops of the name are more than one in a town, a line by its
+// operator, its kind and its name, and by its place where lines of that
 // name are in places apart, a trip by its line and where and when it starts.
 
-import { linePath, slug, stopPath, tripPath } from '../../public/address.js';
+import fs from 'node:fs';
+import { linePath, slug, stopName, stopPath, stopPathAt, tripPath } from '../../public/address.js';
 import { t } from '../../public/i18n.js';
 import { townToShow } from '../../public/stops.js';
 import { addDays, localClock, localDate, serviceDayStart, timeZone } from './time.js';
 import { MODES } from './timetable.js';
 
-// A stop of the name of an address is taken up to this far from its place.
-// Of the stations of January, October had one of the same name at the very
-// same place in 47.6 % of the cases, within 10 m in 80 %, within 1 km in
-// 94.1 % (measured for #105).
+// A stop of the name of an address with a place, as addresses were written
+// before #288, is taken up to this far from it. Of the stations of January,
+// October had one of the same name at the very same place in 47.6 % of the
+// cases, within 10 m in 80 %, within 1 km in 94.1 % (measured for #105).
 const SAME_NAME_M = 1000;
+// Stops of one name in one town are told apart by numbers in their
+// addresses, /2 and on (#288): those further apart than the platforms of one
+// stop (#299). A stop keeps its number from one timetable to the next where
+// one of the name stands within this far of where it stood.
+const KEPT_NUMBER_M = 300;
+// (what is kept of the numbers, stop-numbers.json: raised when that changes)
+const NUMBERS_VERSION = 1;
 // Else a stop of any name this near the place: renamed, 1.6 % of them.
 const RENAMED_M = 10;
 // The lines of a stop that its description names, the busiest first.
@@ -43,10 +52,77 @@ function firstAt(order, value, wanted) {
   return low;
 }
 
+/** Those in `order` whose value, as `value` has it, is `wanted`: [numbers], in that order. */
+function allAt(order, value, wanted) {
+  const found = [];
+  for (let k = firstAt(order, value, wanted); k < order.length && value(order[k]) === wanted; k++) found.push(order[k]);
+  return found;
+}
+
+/** Numbers 0 to values.length - 1 in the order of their values, and of the numbers where those are the same. */
+const orderOf = (values) => Int32Array.from(values.keys()).sort((a, b) => (values[a] < values[b] ? -1 : values[a] > values[b] ? 1 : a - b));
+
+const round5 = (value) => Math.round(value * 1e5) / 1e5;
+
+/**
+ * The numbers of the stops of a name in a town (#288), kept from one
+ * timetable to the next in the data directory, as stop-numbers.json:
+ * { version, names: { <name in the address>: [[latitude, longitude,
+ * number], …] } }. Without the file (a new instance, or one whose data was
+ * deleted) they are given anew, in the order of their places, as they were
+ * where no stop of the name has come or gone. Without a path they are kept
+ * in memory alone.
+ */
+export class KeptNumbers {
+  constructor(file = null) {
+    this.file = file;
+    this.names = null;
+  }
+
+  /** What is kept: { <name>: [[latitude, longitude, number], …] }. */
+  read() {
+    if (this.names) return this.names;
+    this.names = {};
+    if (!this.file) return this.names;
+    try {
+      const kept = JSON.parse(fs.readFileSync(this.file, 'utf8'));
+      if (kept?.version !== NUMBERS_VERSION || typeof kept.names !== 'object' || kept.names === null) return this.names;
+      for (const [name, entries] of Object.entries(kept.names)) {
+        const valid = Array.isArray(entries) ? entries.filter((entry) => Array.isArray(entry) && entry.length === 3 && entry.every(Number.isFinite) && Number.isInteger(entry[2]) && entry[2] > 0) : [];
+        if (valid.length) this.names[name] = valid;
+      }
+    } catch {
+      // (none yet, or not to be read: given anew)
+    }
+    return this.names;
+  }
+
+  /** Keeps these instead; a file that cannot be written leaves them in memory. */
+  write(names) {
+    this.names = names;
+    if (!this.file) return;
+    try {
+      const tmp = `${this.file}.tmp`;
+      fs.writeFileSync(tmp, JSON.stringify({ version: NUMBERS_VERSION, names }));
+      fs.renameSync(tmp, this.file);
+    } catch {
+      // (the next timetable tries again)
+    }
+  }
+}
+
 export class Addresses {
-  /** @param timetable a Timetable: its stations, lines and trips */
-  constructor(timetable) {
+  /**
+   * @param timetable a Timetable: its stations, lines and trips
+   * @param kept the numbers of stops kept from the timetable before (KeptNumbers)
+   * @param before the Addresses of the timetable before, where the server has
+   *   it still: of a name that more stops have now, the one that had it alone
+   *   keeps it. Let go of once the stations are indexed.
+   */
+  constructor(timetable, kept = new KeptNumbers(), before = null) {
     this.timetable = timetable;
+    this.kept = kept;
+    this.before = before;
     // The lines of each address without a place, the busiest first (as in the
     // list of the search: a line without a stop in the area is not there).
     // Those of a name in places apart (#152), or of names an address writes
@@ -66,18 +142,181 @@ export class Addresses {
     }
   }
 
+  /** Station number i as its address names it: { name, town }, town null where none is known. */
+  stationNamed(i) {
+    const { stations, towns, stationTown } = this.timetable;
+    return { name: stations[i].name, town: towns?.[stationTown?.[i]]?.name ?? null };
+  }
+
+  /** The name of station number i in addresses: its own, with its town where it does not say it (stopName). */
+  keyOf(i) {
+    return stopName(this.stationNamed(i));
+  }
+
+  /** Of stations named alike the busiest, of as busy ones the southernmost. */
+  firstOf(numbers) {
+    const { stations, stationService } = this.timetable;
+    const service = (i) => stationService?.[i] ?? 0;
+    const before = (a, b) => service(a) > service(b) || (service(a) === service(b) && (stations[a].lat < stations[b].lat || (stations[a].lat === stations[b].lat && stations[a].lon < stations[b].lon)));
+    return numbers.reduce((first, i) => (before(i, first) ? i : first));
+  }
+
   /**
-   * The stations in the order of the names in their addresses (named), and
-   * in that of their cells (placed, with the cells of them in that order):
-   * lists of numbers, 4 MB for the quarter of a million of all of Germany,
-   * where maps of their names and cells would take more than 100. Made when
-   * a stop is first looked for: the lines need none of it.
+   * The stations in the order of the names in their addresses (keyed), and
+   * where stations have one name: those of a town other than that of the
+   * busiest of them with that town after the name (renamed, and the other
+   * way round byName), with its district where towns of that name are
+   * among them; and the stations of one name in a town numbered (numbers,
+   * 0 for none), as they were in the timetable before (KeptNumbers), else
+   * along the line on which they lie apart. In all of Germany a few hundred
+   * stations have their town after their name or a number. Lists of numbers,
+   * 1.5 MB for the quarter of a million of all of Germany, where a map of
+   * the names would take more than 100. Made when a stop is first looked for
+   * or written, in a second for all of Germany: the lines need none of it.
    */
   indexStations() {
+    if (this.keyed) return;
+    const { stations, towns, stationTown } = this.timetable;
+    const keys = stations.map((_, i) => this.keyOf(i));
+    this.keyed = orderOf(keys);
+    const groups = []; // the stations of each name that more than one have
+    for (let k = 0; k < this.keyed.length; ) {
+      let end = k + 1;
+      while (end < this.keyed.length && keys[this.keyed[end]] === keys[this.keyed[k]]) end++;
+      if (end - k > 1) groups.push([...this.keyed.subarray(k, end)]);
+      k = end;
+    }
+    // In several towns: the name with the town after it, or its district where towns of one name are among them.
+    const townOf = (i) => stationTown?.[i] ?? -1;
+    this.renamed = new Map();
+    this.byName = new Map();
+    for (const numbers of groups) {
+      const home = townOf(this.firstOf(numbers));
+      const others = [...new Set(numbers.map(townOf))].filter((town) => town >= 0 && town !== home);
+      if (!others.length) continue;
+      const shared = (town) => [home, ...others].some((other) => other >= 0 && other !== town && towns[other].name === towns[town].name);
+      for (const i of numbers) {
+        const town = townOf(i);
+        if (town < 0 || town === home) continue;
+        const name = `${keys[i]}-${slug(shared(town) && towns[town].district ? towns[town].district : towns[town].name)}`;
+        this.renamed.set(i, name);
+        this.byName.set(name, [...(this.byName.get(name) ?? []), i]);
+      }
+    }
+    // Of one name in a town: numbered, also where a name had several stops before.
+    const nameOf = (i) => this.renamed.get(i) ?? keys[i];
+    const plain = (name) => allAt(this.keyed, (i) => keys[i], name).filter((i) => !this.renamed.has(i));
+    const members = new Map();
+    for (const numbers of groups) for (const i of numbers) members.set(nameOf(i), [...(members.get(nameOf(i)) ?? []), i]);
+    const kept = this.kept.read();
+    for (const name of [...this.byName.keys(), ...Object.keys(kept)]) {
+      const all = [...new Set([...(members.get(name) ?? []), ...plain(name), ...(this.byName.get(name) ?? [])])];
+      if (all.length) members.set(name, all);
+    }
+    this.numbers = new Uint16Array(stations.length);
+    const next = {};
+    for (const [name, list] of members) {
+      const numbered = this.numbered(list, kept[name] ?? [], name);
+      if (!numbered) continue;
+      for (const [i, number] of numbered.numbers) this.numbers[i] = number;
+      next[name] = numbered.entries;
+    }
+    for (const [name, entries] of Object.entries(kept)) if (!(name in next)) next[name] = entries;
+    if (JSON.stringify(next) !== JSON.stringify(kept)) this.kept.write(next);
+    this.before = null;
+  }
+
+  /** The stations whose addresses have that name: of its own, and with a town after it (renamed). */
+  withName(name) {
+    this.indexStations();
+    return [...allAt(this.keyed, (i) => this.keyOf(i), name).filter((i) => !this.renamed.has(i)), ...(this.byName.get(name) ?? [])];
+  }
+
+  /**
+   * Of these stations, the one that stands within KEPT_NUMBER_M of the stop
+   * that had that name alone in the timetable before (before), the nearest;
+   * undefined where none does, or the timetable before is not known.
+   */
+  hadAlone(list, name) {
+    if (!this.before) return undefined;
+    const { stations } = this.timetable;
+    const old = this.before.timetable.stations;
+    const alone = this.before.withName(name).filter((j) => !this.before.numbers[j]);
+    let found;
+    let nearest = KEPT_NUMBER_M;
+    for (const i of list) {
+      for (const j of alone) {
+        const away = metres(stations[i].lat, stations[i].lon, old[j].lat, old[j].lon);
+        if (away <= nearest) [found, nearest] = [i, away];
+      }
+    }
+    return found;
+  }
+
+  /**
+   * The numbers of the stations of one name in a town: each that stands
+   * within KEPT_NUMBER_M of where one stood in the timetable before has its
+   * number, nearest first; the others have numbers that none of the name had,
+   * along the line on which they lie apart (from the south or from the west):
+   * so none takes the number of another, and a stop that is gone gets its
+   * own again when it comes back. Where none was kept, the busiest has the
+   * name alone: it is as a rule the stop that had it, alone of its name,
+   * before. Null for a stop alone of its name, which has none.
+   * @param list the station numbers
+   * @param before [[latitude, longitude, number], …] as KeptNumbers has them
+   * @param name the name in their addresses
+   * @returns { numbers: Map station → number, entries: what is kept now }
+   */
+  numbered(list, before, name) {
+    if (list.length < 2 && !before.length) return null;
+    const { stations } = this.timetable;
+    const pairs = [];
+    for (const i of list) {
+      before.forEach(([lat, lon], e) => {
+        const away = metres(stations[i].lat, stations[i].lon, lat, lon);
+        if (away <= KEPT_NUMBER_M) pairs.push([away, i, e]);
+      });
+    }
+    pairs.sort((a, b) => a[0] - b[0]);
+    const numbers = new Map();
+    const used = new Set();
+    for (const [, i, e] of pairs) {
+      if (numbers.has(i) || used.has(e)) continue;
+      numbers.set(i, before[e][2]);
+      used.add(e);
+    }
+    let top = Math.max(0, ...before.map((entry) => entry[2]));
+    // (numbered for the first time, the one that had the name alone before keeps it, where that is known, else the
+    // busiest: as a rule that one)
+    const fresh = list.filter((i) => !numbers.has(i));
+    const first = before.length ? [] : [this.hadAlone(fresh, name) ?? this.firstOf(fresh)];
+    for (const i of [...first, ...this.alongPlaces(fresh.filter((i) => !first.includes(i)))]) numbers.set(i, ++top);
+    const entries = [...before.filter((_, e) => !used.has(e)), ...[...numbers].map(([i, number]) => [round5(stations[i].lat), round5(stations[i].lon), number])];
+    return { numbers, entries: entries.sort((a, b) => a[2] - b[2]) };
+  }
+
+  /** Stations in the order of their places along the line on which they lie apart: from the south, or from the west. */
+  alongPlaces(list) {
+    const { stations } = this.timetable;
+    if (list.length < 2) return list;
+    const spread = (values) => Math.max(...values) - Math.min(...values);
+    const northSouth = spread(list.map((i) => stations[i].lat));
+    const eastWest = spread(list.map((i) => stations[i].lon)) * Math.cos((stations[list[0]].lat * Math.PI) / 180);
+    const [first, second] = northSouth >= eastWest ? ['lat', 'lon'] : ['lon', 'lat'];
+    return [...list].sort((a, b) => stations[a][first] - stations[b][first] || stations[a][second] - stations[b][second] || a - b);
+  }
+
+  /**
+   * The stations in the order of their own names (named, as addresses had
+   * them before #288), and in that of their cells (placed, with the cells of
+   * them in that order): lists of numbers, 4 MB for all of Germany. Made when
+   * an address is first looked for that is no stop's own address now, in
+   * half a second.
+   */
+  indexNames() {
     if (this.named) return;
     const { stations } = this.timetable;
-    const names = stations.map((station) => slug(station.name));
-    this.named = Int32Array.from(names.keys()).sort((a, b) => (names[a] < names[b] ? -1 : names[a] > names[b] ? 1 : a - b));
+    this.named = orderOf(stations.map((station) => slug(station.name)));
     const cells = stations.map((station) => cellOf(station.lat, station.lon));
     this.placed = Int32Array.from(cells.keys()).sort((a, b) => cells[a] - cells[b] || a - b);
     this.cells = Float64Array.from(this.placed, (i) => cells[i]);
@@ -85,27 +324,45 @@ export class Addresses {
 
   /**
    * The station that an address names, as its number in timetable.stations,
-   * or -1: the one whose address it is; else the one of its name nearest its
-   * place, up to SAME_NAME_M away; else the nearest of any name up to
-   * RENAMED_M away. (Of two of a name either side of where the places of
-   * their addresses round apart, the place in the one's may be nearer the
-   * other.)
+   * or -1: the one whose address it is, or was before #288 (its name and its
+   * place to four decimals, stopPathAt). Else of those whose addresses have
+   * its name, without a place in it the one of the lowest number (the name
+   * alone where it has one), with a place the nearest up to SAME_NAME_M away;
+   * else the same of those of that name, as addresses had it before, the
+   * busiest where it has no place. Else the nearest of any name up to
+   * RENAMED_M away from its place. (Of two of a name either side of where
+   * the places of their addresses round apart, the place in the one's may be
+   * nearer the other.)
    * @param asked a stop as parseAddress (public/address.js) has it
+   * @param path the address as asked for, to know it where it is a stop's own
    */
-  station({ name, lat, lon }) {
+  station({ name, lat, lon }, path = null) {
     this.indexStations();
     const { stations } = this.timetable;
-    const nameOf = (i) => slug(stations[i].name);
-    const path = stopPath(name, lat, lon);
-    let found = -1;
-    let nearest = SAME_NAME_M;
-    for (let k = firstAt(this.named, nameOf, name); k < this.named.length && nameOf(this.named[k]) === name; k++) {
-      const i = this.named[k];
-      const away = this.stationPath(i) === path ? 0 : metres(lat, lon, stations[i].lat, stations[i].lon);
-      if (away <= nearest) [found, nearest] = [i, away];
+    const placed = lat !== undefined;
+    const nearestOf = (numbers, within) => numbers.reduce(([found, best], i) => {
+      const away = metres(lat, lon, stations[i].lat, stations[i].lon);
+      return away <= best ? [i, away] : [found, best];
+    }, [-1, within])[0];
+    const keyed = this.withName(name);
+    const own = keyed.find((i) => this.stationPath(i) === path);
+    if (own !== undefined) return own;
+    if (keyed.length && !placed) return keyed.reduce((lowest, i) => ((this.numbers[i] || 1) < (this.numbers[lowest] || 1) ? i : lowest));
+    this.indexNames();
+    const named = allAt(this.named, (i) => slug(stations[i].name), name);
+    const was = named.find((i) => stopPathAt(stations[i].name, stations[i].lat, stations[i].lon) === path);
+    if (was !== undefined) return was;
+    if (keyed.length) {
+      const found = nearestOf(keyed, SAME_NAME_M);
+      if (found >= 0) return found;
     }
-    if (found >= 0) return found;
-    nearest = RENAMED_M;
+    if (named.length) {
+      const found = placed ? nearestOf(named, SAME_NAME_M) : this.firstOf(named);
+      if (found >= 0) return found;
+    }
+    if (!placed) return -1;
+    let found = -1;
+    let nearest = RENAMED_M;
     const [row, column] = [Math.floor(lat / CELL), Math.floor(lon / CELL)];
     for (let dLat = -1; dLat <= 1; dLat++) {
       for (let dLon = -1; dLon <= 1; dLon++) {
@@ -198,10 +455,26 @@ export class Addresses {
     return tripPath(line, `${day.slice(0, 4)}-${day.slice(4, 6)}-${day.slice(6)}`, localClock(leaves), tt.stops.name[tt.stopsOf(trip)[0]]);
   }
 
-  /** The address of station number i. */
+  /** The address of station number i: its name, with its town or its number where it needs them. */
   stationPath(i) {
-    const { name, lat, lon } = this.timetable.stations[i];
-    return stopPath(name, lat, lon);
+    this.indexStations();
+    return stopPath(this.renamed.get(i) ?? this.keyOf(i), this.numbers[i] || 1);
+  }
+
+  /** The address of the station that is stop number s of the timetable (Timetable.stops), as answers name stops. */
+  stopAddress(s) {
+    if (!this.stationOfStop) {
+      const { stations, stopIndex, stops } = this.timetable;
+      this.stationOfStop = new Int32Array(stops.name.length).fill(-1);
+      stations.forEach((station, i) => {
+        this.stationOfStop[stopIndex.get(station.id)] = i;
+      });
+    }
+    const i = this.stationOfStop[s];
+    if (i >= 0) return this.stationPath(i);
+    // (one beyond the area, as a line that leaves it has: by its name, as the page of a stop would be named)
+    const { stops, towns } = this.timetable;
+    return stopPath(stopName({ name: stops.name[s], town: towns?.[stops.town[s]]?.name ?? null }));
   }
 
   /** The address of line number i. */
