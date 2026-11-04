@@ -12,11 +12,13 @@
 import { parentPort, workerData } from 'node:worker_threads';
 import { Area } from './area.js';
 import { readDataset, writeDataset } from './dataset.js';
-import { buildDataset } from './importer.js';
+import { buildDataset, callsAt, joinPlatforms } from './importer.js';
 import { KeptRoutes } from './kept-routes.js';
 import { NETWORKS_VERSION } from './network.js';
 import { buildSegments, loadNetworks } from './shapes.js';
 import { townsOf } from './towns.js';
+import { slug } from '../../public/address.js';
+import { townToShow } from '../../public/stops.js';
 
 const { mode, interim, zipPath, outPath, dataDir, source, osm, downloadTimeoutMs, agencies, scope } = workerData;
 // (an instance may have no area: what it covers is then seen from its trips)
@@ -60,9 +62,17 @@ if (osm.urls.length) {
     const kept = new KeptRoutes(dataDir, { fetchedAt: networks.fetchedAt, scope });
     data.segments = buildSegments(data, networks.nets, region, onProgress, { kept });
     kept.save();
-    // (the towns of the stations, by the borders in the same extracts)
-    const { names, districts, of } = townsOf(data.stops, networks.towns);
-    Object.assign(data, { towns: names, districts, stops: { ...data.stops, town: of } });
+    // (the towns of the stations, by the borders in the same extracts; then the platforms of one stop that the feed lists
+    // apart under names an address writes alike, with the town where the name does not say it, are one, #299, and a
+    // platform has no town of its own)
+    const first = townsOf(data.stops, networks.towns);
+    const stops = { ...data.stops, parent: Int32Array.from(data.stops.parent) };
+    joinPlatforms(stops, callsAt(stops.name.length, data.patterns.start, data.patterns.stops, data.trips.pattern), (i) => {
+      const town = first.names[first.of[i]] ?? null;
+      return slug(townToShow(stops.name[i], town) ? `${stops.name[i]} ${town}` : stops.name[i]);
+    });
+    const { names, districts, of } = townsOf(stops, networks.towns);
+    Object.assign(data, { towns: names, districts, stops: { ...stops, town: of } });
   }
 }
 if (!networks) data.segments = null;

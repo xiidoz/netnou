@@ -10,6 +10,7 @@ import { DATASET_VERSION, Numbers, SharedLists, Texts, byteOrder } from './datas
 import { addDays, weekday } from './time.js';
 import { findSharedWays } from './timetable.js';
 import { openZip } from './zip.js';
+import { slug } from '../../public/address.js';
 
 const WEEKDAYS = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
 
@@ -412,6 +413,78 @@ async function readServices(zip, serviceIds) {
   return dates;
 }
 
+// Stops of one name that the feed lists apart, without a parent station,
+// are one station where they stand this near the busiest of them (#299):
+// the platforms of a stop on either side of a street or around a corner,
+// which a rider takes for one stop. In all of Germany a median 80 m apart.
+// Further apart, a stop of the same name is mostly another place: a train
+// station and the bus stop of its village, the two ends of a long street.
+const PLATFORMS_M = 300;
+
+/** How many trips call at each stop: the trips of each pattern, at each of its stops. */
+export function callsAt(stopCount, patternStart, patternStops, tripPatterns) {
+  const trips = new Float64Array(patternStart.length - 1);
+  for (const p of tripPatterns) trips[p]++;
+  const calls = new Float64Array(stopCount);
+  for (let p = 0; p < trips.length; p++) {
+    for (let k = patternStart[p]; k < patternStart[p + 1]; k++) calls[patternStops[k]] += trips[p];
+  }
+  return calls;
+}
+
+/**
+ * Makes stops of one name that have no parent station the platforms of one
+ * of them where they stand within PLATFORMS_M of it, as the parent stations
+ * of the feed have theirs (#299): of a parent station of the feed that one,
+ * else the busiest, of as busy ones the southernmost. The name is as an
+ * address writes it: when the dataset is put together the stop's own, once
+ * the towns are known with its town where it does not say it, so that
+ * "Wilhelmsbau" in Stuttgart and "Wilhelmsbau, Stuttgart" beside it are one.
+ * Of the stops of all of Germany 1,043 become platforms so by their names,
+ * and 102 more by their names with their towns.
+ * @param stops { name, lat, lon, parent } of the dataset; parent is changed
+ * @param calls for each stop, how many trips call there (callsAt)
+ * @param nameOf (stop) => its name as an address writes it
+ */
+export function joinPlatforms(stops, calls, nameOf = (i) => slug(stops.name[i])) {
+  const count = stops.name.length;
+  const isParent = new Uint8Array(count);
+  const service = new Float64Array(count);
+  for (let i = 0; i < count; i++) {
+    const station = stops.parent[i] >= 0 ? stops.parent[i] : i;
+    service[station] += calls[i];
+    if (station !== i) isParent[station] = 1;
+  }
+  const byName = new Map();
+  for (let i = 0; i < count; i++) {
+    // (a stop without a name in letters is like no other)
+    if (stops.parent[i] >= 0 || slug(stops.name[i]) === '-') continue;
+    const name = nameOf(i);
+    if (byName.has(name)) byName.get(name).push(i);
+    else byName.set(name, [i]);
+  }
+  const first = (a, b) => isParent[b] - isParent[a] || service[b] - service[a] || stops.lat[a] - stops.lat[b] || stops.lon[a] - stops.lon[b] || a - b;
+  const metres = (a, b) => Math.hypot((stops.lon[a] - stops.lon[b]) * Math.cos((stops.lat[a] * Math.PI) / 180), stops.lat[a] - stops.lat[b]) * 111_320;
+  const joined = new Map(); // stop → the station it is a platform of now
+  for (const list of byName.values()) {
+    let rest = list.length > 1 ? list.sort(first) : [];
+    while (rest.length > 1) {
+      const [main, ...others] = rest;
+      rest = [];
+      for (const i of others) {
+        if (metres(main, i) <= PLATFORMS_M) joined.set(i, main);
+        else rest.push(i);
+      }
+    }
+  }
+  if (!joined.size) return;
+  for (let i = 0; i < count; i++) {
+    // (the platforms of a parent station that is joined to another one go with it)
+    const parent = stops.parent[i] >= 0 ? stops.parent[i] : i;
+    if (joined.has(parent)) stops.parent[i] = joined.get(parent);
+  }
+}
+
 /**
  * Puts a dataset together from the trips collected and what belongs to them.
  * A trip without a route that the feed knows is left out. The trips stay in
@@ -439,6 +512,8 @@ function assemble({ area, stops, towns = [], districts = [], routes, headsigns, 
   const patterns = collector.patterns.done();
   const profiles = collector.profiles.done();
   const seqLists = collector.seqLists.done();
+  // (the platforms of a stop that the feed lists apart, by their names: with their towns once those are known, #299)
+  joinPlatforms(stops, callsAt(stops.name.length, patterns.start, patterns.values, kept.map((t) => collector.pattern.array[t])));
   // The headsigns of the trips kept: lists of them only where they change
   // before the last stop, from which nothing leaves (headsignAt in
   // timetable.js); each list once, of those still in use.
