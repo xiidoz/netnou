@@ -550,6 +550,13 @@ test('routeMode tells S-Bahn, regional and long-distance trains apart', () => {
   assert.equal(routeMode(700, '36'), 'other'); // the extended route types of buses, trams and trains are not known
 });
 
+test('routeMode makes a line named U and a number a U-Bahn, also with the route type of a tram (#302)', () => {
+  // as the feed of 31 October 2026 has Nürnberg's U1 to U3, and Dortmund's U43 and U44
+  assert.deepEqual(['U1', 'U 3', 'U43'].map((name) => routeMode(0, name)), ['subway', 'subway', 'subway']);
+  // a tram of another name stays one, and a bus named U, as replacement buses are, a bus; a train named U28 a train
+  assert.deepEqual([routeMode(0, '4'), routeMode(0, 'U'), routeMode(0, 'UB1'), routeMode(0, undefined), routeMode(3, 'U2'), routeMode(2, 'U28')], ['tram', 'tram', 'tram', 'tram', 'bus', 'regional']);
+});
+
 test('routeMode makes ferries and cable cars and monorails kinds of their own, and trolleybuses buses', () => {
   const kinds = (types) => types.map((type) => routeMode(type, ''));
   // ferries; of the extended types water transport (1000s) and ferry service (1200)

@@ -27,6 +27,9 @@ const KEPT_NUMBER_M = 300;
 const NUMBERS_VERSION = 1;
 // Else a stop of any name this near the place: renamed, 1.6 % of them.
 const RENAMED_M = 10;
+// The kinds of transport that run on rails, among which a line's kind may
+// change from one feed to the next (#302).
+const RAILS = ['subway', 'tram', 'suburban', 'regional', 'longdistance', 'cable'];
 // The lines of a stop that its description names, the busiest first.
 const NAMED_LINES = 6;
 // (stations are kept in cells of this many degrees, to find those near a place)
@@ -384,8 +387,18 @@ export class Addresses {
    * @param asked a line as parseAddress (public/address.js) has it
    */
   line({ agency, mode, name, lat, lon }) {
-    const numbers = this.lines.get(`line/${agency}/${mode}/${name}`);
-    if (!numbers) return -1;
+    let numbers = this.lines.get(`line/${agency}/${mode}/${name}`);
+    // (a line whose kind has changed, as a feed gives some lines another
+    // route type from one version to the next, #302: the line of that
+    // operator and name of another kind on rails, where the address is of
+    // one on rails and there is one alone, whose address the page is then
+    // sent on to)
+    if (!numbers) {
+      const family = (kind) => (RAILS.includes(kind) ? 'rails' : kind);
+      const others = MODES.filter((kind) => kind !== mode && family(kind) === family(mode) && this.lines.has(`line/${agency}/${kind}/${name}`));
+      if (others.length !== 1) return -1;
+      numbers = this.lines.get(`line/${agency}/${others[0]}/${name}`);
+    }
     if (lat === undefined || numbers.length === 1) return numbers[0];
     const own = numbers.find((i) => {
       const place = this.places.get(i);

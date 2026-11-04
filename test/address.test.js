@@ -190,6 +190,8 @@ test('lines of a name in places apart have the middle of their stations in their
     // (without a stop in the area: as in the search, not there)
     { name: 'S1', mode: 'suburban', agency: 'DB Regio AG Bayern', stops: 0, trips: 5, place: [50, 10] },
     { name: '7', mode: 'bus', agency: 'VAG', stops: 0, trips: 5, place: [49.4, 11] },
+    // (the buses that stand in for the U1 now and then, of its name)
+    { name: 'U1', mode: 'bus', agency: 'VAG', stops: 6, trips: 12, place: [49.45, 11.07] },
   ];
   const addresses = new Addresses({ stations: [], lines, stationService: [] });
   assert.deepEqual([0, 1, 2, 3, 4].map((i) => addresses.linePath(i)), [
@@ -207,10 +209,15 @@ test('lines of a name in places apart have the middle of their stations in their
   // a place of a line alone of its name changes nothing; a line not in the area has no address
   assert.equal(addresses.line(parseAddress('line/vag/subway/u1@48.1,11.5')), 2);
   assert.equal(addresses.line(parseAddress('line/vag/bus/7')), -1);
+  // a line on rails whose kind the feed has changed (#302): its address of the other kind names it, not the bus of its name
+  assert.equal(addresses.line(parseAddress('line/vag/tram/u1')), 2);
+  assert.equal(addresses.line(parseAddress('line/vag/tram/u1@49.4,11')), 2);
+  assert.equal(addresses.line(parseAddress('line/vag/bus/u1')), 7);
+  assert.equal(addresses.line(parseAddress('line/vag/ferry/u1')), -1);
   // the sitemap lists each, the busiest of a name first
   assert.deepEqual(addresses.paths(), [
     'line/db-regio-ag-bayern/suburban/s1@48.21,11.60', 'line/db-regio-ag-bayern/suburban/s1@49.56,11.14', 'line/vag/subway/u1',
-    'line/vag/bus/sev@49.4520,11.0770', 'line/vag/bus/sev@49.4545,11.0800',
+    'line/vag/bus/sev@49.4520,11.0770', 'line/vag/bus/sev@49.4545,11.0800', 'line/vag/bus/u1',
   ]);
 });
 
