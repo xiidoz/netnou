@@ -22,7 +22,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { LANGUAGES, pageTexts, pickLanguage, t } from '../../public/i18n.js';
 import * as shapes from '../../public/vendor/material-design-icons/icons.js';
-import { choiceChip, departureLists, departuresSub, h, lineHead, lineLists, lineStops, panelHead, stopHeading, toHtml } from '../../public/panel.js';
+import { choiceChip, departureLists, departuresSub, h, lineHead, lineLists, lineStops, lineTimetable, panelHead, stopHeading, stopToday, toHtml } from '../../public/panel.js';
 
 export const LANGUAGE_CODES = LANGUAGES.map(([code]) => code);
 // The picture of a link's preview: the icon, unless the operator has one of
@@ -425,7 +425,8 @@ export function renderManifest(json, { language, texts, siteName, areaName, site
  * all its lines and the chip of the lines the departures are of, and behind
  * the switch all its lines, each a link to its page (#255); a line's
  * stops in its first direction, each a link to its page, with its vehicles
- * where they are (#256). The notes of a stop come with the script.
+ * where they are (#256); what the timetable says of each beyond the minute,
+ * how often and until when (#289). The notes of a stop come with the script.
  * @param kind 'stop' or 'line'
  * @param data what api/departures (with list=lines) or api/line answers for it
  * @param fixed whether the page is a screen on a wall set up for one purpose, which has neither switch nor chip
@@ -434,11 +435,15 @@ export function renderManifest(json, { language, texts, siteName, areaName, site
 export function panelHtml(kind, data, { language, texts, timeZone, now, fixed = false }) {
   const time = new Intl.DateTimeFormat(language, { timeStyle: 'short', timeZone });
   const day = new Intl.DateTimeFormat('en-CA', { year: 'numeric', month: '2-digit', day: '2-digit', timeZone });
-  const drawing = { t: (key, params) => t(key, params, texts), time: (epoch) => time.format(epoch * 1000), day: (epoch) => day.format(epoch * 1000), now, times: 'both' };
+  // (whole hours, days of the week and lists, for what the timetable says beyond the minute: #289)
+  const hour = new Intl.DateTimeFormat(language, { hour: 'numeric', timeZone });
+  const weekday = new Intl.DateTimeFormat(language, { weekday: 'short', timeZone });
+  const list = new Intl.ListFormat(language, { type: 'conjunction' });
+  const drawing = { t: (key, params) => t(key, params, texts), time: (epoch) => time.format(epoch * 1000), day: (epoch) => day.format(epoch * 1000), hour: (epoch) => hour.format(epoch * 1000), weekday: (epoch) => weekday.format(epoch * 1000), list: (words) => list.format(words), now, times: 'both' };
   const [head, body] = kind === 'stop'
-    ? [panelHead(stopHeading(data.name, data.town), fixed ? departuresSub(null, null, drawing) : departuresSub('departures', choiceChip([], drawing), drawing, 'details')),
+    ? [panelHead(stopHeading(data.name, data.town), fixed ? null : stopToday(data.today, drawing), fixed ? departuresSub(null, null, drawing) : departuresSub('departures', choiceChip([], drawing), drawing, 'details')),
       [...departureLists(data, drawing), fixed ? null : h('div', { class: 'view-lines', hidden: true }, lineLists(data, drawing))].filter(Boolean)]
-    : [lineHead(data, drawing, 0), lineStops(data, { ...drawing, live: data.vehicles.some((v) => v.delay !== null) }, 0)];
+    : [lineHead(data, drawing, 0), [...lineStops(data, { ...drawing, live: data.vehicles.some((v) => v.delay !== null) }, 0), lineTimetable(data.facts, drawing)].filter(Boolean)];
   return { head: toHtml(head), body: body.map(toHtml).join('') };
 }
 

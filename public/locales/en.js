@@ -4,6 +4,8 @@
 // A value is a text, with {placeholders} for what the script puts in. Where the
 // wording depends on a number it is an object with one text per plural form of
 // the language (English: one, other; see Intl.PluralRules), chosen by {count}.
+// A number of its own may have a text of its own beside them, where the
+// language has a word for it ("twice an hour"): it goes before the form.
 // Numbers are put in formatted for the language.
 //
 // test/frontend.test.js compares the languages and checks that every key is used.
@@ -232,6 +234,34 @@ export default {
   // the name of the badge at the top of a trip, which leads to its line
   'line.open': 'To line {line}',
 
+  // what the timetable says beyond the minute (#289): "At least every 4 min until 7 PM · last trip 12:58 AM"
+  'facts.every': 'every {count} min',
+  'facts.atMost': 'at least every {count} min',
+  'facts.hourly': 'hourly',
+  'facts.everyHours': 'every {count} h',
+  'facts.perHour': { one: 'once an hour', 2: 'twice an hour', other: '{count} times an hour' },
+  'facts.perHourRange': '{few} to {many} times an hour',
+  'facts.until': '{often} until {until}',
+  'facts.first': 'first trip {time}',
+  'facts.last': 'last trip {time}',
+  'facts.overToday': 'No more trips today',
+  'facts.noneToday': 'No trips today',
+  'facts.lines': { one: '{count} line', other: '{count} lines' },
+  'facts.stopToday': '{lines}, departures from {first} to {last} today',
+  'facts.stopNone': 'No departures today',
+  'facts.timetable': 'Timetable for the next 7 days',
+  'facts.trips': { one: '{count} trip', other: '{count} trips' },
+  'facts.tripsRange': '{few} to {many} trips',
+  'facts.noTrips': 'no trips',
+  'facts.during': '{hours} {often}',
+  'facts.endToEnd': '{count} min from end to end',
+  'facts.stops': { one: '{count} stop', other: '{count} stops' },
+  'facts.through': 'Through {towns}',
+  'facts.throughMany': 'Through {count} towns from {from} to {to}',
+  'facts.towns': 'Its lines go to {towns}.',
+  'facts.townsMore': 'Its lines go to {towns} and {count} more towns.',
+  'facts.townsOne': 'Its lines stay within {town}.',
+
   'stop.platform': 'Plat. {platform}',
   'stop.skipped': 'skipped',
 
@@ -274,7 +304,25 @@ export default {
   'address.stopDescriptionNone': 'Departures at {stop} in real time, live on the map.',
   'address.more': '{lines}, plus {kinds}',
   'address.lineTitle': '{line} {route} live',
-  'address.lineDescription': '{line} ({agency}) live on the map, every trip with its delay.',
+    // (#289: "U1: on working days at least every 7 minutes from 5:00 to 20:00, trips between 4:43 and 0:58. 27 stops in Nürnberg and Fürth, live on the map.")
+  'address.lineDescribed': '{line}: {days} {often}, trips between {first} and {last}. {stops}{towns}, live on the map.',
+  'address.lineCounted': '{line}: {days} {trips} each way between {first} and {last}. {stops}{towns}, live on the map.',
+  'address.lineCountedAt': '{line}: {days} {trips} each way at {first}. {stops}{towns}, live on the map.',
+  'address.lineDescription': '{line}: {stops}{towns}, live on the map, every trip with its delay.',
+  'address.workingDays': 'on working days',
+  'address.workingDaysExcept': 'on working days except {days},',
+  'address.someWorkingDays': 'on some working days',
+  'address.dates': '{from} to {to}',
+  'address.oftenHours': '{often} from {from}:00 to {to}:00',
+  'address.every': 'every {count} minutes',
+  'address.atMost': 'at least every {count} minutes',
+  'address.hourly': 'hourly',
+  'address.everyHours': 'every {count} hours',
+  'address.trips': { one: '{count} trip', other: '{count} trips' },
+  'address.tripsRange': '{few} to {many} trips',
+  'address.stops': { one: '{count} stop', other: '{count} stops' },
+  'address.townsIn': ' in {towns}',
+  'address.townsFromTo': ' from {from} to {to}',
   'address.stopGone': 'This stop is not in the timetable.',
   'address.lineGone': 'This line is not in the timetable.',
   // a trip (#178): its line and where it goes, where and when it starts (the time and the day as the language writes them)

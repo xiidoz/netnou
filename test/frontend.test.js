@@ -181,7 +181,8 @@ test('every language has the texts of English, with the same placeholders and it
         continue;
       }
       assert.equal(typeof message, 'object', `${code}: ${key} has plural forms in en.js`);
-      assert.deepEqual(Object.keys(message).sort(), forms, `${code}: plural forms of ${key}`);
+      // (and beside them, texts of numbers of their own: "twice an hour", #289)
+      assert.deepEqual(Object.keys(message).filter((form) => !/^\d+$/.test(form)).sort(), forms, `${code}: plural forms of ${key}`);
       // A form may leave a placeholder out ("one vehicle"), 'other' has them all.
       const known = placeholders(reference.other);
       assert.deepEqual(placeholders(message.other), known, `${code}: placeholders of ${key}`);
@@ -335,11 +336,12 @@ test('the header card comes as most visitors get it', () => {
   assert.match(read('first.js'), /root\.dataset\.controls = 'shown'/);
   assert.match(app, /document\.documentElement\.dataset\.controls = 'shown'/);
 
-  // a chip for every mode, switched on, in its colour and with its name; those
+  // a chip for every mode, switched on, in its colour and with its name, its
+  // count left to the script (#289: none is 0 before it runs); those
   // of the kinds that only some timetables have are hidden until the server
   // shows them (test/page.test.js)
   const modes = arrayIn(app, 'MODES');
-  const chips = [...card.matchAll(/<button type="button" class="chip" data-mode="([a-z]+)" aria-pressed="true"( hidden)?><span class="swatch"><\/span><span class="name" data-i18n="mode\.([a-z]+)">[^<]+<\/span><span class="count">0<\/span><\/button>/g)];
+  const chips = [...card.matchAll(/<button type="button" class="chip" data-mode="([a-z]+)" aria-pressed="true"( hidden)?><span class="swatch"><\/span><span class="name" data-i18n="mode\.([a-z]+)">[^<]+<\/span><span class="count"><\/span><\/button>/g)];
   assert.deepEqual(chips.map(([, mode]) => mode), modes);
   assert.deepEqual(chips.filter(([, , hidden]) => hidden).map(([, mode]) => mode), ['ferry', 'cable', 'other']);
   assert.equal(card.match(/class="chip"/g).length, modes.length);

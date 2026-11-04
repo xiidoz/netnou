@@ -12,10 +12,11 @@ import { kilometres } from '../public/search.js';
 import { townToShow } from '../public/stops.js';
 import { loadConfig, parseBox, parsePlace } from './config.js';
 import { Addresses, KeptNumbers, stopTitle } from './lib/addresses.js';
+import { facts } from './lib/facts.js';
 import { FeedUpdater } from './lib/feed.js';
 import { RealtimePoller } from './lib/realtime.js';
 import { addressTitle, inlineHashes, LANGUAGE_CODES, languageFor, ownFiles, PAGE_INLINE, panelHtml, pictureSize, renderManifest, renderPage, robotsTxt, securityPolicy, sitemapFiles, titleOf, versionsOfFiles } from './lib/page.js';
-import { setTimeZone, timeZone } from './lib/time.js';
+import { localDate, setTimeZone, timeZone } from './lib/time.js';
 import { sharesFor, thinOut, ZOOM_ALL, ZOOM_MIN } from './lib/thinning.js';
 import { LITE_AHEAD_S, MODES, lite } from './lib/timetable.js';
 import { describeBuild, githubReleases, UpdateChecker } from './lib/update.js';
@@ -299,9 +300,27 @@ function addressed(asked) {
   return { type: named.type, found, path: named.type === 'stop' ? addressesNow().stationPath(found) : addressesNow().linePath(found) };
 }
 
-/** Every line of a station with its next departure each way (Timetable.linesAt, #255), each with the address of its page. */
-function linesOf(stationId, now) {
-  return timetable.linesAt(stationId, now, realtime.snapshot).map(({ index, ...line }) => ({ ...line, path: addressesNow().linePath(index) }));
+/**
+ * What the timetable says of a station beyond the minute (#289), of the
+ * service day of a moment: its first and last departure, its lines, each
+ * line's facts there, the towns they go to (lib/facts.js).
+ */
+const stopFacts = (stationId, now) => facts(timetable).stop(timetable.stopIndex.get(stationId), now);
+
+/** Of the facts of a station (stopFacts), what the line below its name says. */
+const todayOf = (known) => ({ first: known.first, last: known.last, lines: known.lines.size });
+
+/**
+ * Every line of a station with its next departure each way (Timetable.linesAt, #255), each with the address of its page
+ * and each way with how often it leaves there that way today (#289); and the towns they go to.
+ */
+function linesOf(stationId, now, known = stopFacts(stationId, now)) {
+  const lines = timetable.linesAt(stationId, now, realtime.snapshot).map(({ index, ways, ...line }) => ({
+    ...line,
+    path: addressesNow().linePath(index),
+    ways: ways.map((way) => ({ ...way, facts: known.lines.get(index)?.get(way.to) ?? null })),
+  }));
+  return { lines, towns: { towns: known.towns, more: known.more } };
 }
 
 /**
@@ -347,9 +366,10 @@ function serveAddress(req, res, url) {
       const at = { language, texts: words, timeZone: timeZone(), now: Math.floor(Date.now() / 1000), fixed: readDisplay(url.search, MODES)?.fixed ?? false };
       if (named.type === 'stop') {
         const board = timetable.departures(timetable.stations[found].id, at.now, realtime.snapshot);
-        if (board) address.panel = panelHtml('stop', { ...board, lines: linesOf(board.id, at.now) }, at);
+        const known = board && stopFacts(board.id, at.now);
+        if (board) address.panel = panelHtml('stop', { ...board, today: todayOf(known), ...linesOf(board.id, at.now, known) }, at);
       } else if (named.type === 'line') {
-        address.panel = panelHtml('line', timetable.lineVehicles(found, vehicles().all, stopAddress), at);
+        address.panel = panelHtml('line', { ...timetable.lineVehicles(found, vehicles().all, stopAddress), facts: facts(timetable).line(found, at.now) }, at);
       }
     }
   }
@@ -415,7 +435,9 @@ function serveMissing(req, res, url) {
 // (lib/page.js): all its files put together at once for each timetable, and
 // kept as they are sent, without the addresses (which would take 65 MB in
 // all of Germany, the files take 25 MB).
-let sitemaps = { of: undefined, files: [] };
+// Its stops are those something leaves in the coming week (#289): made anew
+// for each timetable and each day.
+let sitemaps = { of: undefined, day: null, files: [] };
 
 /** The date of the timetable, YYYY-MM-DD: when its feed was published, else when it was imported; null without one. */
 function timetableDate() {
@@ -425,7 +447,11 @@ function timetableDate() {
 }
 
 function serveSitemap(req, res, part) {
-  if (sitemaps.of !== timetable) sitemaps = { of: timetable, files: sitemapFiles(sitemapAt, timetable ? addressesNow().paths() : [], undefined, timetableDate(), config.language).map((xml) => keep(Buffer.from(xml))) };
+  const day = localDate(Date.now() / 1000);
+  if (sitemaps.of !== timetable || sitemaps.day !== day) {
+    const paths = timetable ? addressesNow().paths(facts(timetable).leavingWithin(day)) : [];
+    sitemaps = { of: timetable, day, files: sitemapFiles(sitemapAt, paths, undefined, timetableDate(), config.language).map((xml) => keep(Buffer.from(xml))) };
+  }
   const kept = sitemaps.files[part];
   if (!kept) return send(req, res, 404, MIME['.txt'], Buffer.from('not found\n'), { 'Cache-Control': 'no-cache' });
   return send(req, res, 200, MIME['.xml'], kept.body, { 'Cache-Control': 'no-cache' }, kept);
@@ -741,7 +767,8 @@ function handleApi(req, res, url) {
       const way = trip === undefined ? {} : { way: Math.max(0, timetable.wayOfTrip(index, trip)) };
       const path = addressesNow().linePath(index);
       visitOpened(req, res, url, path, (language, words) => addressesNow().lineWords(index, language, words).title);
-      return sendJson(req, res, 200, { now: at, ...timetable.lineVehicles(index, all, stopAddress), path, ...route, ...way });
+      // (and what the timetable says of it beyond the minute, #289)
+      return sendJson(req, res, 200, { now: at, ...timetable.lineVehicles(index, all, stopAddress), facts: facts(timetable).line(index, at), path, ...route, ...way });
     }
 
     case '/api/trip': {
@@ -787,9 +814,10 @@ function handleApi(req, res, url) {
       visitOpened(req, res, url, path, (language, words) => stopTitle(board.name, words, townToShow(board.name, board.town)));
       // (and what there is to choose from, where the page asks for it: once, as it does not change with the minute)
       const directions = url.searchParams.get('directions') === '1' ? { directions: timetable.directions(board.id) } : {};
-      // (and every line of it with its next departure each way, while the page shows them: of all, whatever is chosen, #255)
-      const lines = url.searchParams.get('list') === 'lines' ? { lines: linesOf(board.id, now) } : {};
-      return sendJson(req, res, 200, { now, ...board, path, ...directions, ...lines });
+      // (what leaves it today, #289, and every line of it with its next departure each way, while the page shows them: of all, whatever is chosen, #255)
+      const known = stopFacts(board.id, now);
+      const lines = url.searchParams.get('list') === 'lines' ? linesOf(board.id, now, known) : {};
+      return sendJson(req, res, 200, { now, ...board, today: todayOf(known), path, ...directions, ...lines });
     }
 
     default:
