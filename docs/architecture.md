@@ -204,7 +204,22 @@ of all of Germany to about 98,000 trips and 13,500 stations.
 3. **The rest.** `trips.txt`, `routes.txt`, `agency.txt`, `calendar.txt` and
    `calendar_dates.txt` are read for the kept trips, then `stops.txt` again
    for every stop they call at, also outside the area, and their parent
-   stations.
+   stations. Many stops are the platforms of one stop that the feed lists
+   apart, each with the same name and no parent station: Sankt Augustin Ort
+   is two, 85 m apart, one for each direction of tram 66. Stops of one name
+   without a parent station are one station where they stand within 300 m
+   of the busiest of them (`joinPlatforms`,
+   [#299](https://github.com/xiidoz/netnou/issues/299)): the others become
+   its platforms, as those of a parent station of the feed are, and a stop
+   of the name beside a parent station becomes one of its platforms. Once
+   the towns are known (step 5) the same is done with the names as an
+   address writes them, with the town where the name does not say it:
+   "Wilhelmsbau" in Stuttgart and "Wilhelmsbau, Stuttgart" at the same
+   place are one then. In all of Germany (November 2026) 1,043 stops become
+   platforms by their names and 102 more by their names with their towns,
+   in 1,083 stations, a median 80 m from the others. Further apart a stop of the same
+   name is mostly another place: a train station and the bus stop of its
+   village, the two ends of a long street.
 4. **Interim dataset.** If the server has nothing to show yet, the dataset is
    saved without route geometry and loaded, so that the map works with
    straight lines while the next step runs.
@@ -1148,7 +1163,7 @@ What these mean for other feeds and countries, and where to change them:
 | --- | --- |
 | area | the region covered, from `NETNOU_BBOX` or `NETNOU_AREA_FILE` |
 | stop | a row of `stops.txt`, often a single platform |
-| station | the stop that groups platforms (`parent_station`); what the map shows and a departure board is for |
+| station | the stop that groups platforms (`parent_station`, or stops of its name nearby, #299); what the map shows and a departure board is for |
 | pattern | a sequence of stops, stored once for all the trips that run it |
 | profile | a set of running times, stored once: arrival and departure at every stop, counted from the first departure |
 | hop | two consecutive stops of a trip |

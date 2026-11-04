@@ -394,6 +394,34 @@ test('the stations get their towns from the borders in the OSM extract, with the
   assert.deepEqual(fs.readdirSync(dir).sort(), ['dataset.bin', 'osm-networks.bin', 'osm-routes.bin', 'osm-towns.json.gz']);
 });
 
+test('the platforms of a stop whose names an address writes alike once their town is known are one stop (#299)', async (t) => {
+  // "Alpha, Alphastadt" 55 m north of Alpha, with a trip of its own: a stop of its own while the town is not known,
+  // one of Alpha's platforms once it is ("Alpha" in Alphastadt is written so too)
+  const files = {
+    ...FEED,
+    'stops.txt': `${FEED['stops.txt']}A2,"Alpha, Alphastadt",49.4005,11.00\n`,
+    'trips.txt': `${FEED['trips.txt']}R1,DAILY,T2\n`,
+    'stop_times.txt': `${FEED['stop_times.txt']}T2,11:00:00,11:00:00,A2,0\nT2,11:10:00,11:10:00,B,1\n`,
+  };
+  const { feed, url, make } = await setup(t, files);
+  feed.osm = makePbf(
+    [[1, 49.4, 11.0001], [2, 49.45, 11.002], [3, 49.5, 11.0001], [4, 49.35, 10.95], [5, 49.35, 11.05], [6, 49.45, 11.05], [7, 49.45, 10.95]],
+    [[10, [1, 2, 3], { railway: 'subway' }], [11, [4, 5, 6], {}], [12, [4, 7, 6], {}]],
+    [[20, { type: 'boundary', boundary: 'administrative', admin_level: '8', name: 'Alphastadt' }, [['way', 11, 'outer'], ['way', 12, 'outer']]]],
+  );
+  const { updater, timetables } = make({ osmUrls: [`${url}/area.osm.pbf`] });
+  await updater.check();
+  assert.equal(updater.status.error, null);
+  const towns = (timetable) => {
+    const { names, town, towns: named } = timetable.searchList().list.stations;
+    return names.split('\n').map((name, i) => `${name}: ${named[town[i]] ?? '-'}`).sort();
+  };
+  assert.deepEqual(timetables.map(towns), [['Alpha, Alphastadt: -', 'Alpha: -', 'Beta: -'], ['Alpha: Alphastadt', 'Beta: -']]);
+  // (the trip from the platform leaves from Alpha)
+  const at = timetables.at(-1);
+  assert.equal(at.stationOf[at.stopIndex.get('A2')], at.stopIndex.get('A'));
+});
+
 test('without an area the OSM data is kept where the trips run, and read again when they reach beyond it', async (t) => {
   const { feed, url, requests, make } = await setup(t, FEED);
   // a track from A to B, and another one far away
