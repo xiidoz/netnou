@@ -8,7 +8,7 @@
 // (see i18n.js). Of what the server sends only data is shown – the names of
 // lines, stops and operators, and the notes of the feed.
 
-import { parseAddress, stopPath, wordsOf } from './address.js';
+import { parseAddress, stopPathAt, wordsOf } from './address.js';
 import { APP_NAME, READMES, chooseLanguage, dayOf, formatNumber, formatTime, languagePicker, languageToOffer, loadLanguage, pageTexts, sentInAnother, setTimeZone, t, textsOf, translatePage } from './i18n.js';
 import { FAVOURITE_NAME_ZOOM, HEART_MIDDLE, PLACES_ZOOM, RAIL_MODES, heartMark, joiningLines, mergePlaces, namePrecedence, namedAt, placeNames, stopMark, townToShow, townsAlong, withoutStyleStops } from './stops.js';
 import { favouritesFrom, isFavourite, lineFavourite, sameStop, stopFavourite, withChoice, withFavourite } from './favourites.js';
@@ -2789,12 +2789,15 @@ function tripTitle({ line: name, mode, to }) {
 let servedAt = sentInAnother() ? null : here();
 
 /**
- * The address of a stop from what an answer says of it. The server keeps
- * the places of its stops to 1e-5 degrees (timetable.js) and writes their
- * addresses from that; api/departures answers the place as the timetable has
- * it, which the fourth decimal of the address may round the other way.
+ * An address of a stop by its name and its place (stopPathAt), from what an
+ * answer or the search says of it: one the server finds it by, where the page
+ * has not had its own address from the server (that of an answer, `path`,
+ * #288), and the same for the same stop, to tell stops apart by. The server
+ * keeps the places of its stops to 1e-5 degrees (timetable.js); api/departures
+ * answers the place as the timetable has it, which the fourth decimal may
+ * round the other way.
  */
-const stopPathOf = ({ name, lat, lon }) => stopPath(name, Math.round(lat * 1e5) / 1e5, Math.round(lon * 1e5) / 1e5);
+const stopPathOf = ({ name, lat, lon }) => stopPathAt(name, Math.round(lat * 1e5) / 1e5, Math.round(lon * 1e5) / 1e5);
 
 /**
  * Puts the address of what is open into the address bar, as a new step back,
@@ -3066,7 +3069,7 @@ async function loadSelection(first = false) {
         const kept = selection.linesAsked || state.lines.length ? null : favourites.stops.find((stop) => sameStop(stop, data));
         const again = kept?.lines !== undefined;
         if (again) state.lines = readChoice(choiceValue(kept.lines));
-        showAddress(stopPathOf(data), stopTitle(data.name, data.town), selection.from);
+        showAddress(data.path, stopTitle(data.name, data.town), selection.from);
         shareable(true, true);
         // (a board keeps the stop it shows in the middle of the map, or all of its stops in view, unless the address of a display says where the map is)
         if (state.board !== null && !selection.kept) showBoardStops(data);
@@ -4117,16 +4120,7 @@ async function loadBoardStop(stop) {
     const found = await res.json();
     known = { name: found.name, lat: found.lat, lon: found.lon, departures: null, gone: false };
     // (a stop that has moved a little, or has another name: the address says where it is now)
-    const path = found.path.slice('stop/'.length);
-    boardStopData.set(path, known);
-    if (path !== stop.path) {
-      // (and where that is a stop on the board already, it is there once)
-      const twice = path === boardList()[0].path || state.extra.some((other) => other !== stop && other.path === path);
-      if (twice) state.extra = state.extra.filter((other) => other !== stop);
-      else stop.path = path;
-      writeBoard();
-      if (twice) return;
-    }
+    if (!boardStopAt(stop, found.path.slice('stop/'.length), known)) return;
   }
   if (known.gone) return;
   const res = await fetch(`api/departures?at=${known.lat.toFixed(5)},${known.lon.toFixed(5)}`);
@@ -4136,7 +4130,24 @@ async function loadBoardStop(stop) {
     known.lost = true;
   } else if (res.ok) {
     known.departures = await res.json();
+    // (one added from the search had the address the page wrote for it: now its own, #288)
+    boardStopAt(stop, known.departures.path.slice('stop/'.length), known);
   }
+}
+
+/**
+ * A further stop of the board under the address the server has for it, in
+ * the address of the board as well; where that is a stop on the board
+ * already, it is there once. False where it went for that.
+ */
+function boardStopAt(stop, path, known) {
+  boardStopData.set(path, known);
+  if (path === stop.path) return true;
+  const twice = path === boardList()[0].path || state.extra.some((other) => other !== stop && other.path === path);
+  if (twice) state.extra = state.extra.filter((other) => other !== stop);
+  else stop.path = path;
+  writeBoard();
+  return !twice;
 }
 
 /**
@@ -4170,7 +4181,7 @@ const loadBoardStops = () => Promise.allSettled(state.extra.map(loadBoardStop));
 /** The stops of the board in its order, the open one first, each with what is known of it: [{ path, joined, known }]. */
 function boardEntries(board) {
   return [
-    { path: stopPathOf(board).slice('stop/'.length), joined: false, known: { name: board.name, lat: board.lat, lon: board.lon, departures: board, gone: false } },
+    { path: board.path.slice('stop/'.length), joined: false, known: { name: board.name, lat: board.lat, lon: board.lon, departures: board, gone: false } },
     ...state.extra.map((stop) => ({ ...stop, known: boardStopData.get(stop.path) ?? null })),
   ];
 }
@@ -4178,7 +4189,7 @@ function boardEntries(board) {
 /** The name of a stop of the board; of one the timetable does not have, the words of its address. */
 function nameOf(entry) {
   if (entry.known?.name) return entry.known.name;
-  return wordsOf(entry.path.split('@')[0]).replace(/(^|\s)\S/g, (letter) => letter.toUpperCase());
+  return wordsOf(entry.path.split(/[@/]/)[0]).replace(/(^|\s)\S/g, (letter) => letter.toUpperCase());
 }
 
 /**
@@ -4286,7 +4297,7 @@ function showBoardStops(first) {
 /** The stops of the board in its order, the open one first: [{ path, joined }]. */
 function boardList() {
   const data = state.selection?.data;
-  const first = data ? stopPathOf(data).slice('stop/'.length) : here().slice('stop/'.length);
+  const first = data ? data.path.slice('stop/'.length) : here().slice('stop/'.length);
   return [{ path: first, joined: false }, ...state.extra.map((stop) => ({ ...stop }))];
 }
 
@@ -4311,13 +4322,17 @@ function without(list, at) {
  * as a block of its own. One that is on the board already moves there.
  */
 function addBoardStop(stop, block) {
-  const path = stopPathOf(stop).slice('stop/'.length);
+  const list = boardList();
+  // (one on the board already is known by its name and place: the board has the address of the server for it, #288)
+  const at = list.findIndex((entry, k) => {
+    const place = k === 0 ? state.selection?.data : boardStopData.get(entry.path);
+    return place?.name && stopPathOf(place) === stopPathOf(stop);
+  });
+  const path = at >= 0 ? list[at].path : stopPathOf(stop).slice('stop/'.length);
   // (what the search knows of it, until its departures are there)
   if (!boardStopData.get(path)?.name) boardStopData.set(path, { name: stop.name, lat: stop.lat, lon: stop.lon, departures: null, gone: false });
-  const list = boardList();
   const blocks = boardBlocks(list[0], list.slice(1));
   const into = block === null ? null : blocks[block];
-  const at = list.findIndex((entry) => entry.path === path);
   // (in that list already: nothing to do)
   if (at >= 0 && into?.includes(list[at])) {
     focusBoard(`remove:${path}`);

@@ -162,7 +162,7 @@ test('while the timetable is loading the API says so', async () => {
   assert.equal((await get('/api/area')).status, 200);
   // the page itself as well, and what names nothing whatever the timetable (#198)
   assert.equal((await request('/')).status, 200);
-  assert.equal((await request('/stop/alpha@49.4000,11.0000/')).status, 301);
+  assert.equal((await request('/stop/alpha/')).status, 301);
   assert.equal((await request('/foo', { headers: { Accept: 'text/html' } })).status, 404);
 });
 
@@ -336,7 +336,7 @@ test('/api/line: the vehicles of one line that are under way, and its stops with
   assert.equal(json.vehicles.find((v) => v.id === `T1_${today}`).delay, 120);
   // its stops (#256): the shuttle is one way, A and B by turns, each vehicle between two of them, the one ahead its next
   assert.deepEqual(json.ways.map((way) => [way.to, way.stops.length, way.branches]), [['Rundkurs', 102, []]]);
-  assert.deepEqual(json.ways[0].stops.slice(0, 3).map((stop) => [stop.id, stop.name, stop.path]), [['A', 'Alpha', 'stop/alpha@49.4000,11.0000'], ['B', 'Beta', 'stop/beta@49.5000,11.0000'], ['A', 'Alpha', 'stop/alpha@49.4000,11.0000']]);
+  assert.deepEqual(json.ways[0].stops.slice(0, 3).map((stop) => [stop.id, stop.name, stop.path]), [['A', 'Alpha', 'stop/alpha'], ['B', 'Beta', 'stop/beta'], ['A', 'Alpha', 'stop/alpha']]);
   assert.deepEqual(json.ways[0].vehicles.map((v) => v.id).sort(), json.vehicles.map((v) => v.id).sort());
   for (const v of json.ways[0].vehicles) {
     assert.equal(v.until, v.from + 1);
@@ -426,7 +426,8 @@ test('/api/departures', async () => {
   const { status, json } = await get('/api/departures?station=A');
   assert.equal(status, 200);
   const { now, departures, ...board } = json;
-  assert.deepEqual(board, { id: 'A', name: 'Alpha', town: null, lat: 49.4, lon: 11, notes: [{ title: 'Aufzug gestört', text: 'Aufzug außer Betrieb', severity: 'info' }] });
+  // (with its address, which the page writes into its own, #288)
+  assert.deepEqual(board, { id: 'A', name: 'Alpha', town: null, lat: 49.4, lon: 11, notes: [{ title: 'Aufzug gestört', text: 'Aufzug außer Betrieb', severity: 'info' }], path: 'stop/alpha' });
   // one an hour from each of the runs under way: four to nine in the next two hours, and as that is fewer than ten, the next ones up to ten (#165)
   const soon = departures.filter((d) => d.planned <= now + 7200).length;
   assert.ok(soon >= 4 && soon <= 9, `${soon} departures in two hours`);
@@ -533,7 +534,7 @@ test('static files: types, revalidation, HEAD, gzip and Brotli', async () => {
   }
   // (and an answer compressed for itself alone, such as the page of a stop)
   for (const [accepted, encoding] of [['gzip', 'gzip'], ['gzip;q=0', undefined]]) {
-    assert.equal((await request('/stop/alpha@49.4000,11.0000', { headers: { 'Accept-Encoding': accepted } })).headers['content-encoding'], encoding, accepted);
+    assert.equal((await request('/stop/alpha', { headers: { 'Accept-Encoding': accepted } })).headers['content-encoding'], encoding, accepted);
   }
   // the map library is modules, which browsers only run with the type of a script
   assert.equal((await request('/vendor/maplibre-gl/maplibre-gl-worker.mjs')).headers['content-type'], 'text/javascript; charset=utf-8');
@@ -556,7 +557,7 @@ test('the page says what and where the instance is before any script runs', asyn
   assert.match(page, /<p id="area-name">Testland<\/p>/);
   // the stations its search suggests near the first view, each a link to its page (#257): Beta, at which more kinds stop, before Alpha
   assert.equal(/<ul class="search-results" id="search-results"[^>]*>(.*?)<\/ul>/s.exec(page)[1], '<li class="search-heading" role="presentation">In der Nähe</li>'
-    + '<li role="option" aria-selected="false"><a href="stop/beta@49.5000,11.0000">Beta</a></li><li role="option" aria-selected="false"><a href="stop/alpha@49.4000,11.0000">Alpha</a></li>');
+    + '<li role="option" aria-selected="false"><a href="stop/beta">Beta</a></li><li role="option" aria-selected="false"><a href="stop/alpha">Alpha</a></li>');
   // (and the header card, which a visitor sees before the scripts have run)
   assert.ok(page.includes('<span id="status-text" data-i18n="status.connecting">Verbinde …</span>'));
   assert.ok(page.includes(`<link rel="canonical" href="${address}">`));
@@ -634,7 +635,7 @@ test('the page says what and where the instance is before any script runs', asyn
   assert.equal(robots.body.toString(), `User-agent: *\nAllow: /\n\nSitemap: ${address}sitemap.xml\n`);
   const sitemap = await request('/sitemap.xml');
   assert.deepEqual([sitemap.status, sitemap.headers['content-type']], [200, 'application/xml; charset=utf-8']);
-  assert.deepEqual([...sitemap.body.toString().matchAll(/<loc>([^<]*)<\/loc>/g)].map(([, loc]) => loc), [address, `${address}?lang=en`, `${address}stop/alpha@49.4000,11.0000`, `${address}stop/beta@49.5000,11.0000`, `${address}line/testbetrieb/subway/u1`, `${address}line/testbetrieb/longdistance/ice-5`]);
+  assert.deepEqual([...sitemap.body.toString().matchAll(/<loc>([^<]*)<\/loc>/g)].map(([, loc]) => loc), [address, `${address}?lang=en`, `${address}stop/alpha`, `${address}stop/beta`, `${address}line/testbetrieb/subway/u1`, `${address}line/testbetrieb/longdistance/ice-5`]);
 
   // data may be read by a search engine that runs the page, but is not for its results
   for (const pathname of ['/api/area', '/api/status', '/api/vehicles', '/api/search', '/api/stations', '/api/nothing']) {
@@ -643,24 +644,24 @@ test('the page says what and where the instance is before any script runs', asyn
   for (const pathname of ['/', '/app.js', '/robots.txt']) assert.equal((await request(pathname)).headers['x-robots-tag'], undefined, pathname);
 });
 
-test('the address of a stop or a line is a page of its own, found again by its name and its place (#37)', async () => {
+test('the address of a stop or a line is a page of its own, found again by its name (#37, #288)', async () => {
   const address = 'https://karte.example.org/live/';
   // the page of a stop: its title and description, its address as its own, its details open, the page's files one step up
-  const alpha = await request('/stop/alpha@49.4000,11.0000');
+  const alpha = await request('/stop/alpha');
   const page = alpha.body.toString();
   assert.deepEqual([alpha.status, alpha.headers['x-robots-tag']], [200, undefined]);
   assert.match(page, /<meta charset="utf-8">\n {2}<base href="\.\.\/">\n/);
   assert.match(page, /<title>Abfahrten Alpha live – Netnou<\/title>/);
   assert.match(page, /<meta name="description" content="Abfahrten an der Haltestelle Alpha in Echtzeit: U1, live auf der Karte\.">/);
-  assert.ok(page.includes(`<link rel="canonical" href="${address}stop/alpha@49.4000,11.0000">`));
-  assert.ok(page.includes(`<link rel="alternate" hreflang="en" href="${address}stop/alpha@49.4000,11.0000?lang=en">`));
+  assert.ok(page.includes(`<link rel="canonical" href="${address}stop/alpha">`));
+  assert.ok(page.includes(`<link rel="alternate" hreflang="en" href="${address}stop/alpha?lang=en">`));
   // in the main language it has one address, the plain one (#287): asked for in it, it sends the browser there, with the rest of the address
-  assert.ok(page.includes(`<link rel="alternate" hreflang="de" href="${address}stop/alpha@49.4000,11.0000">`));
-  for (const [asked, to] of [['/stop/alpha@49.4000,11.0000?lang=de', '../stop/alpha@49.4000,11.0000'], ['/stop/alpha@49.4000,11.0000?board=&lang=de&display', '../stop/alpha@49.4000,11.0000?board=&display'], ['/?lang=de', './'], ['/?lang=de&display=fixed', '?display=fixed']]) {
+  assert.ok(page.includes(`<link rel="alternate" hreflang="de" href="${address}stop/alpha">`));
+  for (const [asked, to] of [['/stop/alpha?lang=de', '../stop/alpha'], ['/stop/alpha?board=&lang=de&display', '../stop/alpha?board=&display'], ['/?lang=de', './'], ['/?lang=de&display=fixed', '?display=fixed']]) {
     const moved = await request(asked);
     assert.deepEqual([moved.status, moved.headers.location], [301, to], asked);
   }
-  assert.equal((await request('/stop/alpha@49.4000,11.0000?lang=en')).status, 200);
+  assert.equal((await request('/stop/alpha?lang=en')).status, 200);
   assert.match(page, /<aside class="card panel" id="panel" tabindex/);
   // its details as the page shows them, its departures at this moment (#254): its name the main heading of the page, not the instance's
   assert.ok(page.includes('<div id="panel-head"><div class="panel-head"><h1>Alpha</h1><p class="sub with-choice"><span class="view-switch" role="group" aria-label="Ansicht"><button type="button" aria-pressed="true" data-view="departures">Nächste Abfahrten</button><button type="button" aria-pressed="false" data-view="lines">Alle Linien</button></span><span class="choice"><button type="button" class="choice-open" aria-label="Filter"'));
@@ -672,25 +673,26 @@ test('the address of a stop or a line is a page of its own, found again by its n
   assert.ok(page.includes('<div class="site-name">Netnou</div>'));
   assert.deepEqual(page.match(/<h1\b/g), ['<h1']);
   // (the same page while the minute is the same: asked again with its ETag, not sent again)
-  const again = async () => (await request('/stop/alpha@49.4000,11.0000', { headers: { 'If-None-Match': (await request('/stop/alpha@49.4000,11.0000')).headers.etag } })).status;
+  const again = async () => (await request('/stop/alpha', { headers: { 'If-None-Match': (await request('/stop/alpha')).headers.etag } })).status;
   assert.ok((await again()) === 304 || (await again()) === 304);
   // the stop with two kinds of transport, in English
-  const beta = (await request('/stop/beta@49.5000,11.0000?lang=en')).body.toString();
+  const beta = (await request('/stop/beta?lang=en')).body.toString();
   assert.match(beta, /<title>Beta departures live – Netnou<\/title>/);
   assert.match(beta, /content="Departures at Beta in real time: U1, ICE 5, live on the map\."/);
 
-  // moved a little, in capitals, or under another name at its place: sent on to the address it has, with the settings of the page
-  for (const asked of ['/stop/alpha@49.4010,11.0010', '/stop/ALPHA@49.4000,11.0000', '/STOP/alpha@49.4000,11.0000', '/stop/gamma@49.4000,11.0000?lang=en']) {
+  // as written before #288 (its name and its place), moved a little, in capitals, or under another name at its place: sent
+  // on to the address it has, with the settings of the page
+  for (const asked of ['/stop/alpha@49.4000,11.0000', '/stop/alpha@49.4010,11.0010', '/stop/ALPHA@49.4000,11.0000', '/STOP/alpha@49.4000,11.0000', '/stop/gamma@49.4000,11.0000?lang=en']) {
     const moved = await request(asked);
-    assert.deepEqual([moved.status, moved.headers.location], [301, `../stop/alpha@49.4000,11.0000${asked.includes('?') ? '?lang=en' : ''}`], asked);
+    assert.deepEqual([moved.status, moved.headers.location], [301, `../stop/alpha${asked.includes('?') ? '?lang=en' : ''}`], asked);
   }
   // with a slash at its end, or more: sent on to the address without, from where the browser is (the instance may be at a path of its own, #198)
-  for (const [asked, to] of [['/stop/alpha@49.4000,11.0000/', '/stop/alpha@49.4000,11.0000'], ['/stop/alpha@49.4000,11.0000//?lang=en', '/stop/alpha@49.4000,11.0000?lang=en'], ['/line/testbetrieb/subway/u1/', '/line/testbetrieb/subway/u1'], ['/LINE/testbetrieb/subway/u1/', '/LINE/testbetrieb/subway/u1']]) {
+  for (const [asked, to] of [['/stop/alpha/', '/stop/alpha'], ['/stop/alpha//?lang=en', '/stop/alpha?lang=en'], ['/line/testbetrieb/subway/u1/', '/line/testbetrieb/subway/u1'], ['/LINE/testbetrieb/subway/u1/', '/LINE/testbetrieb/subway/u1']]) {
     const moved = await request(asked);
     assert.equal(moved.status, 301, asked);
     assert.equal(new URL(moved.headers.location, `https://karte.example.org/live${asked}`).href, `https://karte.example.org/live${to}`, asked);
   }
-  assert.equal((await request('/stop/alpha@49.4000,11.0000/')).headers.location, '../../stop/alpha@49.4000,11.0000');
+  assert.equal((await request('/stop/alpha/')).headers.location, '../../stop/alpha');
   // nothing of that name nearby, and no stop at its place: the page says so, and is not to be listed
   for (const asked of ['/stop/alpha@49.4200,11.0000', '/stop/nirgends@48.0000,10.0000', '/stop/kaputt']) {
     const gone = await request(asked);
@@ -707,14 +709,14 @@ test('the address of a stop or a line is a page of its own, found again by its n
   // its details as the page shows them (#254): its stops, each a link to its page, and its vehicles under way along them
   // at this moment (#256)
   assert.match(line, /<div class="panel-head"><h1><span class="badge" data-mode="subway">U1<\/span><span>U-Bahn<\/span><\/h1><p class="sub">Testbetrieb · \d Fahrzeuge unterwegs<\/p><\/div>/);
-  assert.ok(line.includes('<div id="panel-body" data-sent><div class="line-body"><ul class="line-stops" data-mode="subway"><li class="on-line station first"><a class="row on-line" href="stop/alpha@49.4000,11.0000" data-station="A" title="Alpha">'));
+  assert.ok(line.includes('<div id="panel-body" data-sent><div class="line-body"><ul class="line-stops" data-mode="subway"><li class="on-line station first"><a class="row on-line" href="stop/alpha" data-station="A" title="Alpha">'));
   assert.equal(line.match(/<g class="line-vehicle" transform="translate\(36\.0 [\d.]+\)" data-trip="T1_\d{8}" role="button" tabindex="0" aria-label="U1 nach Rundkurs[^"]*" data-mode="subway" data-track="[\d.,]+">/g).length, 2);
   const otherKind = await request('/line/testbetrieb/bus/u1');
   assert.equal(otherKind.status, 404);
   assert.ok(otherKind.body.toString().includes('Diese Linie ist nicht im Fahrplan.'));
 
   // what an address names, for the page that is at it
-  assert.deepEqual((await get('/api/address?path=stop/alpha@49.4010,11.0010')).json, { type: 'stop', name: 'Alpha', lat: 49.4, lon: 11, path: 'stop/alpha@49.4000,11.0000' });
+  assert.deepEqual((await get('/api/address?path=stop/alpha@49.4010,11.0010')).json, { type: 'stop', name: 'Alpha', lat: 49.4, lon: 11, path: 'stop/alpha' });
   // (with the place of the line: the middle of the three stations of the ICE, for the page to ask for it by)
   assert.deepEqual((await get('/api/address?path=line/testbetrieb/longdistance/ice-5')).json, { type: 'line', name: 'ICE 5', mode: 'longdistance', agency: 'Testbetrieb', at: [51.13333, 12.33333], path: 'line/testbetrieb/longdistance/ice-5' });
   for (const path of ['stop/nirgends@48.0000,10.0000', 'line/anders/subway/u1', 'nothing']) assert.equal((await get(`/api/address?path=${encodeURIComponent(path)}`)).status, 404, path);
@@ -1122,9 +1124,9 @@ test('a visit of the page is reported to the analytics service the operator name
     assert.equal(reports[1].url, '/api/send?site=7');
     assert.deepEqual(Object.keys(JSON.parse(reports[1].body).payload).sort(), ['hostname', 'ip', 'language', 'near', 'page', 'title', 'url', 'userAgent']);
     // the page of a stop is a visit too, at its address
-    await request('/stop/alpha@49.4000,11.0000', { headers: opened });
+    await request('/stop/alpha', { headers: opened });
     await reported(3);
-    assert.equal(JSON.parse(reports[2].body).payload.url, '/live/stop/alpha@49.4000,11.0000');
+    assert.equal(JSON.parse(reports[2].body).payload.url, '/live/stop/alpha');
 
     // no visits: the worker filling its cache, a script fetching the page, a prefetch, HEAD, Do Not Track and GPC, a script's request for data
     for (const headers of [
@@ -1160,14 +1162,14 @@ test('a visit of the page is reported to the analytics service the operator name
     const of = (part) => reports.slice(4).map((report) => JSON.parse(report.body).payload).find((visit) => visit.page.includes(part));
     // (without a source: the visitor came from the page itself; with the title of the page at the address)
     assert.deepEqual(of('/stop/'), {
-      url: '/live/stop/alpha@49.4000,11.0000',
+      url: '/live/stop/alpha',
       hostname: 'karte.example.org',
       language: 'de-DE',
       title: 'Abfahrten Alpha live – Netnou',
       ip: '203.0.113.47',
       near: '203.0.113.0',
       userAgent: browser,
-      page: 'https://karte.example.org/live/stop/alpha@49.4000,11.0000',
+      page: 'https://karte.example.org/live/stop/alpha',
     });
     assert.equal(reports.find((report) => report.body.includes('/stop/')).url, '/api/send?site=7');
     const lineTitle = /<title>([^<]*)<\/title>/.exec((await request('/line/testbetrieb/subway/u1', { headers: { 'Accept-Language': 'de-DE' } })).body.toString())[1];
