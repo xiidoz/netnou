@@ -830,7 +830,11 @@ line, see
 [Other feeds and other countries](configuration.md#other-feeds-and-other-countries).
 Ferries are route type 4, cable cars and monorails 5, 6, 7 and 12 (the feed of
 Germany gives all of them the type of a funicular, 7), trolleybuses (11) are
-buses, and the extended route types of the same things count likewise.
+buses, and the extended route types of the same things count likewise. A line
+named U and a number (`U1`, `U 43`) is a `subway` also where the feed gives
+it the route type of a tram: so are all U-Bahn and Stadtbahn lines called in
+Germany and Austria, and their route type changes from one version of a feed
+to the next.
 
 ## Stability and licence
 

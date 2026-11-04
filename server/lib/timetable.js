@@ -32,15 +32,21 @@ export const MODES = ['subway', 'tram', 'bus', 'suburban', 'regional', 'longdist
 export const NET_OF_MODE = { bus: 'road', tram: 'tram', subway: 'subway', suburban: 'rail', regional: 'rail', longdistance: 'rail', ferry: 'ferry', cable: 'cable' };
 
 const LONG_DISTANCE = /^(ICE|IC|ECE|EC|RJX|RJ|NJ|EN|TGV|FLX|D)\s?\d/;
+// A line named U and a number is a U-Bahn, as in Germany and Austria all of
+// them are called: also where the feed gives it the route type of a tram, as
+// it does from one version to the next for some U-Bahn and Stadtbahn lines
+// (Nürnberg's U1 to U3 in the feed of 31 October 2026, #302).
+const U_BAHN = /^U\s?\d+$/;
 
 // GTFS has one route_type for all trains. The kinds of train are told apart by
 // the line name as used in Germany and its neighbours ("S1", "ICE 29"). Of the
 // other route types, ferries are a kind of their own, and so are cable cars,
 // funiculars and monorails; trolleybuses are buses. Of the extended route
 // types (developers.google.com/transit/gtfs/reference/extended-route-types)
-// those of the same things count likewise; everything else is 'other'.
+// those of the same things count likewise; everything else is 'other'. Of
+// trams, a line named as a U-Bahn is one (U_BAHN).
 export function routeMode(type, shortName) {
-  if (type === 0) return 'tram';
+  if (type === 0) return U_BAHN.test(shortName ?? '') ? 'subway' : 'tram';
   if (type === 1) return 'subway';
   if (type === 3 || type === 11 || (type >= 800 && type < 900)) return 'bus';
   if (type === 2) {
