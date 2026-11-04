@@ -9,7 +9,7 @@ import { Addresses } from '../server/lib/addresses.js';
 import { Area, scopeId } from '../server/lib/area.js';
 import { eachLine, parseCsvLine } from '../server/lib/csv.js';
 import { readDataset, writeDataset } from '../server/lib/dataset.js';
-import { buildDataset, tidyName } from '../server/lib/importer.js';
+import { buildDataset, joinPlatforms, tidyName } from '../server/lib/importer.js';
 import { decodeFeed } from '../server/lib/pb.js';
 import { agreedDelay, buildRealtime } from '../server/lib/realtime.js';
 import { addDays, localDate, serviceDayStart, setTimeZone, weekday } from '../server/lib/time.js';
@@ -196,6 +196,44 @@ test('a station whose modes stop apart has their places, where they stop togethe
   assert.deepEqual(apart.stations.find((s) => s.id === 'B').modes, ['subway', 'bus', 'longdistance']);
   assert.equal(apart.stations.find((s) => s.id === 'B').places, undefined);
   assert.equal(timetable.stations.find((s) => s.id === 'SA').places, undefined);
+});
+
+test('the platforms of a stop that the feed lists apart are one station (#299)', async () => {
+  // a bus of line 99 from a stop of Gamma 78 m north of its U-Bahn to Beta, and one from a stop of the name 400 m north
+  const joined = await importFeed({
+    'stops.txt': `${FEED['stops.txt']}Gamma,,C2,49.6007,11.10,,\r\nGamma,,C3,49.6036,11.10,,\r\n`,
+    'trips.txt': `${FEED['trips.txt']}R3,DAILY,T5\nR3,DAILY,T6\n`,
+    'stop_times.txt': `${FEED['stop_times.txt']}T5,10:30:00,10:30:00,C2,0,Beta,,\nT5,10:40:00,10:40:00,B,1,Beta,,\nT6,11:30:00,11:30:00,C3,0,Beta,,\nT6,11:40:00,11:40:00,B,1,Beta,,\n`,
+  }, 'platforms.zip');
+  // the first is a platform of the busier stop, its U-Bahn, as the platforms of a parent station are; the other a stop apart
+  assert.deepEqual(joined.stations.filter((s) => s.name === 'Gamma').map((s) => s.id).sort(), ['C', 'C3']);
+  const gamma = joined.stations.find((s) => s.id === 'C');
+  assert.deepEqual([gamma.lat, gamma.lon, gamma.modes], [49.6, 11.1, ['subway', 'bus']]);
+  assert.deepEqual(gamma.places.map((place) => place.modes), [['subway'], ['bus']]);
+  // its board has the departures of both, and its lines are those of both
+  assert.ok(joined.departures('C', at('10:00'), null).departures.some((dep) => dep.line === '99'));
+  assert.deepEqual(joined.linesAt('C', at('10:00'), null).map((line) => line.name).sort(), ['99', 'U1']);
+});
+
+test('stops of one name are joined around a parent station of the feed, else around the busiest of them (#299)', () => {
+  const stops = {
+    name: ['Ort', 'Ort', 'Kirche', 'Kirche', 'Hbf', 'Hbf Gleis 1', 'Hbf', 'Hbf', '?!', '?!', 'Ried', 'Ried', 'Messe', 'Messe U', 'Messe', 'Messe Bus'],
+    lat: [50.77019, 50.76985, 48, 48.0036, 49.4456, 49.4456, 49.4466, 49.6, 49, 49, 48.1, 48.1, 48.2, 48.2, 48.2009, 48.2009],
+    lon: [7.18079, 7.17971, 11, 11, 11.083, 11.083, 11.083, 11, 11, 11, 11.5, 11.50001, 11.6, 11.6, 11.6, 11.6],
+    parent: [-1, -1, -1, -1, -1, 4, -1, -1, -1, -1, -1, -1, -1, 12, -1, 14],
+  };
+  const calls = [285, 215, 10, 20, 0, 100, 500, 5, 1, 1, 5, 5, 0, 50, 0, 80];
+  joinPlatforms(stops, calls);
+  assert.deepEqual(stops.parent, [
+    // two platforms 85 m apart: one stop, the busier its station; 400 m apart: two
+    -1, 0, -1, -1,
+    // a stop of the name of a parent station 111 m from it is one of its platforms, though busier; one far away is not
+    -1, 4, 4, -1,
+    // stops without a name in letters stay apart; of as busy ones the southernmost, then the westernmost is the station
+    -1, -1, -1, 10,
+    // of two parent stations of a name 100 m apart the busier is the station, and the platforms of the other go with it
+    14, 14, -1, 14,
+  ]);
 });
 
 test('the modes of a station within 25 m of each other are one of its places', () => {
