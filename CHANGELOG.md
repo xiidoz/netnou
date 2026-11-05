@@ -8,6 +8,13 @@ This file is written by
 messages when a release is made. Do not edit it by hand; see
 [Releases](CONTRIBUTING.md#releases).
 
+## [0.23.1](https://github.com/xiidoz/netnou/compare/v0.23.0...v0.23.1) (2026-11-05)
+
+
+### Bug Fixes
+
+* **timetable:** an operator is named without the code a feed writes before its name ([#306](https://github.com/xiidoz/netnou/issues/306)) ([aa39959](https://github.com/xiidoz/netnou/commit/aa399590400d57800c21b2d09efafc20e3c37bc9)), closes [#305](https://github.com/xiidoz/netnou/issues/305)
+
 ## [0.23.0](https://github.com/xiidoz/netnou/compare/v0.22.2...v0.23.0) (2026-11-05)
 
 
