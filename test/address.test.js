@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { test } from 'node:test';
-import { linePath, parseAddress, slug, stopName, stopPath, stopPathAt, tripPath, wordsOf } from '../public/address.js';
+import { linePath, operatorName, parseAddress, slug, stopName, stopPath, stopPathAt, tripPath, wordsOf } from '../public/address.js';
 import { Addresses, KeptNumbers } from '../server/lib/addresses.js';
 import { sitemapFiles } from '../server/lib/page.js';
 
@@ -219,6 +219,36 @@ test('lines of a name in places apart have the middle of their stations in their
     'line/db-regio-ag-bayern/suburban/s1@48.21,11.60', 'line/db-regio-ag-bayern/suburban/s1@49.56,11.14', 'line/vag/subway/u1',
     'line/vag/bus/sev@49.4520,11.0770', 'line/vag/bus/sev@49.4545,11.0800', 'line/vag/bus/u1',
   ]);
+});
+
+test('an operator\'s name is without a code before it: a first word of six letters and digits with a digit in it (#305)', () => {
+  assert.deepEqual(['800714 DB Regio AG Bayern', '8007D4 DB Regio AG Bayern', 'kvv22E KVV', 'goo030 go.on.', 'NBRB54 NEB Niederbarnimer Eisenbahn', 'B1NIWE DB Regio AG Nord'].map(operatorName),
+    ['DB Regio AG Bayern', 'DB Regio AG Bayern', 'KVV', 'go.on.', 'NEB Niederbarnimer Eisenbahn', 'DB Regio AG Nord']);
+  // six letters without a digit are a name; a code alone, or a first word of another length, stays as it is
+  const kept = ['KomBus GmbH', 'Arendt Busbetrieb', 'rabRAB DB ZugBus Regionalverkehr Alb-Bodensee GmbH', '800528', '1234567 Verkehr', 'VerkehrsAG Nürnberg', ''];
+  assert.deepEqual(kept.map(operatorName), kept);
+});
+
+test('an address of a line whose operator\'s name has gained or lost words before it names the line still (#305)', () => {
+  const lines = [
+    { name: 'S9', mode: 'suburban', agency: 'DB Regio AG Mitte Region Hessen', stops: 30, trips: 300, place: [50.1, 8.7] },
+    { name: 'RB81', mode: 'regional', agency: 'rabRAB DB ZugBus Regionalverkehr Alb-Bodensee GmbH', stops: 20, trips: 50, place: [47.8, 9.6] },
+    { name: 'S1', mode: 'suburban', agency: 'DB Regio AG Bayern', stops: 37, trips: 264, place: [49.56472, 11.13972] },
+    { name: 'S1', mode: 'suburban', agency: 'DB Regio AG Bayern', stops: 24, trips: 1051, place: [48.21483, 11.59682] },
+    { name: 'S1', mode: 'suburban', agency: 'S-Bahn Rhein-Main', stops: 25, trips: 400, place: [50.1, 8.6] },
+  ];
+  const addresses = new Addresses({ stations: [], lines, stationService: [] });
+  // an address written while the feed had a code before the name (31 October 2026)
+  assert.equal(addresses.line(parseAddress('line/800528-db-regio-ag-mitte-region-hessen/suburban/s9')), 0);
+  // a name that has gained one: of the lines of that kind and name, its own
+  assert.equal(addresses.line(parseAddress('line/db-zugbus-regionalverkehr-alb-bodensee-gmbh/regional/rb81')), 1);
+  // of lines of a name in places apart, the nearest to the place in the address; without one the busiest
+  assert.equal(addresses.line(parseAddress('line/8007d4-db-regio-ag-bayern/suburban/s1@49.45,11.08')), 2);
+  assert.equal(addresses.line(parseAddress('line/8007d4-db-regio-ag-bayern/suburban/s1')), 3);
+  // only whole words at the start, of the same kind and name
+  for (const asked of ['line/regio-ag-mitte-region-hessenx/suburban/s9', 'line/800528-db-regio-ag-mitte-region-hessen/regional/s8', 'line/sbahn-rhein-main/suburban/s1', 'line/db-regio-ag-mitte-region/suburban/s9']) {
+    assert.equal(addresses.line(parseAddress(asked)), -1, asked);
+  }
 });
 
 test('a sitemap of more addresses than a file may hold is cut into parts, which sitemap.xml lists', () => {

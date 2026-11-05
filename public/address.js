@@ -47,6 +47,17 @@ export const stopPath = (name, number = 1) => `stop/${name}${number > 1 ? `/${nu
 export const stopPathAt = (name, lat, lon) => `stop/${slug(name)}@${lat.toFixed(4)},${lon.toFixed(4)}`;
 
 /**
+ * The name of an operator as Netnou has it (#305): as the feed gives it,
+ * without a code written before it. A code is a first word of six letters
+ * and digits with a digit in it, as gtfs.de writes since its timetable of
+ * 31 October 2026: "800714 DB Regio AG Bayern", "kvv22E KVV", "NBRB54 NEB
+ * Niederbarnimer Eisenbahn". A name that is only such a word stays as it is,
+ * and so do "KomBus GmbH" and "Arendt Busbetrieb". The import names every
+ * operator so; the page also its favourites saved before.
+ */
+export const operatorName = (name) => name.replace(/^(?=[A-Za-z]*\d)[A-Za-z\d]{6} +(?=\S)/, '');
+
+/**
  * The address of a line: line/<operator>/<kind>/<name>, and @<place> where
  * lines of that name are in places apart (#152): the middle of its stations,
  * as server/lib/addresses.js writes it.
