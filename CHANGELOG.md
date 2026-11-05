@@ -8,6 +8,18 @@ This file is written by
 messages when a release is made. Do not edit it by hand; see
 [Releases](CONTRIBUTING.md#releases).
 
+## [0.24.0](https://github.com/xiidoz/netnou/compare/v0.23.1...v0.24.0) (2026-11-05)
+
+
+### Features
+
+* **page:** the heading of a line's timetable waits at the foot of its stops, a tap away ([#310](https://github.com/xiidoz/netnou/issues/310)) ([8379cba](https://github.com/xiidoz/netnou/commit/8379cbae642cea5b36b8bc2ca5c78489ce0fe18b))
+
+
+### Bug Fixes
+
+* **map:** the lines in a bubble of vehicles stay centred where a favourite's name is shown ([#308](https://github.com/xiidoz/netnou/issues/308)) ([0a3be0c](https://github.com/xiidoz/netnou/commit/0a3be0c33b0705a8b41412931a2e2cfd830335ea))
+
 ## [0.23.1](https://github.com/xiidoz/netnou/compare/v0.23.0...v0.23.1) (2026-11-05)
 
 
