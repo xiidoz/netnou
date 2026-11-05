@@ -244,7 +244,7 @@ export default {
   'facts.perHourAtMost': { one: 'at most once an hour', 2: 'at most twice an hour', other: 'at most {count} times an hour' },
   'facts.none': 'no trips',
   'facts.fromStop': 'From {stop}: {said}',
-  'facts.timetableAt': 'Timetable for the next 7 days from {stop}',
+  'facts.timetableFrom': 'from {stop}',
   'facts.todayMark': 'today',
   'facts.linesToday': { one: '{count} line runs today', other: '{count} lines run today' },
   'facts.linesOfToday': { one: '{count} of {all} lines runs today', other: '{count} of {all} lines run today' },

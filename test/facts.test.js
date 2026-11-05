@@ -293,9 +293,11 @@ test('the timetable after the stops of a line: two lines for each kind of day, M
   ];
   const facts = { ways: [{ week }, { week: week.slice(0, 1) }], minutes: 37, stops: 27, towns: ['Nürnberg', 'Fürth'] };
   const context = drawing('de', de, at('20261104', '13:37'));
-  const html = toHtml(lineTimetable(facts, context));
+  const html = lineTimetable(facts, context).map(toHtml).join('');
   const chevron = '<svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M7.41,15.41L12,10.83L16.59,15.41L18,14L12,8L6,14L7.41,15.41Z"></path></svg>';
-  assert.equal(html, '<section class="line-timetable"><h2>Fahrplan der nächsten 7 Tage</h2><ul class="timetable-days">'
+  // the heading before the timetable, a way down to it from the foot of the details (app.js)
+  assert.equal(html, `<h2 class="timetable-head"><button type="button" class="to-timetable"><span class="what"><span class="title">Fahrplan der nächsten 7 Tage</span></span>${chevron}</button></h2>`
+    + '<section class="line-timetable"><ul class="timetable-days">'
     + '<li><details class="days" data-days="20261104,20261105,20261106,20261109,20261110"><summary class="days-head" data-focus="days 20261104,20261105,20261106,20261109,20261110">'
     + `<span class="when">Mo–Fr</span><span class="said"><span class="span">05:30–23:40</span><span class="often">6–20 Uhr alle 10 Min.</span></span>${chevron}</summary>`
     + '<ul class="runs"><li><span class="hours">6–20 Uhr</span> <span>alle 10 Min.</span></li><li><span class="hours">20–24 Uhr</span> <span>alle 20 Min.</span></li></ul></details></li>'
@@ -303,20 +305,20 @@ test('the timetable after the stops of a line: two lines for each kind of day, M
     + '<li><div class="days-head"><span class="when">So</span><span class="said"><span class="span">08:10–21:50</span><span class="often">14 Fahrten</span></span></div></li>'
     + '</ul><div class="along"><p>37 Min. von Ende zu Ende · 27 Haltestellen</p><p>Durch Nürnberg und Fürth</p></div></section>');
   // the stop its figures are of, in the heading; the kind of day today is, marked
-  const named = toHtml(lineTimetable({ ...facts, date: '20261104', ways: [{ week, stop: 'Nürnberg Plärrer' }] }, context));
-  assert.ok(named.includes('<h2>Fahrplan der nächsten 7 Tage ab Nürnberg Plärrer</h2>'), named);
+  const named = lineTimetable({ ...facts, date: '20261104', ways: [{ week, stop: 'Nürnberg Plärrer' }] }, context).map(toHtml).join('');
+  assert.ok(named.includes('<span class="title">Fahrplan der nächsten 7 Tage</span><span class="from">ab Nürnberg Plärrer</span>'), named);
   assert.ok(named.includes('<span class="when">Mo–Fr<span class="today">heute</span></span>'), named);
   assert.equal(named.match(/class="today"/g).length, 1);
   // a kind of day opened (by its dates) is drawn open; the other way has its own
-  assert.ok(toHtml(lineTimetable(facts, context, 0, new Set(['20261104,20261105,20261106,20261109,20261110']))).includes('<details class="days" open data-days='));
-  assert.ok(toHtml(lineTimetable(facts, context, 1)).includes('<span class="when">So</span>') && !toHtml(lineTimetable(facts, context, 1)).includes('Mo–Fr'));
+  assert.ok(lineTimetable(facts, context, 0, new Set(['20261104,20261105,20261106,20261109,20261110'])).map(toHtml).join('').includes('<details class="days" open data-days='));
+  assert.ok(lineTimetable(facts, context, 1).map(toHtml).join('').includes('<span class="when">So</span>') && !lineTimetable(facts, context, 1).map(toHtml).join('').includes('Mo–Fr'));
   // a kind of day whose hours say no more than its second line has nothing to open
   const one = { ways: [{ week: [{ ...week[1], runs: [week[1].often] }] }] };
-  assert.ok(!toHtml(lineTimetable(one, context)).includes('<details'));
+  assert.ok(!lineTimetable(one, context).map(toHtml).join('').includes('<details'));
   // days apart, and a stretch of three or more: "Mo, Mi–Fr"
   assert.equal(daysText(['20261106', '20261104', '20261105', '20261109'], drawing('de', de, 0)), 'Mo, Mi–Fr');
   // many towns: how many, from the first to the last
-  assert.match(toHtml(lineTimetable({ ...facts, minutes: 112, stops: 37, towns: ['Bamberg', 'Forchheim', 'Erlangen', 'Fürth', 'Nürnberg', 'Pommelsbrunn'] }, drawing('en-US', en, 0))), /<p>Through 6 towns from Bamberg to Pommelsbrunn<\/p>/);
+  assert.match(lineTimetable({ ...facts, minutes: 112, stops: 37, towns: ['Bamberg', 'Forchheim', 'Erlangen', 'Fürth', 'Nürnberg', 'Pommelsbrunn'] }, drawing('en-US', en, 0)).map(toHtml).join(''), /<p>Through 6 towns from Bamberg to Pommelsbrunn<\/p>/);
   assert.equal(lineTimetable({ ways: [{ week: [] }] }, drawing('de', de, 0)), null);
 });
 

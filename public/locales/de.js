@@ -183,7 +183,7 @@ export default {
   'facts.perHourAtMost': { one: 'höchstens einmal pro Stunde', 2: 'höchstens zweimal pro Stunde', other: 'höchstens {count}-mal pro Stunde' },
   'facts.none': 'keine Fahrt',
   'facts.fromStop': 'Ab {stop}: {said}',
-  'facts.timetableAt': 'Fahrplan der nächsten 7 Tage ab {stop}',
+  'facts.timetableFrom': 'ab {stop}',
   'facts.todayMark': 'heute',
   'facts.linesToday': { one: '{count} Linie fährt heute', other: '{count} Linien fahren heute' },
   'facts.linesOfToday': { one: '{count} von {all} Linien fährt heute', other: '{count} von {all} Linien fahren heute' },

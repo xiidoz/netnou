@@ -487,11 +487,14 @@ const sameRun = (run, often) => run.from === often.from && run.to === often.to &
  * hour is folded away below each, opened and closed by its own head (a
  * disclosure, which works without the script); folded, the hours are in the
  * page all the same. Then how long it takes from end to end, its stops, its
- * towns.
+ * towns. Its heading stands before it, not in it: below a long list of
+ * stops it waits at the foot of the details while they scroll, as the way
+ * down to it (style.css, app.js).
  * @param facts as api/line has them (`facts`), or none
  * @param context { t, time, hour, weekday, list }
  * @param way which of its ways (facts.ways)
  * @param open the kinds of day whose hours are shown, by their dates joined with commas
+ * @returns [its heading, the timetable], or null
  */
 export function lineTimetable(facts, context, way = 0, open = new Set()) {
   const { t, time, list } = context;
@@ -530,10 +533,14 @@ export function lineTimetable(facts, context, way = 0, open = new Set()) {
     [facts.minutes !== null && facts.minutes !== undefined ? t('facts.endToEnd', { count: facts.minutes }) : null, facts.stops ? t('facts.stops', { count: facts.stops }) : null].filter(Boolean).join(' · '),
     !towns.length ? null : towns.length <= 4 ? t('facts.through', { towns: list(towns) }) : t('facts.throughMany', { count: towns.length, from: towns[0], to: towns.at(-1) }),
   ].filter(Boolean);
-  return h('section', { class: 'line-timetable' },
-    h('h2', {}, stop ? t('facts.timetableAt', { stop }) : t('facts.timetable')),
-    h('ul', { class: 'timetable-days' }, days),
-    along.length ? h('div', { class: 'along' }, along.map((said) => h('p', {}, said))) : null);
+  return [
+    h('h2', { class: 'timetable-head' }, h('button', { type: 'button', class: 'to-timetable' },
+      h('span', { class: 'what' }, h('span', { class: 'title' }, t('facts.timetable')), stop ? h('span', { class: 'from' }, t('facts.timetableFrom', { stop })) : null),
+      iconOf(mdiChevronUp))),
+    h('section', { class: 'line-timetable' },
+      h('ul', { class: 'timetable-days' }, days),
+      along.length ? h('div', { class: 'along' }, along.map((said) => h('p', {}, said))) : null),
+  ];
 }
 
 // ---------- a line ----------
