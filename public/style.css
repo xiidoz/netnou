@@ -461,6 +461,8 @@ button { font: inherit; color: inherit; }
 .chip[data-mode="other"] { --chip-color: var(--mode-other); }
 .chip .swatch { background: var(--chip-color); }
 .chip .count { color: var(--text-muted); font-variant-numeric: tabular-nums; }
+/* (the page is sent without the counts, which the script puts in: #289) */
+.chip .count:empty { display: none; }
 .chip[aria-pressed="false"] { color: var(--text-muted); background: var(--bg-subtle); }
 .chip[aria-pressed="false"] .swatch { background: transparent; box-shadow: inset 0 0 0 2px var(--delay-none); }
 .chip[aria-pressed="false"] .name { text-decoration: line-through; }
@@ -623,6 +625,10 @@ button:focus-visible, select:focus-visible, .row:focus-visible, .panel:focus-vis
   flex-wrap: wrap;
 }
 .panel-head .sub { margin: 4px 0 0; color: var(--text-muted); font-size: 13px; }
+/* What the timetable says beyond the minute (#289): how often now and the
+   last trip, below the name of a line or a stop; the main message of the
+   head, so in the colour of the text. */
+.panel-head .facts { margin: 4px 0 0; font-size: 13px; }
 
 /* The lines of a stop to show (#164): a chip beside "Departures" says which,
    all or only those chosen, and opens the sheet to choose them; its cross
@@ -921,6 +927,40 @@ button.line-vehicle { position: absolute; left: -18px; top: -18px; width: 36px; 
 .row.departure.by-line.resting { cursor: default; }
 .row.resting:hover { background: none; }
 .row.resting .later { color: var(--text-muted); font-size: 12.5px; white-space: nowrap; text-decoration: none; }
+/* (below each way of a line, how often it leaves here that way now and its last today; after the lines, the towns they go to: #289) */
+.line-facts { margin: -3px 0 0; padding: 0 14px 6px 0; color: var(--text-muted); font-size: 12.5px; }
+.lines-towns { margin: 0; padding: 8px 14px 14px; color: var(--text-muted); font-size: 13px; }
+
+/* The timetable of a line after its stops (#289): of each kind of day two
+   lines, its first and last trip and how often it runs, beside its name in
+   a column of their own, as on a printed timetable; its hours folded away
+   below them, opened by that head, whose chevron says which way they go;
+   then from end to end and its towns, quiet below a rule. */
+.line-timetable { margin-top: 4px; padding: 0 14px 14px; border-top: 1px solid var(--border); }
+.line-timetable h2 { margin: 14px 0 6px; color: var(--text-muted); font-size: 13px; font-weight: 650; }
+.timetable-days { list-style: none; margin: 0; padding: 0; }
+.days-head { display: grid; grid-template-columns: 60px minmax(0, 1fr) auto; column-gap: 8px; align-items: baseline; padding: 6px 0; }
+.timetable-days .when { font-size: 14px; font-weight: 650; }
+/* (the kind of day today is: a word below its name) */
+.timetable-days .when .today { display: block; color: var(--text-muted); font-size: 12px; font-weight: 400; }
+.timetable-days .said > span { display: block; }
+.timetable-days .span { font-size: 14px; font-variant-numeric: tabular-nums; }
+.timetable-days .often { margin-top: 2px; color: var(--text-muted); font-size: 13px; }
+/* (a head that opens: the whole of it a finger to tap, its chevron down while folded, up when open) */
+summary.days-head { list-style: none; margin: 0 -8px; padding: 6px 8px; border-radius: 8px; cursor: pointer; }
+summary.days-head::-webkit-details-marker { display: none; }
+summary.days-head .icon { align-self: center; width: 20px; height: 20px; color: var(--text-muted); transform: rotate(180deg); }
+.days[open] > summary.days-head .icon { transform: none; }
+@media (hover: hover) {
+  summary.days-head:hover { background: var(--bg-subtle); }
+}
+/* (the hours of a kind of day: a column of hours and one of how often, along a quiet line on their left, under its two lines) */
+.timetable-days .runs { list-style: none; margin: 2px 0 6px 68px; padding: 0 0 0 8px; border-left: 2px solid var(--border); display: grid; grid-template-columns: max-content minmax(0, 1fr); column-gap: 14px; row-gap: 2px; color: var(--text-muted); font-size: 13px; }
+.timetable-days .runs > li { display: grid; grid-column: 1 / -1; grid-template-columns: subgrid; }
+.timetable-days .runs .hours { font-variant-numeric: tabular-nums; }
+.line-timetable .along { margin-top: 6px; padding-top: 12px; border-top: 1px solid var(--border); color: var(--text-muted); font-size: 13px; }
+.line-timetable .along p { margin: 0; }
+.line-timetable .along p + p { margin-top: 2px; }
 
 /* --time-chars: how many characters a clock time has at most in the visitor's language,
    --clock-chars: the same without what it writes before or after the digits, such as "PM" (app.js sets both).

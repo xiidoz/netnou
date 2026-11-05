@@ -51,12 +51,18 @@ let numberFormat;
 let pluralRules;
 let timeFormat;
 let dayFormat;
+let hourFormat;
+let weekdayFormat;
+let listFormat;
 
 function setFormats() {
   numberFormat = new Intl.NumberFormat(locale);
   pluralRules = new Intl.PluralRules(locale);
   timeFormat = new Intl.DateTimeFormat(locale, { timeStyle: 'short', timeZone });
   dayFormat = new Intl.DateTimeFormat('en-CA', { year: 'numeric', month: '2-digit', day: '2-digit', timeZone });
+  hourFormat = new Intl.DateTimeFormat(locale, { hour: 'numeric', timeZone });
+  weekdayFormat = new Intl.DateTimeFormat(locale, { weekday: 'short', timeZone });
+  listFormat = new Intl.ListFormat(locale, { type: 'conjunction' });
 }
 setFormats();
 
@@ -162,7 +168,8 @@ export const sentInAnother = (sent = SENT) => chosen && language !== sent;
 export function t(key, params = {}, texts = messages) {
   let message = texts[key] ?? en[key];
   if (message === undefined) return key;
-  if (typeof message === 'object') message = message[pluralRules.select(params.count)] ?? message.other;
+  // (a plural by the number itself where the language has words of its own for it, "twice", else by its kind)
+  if (typeof message === 'object') message = message[params.count] ?? message[pluralRules.select(params.count)] ?? message.other;
   return message.replace(/\{(\w+)\}/g, (placeholder, name) => {
     const value = params[name];
     if (value === undefined) return placeholder;
@@ -188,6 +195,15 @@ export const formatTime = (epoch) => timeFormat.format(epoch * 1000);
 
 /** The date of a point in time given in epoch seconds, as YYYY-MM-DD where the area is: what tells today from tomorrow. */
 export const dayOf = (epoch) => dayFormat.format(epoch * 1000);
+
+/** The hour of a point in time given in epoch seconds, as a clock says a whole hour: "19 Uhr", "7 PM" (hoursText in panel.js). */
+export const formatHour = (epoch) => hourFormat.format(epoch * 1000);
+
+/** The day of the week of a point in time given in epoch seconds, short: "Mo", "Mon". */
+export const formatWeekday = (epoch) => weekdayFormat.format(epoch * 1000);
+
+/** Words as a list: "a, b und c". */
+export const formatList = (words) => listFormat.format(words);
 
 /**
  * Times are shown in the time zone of the area (timeZone of api/area), as on

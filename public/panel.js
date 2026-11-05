@@ -12,7 +12,7 @@
 // as it is (test/panel.test.js).
 
 import { townToShow, townsAlong } from './stops.js';
-import { mdiAlert, mdiArrowCollapse, mdiArrowExpand, mdiChevronRight, mdiClose, mdiFilterVariant } from './vendor/material-design-icons/icons.js';
+import { mdiAlert, mdiArrowCollapse, mdiArrowExpand, mdiChevronRight, mdiChevronUp, mdiClose, mdiFilterVariant } from './vendor/material-design-icons/icons.js';
 
 // The kinds of transport, as the API names them; any other is drawn as "other".
 const KINDS = ['subway', 'tram', 'bus', 'suburban', 'regional', 'longdistance', 'ferry', 'cable', 'other'];
@@ -250,7 +250,9 @@ export function lineLink(line, { t }) {
  * Every line of a stop with each way it goes from there and its next
  * departure (#255), under the kinds where there are several: the badge of
  * the line, which leads to it, beside its ways. A way with no departure in
- * the next 24 hours says so where the minutes stand and opens nothing.
+ * the next 24 hours says so where the minutes stand and opens nothing. Below
+ * each way, how often it leaves there that way now and when last today
+ * (#289); after the lines, the towns they go to.
  * @param board as api/departures?list=lines answers, with `lines`
  */
 export function lineLists(board, context) {
@@ -259,16 +261,23 @@ export function lineLists(board, context) {
   if (!lines.length) return [h('p', { class: 'panel-empty' }, t('departures.none'))];
   const signed = lines.some((line) => line.ways.some((way) => way.departure?.warnings.length > 0));
   const kinds = [...new Set(lines.map((line) => kindOf(line.mode)))];
-  const way = (line, { to, departure }) => h('li', {}, departure
+  // (each way with how often it leaves here that way now, and when last today, #289)
+  const way = (line, { to, departure, facts }) => h('li', {}, departure
     ? departureRow({ ...departure, line: line.name, mode: line.mode }, signed, context, true)
     : h('div', { class: `row departure times-${times} by-line resting` },
       h('span', { class: 'name', title: to }, to),
-      h('abbr', { class: 'later', title: t('lines.laterLong') }, t('lines.later'))));
-  return kinds.flatMap((kind) => [
+      h('abbr', { class: 'later', title: t('lines.laterLong') }, t('lines.later'))),
+  facts ? h('p', { class: 'line-facts' }, todayText(facts, context)) : null);
+  const towns = board.towns?.towns ?? [];
+  return [...kinds.flatMap((kind) => [
     kinds.length > 1 ? h('h3', { class: 'rows-head' }, t(`mode.${kind}`)) : null,
     h('ul', { class: `line-rows${signed ? ' signed' : ''}` }, lines.filter((line) => kindOf(line.mode) === kind).map((line) =>
       h('li', {}, lineLink(line, context), h('ul', {}, line.ways.map((one) => way(line, one)))))),
-  ]).filter(Boolean);
+  ]),
+  // (the towns its lines go to, the nearest first)
+  towns.length ? h('p', { class: 'lines-towns' }, towns.length === 1 && !board.towns.more ? t('facts.townsOne', { town: towns[0] })
+    : board.towns.more ? t('facts.townsMore', { towns: towns.join(', '), count: board.towns.more }) : t('facts.towns', { towns: context.list(towns) })) : null,
+  ].filter(Boolean);
 }
 
 /**
@@ -363,6 +372,170 @@ export function stopHeading(name, town) {
  */
 export const panelHead = (heading, ...more) => h('div', { class: 'panel-head' }, h('h1', {}, heading), more);
 
+// ---------- what the timetable says beyond the minute (#289) ----------
+
+/**
+ * How often, in words (server/lib/facts.js): "alle 10 Min.", "spätestens
+ * alle 4 Min.", "stündlich", "zweimal pro Stunde".
+ * @param often { every } | { atMost } | { perHour: [few, many] } | { none }
+ */
+export function oftenText(often, { t }) {
+  if (often.every !== undefined) {
+    if (often.every % 60 !== 0) return t('facts.every', { count: often.every });
+    return often.every === 60 ? t('facts.hourly') : t('facts.everyHours', { count: often.every / 60 });
+  }
+  if (often.atMost !== undefined) return t('facts.atMost', { count: often.atMost });
+  if (often.none) return t('facts.none');
+  const [few, many] = often.perHour;
+  if (few === 0) return t('facts.perHourAtMost', { count: many });
+  return few === many ? t('facts.perHour', { count: few }) : t('facts.perHourRange', { few, many });
+}
+
+/**
+ * A whole hour as a clock says it, "19 Uhr", "7 PM"; where the language says
+ * the hour by its number alone (en-GB: "19"), as the time "19:00". Midnight
+ * at the end of a stretch of hours is its 24th hour where the clock counts
+ * so: "20–24 Uhr".
+ * @param end whether it ends a stretch
+ * @param context { hour, time }: the hour and the time of day of a moment
+ */
+function hourParts(epoch, { hour, time }, end = false) {
+  const said = hour(epoch);
+  const [, digits, rest] = /^0?(\d+)(.*)$/.exec(/^\d+$/.test(said) ? time(epoch) : said) ?? [null, said, ''];
+  // (a clock of 24 hours, which has neither AM nor PM)
+  return [end && digits === '0' && !/[ap]\.?\s?m\b/i.test(rest) ? '24' : digits, rest];
+}
+
+/** A whole hour as a clock says it (hourParts). */
+export const hourText = (epoch, context) => hourParts(epoch, context, true).join('');
+
+/** A stretch of whole hours: "5–7 Uhr", "20–24 Uhr", "11 AM–1 PM". */
+export function hoursText(from, to, context) {
+  const [a, aRest] = hourParts(from, context);
+  const [b, bRest] = hourParts(to, context, true);
+  // (what both say after the hour once: " Uhr", and " AM" within one half of the day; a time, "20:00", in full)
+  const once = aRest === bRest && !aRest.startsWith(':') && (!/[ap]\.?\s?m\b/i.test(aRest) || to - from < 12 * 3600);
+  return once ? `${a}–${b}${bRest}` : `${a}${aRest}–${b}${bRest}`;
+}
+
+const firstUp = (text) => text.charAt(0).toUpperCase() + text.slice(1);
+
+/**
+ * What runs now, of a line or of a line at a stop, in a line of the details:
+ * how often in the hour it is and until when that holds, and the last trip
+ * of the service day; before the first, the first; after the last, that
+ * none comes any more.
+ * @param day { first, last, runs } of the service day (facts.js), null where nothing runs that day
+ * @param context { t, time, hour, now }
+ * @param stop the stop these are of, which the line then names first, or null where it is the stop shown
+ */
+export function todayText(day, context, stop = null) {
+  const { t, time, now } = context;
+  const run = day && day.first !== null && now >= day.first && now <= day.last ? day.runs.find(({ from, to }) => from <= now && now < to) : null;
+  const said = !day || day.first === null ? t('facts.noneToday')
+    : now > day.last ? t('facts.overToday')
+      : [
+        now < day.first ? t('facts.first', { time: time(day.first) }) : null,
+        run ? t('facts.until', { often: oftenText(run, context), until: hourText(run.to, context) }) : null,
+        t('facts.last', { time: time(day.last) }),
+      ].filter(Boolean).join(' · ');
+  // (where the figures are of, where that is not the stop shown: a line's last trip at its busiest stop is not that at the next)
+  return firstUp(stop ? t('facts.fromStop', { stop, said: said.charAt(0).toLowerCase() + said.slice(1) }) : said);
+}
+
+/**
+ * The line below the name of a stop that says what leaves it on the service
+ * day: how many lines, of how many, and from when to when.
+ * @param today { first, last, lines, all } as api/departures has it, or null
+ */
+export function stopToday(today, context) {
+  const { t, time } = context;
+  if (!today) return null;
+  // (of how many, where some of its lines do not run today: their badges are all under "Alle Linien")
+  const lines = (today.all ?? today.lines) > today.lines ? t('facts.linesOfToday', { count: today.lines, all: today.all }) : t('facts.linesToday', { count: today.lines });
+  const said = today.first === null ? t('facts.stopNone') : t('facts.stopToday', { lines, first: time(today.first), last: time(today.last) });
+  return h('p', { class: 'facts' }, said);
+}
+
+/** The days of a week as their timetable groups them: "Mo, Fr", "Di–Do", Monday first, a run of three or more as a range. */
+export function daysText(dates, { weekday }) {
+  // (noon of each day in the area, whose weekday it is; dates as yyyymmdd)
+  const days = dates.map((date) => {
+    const noon = Date.UTC(+date.slice(0, 4), +date.slice(4, 6) - 1, +date.slice(6, 8), 12) / 1000;
+    return { name: weekday(noon), order: (new Date(noon * 1000).getUTCDay() + 6) % 7 };
+  }).sort((a, b) => a.order - b.order);
+  const parts = [];
+  for (let k = 0; k < days.length;) {
+    let end = k;
+    while (end + 1 < days.length && days[end + 1].order === days[end].order + 1) end++;
+    if (end - k >= 2) parts.push(`${days[k].name}–${days[end].name}`);
+    else for (let j = k; j <= end; j++) parts.push(days[j].name);
+    k = end + 1;
+  }
+  return parts.join(', ');
+}
+
+/** Whether a stretch of hours (a run of hourly() in facts.js) is the one a group of days says already. */
+const sameRun = (run, often) => run.from === often.from && run.to === often.to && run.every === often.every && run.atMost === often.atMost && String(run.perHour) === String(often.perHour);
+
+/**
+ * The timetable of a line after its stops (#289), the way it goes that its
+ * stops show: of the coming days, by their kind as a timetable has them
+ * (Mo–Fr, Sa, So, apart where the first or last trip differs), two lines
+ * each: its first and last trip, and the longest stretch of hours one set of
+ * words holds for, else how many trips it makes. How often it runs hour by
+ * hour is folded away below each, opened and closed by its own head (a
+ * disclosure, which works without the script); folded, the hours are in the
+ * page all the same. Then how long it takes from end to end, its stops, its
+ * towns.
+ * @param facts as api/line has them (`facts`), or none
+ * @param context { t, time, hour, weekday, list }
+ * @param way which of its ways (facts.ways)
+ * @param open the kinds of day whose hours are shown, by their dates joined with commas
+ */
+export function lineTimetable(facts, context, way = 0, open = new Set()) {
+  const { t, time, list } = context;
+  const week = facts?.ways?.[way]?.week;
+  if (!week?.length) return null;
+  const { stop } = facts.ways[way];
+  const order = (group) => Math.min(...group.dates.map((date) => (new Date(Date.UTC(+date.slice(0, 4), +date.slice(4, 6) - 1, +date.slice(6, 8))).getUTCDay() + 6) % 7));
+  const groups = [...week].sort((a, b) => order(a) - order(b));
+  // (the hours of a group, where they say more than its second line)
+  const hours = (group) => (group.runs.length > 1 || (group.runs.length === 1 && !(group.often && sameRun(group.runs[0], group.often))) ? group.runs : []);
+  const often = (group) => {
+    if (group.often) return t('facts.during', { hours: hoursText(group.often.from, group.often.to, context), often: oftenText(group.often, context) });
+    if (!group.trips) return null;
+    const [few, many] = group.trips;
+    return few === many ? t('facts.trips', { count: few }) : t('facts.tripsRange', { few, many });
+  };
+  // (the head of a kind of day: its name, and beside it its two lines; a summary holds no blocks, so spans)
+  // (the kind of day today is, marked so: the rider need not work out that Wednesday is "Mo–Fr")
+  const head = (group, folds) => [
+    h('span', { class: 'when' }, daysText(group.dates, context), group.dates.includes(facts.date) ? h('span', { class: 'today' }, t('facts.todayMark')) : null),
+    h('span', { class: 'said' },
+      h('span', { class: 'span' }, group.first === null ? t('facts.noTrips') : `${time(group.first)}–${time(group.last)}`),
+      group.first === null ? null : h('span', { class: 'often' }, often(group))),
+    folds ? iconOf(mdiChevronUp) : null,
+  ];
+  const days = groups.map((group) => {
+    const shown = hours(group);
+    if (!shown.length) return h('li', {}, h('div', { class: 'days-head' }, head(group, false)));
+    const key = group.dates.join(',');
+    return h('li', {}, h('details', { class: 'days', open: open.has(key), 'data-days': key },
+      h('summary', { class: 'days-head', 'data-focus': `days ${key}` }, head(group, true)),
+      h('ul', { class: 'runs' }, shown.map((run) => h('li', {}, h('span', { class: 'hours' }, hoursText(run.from, run.to, context)), ' ', h('span', {}, oftenText(run, context)))))));
+  });
+  const towns = facts.towns ?? [];
+  const along = [
+    [facts.minutes !== null && facts.minutes !== undefined ? t('facts.endToEnd', { count: facts.minutes }) : null, facts.stops ? t('facts.stops', { count: facts.stops }) : null].filter(Boolean).join(' · '),
+    !towns.length ? null : towns.length <= 4 ? t('facts.through', { towns: list(towns) }) : t('facts.throughMany', { count: towns.length, from: towns[0], to: towns.at(-1) }),
+  ].filter(Boolean);
+  return h('section', { class: 'line-timetable' },
+    h('h2', {}, stop ? t('facts.timetableAt', { stop }) : t('facts.timetable')),
+    h('ul', { class: 'timetable-days' }, days),
+    along.length ? h('div', { class: 'along' }, along.map((said) => h('p', {}, said))) : null);
+}
+
 // ---------- a line ----------
 
 // The rows of the stops of a line (#256), in px, as style.css has them: a
@@ -409,10 +582,13 @@ export function delayFlag(delay, live) {
  * most of its way.
  * @param way the way shown, or null for no switch
  */
-export function lineHead(line, { t }, way = null) {
+export function lineHead(line, context, way = null) {
+  const { t } = context;
   const sub = [line.agency, line.vehicles.length ? t('line.vehicles', { count: line.vehicles.length }) : ''].filter(Boolean).join(' · ');
   const ways = line.ways ?? [];
   return panelHead([badge(line.name, line.mode), h('span', {}, t(`mode.${kindOf(line.mode)}`))], h('p', { class: 'sub' }, sub),
+    // (how often it runs now the way its stops show and its last trip today, #289)
+    line.facts?.ways?.length ? h('p', { class: 'facts' }, todayText(line.facts.ways[Math.min(way ?? 0, line.facts.ways.length - 1)].today, context, line.facts.ways[Math.min(way ?? 0, line.facts.ways.length - 1)].stop)) : null,
     way !== null && ways.length > 1
       ? h('p', { class: 'sub with-choice line-ways' }, h('span', {}, t('line.toward')),
         h('span', { class: 'view-switch ways', role: 'group', 'aria-label': t('line.ways') },

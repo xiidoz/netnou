@@ -9,11 +9,11 @@
 // lines, stops and operators, and the notes of the feed.
 
 import { parseAddress, stopPathAt, wordsOf } from './address.js';
-import { APP_NAME, READMES, chooseLanguage, dayOf, formatNumber, formatTime, languagePicker, languageToOffer, loadLanguage, pageTexts, sentInAnother, setTimeZone, t, textsOf, translatePage } from './i18n.js';
+import { APP_NAME, READMES, chooseLanguage, dayOf, formatHour, formatList, formatNumber, formatTime, formatWeekday, languagePicker, languageToOffer, loadLanguage, pageTexts, sentInAnother, setTimeZone, t, textsOf, translatePage } from './i18n.js';
 import { FAVOURITE_NAME_ZOOM, HEART_MIDDLE, PLACES_ZOOM, RAIL_MODES, heartMark, joiningLines, mergePlaces, namePrecedence, namedAt, placeNames, stopMark, townToShow, townsAlong, withoutStyleStops } from './stops.js';
 import { favouritesFrom, isFavourite, lineFavourite, sameStop, stopFavourite, withChoice, withFavourite } from './favourites.js';
 import { choiceValue, readChoice, toggled } from './choice.js';
-import { DELAY_MAJOR_S, DELAY_MINOR_S, DELAY_SEVERE_S, MINUTES_MAX, NOTE_CHARS, badge as badgeOf, choiceChip as choiceChipOf, clockOf, delayCell as delayCellOf, delayClass, delayNode as delayNodeOf, delaySum as delaySumOf, delayFlag, delayText, departureLists, departuresSub as departuresSubOf, directionSign as directionSignOf, leavesAt, lineHead, lineLists, lineStops, minutesNode as minutesNodeOf, trackAt, VEHICLE_R, panelHead as panelHeadOf, stopHeading, tomorrowAt as tomorrowAtOf, untilText as untilTextOf, vehicleLabel, warningSign as warningSignOf, warns } from './panel.js';
+import { DELAY_MAJOR_S, DELAY_MINOR_S, DELAY_SEVERE_S, MINUTES_MAX, NOTE_CHARS, badge as badgeOf, choiceChip as choiceChipOf, clockOf, delayCell as delayCellOf, delayClass, delayNode as delayNodeOf, delaySum as delaySumOf, delayFlag, delayText, departureLists, departuresSub as departuresSubOf, directionSign as directionSignOf, leavesAt, lineHead, lineLists, lineStops, lineTimetable, minutesNode as minutesNodeOf, trackAt, VEHICLE_R, panelHead as panelHeadOf, stopHeading, stopToday, tomorrowAt as tomorrowAtOf, untilText as untilTextOf, vehicleLabel, warningSign as warningSignOf, warns } from './panel.js';
 import { BOARD_MAX, BOARD_SHARE, BOARD_STOPS, boardBlocks, boardQuery, boardShare, displayQuery, ledBy, readBoard, readDisplay, readStops } from './display.js';
 import { mdiChevronLeft, mdiChevronRight, mdiCityVariantOutline, mdiFullscreen, mdiFullscreenExit, mdiHeart, mdiHeartOutline, mdiMinusCircleOutline, mdiPlus } from './vendor/material-design-icons/icons.js';
 import { AttributionControl, MapLibreMap, NavigationControl } from './vendor/maplibre-gl/maplibre-gl.mjs';
@@ -177,11 +177,12 @@ function toDom(node, svg = false) {
 
 /**
  * What panel.js needs to draw: the texts, times of day and dates where the
- * area is, the clock, how departure times show, and for the vehicles of a
- * line as on the map, whether delays come in and how the vehicles are coloured and flagged.
+ * area is, whole hours, days of the week and lists (#289), the clock, how
+ * departure times show, and for the vehicles of a line as on the map,
+ * whether delays come in and how the vehicles are coloured and flagged.
  */
 function drawing() {
-  return { t, time: formatTime, day: dayOf, now: now(), times: state.times, live: realtimeState() === 'live', colorBy: state.colorBy, flags: state.flags, moving: true };
+  return { t, time: formatTime, day: dayOf, hour: formatHour, weekday: formatWeekday, list: formatList, now: now(), times: state.times, live: realtimeState() === 'live', colorBy: state.colorBy, flags: state.flags, moving: true };
 }
 
 // The icons on the page's own buttons are from Material Design Icons
@@ -3193,6 +3194,19 @@ panel.addEventListener('click', (event) => {
   else if (event.target.closest('.board-open')) setBoard(state.board === null ? boardWas : null);
 });
 
+// The hours of a kind of day in the timetable of a line (#289), opened or
+// folded by its head: kept for as long as the line is open, as its details
+// are drawn anew with every answer. (A toggle does not bubble: caught on its
+// way down.)
+panel.addEventListener('toggle', (event) => {
+  const days = event.target;
+  const selection = state.selection;
+  if (!days.matches?.('details.days') || selection?.type !== 'line') return;
+  selection.hours ??= new Set();
+  if (days.open) selection.hours.add(days.dataset.days);
+  else selection.hours.delete(days.dataset.days);
+}, true);
+
 const platformText = (platform) => (platform ? t('stop.platform', { platform }) : '');
 
 // The way back. There always is one: the device's Back, through the steps
@@ -3549,7 +3563,9 @@ function renderLine(line, first) {
   const drawn = drawing();
   // (its stops in one direction, which it shows until another is chosen, with its vehicles along them: #256)
   const way = Math.min(selection.way ?? 0, Math.max(0, (line.ways?.length ?? 1) - 1));
-  fillPanel([toDom(lineHead(line, drawn, way))], ...lineStops(line, drawn, way).map((node) => toDom(node)));
+  // (and after them its timetable of the coming days that way, #289, with the hours shown of the days they were opened for)
+  const timetableOf = lineTimetable(line.facts, drawn, way, selection.hours ?? new Set());
+  fillPanel([toDom(lineHead(line, drawn, way))], ...[...lineStops(line, drawn, way), timetableOf].filter(Boolean).map((node) => toDom(node)));
   panelBody.scrollTop = scrollTop;
   // (its vehicles drawn at once, as high as the list, and with the frames from now on)
   const paper = lineCanvas();
@@ -3614,8 +3630,11 @@ function renderStation(board) {
   // (as the server writes them into the page of the stop: panel.js)
   // (its next departures, or all its lines: until they come, a word that they are on the way)
   const waiting = state.view === 'lines' && !board.lines;
-  const listed = waiting ? [el('p', { class: 'panel-empty', text: t('panel.loading') })] : (state.view === 'lines' ? lineLists : departureLists)(board, drawing()).map((node) => toDom(node));
-  fillPanel([toDom(panelHeadOf(stopHeading(board.name, board.town), departuresSub(), notesList(board.notes)))], ...listed);
+  const drawn = drawing();
+  const listed = waiting ? [el('p', { class: 'panel-empty', text: t('panel.loading') })] : (state.view === 'lines' ? lineLists : departureLists)(board, drawn).map((node) => toDom(node));
+  // (what leaves it today, #289: not on a screen on a wall, which shows its departures alone)
+  const today = FIXED ? null : stopToday(board.today, drawn);
+  fillPanel([toDom(panelHeadOf(stopHeading(board.name, board.town), today, departuresSub(), notesList(board.notes)))], ...listed);
   panelBody.scrollTop = scrollTop;
   // (the one tip, when there are departures to tap)
   if (state.selection?.tip && board.departures.length) {

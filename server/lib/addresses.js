@@ -10,7 +10,8 @@ import fs from 'node:fs';
 import { linePath, slug, stopName, stopPath, stopPathAt, tripPath } from '../../public/address.js';
 import { t } from '../../public/i18n.js';
 import { townToShow } from '../../public/stops.js';
-import { addDays, localClock, localDate, serviceDayStart, timeZone } from './time.js';
+import { facts } from './facts.js';
+import { addDays, localClock, localDate, serviceDayStart, timeZone, weekday } from './time.js';
 import { MODES } from './timetable.js';
 
 // A stop of the name of an address with a place, as addresses were written
@@ -495,10 +496,16 @@ export class Addresses {
     return linePath(this.timetable.lines[i], this.places.get(i));
   }
 
-  /** The addresses of all stations that trips call at and of all lines, for the sitemap. */
-  paths() {
+  /**
+   * The addresses of the stations and of all lines, for the sitemap: of the
+   * stations those that something leaves (#289: in the coming week), else
+   * all that trips call at.
+   * @param leaving by station number, 1 where something leaves it (Facts.leavingWithin), or null
+   */
+  paths(leaving = null) {
     const { stations, stationService } = this.timetable;
-    return [...stations.flatMap((_, i) => (stationService[i] > 0 ? [this.stationPath(i)] : [])), ...[...this.lines.values()].flat().map((i) => this.linePath(i))];
+    const listed = (i) => (leaving ? leaving[i] === 1 : stationService[i] > 0);
+    return [...stations.flatMap((_, i) => (listed(i) ? [this.stationPath(i)] : [])), ...[...this.lines.values()].flat().map((i) => this.linePath(i))];
   }
 
   /** The lines that call at station number i, the busiest first: [{ name, mode, agency, trips }]. */
@@ -543,18 +550,55 @@ export class Addresses {
     };
   }
 
-  /** What the page of line number i says of it, in a language (see stationWords). */
-  lineWords(i, language, texts) {
+  /**
+   * What the page of line number i says of it, in a language (see
+   * stationWords). Its description says what the timetable says of its
+   * working days, as each of them has it (#289): how often it runs in the
+   * hours that holds for, else how many trips go each way; between when and
+   * when; how many stops it has, in which towns.
+   * @param now the moment, in epoch seconds: its working days are those of the coming weeks
+   */
+  lineWords(i, language, texts, now = Date.now() / 1000) {
     const { name, mode, agency, headsigns } = this.timetable.lines[i];
     const line = labelled(name, name, mode, texts);
     // (where it goes most of the time, both ways)
     const route = [...headsigns].sort((a, b) => b[1] - a[1]).slice(0, 2).map(([headsign]) => headsign).join(' – ');
     return {
       title: firstUp(t('address.lineTitle', { line, route }, texts).replace(/\s+/g, ' ')),
-      description: firstUp(t('address.lineDescription', { line, agency }, texts)),
+      description: firstUp(this.lineDescription(i, line, language, texts, now)),
       heading: line,
       sub: agency,
     };
+  }
+
+  /** The description of line number i (lineWords), with its name as it is said (`line`). */
+  lineDescription(i, line, language, texts, now) {
+    const known = facts(this.timetable);
+    const { stops: count, towns } = known.alongOf(i);
+    const stops = t('address.stops', { count }, texts);
+    const along = !towns.length ? '' : towns.length <= 2 ? t('address.townsIn', { towns: listed(towns, language) }, texts) : t('address.townsFromTo', { from: towns[0], to: towns.at(-1) }, texts);
+    const described = known.described(i, now);
+    if (!described) return t('address.lineDescription', { line, stops, towns: along }, texts);
+    const { without, often, trips, first, last } = described;
+    // (the working days it does not run on, where they are few stretches of days: "4. bis 6. November")
+    const stretches = stretchesOf(without, localDate(now));
+    const days = !without.length ? t('address.workingDays', {}, texts)
+      : stretches.length <= 3 ? t('address.workingDaysExcept', { days: listed(stretches.map((dates) => datesText(dates, language, texts)), language) }, texts)
+        : t('address.someWorkingDays', {}, texts);
+    const clock = (seconds) => `${Math.floor(seconds / 3600) % 24}:${String(Math.floor(seconds / 60) % 60).padStart(2, '0')}`;
+    const span = { first: clock(first), last: clock(last) };
+    if (!often) {
+      const [few, many] = trips;
+      const counted = few === many ? t('address.trips', { count: few }, texts) : t('address.tripsRange', { few, many }, texts);
+      // (one time where all of them leave at the same: a school bus once a day)
+      const words = { line, days, trips: counted, ...span, stops, towns: along };
+      return first === last ? t('address.lineCountedAt', words, texts) : t('address.lineCounted', words, texts);
+    }
+    const n = often.often.every ?? often.often.atMost;
+    const words = often.often.atMost !== undefined ? t('address.atMost', { count: n }, texts)
+      : n % 60 !== 0 ? t('address.every', { count: n }, texts) : n === 60 ? t('address.hourly', {}, texts) : t('address.everyHours', { count: n / 60 }, texts);
+    const said = t('address.oftenHours', { often: words, from: String(often.from % 24), to: String(often.to % 24 || 24) }, texts);
+    return t('address.lineDescribed', { line, days, often: said, ...span, stops, towns: along }, texts);
   }
 
   /**
@@ -586,6 +630,38 @@ const labelled = (words, first, mode, texts) => (/^\d/.test(first) ? `${t(`addre
 
 /** Words in a list as the language writes one: "a, b und c". */
 const listed = (words, language) => new Intl.ListFormat(language, { type: 'conjunction' }).format(words);
+
+/**
+ * Working days (yyyymmdd, in order) in stretches of days one after the
+ * other, as a working week has them: Friday and the Monday after are one.
+ * @param from the first day they are of
+ */
+function stretchesOf(dates, from) {
+  const stretches = [];
+  // (each working day from the first on, to tell which follow each other)
+  const working = [];
+  for (let day = from; working.length < 400 && day <= (dates.at(-1) ?? from); day = addDays(day, 1)) if (weekday(day) < 5) working.push(day);
+  const place = new Map(working.map((day, k) => [day, k]));
+  for (const day of dates) {
+    const last = stretches.at(-1);
+    if (last && place.get(day) === place.get(last.at(-1)) + 1) last.push(day);
+    else stretches.push([day]);
+  }
+  return stretches;
+}
+
+/** A stretch of days as a sentence says it: "4. November", "4. bis 6. November", "30. November bis 2. Dezember" (English: "4 to 6 November"). */
+function datesText(dates, language, texts) {
+  const at = (date) => new Date(Date.UTC(+date.slice(0, 4), +date.slice(4, 6) - 1, +date.slice(6, 8), 12));
+  // (the day before the month, as both languages write it in a sentence)
+  const locale = language === 'en' ? 'en-GB' : language;
+  const full = new Intl.DateTimeFormat(locale, { day: 'numeric', month: 'long', timeZone: 'UTC' });
+  const day = new Intl.DateTimeFormat(locale, { day: 'numeric', timeZone: 'UTC' });
+  const [first, last] = [dates[0], dates.at(-1)];
+  if (first === last) return full.format(at(first));
+  const sameMonth = first.slice(0, 6) === last.slice(0, 6);
+  return t('address.dates', { from: (sameMonth ? day : full).format(at(first)), to: full.format(at(last)) }, texts);
+}
 
 const firstUp = (text) => text.charAt(0).toUpperCase() + text.slice(1);
 

@@ -4,13 +4,17 @@
 // they are taken.
 //
 //   feed.zip      the timetable of that day, cut out of a GTFS feed of gtfs.de:
-//                 the trips that call in the area of the pictures in the hours
-//                 around the moment, with their stops, lines and operators
+//                 all the trips of the day that call in the area of the
+//                 pictures, with their stops, lines and operators. The whole
+//                 day, never some hours of it: what the page says of a day
+//                 (the first and last departure of a stop, how often a line
+//                 runs, #289) is then as true in the pictures as on the day
+//   realtime.pb   delays for the trips under way around the moment, made up,
+//                 as a GTFS-Realtime feed of the kind gtfs.de publishes; the
+//                 bus the pictures follow has just left a stop, a few minutes
+//                 late
 //   osm.pbf       the roads and tracks of that area and the borders of its
 //                 towns, cut out of an OpenStreetMap extract of Geofabrik
-//   realtime.pb   delays for those trips, made up, as a GTFS-Realtime feed of
-//                 the kind gtfs.de publishes; the bus the pictures follow has
-//                 just left a stop, a few minutes late
 //   moment.json   the moment, the bus that the pictures follow, and what the
 //                 data was made from
 //
@@ -33,13 +37,15 @@ import { Reader } from '../server/lib/pb.js';
 import { openZip } from '../server/lib/zip.js';
 
 // The moment the pictures show, a Monday afternoon, in the time zone of the default area.
-const MOMENT = '2026-10-19T13:37:00+02:00';
-const DAY = '20261019';
-const MIDNIGHT = Date.parse('2026-10-19T00:00:00+02:00') / 1000;
-// The trips kept: those that call in AREA and are under way at some time
-// between FROM and TO, in seconds of the day: the hour before the moment, and
-// the two hours after it that the departures of a stop reach.
+const MOMENT = '2026-11-16T13:37:00+01:00';
+const DAY = '20261116';
+const MIDNIGHT = Date.parse('2026-11-16T00:00:00+01:00') / 1000;
+// The trips kept: all those of the day that call in AREA.
 const AREA = { south: 49.39, west: 10.92, north: 49.5, east: 11.17 };
+// The trips that have delays: those under way at some time between FROM and
+// TO, in seconds of the day, as a realtime feed has those under way and soon
+// to leave: the hour before the moment, and the two hours after it that the
+// departures of a stop reach.
 const FROM = 12 * 3600 + 30 * 60;
 const TO = 15 * 3600 + 45 * 60;
 // The roads, tracks and borders kept: those in AREA and this much around it, in degrees.
@@ -256,7 +262,7 @@ await table('stop_times.txt', (row, line, c) => {
     trip.last = Math.max(trip.last, time);
   }
 });
-for (const [id, trip] of trips) if (!(trip.inArea && trip.first <= TO && trip.last >= FROM)) trips.delete(id);
+for (const [id, trip] of trips) if (!trip.inArea) trips.delete(id);
 // Then their stop times, as they are.
 await table('stop_times.txt', (row, line, c) => {
   if (!row) return;
@@ -265,7 +271,7 @@ await table('stop_times.txt', (row, line, c) => {
   (trip.rows ??= []).push({ line, stop: row[c.stop_id], sequence: Number(row[c.stop_sequence]), arr: seconds(row[c.arrival_time]), dep: seconds(row[c.departure_time]), headsign: c.stop_headsign === undefined ? '' : row[c.stop_headsign] });
 });
 for (const trip of trips.values()) trip.rows.sort((a, b) => a.sequence - b.sequence);
-console.log(`${trips.size} trips call in the area between ${FROM / 3600} h and ${TO / 3600} h`);
+console.log(`${trips.size} trips call in the area that day`);
 
 // The vehicle the pictures follow: a bus if one is such, else a tram, else any; of them, the least late.
 // Its delay is made up so that it is where it is at the moment.
@@ -311,6 +317,7 @@ const feed = new Bytes();
 feed.message(1, (header) => header.text(1, '2.0').number(2, 0).number(3, now));
 const late = new Map(); // agency id -> the trips with realtime data, for the note that names who provides it
 for (const [id, trip] of trips) {
+  if (!(trip.first <= TO && trip.last >= FROM)) continue;
   const delay = madeUpDelay(id);
   if (delay === null && id !== followed.id) continue;
   // (the vehicle the pictures follow: as late as it is from two stops before the stop on, a minute late before)

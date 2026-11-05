@@ -283,8 +283,8 @@ into it what the instance is:
   the path if it lives under one (`https://example.org/netnou/`). With it
   the page names its canonical address, its versions in the other languages
   and the picture for previews of links, and the server answers
-  `/sitemap.xml`, with the addresses of all the stops and lines of the
-  timetable. Without it all of that is left out, because each needs a
+  `/sitemap.xml`, with the addresses of every line of the timetable and of
+  every stop that something leaves in the coming week. Without it all of that is left out, because each needs a
   full address; the texts are there all the same.
 
 The page chooses its language in the browser, and the browser of a search
@@ -303,11 +303,33 @@ has run; the script then keeps it live:
 
 - **A stop:** its name as the main heading of the page, with its town below
   it where the name does not say it, as in its title and description
-  ("Abfahrten Bruck/ER Rotes Kreuz, Erlangen live"); its next departures
-  (when, which line, where to, from which platform); and every line that
-  calls there, each a link to the page of that line.
-- **A line:** its name as the main heading, and its stops in order, each a
-  link to the page of that stop, with its vehicles where they are.
+  ("Abfahrten Bruck/ER Rotes Kreuz, Erlangen live"); how many lines leave it
+  today, from when to when; its next departures (when, which line, where
+  to, from which platform); and every line that calls there, each a link to
+  the page of that line, with where it goes and, each way, how often it leaves there now
+  and when last today, and the towns the lines go to.
+- **A line:** its name as the main heading, how often it runs now and its
+  last trip today; its stops in order, each a link to the page of that
+  stop, with its vehicles where they are; then its timetable of the coming
+  seven days, the days that are alike together, how long it takes from end
+  to end and the towns it passes through.
+
+What a page says beyond the minute
+([#289](https://github.com/xiidoz/netnou/issues/289)) comes from the
+timetable alone, and each figure holds for every departure in the hours it
+names, on every day it names: "alle 10 Minuten" where each leaves 10
+minutes after the one before; where the gaps differ, the longest wait for a
+line that comes at least every 15 minutes ("spätestens alle 4 Minuten") and
+how many leave in each hour for a rarer one ("zweimal pro Stunde"). They are
+counted at the stop of a line that most of its trips leave from that day,
+each way it goes. The description of a line says what holds on every
+working day of the coming four weeks: how often it runs in the longest
+stretch of hours that holds for, if that is half its day, else how many
+trips go each way; between when and when its trips leave; its stops and
+towns ("U1: werktags von 5 bis 20 Uhr spätestens alle 7 Minuten, Fahrten
+zwischen 4:43 und 0:58 Uhr. 27 Haltestellen in Nürnberg und Fürth, live auf
+der Karte."), and the working days it does not run on, where it does not
+run on all of them. The description of a stop names its lines.
 - **The page itself:** the stations near where the map first opens, in the
   search before anything is typed, each a link to its page.
 
@@ -327,7 +349,9 @@ browser on to the address of that stop (301), as any address does that
 names it otherwise than its own does now.
 
 So a search engine that reads only the plain page finds its way from there
-to every stop and line that is linked. The sitemap dates each address with
+to every stop and line that is linked. The chips of the kinds of transport
+are sent without a count, which the script puts in: a page as sent says
+nothing that is wrong a minute later, such as "0 trams". The sitemap dates each address with
 the timetable it was made from, the day its feed was published, so a
 search engine knows when to come back. Telling search engines of a change as it happens is left
 to the operator: it is about particular search engines and not about
