@@ -936,9 +936,22 @@ button.line-vehicle { position: absolute; left: -18px; top: -18px; width: 36px; 
    a column of their own, as on a printed timetable; its hours folded away
    below them, opened by that head, whose chevron says which way they go;
    then from end to end and its towns, quiet below a rule. */
-.line-timetable { margin-top: 4px; padding: 0 14px 14px; border-top: 1px solid var(--border); }
-.line-timetable h2 { margin: 14px 0 6px; color: var(--text-muted); font-size: 13px; font-weight: 650; }
-.timetable-days { list-style: none; margin: 0; padding: 0; }
+/* Its heading, before it (#289): it waits at the foot of the details while
+   a long list of stops scrolls above it, as the way down to the timetable
+   (app.js marks it pinned there, with its arrow and a shade above it); at
+   the timetable it rests above the days. */
+.timetable-head { position: sticky; bottom: 0; z-index: 3; margin: 4px 0 0; font: inherit; border-top: 1px solid var(--border); background: var(--bg); }
+.timetable-head.pinned { box-shadow: 0 -6px 12px -8px rgb(0 0 0 / 0.25); }
+.to-timetable { display: flex; align-items: center; justify-content: space-between; gap: 12px; width: 100%; padding: 10px 14px; border: 0; background: none; color: var(--text); font: inherit; text-align: left; cursor: pointer; }
+/* (inside its edge: the details scroll and would cut off a ring outside it at their foot) */
+.to-timetable:focus-visible { outline-offset: -2px; }
+.to-timetable .what { display: grid; gap: 1px; }
+.to-timetable .title { font-size: 14px; font-weight: 650; }
+.to-timetable .from { color: var(--text-muted); font-size: 12.5px; font-weight: 400; }
+.to-timetable .icon { width: 22px; height: 22px; color: var(--text-muted); transform: rotate(180deg); visibility: hidden; }
+.timetable-head.pinned .to-timetable .icon { visibility: visible; }
+.line-timetable { padding: 0 14px 14px; }
+.timetable-days { list-style: none; margin: 0; padding: 4px 0 0; }
 .days-head { display: grid; grid-template-columns: 60px minmax(0, 1fr) auto; column-gap: 8px; align-items: baseline; padding: 6px 0; }
 .timetable-days .when { font-size: 14px; font-weight: 650; }
 /* (the kind of day today is: a word below its name) */

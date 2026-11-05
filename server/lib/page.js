@@ -443,7 +443,7 @@ export function panelHtml(kind, data, { language, texts, timeZone, now, fixed = 
   const [head, body] = kind === 'stop'
     ? [panelHead(stopHeading(data.name, data.town), fixed ? null : stopToday(data.today, drawing), fixed ? departuresSub(null, null, drawing) : departuresSub('departures', choiceChip([], drawing), drawing, 'details')),
       [...departureLists(data, drawing), fixed ? null : h('div', { class: 'view-lines', hidden: true }, lineLists(data, drawing))].filter(Boolean)]
-    : [lineHead(data, drawing, 0), [...lineStops(data, { ...drawing, live: data.vehicles.some((v) => v.delay !== null) }, 0), lineTimetable(data.facts, drawing)].filter(Boolean)];
+    : [lineHead(data, drawing, 0), [...lineStops(data, { ...drawing, live: data.vehicles.some((v) => v.delay !== null) }, 0), ...(lineTimetable(data.facts, drawing) ?? [])]];
   return { head: toHtml(head), body: body.map(toHtml).join('') };
 }
 

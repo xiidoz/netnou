@@ -3568,9 +3568,10 @@ function renderLine(line, first) {
   // (its stops in one direction, which it shows until another is chosen, with its vehicles along them: #256)
   const way = Math.min(selection.way ?? 0, Math.max(0, (line.ways?.length ?? 1) - 1));
   // (and after them its timetable of the coming days that way, #289, with the hours shown of the days they were opened for)
-  const timetableOf = lineTimetable(line.facts, drawn, way, selection.hours ?? new Set());
-  fillPanel([toDom(lineHead(line, drawn, way))], ...[...lineStops(line, drawn, way), timetableOf].filter(Boolean).map((node) => toDom(node)));
+  const timetableOf = lineTimetable(line.facts, drawn, way, selection.hours ?? new Set()) ?? [];
+  fillPanel([toDom(lineHead(line, drawn, way))], ...[...lineStops(line, drawn, way), ...timetableOf].map((node) => toDom(node)));
   panelBody.scrollTop = scrollTop;
+  pinTimetable();
   // (its vehicles drawn at once, as high as the list, and with the frames from now on)
   const paper = lineCanvas();
   if (paper) {
@@ -3589,6 +3590,24 @@ function renderLine(line, first) {
     map.fitBounds([[Math.min(...lons), Math.min(...lats)], [Math.max(...lons), Math.max(...lats)]], { padding: clearOfCards(), maxZoom: LINE_ZOOM });
   }
 }
+
+// The heading of a line's timetable waits at the foot of the details while
+// its stops scroll above it (style.css). Pinned there it is the way down:
+// marked so, it shows its arrow, and a tap goes to the timetable, where it
+// rests above the days.
+function pinTimetable() {
+  const head = panelBody.querySelector('.timetable-head');
+  if (!head) return;
+  head.classList.toggle('pinned', head.nextElementSibling.getBoundingClientRect().top >= panelBody.getBoundingClientRect().bottom - 1);
+}
+panelBody.addEventListener('scroll', pinTimetable, { passive: true });
+new ResizeObserver(pinTimetable).observe(panelBody);
+panelBody.addEventListener('click', (event) => {
+  const head = event.target.closest('.timetable-head');
+  if (!head) return;
+  const top = panelBody.scrollTop + head.nextElementSibling.getBoundingClientRect().top - panelBody.getBoundingClientRect().top - head.offsetHeight;
+  panelBody.scrollTo({ top, behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
+});
 
 /** How many whole minutes until a departure leaves, as the clock goes. */
 const minutesUntil = (leaves) => Math.floor(leaves / 60) - Math.floor(now() / 60);
