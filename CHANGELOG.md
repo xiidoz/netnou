@@ -8,6 +8,26 @@ This file is written by
 messages when a release is made. Do not edit it by hand; see
 [Releases](CONTRIBUTING.md#releases).
 
+## [0.23.0](https://github.com/xiidoz/netnou/compare/v0.22.2...v0.23.0) (2026-11-05)
+
+
+### ⚠ BREAKING CHANGES
+
+* **server:** the address of every stop changes once, in the sitemap, in the `path` of /api/departures, /api/address and the stops of /api/line: stop/<name> with the town where the name does not say it, the town or district after it where stops of the name are in several towns, and /<number> where they are more than one in a town. Addresses as they were, stop/<name>@<latitude>,<longitude> with four decimals, are answered with 301 to the new one, and /api/address still takes them.
+
+### Features
+
+* **page:** lines and stops say how often they run, from when to when and where to ([#303](https://github.com/xiidoz/netnou/issues/303)) ([0e3445a](https://github.com/xiidoz/netnou/commit/0e3445a4a36fc8264b526923a1678e3fa983136a))
+* **page:** the page offers the browser's language where its link asked for another one ([#297](https://github.com/xiidoz/netnou/issues/297)) ([fb114aa](https://github.com/xiidoz/netnou/commit/fb114aac45ace0baf92c6ed26f520668681bb259)), closes [#287](https://github.com/xiidoz/netnou/issues/287)
+* **server:** a stop's address is its name and town, kept when a timetable moves it ([#301](https://github.com/xiidoz/netnou/issues/301)) ([0b5dc1b](https://github.com/xiidoz/netnou/commit/0b5dc1b9db98f2d5c3fb253fef3e4f6d29f47b05)), closes [#288](https://github.com/xiidoz/netnou/issues/288)
+* **server:** the page in the main language has one address, the plain one, and keeps to it ([#295](https://github.com/xiidoz/netnou/issues/295)) ([6d4397f](https://github.com/xiidoz/netnou/commit/6d4397fbbaa77c08b9574f55a0b8005b6f25ef64)), closes [#287](https://github.com/xiidoz/netnou/issues/287)
+* **server:** the platforms of one stop that the feed lists apart are one stop ([#300](https://github.com/xiidoz/netnou/issues/300)) ([32ffa20](https://github.com/xiidoz/netnou/commit/32ffa20d2cd17ce10e777a096bcda928147140ab))
+
+
+### Bug Fixes
+
+* **timetable:** a line named U and a number is a U-Bahn, also where the feed says tram ([#304](https://github.com/xiidoz/netnou/issues/304)) ([4e3603c](https://github.com/xiidoz/netnou/commit/4e3603c9158ec44222d4c1d7d2a7ceb3d5d19273))
+
 ## [0.22.2](https://github.com/xiidoz/netnou/compare/v0.22.1...v0.22.2) (2026-11-01)
 
 
