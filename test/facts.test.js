@@ -53,7 +53,10 @@ test('every gap the same is "every n"; differing gaps of a line that comes often
   // but not where the next comes later than that: a wait of more than an hour is no "hourly"
   assert.deepEqual(said(hourly([[468, 528, 588, 648, 708, 830, 890]])).slice(0, 2), [[8, 11, { every: 60 }], [11, 12, { perHour: [1, 1] }]]);
   // hours of as many an hour join where they stay within one of each other: 1 to 2, not 1 to 3
-  assert.deepEqual(said(hourly([[360, 375, 400, 445, 490, 530, 600]])), [[6, 7, { perHour: [3, 3] }], [7, 9, { perHour: [1, 2] }]]);
+  assert.deepEqual(said(hourly([[360, 375, 400, 445, 490, 530, 600]])), [[6, 7, { perHour: [3, 3] }], [7, 9, { perHour: [1, 2] }], [9, 10, { none: true }]]);
+  // an hour without a departure says so; one without on some of the days how many at most; neither is left out
+  assert.deepEqual(said(hourly([[360, 420, 545, 605, 665]])), [[6, 7, { every: 60 }], [7, 8, { perHour: [1, 1] }], [8, 9, { none: true }], [9, 11, { every: 60 }]]);
+  assert.deepEqual(said(hourly([[360, 420, 480, 540], [360, 400, 540]])), [[6, 7, { perHour: [1, 2] }], [7, 9, { perHour: [0, 1] }]]);
 });
 
 test('what holds for several lists of departures holds for each of them: days, or the ways of a line', () => {
@@ -207,8 +210,8 @@ const drawing = (language, texts, now) => {
 
 test('how often, in the words of the details: the gap, the longest wait, how many an hour, hourly', () => {
   const words = (often, texts) => oftenText(often, drawing('de', texts, 0));
-  assert.deepEqual([{ every: 10 }, { atMost: 4 }, { every: 60 }, { every: 120 }, { perHour: [1, 1] }, { perHour: [2, 2] }, { perHour: [5, 5] }, { perHour: [1, 3] }].map((often) => words(often, de)),
-    ['alle 10 Min.', 'spätestens alle 4 Min.', 'stündlich', 'alle 2 Std.', 'einmal pro Stunde', 'zweimal pro Stunde', '5-mal pro Stunde', '1- bis 3-mal pro Stunde']);
+  assert.deepEqual([{ every: 10 }, { atMost: 4 }, { every: 60 }, { every: 120 }, { perHour: [1, 1] }, { perHour: [2, 2] }, { perHour: [5, 5] }, { perHour: [1, 3] }, { none: true }, { perHour: [0, 1] }, { perHour: [0, 3] }].map((often) => words(often, de)),
+    ['alle 10 Min.', 'spätestens alle 4 Min.', 'stündlich', 'alle 2 Std.', 'einmal pro Stunde', 'zweimal pro Stunde', '5-mal pro Stunde', '1- bis 3-mal pro Stunde', 'keine Fahrt', 'höchstens einmal pro Stunde', 'höchstens 3-mal pro Stunde']);
   assert.deepEqual([{ every: 10 }, { atMost: 4 }, { perHour: [1, 1] }, { perHour: [2, 2] }, { perHour: [3, 3] }].map((often) => words(often, en)),
     ['every 10 min', 'at least every 4 min', 'once an hour', 'twice an hour', '3 times an hour']);
 });
@@ -239,6 +242,8 @@ test('the line in the head says how often in the hour it is and until when, and 
   assert.equal(todayText(today, drawing('de', de, at(day, '23:20'))), 'Letzte Fahrt 23:40');
   assert.equal(todayText(today, drawing('de', de, at(day, '23:50'))), 'Heute keine Fahrt mehr');
   assert.equal(todayText(null, drawing('de', de, at(day, '13:37'))), 'Heute keine Fahrt');
+  // an hour without a trip, as such
+  assert.equal(todayText({ ...today, runs: [{ from: at(day, '13:00'), to: at(day, '15:00'), none: true }] }, drawing('de', de, at(day, '13:37'))), 'Bis 15 Uhr keine Fahrt · letzte Fahrt 23:40');
 });
 
 test('a stop says below its name how many lines leave it today, from when to when', () => {

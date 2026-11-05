@@ -377,7 +377,7 @@ export const panelHead = (heading, ...more) => h('div', { class: 'panel-head' },
 /**
  * How often, in words (server/lib/facts.js): "alle 10 Min.", "spätestens
  * alle 4 Min.", "stündlich", "zweimal pro Stunde".
- * @param often { every } | { atMost } | { perHour: [few, many] }
+ * @param often { every } | { atMost } | { perHour: [few, many] } | { none }
  */
 export function oftenText(often, { t }) {
   if (often.every !== undefined) {
@@ -385,7 +385,9 @@ export function oftenText(often, { t }) {
     return often.every === 60 ? t('facts.hourly') : t('facts.everyHours', { count: often.every / 60 });
   }
   if (often.atMost !== undefined) return t('facts.atMost', { count: often.atMost });
+  if (often.none) return t('facts.none');
   const [few, many] = often.perHour;
+  if (few === 0) return t('facts.perHourAtMost', { count: many });
   return few === many ? t('facts.perHour', { count: few }) : t('facts.perHourRange', { few, many });
 }
 

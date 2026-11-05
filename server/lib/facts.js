@@ -31,7 +31,8 @@ const KEPT = 2000;
  * each): an hour where every gap is the same says it (`every`), one where
  * they differ but none is longer than AT_MOST_MIN the longest (`atMost`),
  * any other how many leave in it (`perHour`, the fewest and the most of
- * the lists). The gap that begins in an hour is the hour's, also where it
+ * the lists); one where none leaves on any of them, that none does
+ * (`none`). The gap that begins in an hour is the hour's, also where it
  * ends in a later one: so an hour with no departure of its own, between two
  * that are two hours apart, is in the same `every` as those around it.
  * @param series lists of departure times, in minutes of their service day
@@ -39,7 +40,7 @@ const KEPT = 2000;
  *   `hours` from the first hour all the lists run through to the last, with
  *   null `often` where nothing holds (one of them has no departure in it);
  *   `runs` the hours that say the same as one: `from` and `to` in hours of
- *   the service day; `often` { every: n } | { atMost: n } | { perHour: [few, many] }
+ *   the service day; `often` { every: n } | { atMost: n } | { perHour: [few, many] } | { none: true }
  */
 export function hourly(series) {
   // (two at the same minute are one for a rider: a train in two parts, a bus of two lines' numbers)
@@ -63,9 +64,13 @@ export function hourly(series) {
     const same = gaps.every((gap) => gap === gaps[0]);
     // (one departure in an hour is "every n" only where n is whole hours: "hourly", "every 2 hours")
     const exact = same && (counts.every((count) => count > 1) || gaps[0] % 60 === 0) ? gaps[0] : null;
+    // (an hour without a departure says so, one without on some of the days how many at most: never left out, as on a
+    // rare line the hour without a bus is what a rider plans around)
+    const empty = counts.filter((count) => count === 0).length;
     const often = exact !== null ? { every: exact }
-      : counts.some((count) => count === 0) ? null
-        : longest <= AT_MOST_MIN ? { atMost: longest } : { perHour: [Math.min(...counts), Math.max(...counts)] };
+      : empty === counts.length ? { none: true }
+        : empty ? { perHour: [0, Math.max(...counts)] }
+          : longest <= AT_MOST_MIN ? { atMost: longest } : { perHour: [Math.min(...counts), Math.max(...counts)] };
     hours.push({ h, often, longest, exact });
   }
   // An hour after a stretch of every n whose departures keep that beat, each
@@ -104,7 +109,9 @@ export function hourly(series) {
 function join(a, b) {
   const n = (often) => often.every ?? often.atMost;
   if (n(a) !== undefined && n(a) === n(b)) return a.atMost !== undefined || b.atMost !== undefined ? { atMost: n(a) } : a;
-  if (a.perHour && b.perHour) {
+  if (a.none && b.none) return a;
+  // (hours of at most n, with none on some days, join only each other: "höchstens einmal pro Stunde" is no "einmal pro Stunde")
+  if (a.perHour && b.perHour && (a.perHour[0] === 0) === (b.perHour[0] === 0)) {
     const few = Math.min(a.perHour[0], b.perHour[0]);
     const many = Math.max(a.perHour[1], b.perHour[1]);
     if (many - few <= 1) return { perHour: [few, many] };

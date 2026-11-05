@@ -241,6 +241,8 @@ export default {
   'facts.everyHours': 'every {count} h',
   'facts.perHour': { one: 'once an hour', 2: 'twice an hour', other: '{count} times an hour' },
   'facts.perHourRange': '{few} to {many} times an hour',
+  'facts.perHourAtMost': { one: 'at most once an hour', 2: 'at most twice an hour', other: 'at most {count} times an hour' },
+  'facts.none': 'no trips',
   'facts.until': '{often} until {until}',
   'facts.first': 'first trip {time}',
   'facts.last': 'last trip {time}',

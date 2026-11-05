@@ -180,6 +180,8 @@ export default {
   'facts.everyHours': 'alle {count} Std.',
   'facts.perHour': { one: 'einmal pro Stunde', 2: 'zweimal pro Stunde', 3: 'dreimal pro Stunde', other: '{count}-mal pro Stunde' },
   'facts.perHourRange': '{few}- bis {many}-mal pro Stunde',
+  'facts.perHourAtMost': { one: 'höchstens einmal pro Stunde', 2: 'höchstens zweimal pro Stunde', other: 'höchstens {count}-mal pro Stunde' },
+  'facts.none': 'keine Fahrt',
   'facts.until': 'bis {until} {often}',
   'facts.first': 'erste Fahrt {time}',
   'facts.last': 'letzte Fahrt {time}',
