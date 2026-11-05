@@ -1216,7 +1216,10 @@ function draw() {
   const stopNames = [...open, ...marks.filter((mark) => !openIds.has(mark.id) && hasName(mark)), ...lifted.filter(hasName)].sort(namePrecedence);
   // (the lifted ones get theirs after the vehicles, with them)
   const liftedNames = [];
+  // (in a state of its own: the names of the lifted ones come after the
+  // vehicles and before their bubbles, which write their lines centred)
   const writeName = (mark, left) => {
+    ctx.save();
     ctx.font = '600 12px system-ui, sans-serif';
     ctx.textAlign = 'left';
     ctx.textBaseline = 'middle';
@@ -1227,6 +1230,7 @@ function draw() {
     // (a halo in the colour of the ground, so that the name reads on any map)
     ctx.strokeText(mark.name, left, mark.y + 0.5);
     ctx.fillText(mark.name, left, mark.y + 0.5);
+    ctx.restore();
   };
   if (stopNames.length) {
     ctx.font = '600 12px system-ui, sans-serif';
