@@ -97,7 +97,37 @@ export function hourly(series) {
     if (joined) Object.assign(last, { to: h + 1, often: joined });
     else if (often) runs.push({ from: h, to: h + 1, often });
   }
-  return { hours, runs };
+  const [said] = oneWord([runs.map(({ from, to, often }) => ({ from, to, ...often }))]);
+  return { hours, runs: said.map(({ from, to, ...often }) => ({ from, to, often })) };
+}
+
+/**
+ * One way of saying each number of departures an hour in lists of runs that
+ * are read together, as the details of a line or of a stop have them (runs
+ * as runsAt has them: { from, to, every | atMost | perHour | none }): where
+ * once, twice or three times an hour is said both as a gap ("stündlich",
+ * "alle 30 Min.") and as a count ("einmal pro Stunde"), as a line whose bus
+ * leaves at :20 one hour and at :34 the next, or on Saturdays on the beat
+ * and on Sundays not, has it, the count, which holds for both; and runs of a
+ * list that then say the same as one. A rider reads "stündlich" and
+ * "einmal pro Stunde" alike, and asks what sets them apart.
+ * @returns the lists, each said so
+ */
+export function oneWord(lists) {
+  const counted = new Set(lists.flat().filter(({ perHour }) => perHour && perHour[0] === perHour[1] && perHour[0] > 0).map(({ perHour }) => perHour[0]));
+  const said = (run) => {
+    const n = run.every;
+    return n >= 20 && 60 % n === 0 && counted.has(60 / n) ? { from: run.from, to: run.to, perHour: [60 / n, 60 / n] } : run;
+  };
+  return lists.map((runs) => {
+    const out = [];
+    for (const run of runs.map(said)) {
+      const last = out.at(-1);
+      if (last && last.to === run.from && last.perHour && run.perHour && last.perHour[0] === run.perHour[0] && last.perHour[1] === run.perHour[1]) last.to = run.to;
+      else out.push({ ...run });
+    }
+    return out;
+  });
 }
 
 /**
@@ -184,6 +214,26 @@ export function spanOf(times) {
 
 /** Of several days' spans, the range all of them lie in: the earliest first and the latest last. */
 const rangeOf = (spans) => (spans.length ? { first: Math.min(...spans.map((s) => s.first)), last: Math.max(...spans.map((s) => s.last)) } : null);
+
+/**
+ * The ways of a line (Facts.line), each number of departures an hour said
+ * one way in all that its details say of both (oneWord): of today, and of
+ * each kind of day its longest stretch and its hours.
+ */
+function wordedAlike(ways) {
+  const lists = ways.flatMap(({ today, week }) => [today?.runs ?? [], ...week.flatMap((days) => [days.often ? [days.often] : [], days.runs])]);
+  const said = oneWord(lists).values();
+  const next = () => said.next().value;
+  return ways.map((way) => {
+    const runs = next();
+    const today = way.today && { ...way.today, runs };
+    const week = way.week.map((days) => {
+      const often = next()[0] ?? null;
+      return { ...days, often, runs: next() };
+    });
+    return { ...way, today, week };
+  });
+}
 
 /** The runs of hours of a service day as moments: their hours as epoch seconds. */
 const runsAt = (runs, base) => runs.map(({ from, to, often }) => ({ from: base + from * 3600, to: base + to * 3600, ...often }));
@@ -322,7 +372,7 @@ export class Facts {
   line(index, now) {
     const tt = this.tt;
     const date = this.dayOf(now, (day) => this.lineSpan(index, day));
-    const ways = this.keep(`facts ${index} ${date}`, () => this.waysOf(index).counted.map((way) => {
+    const ways = this.keep(`facts ${index} ${date}`, () => wordedAlike(this.waysOf(index).counted.map((way) => {
       // All of a way's figures are of one stop, which they name: the one most of its trips of the coming days leave
       // from (of as busy ones the first along the way), where it runs as along most of its way, also while a part of
       // it is closed. Its first and last trip are when they leave there, as a rider there has them.
@@ -346,7 +396,7 @@ export class Facts {
       }
       const week = [...groups.values()].map((group) => this.daysSaid(group.dates, group.span, group.dates.map(at)));
       return { stop: station >= 0 ? tt.stops.name[station] : null, today, week };
-    }));
+    })));
     const { minutes, stops, towns } = this.alongOf(index);
     return { date, ways, minutes, stops, towns };
   }
@@ -456,6 +506,9 @@ export class Facts {
       }
       shown.set(line, said);
     }
+    // (one word for each number an hour in all the lines of the stop say, read one below the other: oneWord)
+    const days = [...shown.values()].flatMap((said) => [...said.values()]);
+    oneWord(days.map(({ runs }) => runs)).forEach((runs, k) => { days[k].runs = runs; });
     const { towns, more } = this.keep(`towns ${station}`, () => this.townsFrom(station));
     return { date, first: span ? base + span.first : null, last: span ? base + span.last : null, lines: shown, all: this.stopDay(station, date).all, towns, more };
   }

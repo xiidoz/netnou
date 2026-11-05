@@ -14,7 +14,7 @@ import { daysText, hoursText, hourText, lineLists, lineTimetable, oftenText, sto
 import { Addresses } from '../server/lib/addresses.js';
 import { Area } from '../server/lib/area.js';
 import { readDataset, writeDataset } from '../server/lib/dataset.js';
-import { facts, hourly, spanOf, stretchOf } from '../server/lib/facts.js';
+import { facts, hourly, oneWord, spanOf, stretchOf } from '../server/lib/facts.js';
 import { buildDataset } from '../server/lib/importer.js';
 import { addDays, serviceDayStart, setTimeZone } from '../server/lib/time.js';
 import { Timetable } from '../server/lib/timetable.js';
@@ -50,12 +50,20 @@ test('every gap the same is "every n"; differing gaps of a line that comes often
   assert.deepEqual(said(hourly([[360, 410, 470, 520, 580]])), [[6, 8, { perHour: [1, 2] }], [8, 9, { every: 60 }]]);
   // an hour that keeps the beat of the hours before it is theirs, also where the next comes sooner: 9:48, 10:48, 11:48, 12:18
   assert.deepEqual(said(hourly([[468, 528, 588, 648, 708, 738, 762, 768, 805, 809, 818, 831, 888, 948]])), [[8, 12, { every: 60 }], [12, 14, { perHour: [3, 4] }], [14, 15, { every: 60 }]]);
-  // but not where the next comes later than that: a wait of more than an hour is no "hourly"
-  assert.deepEqual(said(hourly([[468, 528, 588, 648, 708, 830, 890]])).slice(0, 2), [[8, 11, { every: 60 }], [11, 12, { perHour: [1, 1] }]]);
+  // but not where the next comes later than that: a wait of more than an hour is no "hourly"; as a list then has hours
+  // of one departure that are not on the beat, all of them are "einmal pro Stunde"
+  assert.deepEqual(said(hourly([[468, 528, 588, 648, 708, 830, 890]])), [[8, 12, { perHour: [1, 1] }], [12, 13, { none: true }], [13, 14, { perHour: [1, 1] }]]);
+  // a bus at :20 one hour and at :34 the next, once an hour: said so throughout, never "stündlich" beside "einmal pro
+  // Stunde", which a rider reads alike (bus 113 on Sundays); a list without the uneven hours keeps "stündlich"
+  const sunday = [500, 560, 620, 694, 754, 814, 860, 934, 994, 1040, 1100, 1174, 1234];
+  assert.deepEqual(said(hourly([sunday])), [[9, 20, { perHour: [1, 1] }]]);
+  assert.deepEqual(said(hourly([every(60, '08:48', '23:49')])), [[9, 23, { every: 60 }]]);
+  // likewise twice an hour: hours of "alle 30 Min." among hours of two uneven ones are "zweimal pro Stunde" with them
+  assert.deepEqual(said(hourly([[600, 630, 660, 690, 735, 760, 780, 810, 840, 870, 900]])), [[10, 15, { perHour: [2, 2] }]]);
   // hours of as many an hour join where they stay within one of each other: 1 to 2, not 1 to 3
   assert.deepEqual(said(hourly([[360, 375, 400, 445, 490, 530, 600]])), [[6, 7, { perHour: [3, 3] }], [7, 9, { perHour: [1, 2] }], [9, 10, { none: true }]]);
   // an hour without a departure says so; one without on some of the days how many at most; neither is left out
-  assert.deepEqual(said(hourly([[360, 420, 545, 605, 665]])), [[6, 7, { every: 60 }], [7, 8, { perHour: [1, 1] }], [8, 9, { none: true }], [9, 11, { every: 60 }]]);
+  assert.deepEqual(said(hourly([[360, 420, 545, 605, 665]])), [[6, 8, { perHour: [1, 1] }], [8, 9, { none: true }], [9, 11, { perHour: [1, 1] }]]);
   assert.deepEqual(said(hourly([[360, 420, 480, 540], [360, 400, 540]])), [[6, 7, { perHour: [1, 2] }], [7, 9, { perHour: [0, 1] }]]);
 });
 
@@ -69,6 +77,19 @@ test('what holds for several lists of departures holds for each of them: days, o
   assert.deepEqual(said(hourly([every(10, '06:00', '10:01'), every(10, '08:00', '12:01'), []])), [[8, 10, { every: 10 }]]);
   // two at the same minute are one
   assert.deepEqual(said(hourly([[...every(10, '06:00', '08:01'), 400]])), [[6, 8, { every: 10 }]]);
+});
+
+test('what is read together says each number an hour one way: the count, where one list has it and another the gap', () => {
+  // a bus on the beat on Saturdays and not on Sundays: once an hour on both, not "stündlich" one line above "einmal pro Stunde"
+  const saturday = [{ from: 9, to: 23, every: 60 }];
+  const sunday = [{ from: 9, to: 21, perHour: [1, 1] }, { from: 21, to: 22, none: true }];
+  assert.deepEqual(oneWord([saturday, sunday]), [[{ from: 9, to: 23, perHour: [1, 1] }], sunday]);
+  // within one list, the same as one after
+  assert.deepEqual(oneWord([[{ from: 6, to: 9, every: 30 }, { from: 9, to: 12, perHour: [2, 2] }, { from: 12, to: 14, every: 60 }]]),
+    [[{ from: 6, to: 12, perHour: [2, 2] }, { from: 12, to: 14, every: 60 }]]);
+  // the gap stays where no list counts that number: every 30 beside once an hour, every 10, at most once an hour
+  const kept = [[{ from: 6, to: 9, every: 30 }, { from: 9, to: 12, every: 10 }], [{ from: 9, to: 12, perHour: [1, 1] }], [{ from: 12, to: 14, perHour: [0, 2] }]];
+  assert.deepEqual(oneWord(kept), kept);
 });
 
 test('a description names the longest stretch that one set of words holds for, where that is half the hours there are', () => {
