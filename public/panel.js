@@ -427,29 +427,33 @@ const firstUp = (text) => text.charAt(0).toUpperCase() + text.slice(1);
  * none comes any more.
  * @param day { first, last, runs } of the service day (facts.js), null where nothing runs that day
  * @param context { t, time, hour, now }
+ * @param stop the stop these are of, which the line then names first, or null where it is the stop shown
  */
-export function todayText(day, context) {
+export function todayText(day, context, stop = null) {
   const { t, time, now } = context;
-  if (!day || day.first === null) return t('facts.noneToday');
-  if (now > day.last) return t('facts.overToday');
-  const run = now >= day.first ? day.runs.find(({ from, to }) => from <= now && now < to) : null;
-  const parts = [
-    now < day.first ? t('facts.first', { time: time(day.first) }) : null,
-    run ? t('facts.until', { often: oftenText(run, context), until: hourText(run.to, context) }) : null,
-    t('facts.last', { time: time(day.last) }),
-  ];
-  return firstUp(parts.filter(Boolean).join(' · '));
+  const run = day && day.first !== null && now >= day.first && now <= day.last ? day.runs.find(({ from, to }) => from <= now && now < to) : null;
+  const said = !day || day.first === null ? t('facts.noneToday')
+    : now > day.last ? t('facts.overToday')
+      : [
+        now < day.first ? t('facts.first', { time: time(day.first) }) : null,
+        run ? t('facts.until', { often: oftenText(run, context), until: hourText(run.to, context) }) : null,
+        t('facts.last', { time: time(day.last) }),
+      ].filter(Boolean).join(' · ');
+  // (where the figures are of, where that is not the stop shown: a line's last trip at its busiest stop is not that at the next)
+  return firstUp(stop ? t('facts.fromStop', { stop, said: said.charAt(0).toLowerCase() + said.slice(1) }) : said);
 }
 
 /**
  * The line below the name of a stop that says what leaves it on the service
- * day: how many lines, and from when to when.
- * @param today { first, last, lines } as api/departures has it, or null
+ * day: how many lines, of how many, and from when to when.
+ * @param today { first, last, lines, all } as api/departures has it, or null
  */
 export function stopToday(today, context) {
   const { t, time } = context;
   if (!today) return null;
-  const said = today.first === null ? t('facts.stopNone') : t('facts.stopToday', { lines: t('facts.lines', { count: today.lines }), first: time(today.first), last: time(today.last) });
+  // (of how many, where some of its lines do not run today: their badges are all under "Alle Linien")
+  const lines = (today.all ?? today.lines) > today.lines ? t('facts.linesOfToday', { count: today.lines, all: today.all }) : t('facts.linesToday', { count: today.lines });
+  const said = today.first === null ? t('facts.stopNone') : t('facts.stopToday', { lines, first: time(today.first), last: time(today.last) });
   return h('p', { class: 'facts' }, said);
 }
 
@@ -493,6 +497,7 @@ export function lineTimetable(facts, context, way = 0, open = new Set()) {
   const { t, time, list } = context;
   const week = facts?.ways?.[way]?.week;
   if (!week?.length) return null;
+  const { stop } = facts.ways[way];
   const order = (group) => Math.min(...group.dates.map((date) => (new Date(Date.UTC(+date.slice(0, 4), +date.slice(4, 6) - 1, +date.slice(6, 8))).getUTCDay() + 6) % 7));
   const groups = [...week].sort((a, b) => order(a) - order(b));
   // (the hours of a group, where they say more than its second line)
@@ -504,8 +509,9 @@ export function lineTimetable(facts, context, way = 0, open = new Set()) {
     return few === many ? t('facts.trips', { count: few }) : t('facts.tripsRange', { few, many });
   };
   // (the head of a kind of day: its name, and beside it its two lines; a summary holds no blocks, so spans)
+  // (the kind of day today is, marked so: the rider need not work out that Wednesday is "Mo–Fr")
   const head = (group, folds) => [
-    h('span', { class: 'when' }, daysText(group.dates, context)),
+    h('span', { class: 'when' }, daysText(group.dates, context), group.dates.includes(facts.date) ? h('span', { class: 'today' }, t('facts.todayMark')) : null),
     h('span', { class: 'said' },
       h('span', { class: 'span' }, group.first === null ? t('facts.noTrips') : `${time(group.first)}–${time(group.last)}`),
       group.first === null ? null : h('span', { class: 'often' }, often(group))),
@@ -525,7 +531,7 @@ export function lineTimetable(facts, context, way = 0, open = new Set()) {
     !towns.length ? null : towns.length <= 4 ? t('facts.through', { towns: list(towns) }) : t('facts.throughMany', { count: towns.length, from: towns[0], to: towns.at(-1) }),
   ].filter(Boolean);
   return h('section', { class: 'line-timetable' },
-    h('h2', {}, t('facts.timetable')),
+    h('h2', {}, stop ? t('facts.timetableAt', { stop }) : t('facts.timetable')),
     h('ul', { class: 'timetable-days' }, days),
     along.length ? h('div', { class: 'along' }, along.map((said) => h('p', {}, said))) : null);
 }
@@ -582,7 +588,7 @@ export function lineHead(line, context, way = null) {
   const ways = line.ways ?? [];
   return panelHead([badge(line.name, line.mode), h('span', {}, t(`mode.${kindOf(line.mode)}`))], h('p', { class: 'sub' }, sub),
     // (how often it runs now the way its stops show and its last trip today, #289)
-    line.facts?.ways?.length ? h('p', { class: 'facts' }, todayText(line.facts.ways[Math.min(way ?? 0, line.facts.ways.length - 1)].today, context)) : null,
+    line.facts?.ways?.length ? h('p', { class: 'facts' }, todayText(line.facts.ways[Math.min(way ?? 0, line.facts.ways.length - 1)].today, context, line.facts.ways[Math.min(way ?? 0, line.facts.ways.length - 1)].stop)) : null,
     way !== null && ways.length > 1
       ? h('p', { class: 'sub with-choice line-ways' }, h('span', {}, t('line.toward')),
         h('span', { class: 'view-switch ways', role: 'group', 'aria-label': t('line.ways') },

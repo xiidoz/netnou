@@ -308,7 +308,7 @@ function addressed(asked) {
 const stopFacts = (stationId, now) => facts(timetable).stop(timetable.stopIndex.get(stationId), now);
 
 /** Of the facts of a station (stopFacts), what the line below its name says. */
-const todayOf = (known) => ({ first: known.first, last: known.last, lines: known.lines.size });
+const todayOf = (known) => ({ first: known.first, last: known.last, lines: known.lines.size, all: known.all });
 
 /**
  * Every line of a station with its next departure each way (Timetable.linesAt, #255), each with the address of its page

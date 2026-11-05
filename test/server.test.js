@@ -322,7 +322,8 @@ test('/api/line: the vehicles of one line that are under way, and its stops with
   assert.deepEqual([json.name, json.mode, json.agency], ['U1', 'subway', 'Testbetrieb']);
   // what the timetable says of it beyond the minute (#289, lib/facts.js): its one trip a day, which starts at midnight;
   // the coming week as far as the timetable goes (today and three more days) by kind of day, each its one trip; its way from end to end
-  assert.deepEqual(Object.keys(json.facts).sort(), ['minutes', 'stops', 'towns', 'ways']);
+  assert.deepEqual(Object.keys(json.facts).sort(), ['date', 'minutes', 'stops', 'towns', 'ways']);
+  assert.equal(json.facts.ways[0].stop, 'Alpha');
   assert.equal(json.facts.ways.length, 1);
   assert.equal(json.facts.ways[0].week.flatMap((group) => group.dates).length, 4);
   for (const group of json.facts.ways[0].week) assert.deepEqual([group.last - group.first, group.often, group.trips, group.runs], [0, null, [1, 1], []]);
@@ -674,7 +675,7 @@ test('the address of a stop or a line is a page of its own, found again by its n
   assert.match(page, /<aside class="card panel" id="panel" tabindex/);
   // its details as the page shows them, its departures at this moment (#254): its name the main heading of the page, not the instance's
   // (below it what leaves it today, #289)
-  assert.match(page, /<div id="panel-head"><div class="panel-head"><h1>Alpha<\/h1><p class="facts">1 Linie, Abfahrten heute von \d\d:00 bis \d\d:00<\/p><p class="sub with-choice">/);
+  assert.match(page, /<div id="panel-head"><div class="panel-head"><h1>Alpha<\/h1><p class="facts">1 Linie fährt heute, von \d\d:00 bis \d\d:00<\/p><p class="sub with-choice">/);
   assert.ok(page.includes('<p class="sub with-choice"><span class="view-switch" role="group" aria-label="Ansicht"><button type="button" aria-pressed="true" data-view="departures">Nächste Abfahrten</button><button type="button" aria-pressed="false" data-view="lines">Alle Linien</button></span><span class="choice"><button type="button" class="choice-open" aria-label="Filter"'));
   // and behind the switch all its lines, each a link to its page (#255)
   assert.ok(page.includes('<div class="view-lines" hidden><ul class="line-rows signed"><li><a class="to-line" href="line/testbetrieb/subway/u1" aria-label="Zur Linie U1" title="Zur Linie U1" data-line='));
@@ -721,9 +722,9 @@ test('the address of a stop or a line is a page of its own, found again by its n
   // its details as the page shows them (#254): its stops, each a link to its page, and its vehicles under way along them
   // at this moment (#256)
   // (and how often it runs now, #289: today's one trip has left)
-  assert.match(line, /<div class="panel-head"><h1><span class="badge" data-mode="subway">U1<\/span><span>U-Bahn<\/span><\/h1><p class="sub">Testbetrieb · \d Fahrzeuge unterwegs<\/p><p class="facts">Heute keine Fahrt mehr<\/p><\/div>/);
+  assert.match(line, /<div class="panel-head"><h1><span class="badge" data-mode="subway">U1<\/span><span>U-Bahn<\/span><\/h1><p class="sub">Testbetrieb · \d Fahrzeuge unterwegs<\/p><p class="facts">Ab Alpha: heute keine Fahrt mehr<\/p><\/div>/);
   // after its stops its timetable of the coming days, alike as far as the timetable goes (#289)
-  assert.match(line, /<section class="line-timetable"><h2>Fahrplan der nächsten 7 Tage<\/h2><ul class="timetable-days">(<li><div class="days-head"><span class="when">[^<]+<\/span><span class="said"><span class="span">00:00–00:00<\/span><span class="often">1 Fahrt<\/span><\/span><\/div><\/li>)+<\/ul><div class="along"><p>3[,.]?030 Min\. von Ende zu Ende · 102 Haltestellen<\/p><\/div><\/section>/);
+  assert.match(line, /<section class="line-timetable"><h2>Fahrplan der nächsten 7 Tage ab Alpha<\/h2><ul class="timetable-days">(<li><div class="days-head"><span class="when">[^<]+(<span class="today">heute<\/span>)?<\/span><span class="said"><span class="span">00:00–00:00<\/span><span class="often">1 Fahrt<\/span><\/span><\/div><\/li>)+<\/ul><div class="along"><p>3[,.]?030 Min\. von Ende zu Ende · 102 Haltestellen<\/p><\/div><\/section>/);
   assert.ok(line.includes('<div id="panel-body" data-sent><div class="line-body"><ul class="line-stops" data-mode="subway"><li class="on-line station first"><a class="row on-line" href="stop/alpha" data-station="A" title="Alpha">'));
   assert.equal(line.match(/<g class="line-vehicle" transform="translate\(36\.0 [\d.]+\)" data-trip="T1_\d{8}" role="button" tabindex="0" aria-label="U1 nach Rundkurs[^"]*" data-mode="subway" data-track="[\d.,]+">/g).length, 2);
   const otherKind = await request('/line/testbetrieb/bus/u1');

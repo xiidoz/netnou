@@ -147,9 +147,11 @@ const clockOf = (epoch) => new Intl.DateTimeFormat('de', { timeStyle: 'short', t
 test('a line, each way it goes: how often it runs today hour by hour, the coming week by kind of day; from end to end', () => {
   const wednesday = '20261104';
   const line = facts(timetable).line(lineNumber('5'), at(wednesday, '13:37'));
-  // its two ways, as its details switch between them: towards Dorf from 5:30, back from 5:32, each counted where it begins
+  // its two ways, as its details switch between them: towards Dorf from 5:30, back from 5:32, each counted where it
+  // begins, the stop they are of named
   assert.equal(line.ways.length, 2);
   const [up, down] = line.ways;
+  assert.deepEqual([line.date, up.stop, down.stop], [wednesday, 'Anger', 'Dorf']);
   assert.equal(up.today.date, wednesday);
   assert.deepEqual([up.today, down.today].map((today) => [clockOf(today.first), clockOf(today.last)]), [['05:30', '23:40'], ['05:32', '23:42']]);
   assert.deepEqual(up.today.runs.map(({ from, to, ...often }) => [clockOf(from), clockOf(to), often]), [['06:00', '20:00', { every: 10 }], ['20:00', '23:00', { every: 20 }]]);
@@ -244,12 +246,19 @@ test('the line in the head says how often in the hour it is and until when, and 
   assert.equal(todayText(null, drawing('de', de, at(day, '13:37'))), 'Heute keine Fahrt');
   // an hour without a trip, as such
   assert.equal(todayText({ ...today, runs: [{ from: at(day, '13:00'), to: at(day, '15:00'), none: true }] }, drawing('de', de, at(day, '13:37'))), 'Bis 15 Uhr keine Fahrt · letzte Fahrt 23:40');
+  // of a line, the stop its figures are of first: its last trip there is not that at the next
+  assert.equal(todayText(today, drawing('de', de, at(day, '13:37')), 'Nürnberg Plärrer'), 'Ab Nürnberg Plärrer: bis 20 Uhr alle 10 Min. · letzte Fahrt 23:40');
+  assert.equal(todayText(today, drawing('de', de, at(day, '23:50')), 'Nürnberg Plärrer'), 'Ab Nürnberg Plärrer: heute keine Fahrt mehr');
+  assert.equal(todayText(today, drawing('en-US', en, at(day, '13:37')), 'Nürnberg Plärrer'), 'From Nürnberg Plärrer: every 10 min until 8 PM · last trip 11:40 PM');
 });
 
 test('a stop says below its name how many lines leave it today, from when to when', () => {
   const day = '20261104';
   const context = drawing('de', de, at(day, '13:37'));
-  assert.equal(toHtml(stopToday({ first: at(day, '04:36'), last: at(day, '25:04'), lines: 20 }, context)), '<p class="facts">20 Linien, Abfahrten heute von 04:36 bis 01:04</p>');
+  assert.equal(toHtml(stopToday({ first: at(day, '04:36'), last: at(day, '25:04'), lines: 20, all: 20 }, context)), '<p class="facts">20 Linien fahren heute, von 04:36 bis 01:04</p>');
+  // of how many, where some of its lines do not run today
+  assert.equal(toHtml(stopToday({ first: at(day, '04:36'), last: at(day, '25:04'), lines: 15, all: 20 }, context)), '<p class="facts">15 von 20 Linien fahren heute, von 04:36 bis 01:04</p>');
+  assert.equal(toHtml(stopToday({ first: at(day, '05:00'), last: at(day, '06:00'), lines: 1, all: 3 }, drawing('en-US', en, 0))), '<p class="facts">1 of 3 lines runs today, from 5:00 AM to 6:00 AM</p>');
   assert.equal(toHtml(stopToday({ first: null, last: null, lines: 0 }, context)), '<p class="facts">Heute keine Abfahrt</p>');
   assert.equal(stopToday(null, context), null);
 });
@@ -272,6 +281,11 @@ test('the timetable after the stops of a line: two lines for each kind of day, M
     + '<li><div class="days-head"><span class="when">Sa</span><span class="said"><span class="span">keine Fahrten</span></span></div></li>'
     + '<li><div class="days-head"><span class="when">So</span><span class="said"><span class="span">08:10–21:50</span><span class="often">14 Fahrten</span></span></div></li>'
     + '</ul><div class="along"><p>37 Min. von Ende zu Ende · 27 Haltestellen</p><p>Durch Nürnberg und Fürth</p></div></section>');
+  // the stop its figures are of, in the heading; the kind of day today is, marked
+  const named = toHtml(lineTimetable({ ...facts, date: '20261104', ways: [{ week, stop: 'Nürnberg Plärrer' }] }, context));
+  assert.ok(named.includes('<h2>Fahrplan der nächsten 7 Tage ab Nürnberg Plärrer</h2>'), named);
+  assert.ok(named.includes('<span class="when">Mo–Fr<span class="today">heute</span></span>'), named);
+  assert.equal(named.match(/class="today"/g).length, 1);
   // a kind of day opened (by its dates) is drawn open; the other way has its own
   assert.ok(toHtml(lineTimetable(facts, context, 0, new Set(['20261104,20261105,20261106,20261109,20261110']))).includes('<details class="days" open data-days='));
   assert.ok(toHtml(lineTimetable(facts, context, 1)).includes('<span class="when">So</span>') && !toHtml(lineTimetable(facts, context, 1)).includes('Mo–Fr'));

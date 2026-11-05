@@ -269,15 +269,28 @@ export class Facts {
     return [...leaving].sort((a, b) => b[1].length - a[1].length || order(a[0]) - order(b[0]))[0]?.[1] ?? [];
   }
 
+  /** What leaves of a counted way (waysOf) on a date: by station, the seconds of the service day each of its trips leaves it (the first time, not at its end). */
+  wayLeaving(way, date) {
+    const tt = this.tt;
+    const leaving = new Map();
+    for (const t of way.trips) {
+      if (!tt.runsOn(t, date)) continue;
+      const stops = tt.stopsOf(t);
+      const seen = new Set();
+      for (let p = 0; p < stops.length - 1; p++) {
+        const station = tt.stationOf[stops[p]];
+        if (seen.has(station)) continue;
+        seen.add(station);
+        (leaving.get(station) ?? leaving.set(station, []).get(station)).push(tt.schedDep(t, p));
+      }
+    }
+    return leaving;
+  }
+
   /** The first and last trip of line number `index` on a date, in seconds of its service day, or null. */
   lineSpan(index, date) {
     const tt = this.tt;
     return spanOf(this.waysOf(index).all.filter((t) => tt.runsOn(t, date)).map((t) => tt.schedDep(t, 0)));
-  }
-
-  /** How often line number `index` runs on a date, hour by hour, at the station of each of its ways (hourly). */
-  lineHours(index, date) {
-    return hourly(this.waysOf(index).counted.map((way) => this.wayMinutes(way, date)));
   }
 
   /**
@@ -295,56 +308,64 @@ export class Facts {
   /**
    * What the details of line number `index` tell of its timetable at a
    * moment, for each of the two ways its details switch between (waysOf), as
-   * a rider takes it one way: of its service day, how often it runs hour by
-   * hour, with its first and last trip that way; of the coming WEEK_DAYS
+   * a rider takes it one way, at one stop of it: of its service day, how
+   * often it runs hour by hour, with its first and last trip there; of the coming WEEK_DAYS
    * days, by their kind as a timetable has them (Monday to Friday, Saturday,
    * Sunday) and apart where their first or last trip differs, what holds on
    * each of those days (daysSaid). And how long the line takes from end to
    * end of its busiest way, its stations and the towns along that.
-   * @returns { ways: [{ today: { date, first, last, runs } | null, week:
-   *   [daysSaid] }], minutes, stops, towns }: times in epoch seconds
+   * @returns { date, ways: [{ stop, today: { date, first, last, runs } |
+   *   null, week: [daysSaid] }], minutes, stops, towns }: `date` the service
+   *   day it is, `stop` the name of the stop a way's figures are of; times
+   *   in epoch seconds
    */
   line(index, now) {
     const tt = this.tt;
     const date = this.dayOf(now, (day) => this.lineSpan(index, day));
     const ways = this.keep(`facts ${index} ${date}`, () => this.waysOf(index).counted.map((way) => {
-      const span = (day) => this.waySpan(way, day);
+      // All of a way's figures are of one stop, which they name: the one most of its trips of the coming days leave
+      // from (of as busy ones the first along the way), where it runs as along most of its way, also while a part of
+      // it is closed. Its first and last trip are when they leave there, as a rider there has them.
+      const days = this.dates(date, WEEK_DAYS);
+      const leaving = new Map(days.map((day) => [day, this.wayLeaving(way, day)]));
+      const counts = new Map();
+      for (const byStation of leaving.values()) for (const [station, times] of byStation) counts.set(station, (counts.get(station) ?? 0) + times.length);
+      const order = (station) => way.order.get(station) ?? Infinity;
+      const station = [...counts].sort((a, b) => b[1] - a[1] || order(a[0]) - order(b[0]))[0]?.[0] ?? -1;
+      const at = (day) => (leaving.get(day) ?? this.wayLeaving(way, day)).get(station) ?? [];
       const base = serviceDayStart(date);
-      const first = span(date);
-      const today = first && tt.dateIndex.has(date) ? { date, first: base + first.first, last: base + first.last, runs: runsAt(hourly([this.wayMinutes(way, date)]).runs, base) } : null;
+      const times = tt.dateIndex.has(date) ? at(date) : [];
+      const span = spanOf(times);
+      const today = span ? { date, first: base + span.first, last: base + span.last, runs: runsAt(hourly([times.map((s) => Math.floor(s / 60))]).runs, base) } : null;
       const groups = new Map();
-      for (const on of this.dates(date, WEEK_DAYS)) {
-        const its = span(on);
+      for (const on of days) {
+        const its = spanOf(at(on));
         // (0 for Monday to Friday, 1 for Saturday, 2 for Sunday)
         const key = `${Math.max(0, weekday(on) - 4)} ${its?.first} ${its?.last}`;
         (groups.get(key) ?? groups.set(key, { dates: [], span: its }).get(key)).dates.push(on);
       }
-      return { today, week: [...groups.values()].map((group) => this.daysSaid(way, group.dates, group.span)) };
+      const week = [...groups.values()].map((group) => this.daysSaid(group.dates, group.span, group.dates.map(at)));
+      return { stop: station >= 0 ? tt.stops.name[station] : null, today, week };
     }));
     const { minutes, stops, towns } = this.alongOf(index);
-    return { ways, minutes, stops, towns };
-  }
-
-  /** The first and last trip one way (a counted way of waysOf) on a date, in seconds of its service day, or null. */
-  waySpan(way, date) {
-    const tt = this.tt;
-    return spanOf(way.trips.filter((t) => tt.runsOn(t, date)).map((t) => tt.schedDep(t, 0)));
+    return { date, ways, minutes, stops, towns };
   }
 
   /**
-   * What holds one way (a counted way of waysOf) on each of some days that
-   * have the same first and last trip that way (`span`, spanOf, null where
-   * it does not run): the longest stretch of hours one set of words holds
-   * for (stretchOf), else how many trips it makes, the fewest and the most;
-   * and how often it runs hour by hour (hourly).
+   * What holds one way at its stop on each of some days that have the same
+   * first and last trip there (`span`, spanOf, null where it does not run;
+   * `lists` the seconds its trips leave there, a list for each day): the
+   * longest stretch of hours one set of words holds for (stretchOf), else how
+   * many trips it makes, the fewest and the most; and how often it runs hour
+   * by hour (hourly).
    * @returns { dates, first, last, often: { from, to, …often } | null,
    *   trips: [few, many] | null, runs }: times in epoch seconds of the first
    *   of the days, which say their time of day; first and last null where it
    *   does not run
    */
-  daysSaid(way, dates, span) {
+  daysSaid(dates, span, lists) {
     if (!span) return { dates, first: null, last: null, often: null, trips: null, runs: [] };
-    const series = dates.map((day) => this.wayMinutes(way, day)).filter((list) => list.length);
+    const series = lists.map((list) => list.map((s) => Math.floor(s / 60))).filter((list) => list.length);
     const { hours, runs } = hourly(series);
     const stretch = stretchOf(hours);
     const base = serviceDayStart(dates[0]);
@@ -417,7 +438,8 @@ export class Facts {
    * nearest first.
    * @param station the number of the station
    * @returns { date, first, last, lines: Map(line number → Map(destination →
-   *   { first, last, runs })), towns: [names], more }: times in epoch seconds,
+   *   { first, last, runs })), all, towns: [names], more }: `all` how many
+   *   lines leave it on any day of the timetable; times in epoch seconds,
    *   first and last null where nothing leaves that day; a line or a way that
    *   nothing leaves by that day is not in `lines`
    */
@@ -435,7 +457,7 @@ export class Facts {
       shown.set(line, said);
     }
     const { towns, more } = this.keep(`towns ${station}`, () => this.townsFrom(station));
-    return { date, first: span ? base + span.first : null, last: span ? base + span.last : null, lines: shown, towns, more };
+    return { date, first: span ? base + span.first : null, last: span ? base + span.last : null, lines: shown, all: this.stopDay(station, date).all, towns, more };
   }
 
   /**
@@ -477,7 +499,7 @@ export class Facts {
         }
         if (named.size) lines.set(line, named);
       }
-      return { span: spanOf(all), lines };
+      return { span: spanOf(all), lines, all: found.size };
     });
   }
 

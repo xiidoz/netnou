@@ -941,6 +941,8 @@ button.line-vehicle { position: absolute; left: -18px; top: -18px; width: 36px; 
 .timetable-days { list-style: none; margin: 0; padding: 0; }
 .days-head { display: grid; grid-template-columns: 60px minmax(0, 1fr) auto; column-gap: 8px; align-items: baseline; padding: 6px 0; }
 .timetable-days .when { font-size: 14px; font-weight: 650; }
+/* (the kind of day today is: a word below its name) */
+.timetable-days .when .today { display: block; color: var(--text-muted); font-size: 12px; font-weight: 400; }
 .timetable-days .said > span { display: block; }
 .timetable-days .span { font-size: 14px; font-variant-numeric: tabular-nums; }
 .timetable-days .often { margin-top: 2px; color: var(--text-muted); font-size: 13px; }
