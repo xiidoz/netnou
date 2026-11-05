@@ -547,6 +547,55 @@ once, when it opens the line, and draws it under the vehicles.
 For a line none of whose trips runs today, `paths` and `stations` are empty
 and `bounds` is `null`.
 
+The answer also has `facts`: what the timetable says of the line beyond the
+minute (#289), as its page says it below its operator and after its stops.
+
+```json
+"facts": {
+  "date": "20261111",
+  "ways": [
+    { "stop": "Nürnberg Aufseßplatz",
+      "today": { "date": "20261111", "first": 1794369075, "last": 1794441435,
+        "runs": [{ "from": 1794369600, "to": 1794376800, "atMost": 7 }, { "from": 1794376800, "to": 1794380400, "atMost": 4 }, …] },
+      "week": [
+        { "dates": ["20261111", "20261112", "20261113", "20261116", "20261117"], "first": 1794369075, "last": 1794441435,
+          "often": { "from": 1794369600, "to": 1794423600, "atMost": 7 }, "trips": [245, 284], "runs": […] },
+        …
+      ] },
+    …
+  ],
+  "minutes": 36,
+  "stops": 27,
+  "towns": ["Nürnberg", "Fürth"]
+}
+```
+
+| Field | Type | Meaning |
+| --- | --- | --- |
+| `date` | string | the service day it is, `yyyymmdd`: yesterday's while its last trip after midnight is still to leave |
+| `ways` | array | one for each way the page switches between, in the order of `ways` above |
+| `ways[].stop` | string or null | the stop all figures of the way are of: the one most of its trips of the coming 7 days leave from. A first or last trip is when it leaves there |
+| `ways[].today` | object or null | of the service day `date`: the first and last trip and how often it runs hour by hour; `null` where it does not run that way that day |
+| `ways[].week` | array | the 7 days from `date` on, by their kind as a timetable has them (Monday to Friday, Saturday, Sunday), apart where the first or last trip differs |
+| `week[].dates` | array of strings | those days, `yyyymmdd` |
+| `week[].first`, `last` | time or null | the first and last trip, at the time of day it has on each of the days, written for the first of them; `null` where it does not run that way on them |
+| `week[].often` | run or null | the longest stretch of hours of which `every` or `atMost` holds on all of the days, where that is at least 3 hours and half of those it runs through; else `null` |
+| `week[].trips` | `[few, many]` or null | how many trips it makes on the fewest and on the most of the days |
+| `today.runs`, `week[].runs` | array of runs | its hours from the first it runs in to the last, those that say the same as one; empty where it does not run |
+| `minutes` | integer | how long its busiest way takes from end to end: the middle of its trips that do |
+| `stops` | integer | the stations of that way |
+| `towns` | array of strings | the towns along it, in order |
+
+A run is `from` and `to`, whole hours as times, and how often trips leave
+in those hours, which holds for each of them on every day it is of:
+`every`, minutes from one to the next, each the same; `atMost`, the
+longest of differing gaps, never more than 15 minutes; `perHour`, `[few,
+many]`, how many leave in each of those hours, `few` 0 where none does on
+some of the days; `none`, `true`, where none leaves on any. Each number of
+departures an hour is said one way in all of `facts`: where it counts one,
+two or three an hour (`perHour` `[n, n]`), hours that are `every` 60, 30
+or 20 minutes are that `perHour` too.
+
 ## `GET /api/trip`
 
 One run of a trip: `?id=<trip id>`. Keeps the fetching of the realtime feed
@@ -670,6 +719,12 @@ where a "via" is behind it.
 none is known; the page shows it below the name where the name does not say
 it (#254). `path` is the address of the station's page, as
 [`/api/address`](#get-apiaddress) describes it (#288).
+`today` is what leaves the station on the service day it is (#289), as the
+line below its name on the page says it: `first` and `last`, the times of
+its first and last departure, `null` where nothing leaves it that day;
+`lines`, how many lines leave it that day, and `all`, how many on any day
+of the timetable. Yesterday's service day counts while its last departure
+after midnight is still to come.
 `cancelled` is true when the run is cancelled or skips this station. `notes`
 are notes of the feed about the station, such as a lift out of order, each
 with a `title`, a `text` and a `severity` as for [a trip](#get-apitrip).
@@ -725,8 +780,11 @@ earlier), or `null` where none leaves that way within 24 hours.
 | `path` | string | the address of the line's page |
 | `ways[].to` | string | the destination most of its trips have here |
 | `ways[].departure` | object or null | the next departure that way, as in `departures` |
+| `ways[].facts` | object or null | how often it leaves here that way on the service day of `today` (#289): `first`, `last` and `runs` as `today` of a way in the `facts` of [`/api/line`](#get-apiline), one way of saying each number an hour in all of `lines`; `null` where it does not leave that way that day |
 
-They are sorted by mode, then by line, then the busier way first.
+They are sorted by mode, then by line, then the busier way first. With
+them comes `towns`: `towns`, the names of up to eight towns the lines go to, the
+nearest first, and `more`, how many more there are.
 
 `warnings` of a departure are those of the notes of its trip that warn, the
 ones with the `severity` `"warning"` or `"severe"`: what is wrong with it
