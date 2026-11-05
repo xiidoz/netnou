@@ -10,7 +10,7 @@ import { DATASET_VERSION, Numbers, SharedLists, Texts, byteOrder } from './datas
 import { addDays, weekday } from './time.js';
 import { findSharedWays } from './timetable.js';
 import { openZip } from './zip.js';
-import { slug } from '../../public/address.js';
+import { operatorName, slug } from '../../public/address.js';
 
 const WEEKDAYS = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
 
@@ -96,7 +96,10 @@ function fillTimes(arr, dep) {
 
 /**
  * The ids of the trips of the operators named, for a feed of which only
- * theirs are wanted. A name the feed does not have is an error of the
+ * theirs are wanted: an operator by its name as the feed gives it, or as
+ * Netnou has it, without a code before it (operatorName, #305), so that
+ * "DB Regio AG Bayern" takes all of "800714 DB Regio AG Bayern", "8007D4 DB
+ * Regio AG Bayern" … A name the feed does not have is an error of the
  * operator of the instance: it is named, with what the feed has that is like it.
  * @param agencies [{ name: as set, key: as compared }]
  */
@@ -108,8 +111,8 @@ async function findAgencyTrips(zip, agencies) {
   if (zip.entries.has('agency.txt')) {
     await readTable(zip, 'agency.txt', ['agency_name'], (f, col) => {
       names.push(f[col.agency_name]);
-      const key = agencyKey(f[col.agency_name]);
-      if (!wanted.has(key)) return;
+      const key = [agencyKey(f[col.agency_name]), agencyKey(operatorName(f[col.agency_name]))].find((one) => wanted.has(one));
+      if (key === undefined) return;
       found.add(key);
       ids.add(col.agency_id === undefined ? '' : f[col.agency_id]);
     });
@@ -695,7 +698,8 @@ export async function buildDataset({ zipPath, area, agencies = null, onProgress 
     const agencyNames = new Map();
     if (zip.entries.has('agency.txt')) {
       await readTable(zip, 'agency.txt', ['agency_name'], (f, col) => {
-        agencyNames.set(col.agency_id === undefined ? '' : f[col.agency_id], f[col.agency_name]);
+        // (without a code before it, so that the operators of one name behind several codes are one, #305)
+        agencyNames.set(col.agency_id === undefined ? '' : f[col.agency_id], operatorName(f[col.agency_name]));
       });
     }
 

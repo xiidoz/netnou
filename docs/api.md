@@ -834,7 +834,15 @@ name within 10 m of the place. `lat` and `lon` are its place as
 `/api/departures` takes it with `at`. Of lines of a name in places apart
 the line is the one whose address it is, else the one nearest the place in
 it, and without a place the busiest; `at` is its place as `/api/line`
-takes it. A trip is the run of its line that leaves its first stop at that
+takes it. The operator in the address of a line or a trip is its name as
+`agency.txt` gives it, without a code before it: a first word of six
+letters and digits with a digit in it, as "800714 DB Regio AG Bayern" has
+(#305). An address of a line that a newer timetable names otherwise names
+it still: of a line on rails whose kind the feed has changed, the line of
+that operator and name of the one other kind on rails (#302); of a line
+whose operator's name has gained or lost words before it, the lines of that
+kind and name of the operators whose name in an address ends with the one
+asked for, or that it ends with. A trip is the run of its line that leaves its first stop at that
 day and time, from the stop of that name, else the only run of the line
 that leaves then; `id` is its id for [`/api/trip`](#get-apitrip), which
 lasts as long as the timetable. `path` is the address of what was

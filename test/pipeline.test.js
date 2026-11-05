@@ -485,6 +485,27 @@ test('an instance may keep the trips of some operators, in its area or wherever 
   assert.equal(await made({ area: AREA, agencies: [operator('Testbetrieb')] }), scopeId(AREA, ['testbetrieb']));
 });
 
+// The feed with a code before the names of its operators (#305), as gtfs.de writes them since its timetable of
+// 31 October 2026: the U1 under two codes of one name, the 99 of an operator whose name begins with six letters
+const CODES = {
+  'agency.txt': 'agency_id,agency_name,agency_url,agency_timezone\n1,800714 DB Regio AG Bayern,https://example.org,Europe/Berlin\n2,8007D4 DB Regio AG Bayern,https://example.org,Europe/Berlin\n3,KomBus GmbH,https://example.org,Europe/Berlin\n',
+  'routes.txt': FEED['routes.txt'].replace(',99,1,3,R3', ',99,3,3,R3') + ',U1,2,1,R4,,\n',
+  'trips.txt': FEED['trips.txt'].replace('R1,FRI,T4', 'R4,FRI,T4'),
+};
+
+test('an operator is named without a code before its name, and one name behind several codes is one operator (#305)', async () => {
+  const coded = await importFeed(CODES, 'codes.zip', { area: null });
+  assert.deepEqual(coded.searchList().list.lines.agencies, ['DB Regio AG Bayern', 'KomBus GmbH']);
+  // the U1 of both codes is one line, as it was before the codes
+  assert.deepEqual(coded.lines.filter((line) => line.name === 'U1').map(({ agency, trips }) => [agency, trips]), [['DB Regio AG Bayern', 2]]);
+  // NETNOU_AGENCIES: the name without its code takes all its codes; a name with its code that one alone
+  const zipPath = path.join(dir, 'codes.zip');
+  const ids = async (agencies) => [...(await buildDataset({ zipPath, area: null, agencies })).trips.id].sort();
+  assert.deepEqual(await ids([operator('DB Regio AG Bayern')]), ['T1', 'T2', 'T4']);
+  assert.deepEqual(await ids([operator('8007D4 DB Regio AG Bayern')]), ['T4']);
+  assert.deepEqual(await ids([operator('KomBus GmbH')]), ['T3']);
+});
+
 test('a line is the trips of a name, mode and operator that share stations: of one name in places apart each is a line (#152)', async () => {
   // a second U1 of the operator, between two stops of its own in the area
   const apart = await importFeed({

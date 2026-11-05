@@ -167,7 +167,12 @@ not show every operator. There are two limits, each optional, and a trip has to 
   them otherwise.
 - **`NETNOU_AGENCIES`** keeps the trips of the operators named and drops all
   others. The names are those of `agency.txt` in the feed (`agency_name`),
-  taken without regard to capitals and to spaces at their ends:
+  taken without regard to capitals and to spaces at their ends. Where the
+  feed writes a code before a name, as gtfs.de does since 31 October 2026,
+  the name without it takes every operator of that name:
+  `DB Regio AG Bayern` takes `800714 DB Regio AG Bayern`, `8007D4 DB Regio
+  AG Bayern` and the others, `8007D4 DB Regio AG Bayern` that one alone.
+  The page names them without the code (#305):
 
   ```sh
   NETNOU_AGENCIES="VerkehrsAG Nürnberg, infra fürth verkehr gmbh"

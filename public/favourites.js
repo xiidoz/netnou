@@ -11,6 +11,8 @@
 // page around it, so that it can be tested as it is (test/favourites.test.js);
 // app.js and search.js use it.
 
+import { operatorName } from './address.js';
+
 // How far a stop may have moved with a new timetable and still be the one
 // marked: as far as api/address looks for a stop of the name.
 export const STOP_REACH_M = 1000;
@@ -31,6 +33,8 @@ const isLine = (item) => isPlace(item) && typeof item.mode === 'string' && typeo
 /**
  * The favourites from what was stored, which may be anything: written by
  * another version of the page or by hand. What is not of their shape is left out.
+ * A line's operator is named as the timetable names it now, without a code
+ * a feed wrote before its name when the line was kept (#305).
  * @returns {{ stops: {name, lat, lon, modes, lines}[], lines: {name, mode, agency, lat, lon}[] }},
  *   `modes` and `lines` of a stop only where they were kept
  */
@@ -38,7 +42,7 @@ export function favouritesFrom(stored) {
   const list = (key, shape) => (Array.isArray(stored?.[key]) ? stored[key].filter(shape) : []);
   return {
     stops: list('stops', isPlace).map(({ name, lat, lon, modes, lines }) => ({ name, lat, lon, ...(isModes(modes) ? { modes } : {}), ...(isLines(lines) ? { lines } : {}) })),
-    lines: list('lines', isLine).map(({ name, mode, agency, lat, lon }) => ({ name, mode, agency, lat, lon })),
+    lines: list('lines', isLine).map(({ name, mode, agency, lat, lon }) => ({ name, mode, agency: operatorName(agency), lat, lon })),
   };
 }
 

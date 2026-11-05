@@ -382,27 +382,59 @@ export class Addresses {
   }
 
   /**
+   * The lines that an address names by its operator, kind and name, the
+   * busiest first, or undefined: those whose address it is; else, where a
+   * newer timetable names them otherwise, those it was written of, whose
+   * address the page is then sent on to.
+   * - A line whose kind has changed, as a feed gives some lines another route
+   *   type from one version to the next (#302): of that operator and name,
+   *   those of the one other kind on rails, where the address is of one on
+   *   rails.
+   * - A line whose operator's name has gained or lost words before it, as a
+   *   feed writes a code before it or leaves one out (#305): of that kind and
+   *   name, those of the operators whose name in an address ends with the one
+   *   asked for, or that it ends with ("800528-db-regio-ag-mitte-region-hessen"
+   *   for "db-regio-ag-mitte-region-hessen" and the other way round).
+   * @param asked a line as parseAddress (public/address.js) has it
+   */
+  linesNamed({ agency, mode, name }) {
+    const own = this.lines.get(`line/${agency}/${mode}/${name}`);
+    if (own) return own;
+    const family = (kind) => (RAILS.includes(kind) ? 'rails' : kind);
+    const others = MODES.filter((kind) => kind !== mode && family(kind) === family(mode) && this.lines.has(`line/${agency}/${kind}/${name}`));
+    if (others.length === 1) return this.lines.get(`line/${agency}/${others[0]}/${name}`);
+    const alike = (other) => other.endsWith(`-${agency}`) || agency.endsWith(`-${other}`);
+    const lines = this.timetable.lines;
+    const numbers = this.operatorsOf(mode, name).filter(alike).flatMap((other) => this.lines.get(`line/${other}/${mode}/${name}`));
+    return numbers.length ? numbers.sort((a, b) => lines[b].trips - lines[a].trips || a - b) : undefined;
+  }
+
+  /** The operators of the lines of a kind and name, as their addresses write them. */
+  operatorsOf(mode, name) {
+    if (!this.operators) {
+      this.operators = new Map(); // "<kind>/<name>" → operators
+      for (const key of this.lines.keys()) {
+        const [, agency, kind, line] = key.split('/');
+        this.operators.set(`${kind}/${line}`, [...(this.operators.get(`${kind}/${line}`) ?? []), agency]);
+      }
+    }
+    return this.operators.get(`${mode}/${name}`) ?? [];
+  }
+
+  /**
    * The line that an address names, as its number in timetable.lines, or -1:
    * of those of its name in places apart, the one whose address it is, else
-   * the one nearest its place; without a place in it, the busiest.
+   * the one nearest its place; without a place in it, the busiest. Where a
+   * newer timetable names it otherwise, the one it was written of (linesNamed).
    * @param asked a line as parseAddress (public/address.js) has it
    */
   line({ agency, mode, name, lat, lon }) {
-    let numbers = this.lines.get(`line/${agency}/${mode}/${name}`);
-    // (a line whose kind has changed, as a feed gives some lines another
-    // route type from one version to the next, #302: the line of that
-    // operator and name of another kind on rails, where the address is of
-    // one on rails and there is one alone, whose address the page is then
-    // sent on to)
-    if (!numbers) {
-      const family = (kind) => (RAILS.includes(kind) ? 'rails' : kind);
-      const others = MODES.filter((kind) => kind !== mode && family(kind) === family(mode) && this.lines.has(`line/${agency}/${kind}/${name}`));
-      if (others.length !== 1) return -1;
-      numbers = this.lines.get(`line/${agency}/${others[0]}/${name}`);
-    }
+    const numbers = this.linesNamed({ agency, mode, name });
+    if (!numbers) return -1;
     if (lat === undefined || numbers.length === 1) return numbers[0];
     const own = numbers.find((i) => {
       const place = this.places.get(i);
+      if (!place) return false;
       const digits = place.split(',')[0].split('.')[1].length;
       return place === `${lat.toFixed(digits)},${lon.toFixed(digits)}`;
     });
@@ -435,7 +467,7 @@ export class Addresses {
    * @param asked a trip as parseAddress (public/address.js) has it
    */
   trip({ agency, mode, name, day, time, from }) {
-    const numbers = this.lines.get(`line/${agency}/${mode}/${name}`);
+    const numbers = this.linesNamed({ agency, mode, name });
     if (!numbers) return null;
     this.indexTrips();
     const tt = this.timetable;

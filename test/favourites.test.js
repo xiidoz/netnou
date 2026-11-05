@@ -19,6 +19,10 @@ test('what was stored is taken as far as it has the shape of favourites', () => 
   }), { stops: [PLAERRER, PLAERRER, PLAERRER], lines: [U1] });
   // (a stop keeps the kinds that call there, where they were kept)
   assert.deepEqual(favouritesFrom({ stops: [{ ...PLAERRER, modes: ['subway', 'tram'] }] }).stops, [{ ...PLAERRER, modes: ['subway', 'tram'] }]);
+  // (a line kept while the feed wrote a code before its operator's name is the line of that operator now, #305)
+  const s1 = { name: 'S1', mode: 'suburban', agency: 'DB Regio AG Bayern', lat: 49.56472, lon: 11.13972 };
+  assert.deepEqual(favouritesFrom({ lines: [{ ...s1, agency: '800721 DB Regio AG Bayern' }, s1] }).lines, [s1, s1]);
+  assert.ok(isFavourite(favouritesFrom({ lines: [{ ...s1, agency: '800721 DB Regio AG Bayern' }] }), 'lines', s1));
 });
 
 test('a stop and a line are kept as their answers say them, to 1e-5 degrees', () => {
