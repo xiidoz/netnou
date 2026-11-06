@@ -584,7 +584,7 @@ minute (#289), as its page says it below its operator and after its stops.
 | `today.runs`, `week[].runs` | array of runs | its hours from the first it runs in to the last, those that say the same as one; empty where it does not run |
 | `minutes` | integer | how long its busiest way takes from end to end: the middle of its trips that do |
 | `stops` | integer | the stations of that way |
-| `towns` | array of strings | the towns along it, in order |
+| `towns` | array of strings | the towns along it, in order, the one it ends in last |
 
 A run is `from` and `to`, whole hours as times, and how often trips leave
 in those hours, which holds for each of them on every day it is of:
