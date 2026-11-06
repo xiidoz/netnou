@@ -8,6 +8,19 @@ This file is written by
 messages when a release is made. Do not edit it by hand; see
 [Releases](CONTRIBUTING.md#releases).
 
+## [0.25.0](https://github.com/xiidoz/netnou/compare/v0.24.0...v0.25.0) (2026-11-06)
+
+
+### Features
+
+* **timetable:** hours on a beat say its minutes, "alle 20 Min.", not "dreimal pro Stunde" ([#312](https://github.com/xiidoz/netnou/issues/312)) ([70e2561](https://github.com/xiidoz/netnou/commit/70e2561ed94292dc911d5d59a3473d4eee2b4291))
+
+
+### Bug Fixes
+
+* **timetable:** a bus every 40 minutes is every 40 minutes also in the hours it leaves once ([#311](https://github.com/xiidoz/netnou/issues/311)) ([265f65e](https://github.com/xiidoz/netnou/commit/265f65e213493c6fc08663e6d45a4a22f32058cd))
+* **timetable:** one to three departures an hour are counted, never "spätestens alle N Min." ([#314](https://github.com/xiidoz/netnou/issues/314)) ([387ee81](https://github.com/xiidoz/netnou/commit/387ee81e238c43dda20019d0fdcb6ea4b099074a))
+
 ## [0.24.0](https://github.com/xiidoz/netnou/compare/v0.23.1...v0.24.0) (2026-11-05)
 
 
