@@ -83,7 +83,10 @@ export function hourly(series) {
   // the hour of the next says. Up to its end: no departure of the beat is
   // missing in the hour, its last less than n before the hour is over; one
   // at 9:17 after every 20 minutes, and none until 10:30, is no "every 20
-  // minutes" from 9 to 10. So is one before such a stretch whose
+  // minutes" from 9 to 10. And only where the hour after is not on the same
+  // beat by itself: there the wait between them is in the stretch, and 8:57
+  // and then 9:20, 9:40, 10:00 are no "every 20 minutes" from 8 to 10. So is
+  // one before such a stretch whose
   // departures keep its beat up to it, each n after the one before and the
   // stretch's first n after its last. This is how an hour with one departure
   // of a beat that is no whole hours is in it: a bus every 40 minutes leaves
@@ -97,7 +100,8 @@ export function hourly(series) {
   const onBeat = (hour, n) => Object.assign(hour, { exact: n, often: { every: n }, longest: n });
   hours.forEach((hour, k) => {
     const n = hours[k - 1]?.exact;
-    if (n && hour.exact === null && hour.often !== null && keeps(hour, n, (gap, last) => last + n >= (hour.h + 1) * 60)) onBeat(hour, n);
+    const ends = (gap, last) => gap <= n || (last + n >= (hour.h + 1) * 60 && hours[k + 1]?.exact !== n);
+    if (n && hour.exact === null && hour.often !== null && keeps(hour, n, ends)) onBeat(hour, n);
   });
   for (let k = hours.length - 2; k >= 0; k--) {
     const hour = hours[k];

@@ -60,6 +60,8 @@ test('every gap the same is "every n"; differing gaps of a line that comes often
   assert.deepEqual(said(hourly([[468, 528, 588, 648, 708, 830, 890]])), [[8, 12, { every: 60 }], [12, 13, { none: true }], [13, 14, { every: 60 }]]);
   // so the hour of 8:17, 8:37, 8:57 is every 20 minutes with those before it, where every 40 minutes follow from 9:37
   assert.deepEqual(said(hourly([[...every(20, '06:17', '08:58'), ...every(40, '09:37', '12:38')]])), [[7, 9, { every: 20 }], [9, 12, { every: 40 }]]);
+  // nor where the hour after is on the same beat by itself: the wait between them, 8:57 to 9:20, is in no "alle 20"
+  assert.deepEqual(said(hourly([[377, 397, 417, 437, 457, 477, 497, 517, 537, 560, 580, 600, 620, 640]])), [[7, 8, { every: 20 }], [8, 9, { perHour: [3, 3] }], [9, 10, { every: 20 }]]);
   // but not where the beat stops before the hour is over: 9:17 after every 20 minutes, and none until 10:30
   assert.deepEqual(said(hourly([[...every(20, '06:17', '09:18'), 630, 660]])), [[7, 9, { every: 20 }], [9, 11, { perHour: [1, 1] }]]);
   // a bus at :20 one hour and at :34 the next, once an hour: said so throughout, never "stündlich" beside "einmal pro
