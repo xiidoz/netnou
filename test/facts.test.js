@@ -50,6 +50,11 @@ test('every gap the same is "every n"; differing gaps of a line that comes often
   assert.deepEqual(said(hourly([[360, 410, 470, 520, 580]])), [[6, 8, { perHour: [1, 2] }], [8, 9, { every: 60 }]]);
   // an hour that keeps the beat of the hours before it is theirs, also where the next comes sooner: 9:48, 10:48, 11:48, 12:18
   assert.deepEqual(said(hourly([[468, 528, 588, 648, 708, 738, 762, 768, 805, 809, 818, 831, 888, 948]])), [[8, 12, { every: 60 }], [12, 14, { perHour: [3, 4] }], [14, 15, { every: 60 }]]);
+  // a bus every 40 minutes leaves twice in one hour and once in the next: every 40 minutes in both, an hour of one
+  // departure before the stretch too, where it keeps the beat up to it (bus 33 in Fürth: 8:57, 9:37, 10:17, … 13:37)
+  assert.deepEqual(said(hourly([[...every(20, '08:17', '08:58'), ...every(40, '09:37', '13:38'), ...every(20, '13:57', '15:00')]])), [[9, 13, { every: 40 }], [13, 14, { every: 20 }]]);
+  // but one departure 40 minutes from those on either side, with no hour of that beat beside it, is once an hour
+  assert.deepEqual(said(hourly([[...every(20, '08:17', '08:58'), 577, ...every(20, '10:17', '11:00')]])), [[9, 10, { perHour: [1, 1] }]]);
   // but not where the next comes later than that: a wait of more than an hour is no "hourly"; as a list then has hours
   // of one departure that are not on the beat, all of them are "einmal pro Stunde"
   assert.deepEqual(said(hourly([[468, 528, 588, 648, 708, 830, 890]])), [[8, 12, { perHour: [1, 1] }], [12, 13, { none: true }], [13, 14, { perHour: [1, 1] }]]);
