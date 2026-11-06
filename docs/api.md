@@ -591,10 +591,13 @@ in those hours, which holds for each of them on every day it is of:
 `every`, minutes from one to the next, each the same; `atMost`, the
 longest of differing gaps, never more than 15 minutes; `perHour`, `[few,
 many]`, how many leave in each of those hours, `few` 0 where none does on
-some of the days; `none`, `true`, where none leaves on any. Each number of
-departures an hour is said one way in all of `facts`: where it counts one,
-two or three an hour (`perHour` `[n, n]`), hours that are `every` 60, 30
-or 20 minutes are that `perHour` too.
+some of the days; `none`, `true`, where none leaves on any. Once an hour
+is said one way in all of `facts`: where it counts one an hour (`perHour`
+`[1, 1]`), hours that are `every` 60 minutes are that `perHour` too.
+Several an hour on a beat stay `every` beside hours of as many off it. The
+hour of the last departure on a beat is `every` with those before it where
+no departure of the beat is missing in it; how long the wait after it is,
+the next run says.
 
 ## `GET /api/trip`
 

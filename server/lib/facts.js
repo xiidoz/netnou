@@ -74,10 +74,19 @@ export function hourly(series) {
     hours.push({ h, often, longest, exact });
   }
   // An hour after a stretch of every n whose departures keep that beat, each
-  // n after the one before, is part of it, also where the next comes sooner
-  // than n after its last: 9:48, 10:48, 11:48 and then 12:18 are "hourly
-  // from 9 to 12", as nobody there waits longer than n, and the hour of 11:48
-  // is no other than those before it. So is one before such a stretch whose
+  // n after the one before, up to its end, is part of it, whenever the next
+  // comes after its last: 9:48, 10:48, 11:48 and then 12:18 are "hourly from
+  // 9 to 12", and so are 8:17, 8:37, 8:57 "every 20 minutes" with those
+  // before them where the next leaves at 9:37, every 40 minutes from then
+  // on. The hour of the last departure on a beat is no other than those
+  // before it, as a printed timetable has it; how long the wait after it is,
+  // the hour of the next says. Up to its end: no departure of the beat is
+  // missing in the hour, its last less than n before the hour is over; one
+  // at 9:17 after every 20 minutes, and none until 10:30, is no "every 20
+  // minutes" from 9 to 10. And only where the hour after is not on the same
+  // beat by itself: there the wait between them is in the stretch, and 8:57
+  // and then 9:20, 9:40, 10:00 are no "every 20 minutes" from 8 to 10. So is
+  // one before such a stretch whose
   // departures keep its beat up to it, each n after the one before and the
   // stretch's first n after its last. This is how an hour with one departure
   // of a beat that is no whole hours is in it: a bus every 40 minutes leaves
@@ -86,12 +95,13 @@ export function hourly(series) {
     let i = firstFrom(list, hour.h * 60);
     const before = i;
     for (; list[i] < (hour.h + 1) * 60; i++) if (list[i] - list[i - 1] !== n) return false;
-    return i > before && next(list[i] - list[i - 1]);
+    return i > before && next(list[i] - list[i - 1], list[i - 1]);
   });
   const onBeat = (hour, n) => Object.assign(hour, { exact: n, often: { every: n }, longest: n });
   hours.forEach((hour, k) => {
     const n = hours[k - 1]?.exact;
-    if (n && hour.exact === null && hour.often !== null && keeps(hour, n, (gap) => gap <= n)) onBeat(hour, n);
+    const ends = (gap, last) => gap <= n || (last + n >= (hour.h + 1) * 60 && hours[k + 1]?.exact !== n);
+    if (n && hour.exact === null && hour.often !== null && keeps(hour, n, ends)) onBeat(hour, n);
   });
   for (let k = hours.length - 2; k >= 0; k--) {
     const hour = hours[k];
@@ -110,23 +120,21 @@ export function hourly(series) {
 }
 
 /**
- * One way of saying each number of departures an hour in lists of runs that
- * are read together, as the details of a line or of a stop have them (runs
- * as runsAt has them: { from, to, every | atMost | perHour | none }): where
- * once, twice or three times an hour is said both as a gap ("stündlich",
- * "alle 30 Min.") and as a count ("einmal pro Stunde"), as a line whose bus
- * leaves at :20 one hour and at :34 the next, or on Saturdays on the beat
+ * One way of saying once an hour in lists of runs that are read together, as
+ * the details of a line or of a stop have them (runs as runsAt has them:
+ * { from, to, every | atMost | perHour | none }): where it is said both as a
+ * gap ("stündlich") and as a count ("einmal pro Stunde"), as a line whose
+ * bus leaves at :20 one hour and at :34 the next, or on Saturdays on the beat
  * and on Sundays not, has it, the count, which holds for both; and runs of a
  * list that then say the same as one. A rider reads "stündlich" and
- * "einmal pro Stunde" alike, and asks what sets them apart.
+ * "einmal pro Stunde" alike, and asks what sets them apart. Several an hour
+ * on a beat keep their minutes ("alle 20 Min.") beside hours of as many off
+ * it ("dreimal pro Stunde"): the minutes say more, and that they differ.
  * @returns the lists, each said so
  */
 export function oneWord(lists) {
   const counted = new Set(lists.flat().filter(({ perHour }) => perHour && perHour[0] === perHour[1] && perHour[0] > 0).map(({ perHour }) => perHour[0]));
-  const said = (run) => {
-    const n = run.every;
-    return n >= 20 && 60 % n === 0 && counted.has(60 / n) ? { from: run.from, to: run.to, perHour: [60 / n, 60 / n] } : run;
-  };
+  const said = (run) => (run.every === 60 && counted.has(1) ? { from: run.from, to: run.to, perHour: [1, 1] } : run);
   return lists.map((runs) => {
     const out = [];
     for (const run of runs.map(said)) {
