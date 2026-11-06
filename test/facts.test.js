@@ -73,6 +73,8 @@ test('every gap the same is "every n"; differing gaps of a line that comes often
   assert.deepEqual(said(hourly([[600, 630, 660, 690, 735, 760, 780, 810, 840, 870, 900]])), [[10, 12, { every: 30 }], [12, 13, { perHour: [2, 2] }], [13, 15, { every: 30 }]]);
   // hours of as many an hour join where they stay within one of each other: 1 to 2, not 1 to 3
   assert.deepEqual(said(hourly([[360, 375, 400, 445, 490, 530, 600]])), [[6, 7, { perHour: [3, 3] }], [7, 9, { perHour: [1, 2] }], [9, 10, { none: true }]]);
+  // a few an hour are counted also where the wait after them is short: one bus at 23:54, the next at 0:04
+  assert.deepEqual(said(hourly([[1300, 1434, 1444, 1454]])), [[22, 23, { none: true }], [23, 24, { perHour: [1, 1] }]]);
   // an hour without a departure says so; one without on some of the days how many at most; neither is left out
   assert.deepEqual(said(hourly([[360, 420, 545, 605, 665]])), [[6, 8, { every: 60 }], [8, 9, { none: true }], [9, 11, { every: 60 }]]);
   assert.deepEqual(said(hourly([[360, 420, 480, 540], [360, 400, 540]])), [[6, 7, { perHour: [1, 2] }], [7, 9, { perHour: [0, 1] }]]);

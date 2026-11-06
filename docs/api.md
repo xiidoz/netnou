@@ -589,7 +589,8 @@ minute (#289), as its page says it below its operator and after its stops.
 A run is `from` and `to`, whole hours as times, and how often trips leave
 in those hours, which holds for each of them on every day it is of:
 `every`, minutes from one to the next, each the same; `atMost`, the
-longest of differing gaps, never more than 15 minutes; `perHour`, `[few,
+longest of differing gaps, never more than 15 minutes, where more than three
+leave in each of those hours; `perHour`, `[few,
 many]`, how many leave in each of those hours, `few` 0 where none does on
 some of the days; `none`, `true`, where none leaves on any. Once an hour
 is said one way in all of `facts`: where it counts one an hour (`perHour`
