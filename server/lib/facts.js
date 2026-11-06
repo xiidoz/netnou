@@ -77,19 +77,27 @@ export function hourly(series) {
   // n after the one before, is part of it, also where the next comes sooner
   // than n after its last: 9:48, 10:48, 11:48 and then 12:18 are "hourly
   // from 9 to 12", as nobody there waits longer than n, and the hour of 11:48
-  // is no other than those before it.
+  // is no other than those before it. So is one before such a stretch whose
+  // departures keep its beat up to it, each n after the one before and the
+  // stretch's first n after its last. This is how an hour with one departure
+  // of a beat that is no whole hours is in it: a bus every 40 minutes leaves
+  // twice in one hour and once in the next, and is every 40 minutes in both.
+  const keeps = (hour, n, next) => lists.every((list) => {
+    let i = firstFrom(list, hour.h * 60);
+    const before = i;
+    for (; list[i] < (hour.h + 1) * 60; i++) if (list[i] - list[i - 1] !== n) return false;
+    return i > before && next(list[i] - list[i - 1]);
+  });
+  const onBeat = (hour, n) => Object.assign(hour, { exact: n, often: { every: n }, longest: n });
   hours.forEach((hour, k) => {
     const n = hours[k - 1]?.exact;
-    if (!n || hour.exact !== null || hour.often === null) return;
-    const keeps = lists.every((list) => {
-      let i = firstFrom(list, hour.h * 60);
-      const before = i;
-      for (; list[i] < (hour.h + 1) * 60; i++) if (list[i] - list[i - 1] !== n) return false;
-      // (one departure in an hour keeps a beat of whole hours alone, as above; and the next comes no later than n after)
-      return i > before && (i - before > 1 || n % 60 === 0) && list[i] - list[i - 1] <= n;
-    });
-    if (keeps) Object.assign(hour, { exact: n, often: { every: n }, longest: n });
+    if (n && hour.exact === null && hour.often !== null && keeps(hour, n, (gap) => gap <= n)) onBeat(hour, n);
   });
+  for (let k = hours.length - 2; k >= 0; k--) {
+    const hour = hours[k];
+    const n = hours[k + 1].exact;
+    if (n && hour.exact === null && hour.often !== null && keeps(hour, n, (gap) => gap === n)) onBeat(hour, n);
+  }
   const runs = [];
   for (const { h, often } of hours) {
     const last = runs.at(-1);
