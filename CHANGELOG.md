@@ -8,6 +8,13 @@ This file is written by
 messages when a release is made. Do not edit it by hand; see
 [Releases](CONTRIBUTING.md#releases).
 
+## [0.25.1](https://github.com/xiidoz/netnou/compare/v0.25.0...v0.25.1) (2026-11-06)
+
+
+### Bug Fixes
+
+* **timetable:** a line's towns end with the town it ends in, its "bis" where it goes ([#315](https://github.com/xiidoz/netnou/issues/315)) ([013b65e](https://github.com/xiidoz/netnou/commit/013b65e90670c7c82b76e71f91a515ecaf55680f))
+
 ## [0.25.0](https://github.com/xiidoz/netnou/compare/v0.24.0...v0.25.0) (2026-11-06)
 
 
