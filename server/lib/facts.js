@@ -233,6 +233,24 @@ export function spanOf(times) {
   return { first, last: last < first ? last + 86400 : last };
 }
 
+/**
+ * The towns along a way, from that of its first station to that of its last
+ * (the towns of its stations in order, null where one is not known): each
+ * once, where it first comes, but the town of the last station at the end,
+ * also where a station before is in that town too. A way's stations are
+ * those of its trips that go different routes, one list (lineWays); a train
+ * that calls in the town it ends in before it calls in others would else go
+ * "bis" the last of those others. Where it ends in the town it starts in, the
+ * towns as they come.
+ */
+export function townsOfWay(towns) {
+  const known = towns.filter(Boolean);
+  const order = [...new Set(known)];
+  const end = towns.at(-1);
+  if (!end || end === known[0] || order.at(-1) === end) return order;
+  return [...order.filter((town) => town !== end), end];
+}
+
 /** Of several days' spans, the range all of them lie in: the earliest first and the latest last. */
 const rangeOf = (spans) => (spans.length ? { first: Math.min(...spans.map((s) => s.first)), last: Math.max(...spans.map((s) => s.last)) } : null);
 
@@ -468,7 +486,7 @@ export class Facts {
       if (tt.stationOf[stops[0]] === first && tt.stationOf[stops.at(-1)] === last) takes.push(tt.schedArr(t, stops.length - 1) - tt.schedDep(t, 0));
     }
     takes.sort((a, b) => a - b);
-    const towns = [...new Set(way.list.map((s) => tt.towns[tt.stops.town[s]]?.name).filter(Boolean))];
+    const towns = townsOfWay(way.list.map((s) => tt.towns[tt.stops.town[s]]?.name ?? null));
     return { minutes: takes.length ? Math.round(takes[takes.length >> 1] / 60) : null, stops: way.list.length, towns };
   }
 

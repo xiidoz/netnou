@@ -14,7 +14,7 @@ import { daysText, hoursText, hourText, lineLists, lineTimetable, oftenText, sto
 import { Addresses } from '../server/lib/addresses.js';
 import { Area } from '../server/lib/area.js';
 import { readDataset, writeDataset } from '../server/lib/dataset.js';
-import { facts, hourly, oneWord, spanOf, stretchOf } from '../server/lib/facts.js';
+import { facts, hourly, oneWord, spanOf, stretchOf, townsOfWay } from '../server/lib/facts.js';
 import { buildDataset } from '../server/lib/importer.js';
 import { addDays, serviceDayStart, setTimeZone } from '../server/lib/time.js';
 import { Timetable } from '../server/lib/timetable.js';
@@ -113,6 +113,17 @@ test('a description names the longest stretch that one set of words holds for, w
   assert.deepEqual(stretchOf(hourly([u1]).hours), { from: 5, to: 20, often: { atMost: 7 } });
   // nothing holds for three hours: none
   assert.equal(stretchOf(hourly([[360, 380, 420, 425, 480, 540, 545, 600]]).hours), null);
+});
+
+test('the towns along a way go from that of its first station to that of its last, each once', () => {
+  // the town it ends in last, also where a station before is in it: "bis Nürnberg", not "bis Schwaig"
+  assert.deepEqual(townsOfWay(['Simmelsdorf', 'Lauf', 'Nürnberg', 'Schwaig', 'Nürnberg']), ['Simmelsdorf', 'Lauf', 'Schwaig', 'Nürnberg']);
+  assert.deepEqual(townsOfWay(['Hamburg', 'Bremen', 'Bremen', 'Köln']), ['Hamburg', 'Bremen', 'Köln']);
+  // a way back into the town it starts in: the towns as they come
+  assert.deepEqual(townsOfWay(['Nürnberg', 'Fürth', 'Zirndorf', 'Nürnberg']), ['Nürnberg', 'Fürth', 'Zirndorf']);
+  // a last station whose town is not known: the towns that are, as they come
+  assert.deepEqual(townsOfWay(['Nürnberg', 'Stein', 'Rohr', null]), ['Nürnberg', 'Stein', 'Rohr']);
+  assert.deepEqual(townsOfWay([null, null]), []);
 });
 
 test('the first and last of a day go around the longest pause, so that a line past midnight ends after it, however the feed writes it', () => {
