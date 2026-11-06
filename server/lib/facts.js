@@ -12,6 +12,10 @@ import { addDays, localDate, serviceDayStart, weekday } from './time.js';
 // Up to this many minutes a wait is told as "at least every N minutes"; a
 // line whose gaps are longer and differ is told by how many leave an hour.
 export const AT_MOST_MIN = 15;
+// Up to this many departures an hour are told by how many leave, also where
+// the waits after them are short: one bus at 23:54 and the next at 0:04 is
+// "once an hour" from 23 to 24, no "at least every 10 minutes".
+export const COUNTED_MAX = 3;
 // The details tell of the coming week, each day as its timetable is.
 export const WEEK_DAYS = 7;
 // "On working days" in a description is every Monday to Friday of the
@@ -29,7 +33,8 @@ const KEPT = 2000;
  * How often departures leave, hour by hour of their service day, in words
  * that hold for each of several lists of them alike (a day each, or a way
  * each): an hour where every gap is the same says it (`every`), one where
- * they differ but none is longer than AT_MOST_MIN the longest (`atMost`),
+ * they differ but none is longer than AT_MOST_MIN, and more than
+ * COUNTED_MAX leave in it, the longest (`atMost`),
  * any other how many leave in it (`perHour`, the fewest and the most of
  * the lists); one where none leaves on any of them, that none does
  * (`none`). The gap that begins in an hour is the hour's, also where it
@@ -70,7 +75,7 @@ export function hourly(series) {
     const often = exact !== null ? { every: exact }
       : empty === counts.length ? { none: true }
         : empty ? { perHour: [0, Math.max(...counts)] }
-          : longest <= AT_MOST_MIN ? { atMost: longest } : { perHour: [Math.min(...counts), Math.max(...counts)] };
+          : longest <= AT_MOST_MIN && Math.min(...counts) > COUNTED_MAX ? { atMost: longest } : { perHour: [Math.min(...counts), Math.max(...counts)] };
     hours.push({ h, often, longest, exact });
   }
   // An hour after a stretch of every n whose departures keep that beat, each
@@ -203,7 +208,7 @@ export function stretchOf(hours) {
     if (found) return { ...found, often: { every: n } };
   }
   for (const n of [...new Set(hours.map((hour) => hour.longest))].filter((n) => n <= AT_MOST_MIN).sort((a, b) => a - b)) {
-    const found = longestWhere((hour) => hour.longest <= n);
+    const found = longestWhere((hour) => hour.longest <= n && !hour.often?.perHour);
     if (found) return { ...found, often: { atMost: n } };
   }
   return null;
