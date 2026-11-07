@@ -8,6 +8,25 @@ This file is written by
 messages when a release is made. Do not edit it by hand; see
 [Releases](CONTRIBUTING.md#releases).
 
+## [0.26.0](https://github.com/xiidoz/netnou/compare/v0.25.1...v0.26.0) (2026-11-07)
+
+
+### Features
+
+* **page:** "Tafel" is a round button in the corner of a stop, apart from views and filter ([#326](https://github.com/xiidoz/netnou/issues/326)) ([8906554](https://github.com/xiidoz/netnou/commit/890655433627fc97a897ee3b3ee7a9de41640ef4))
+* **page:** a departure without a delay reported has the map's "?", not taken for one on time ([#321](https://github.com/xiidoz/netnou/issues/321)) ([ed6f4d7](https://github.com/xiidoz/netnou/commit/ed6f4d7bc490a7c073a07f615f8a74c65cd35d8a))
+* **page:** a trip's and a line's stops as the map draws them, their vehicles as its discs ([#327](https://github.com/xiidoz/netnou/issues/327)) ([b564b7a](https://github.com/xiidoz/netnou/commit/b564b7af474382da3713a4a23957424674335a28))
+* **page:** the search tells tram 10 from bus 10 by their badges, as the departures do ([#325](https://github.com/xiidoz/netnou/issues/325)) ([e3a0e73](https://github.com/xiidoz/netnou/commit/e3a0e73f51978a3be138bdbc59e63e287e4368d2))
+* **page:** the stop a trip or line was opened from has its ring, in the list and on the map ([#328](https://github.com/xiidoz/netnou/issues/328)) ([d09aee4](https://github.com/xiidoz/netnou/commit/d09aee4e9900b69b0c59d7a29b7983414c557af4))
+* **page:** tram 4 and bus 4 at one stop say their kind in the badge, not by colour alone ([#322](https://github.com/xiidoz/netnou/issues/322)) ([352f084](https://github.com/xiidoz/netnou/commit/352f084be199621b083251bd25cfb8228aeeafe6))
+
+
+### Bug Fixes
+
+* **page:** a trip opened on a phone keeps its way back and buttons in sight ([#319](https://github.com/xiidoz/netnou/issues/319)) ([b255b0e](https://github.com/xiidoz/netnou/commit/b255b0e4ded2aaff7903c09e9df7ad988b6a7bc3))
+* **page:** the filter checks the directions chosen instead of crossing out all others ([#323](https://github.com/xiidoz/netnou/issues/323)) ([2fbd947](https://github.com/xiidoz/netnou/commit/2fbd947235a03cff30fd5abece3deef8bc54f017))
+* **page:** wider details on a wide screen, how-often lines kept whole, headings in order ([#324](https://github.com/xiidoz/netnou/issues/324)) ([0952a95](https://github.com/xiidoz/netnou/commit/0952a9524318a1c8cb533e87b43617521e62248b))
+
 ## [0.25.1](https://github.com/xiidoz/netnou/compare/v0.25.0...v0.25.1) (2026-11-06)
 
 
