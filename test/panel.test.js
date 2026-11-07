@@ -67,6 +67,20 @@ test('the departures of a stop: a row each that opens its trip, in two lines in 
   assert.equal(html(departureLists({ name: 'Plärrer', departures: [] }, drawing())), `<p class="panel-empty">${en['departures.none']}</p>`);
 });
 
+test('a departure without a delay reported while delays come in for others has the map\'s question mark, not taken for one on time', () => {
+  const board = { name: 'Plärrer', departures: [departure(4, { delay: 0 }), departure(5), departure(6, { cancelled: true })] };
+  // in the place of the delay, after the place of the planned time, so that it lines up; a screen reader hears what it means
+  const live = html(departureLists(board, { ...drawing('time'), live: true }));
+  assert.ok(live.includes(`<span class="details"><span class="delay" data-delay="none"><span class="planned"></span><span aria-hidden="true">?</span><span class="spoken">${en['departures.noDelay']}</span></span>`), live);
+  // on time still "±0"; a cancelled one says so, without a question mark
+  assert.ok(live.includes('<span class="delay" data-delay="ok"><span class="planned"></span>±0</span>'));
+  assert.equal(live.match(/aria-hidden="true">\?</g).length, 1);
+  // before the minutes, alone
+  assert.ok(html(departureLists(board, { ...drawing('minutes'), live: true })).includes(`<span class="delay" data-delay="none"><span aria-hidden="true">?</span><span class="spoken">${en['departures.noDelay']}</span></span>`));
+  // where no delays come in at all, nothing: the status line says so once
+  assert.ok(!html(departureLists(board, drawing('time'))).includes('?'));
+});
+
 test('a departure that is cancelled says so, and one with something wrong with it has the sign of a warning that says what', () => {
   const warned = departure(5, { warnings: [{ title: null, text: 'Signal failure', severity: 'warning' }] });
   const board = { name: 'Plärrer', departures: [warned, departure(8, { cancelled: true, platform: '1' })] };

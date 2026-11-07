@@ -1034,6 +1034,7 @@ li:last-child > .row.stop .rail::before { bottom: 50%; }
 .delay .planned { display: inline-block; width: calc(var(--clock-chars, 5) * 1ch); margin-right: 1px; text-align: right; color: var(--text-muted); font-weight: 400; }
 /* (said by a screen reader, not seen) */
 .spoken { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+.delay[data-delay="none"] { color: var(--text-muted); }
 .delay[data-delay="early"] { color: var(--delay-early-text); }
 .delay[data-delay="ok"] { color: var(--delay-ok-text); }
 .delay[data-delay="minor"] { color: var(--delay-major-text); }

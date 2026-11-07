@@ -128,7 +128,7 @@ export default {
   // … and, on the button after it and as the heading of the dialog it opens, the way to how the page comes by them.
   'about.title': 'How it works',
   'about.positions': 'Positions',
-  'about.positionsText': 'No vehicle reports its position to this map. Each one is drawn where the timetable says it should be right now, moved by the delay reported for it. So a vehicle can be somewhat ahead of or behind its marker. Vehicles without a reported delay carry a question mark and run by the timetable here.',
+  'about.positionsText': 'No vehicle reports its position to this map. Each one is drawn where the timetable says it should be right now, moved by the delay reported for it. So a vehicle can be somewhat ahead of or behind its marker. Vehicles without a reported delay carry a question mark and run by the timetable here. Their departures show a question mark instead of the delay.',
   'about.routes': 'Routes',
   'about.routesText': 'The route between two stops is computed too: the shortest plausible way along the roads and tracks of OpenStreetMap, not the official one of the operator. Between stops close to each other it is almost always the same. Where it differs, a vehicle takes another way on the map than in reality; where none is found, it moves in a straight line.',
   // Only shown where the instance has more vehicles than a zoomed-out map can show
@@ -298,6 +298,8 @@ export default {
   // how long until a departure leaves: under a minute, and in whole minutes
   'departures.now': 'now',
   'departures.planned': 'planned {time}',
+  // For a screen reader, where a departure has the question mark of no delay reported.
+  'departures.noDelay': 'no delay reported',
   'departures.minutes': '{count} min',
   // the line in a list of departures where the next day begins
   'departures.tomorrow': 'tomorrow',
