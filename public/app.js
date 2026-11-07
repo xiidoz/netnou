@@ -2545,6 +2545,9 @@ const panel = $('panel');
 // What the details are of stays at the top; what is listed scrolls below it.
 const panelHead = $('panel-head');
 const panelBody = $('panel-body');
+// The details themselves never scroll, only what is listed in them (style.css: overflow hidden, which a script, the
+// focus or the browser's search can scroll all the same): their head with the way back and its buttons stays in sight.
+panel.addEventListener('scroll', () => { if (panel.scrollTop) panel.scrollTop = 0; }, { passive: true });
 let panelTimer = null;
 // (what had the keyboard focus when the details opened: see closePanel)
 let panelOpener = null;
@@ -3478,8 +3481,11 @@ function renderTrip(trip, scrollToNext) {
     ],
     list,
   );
-  if (scrollToNext) nextRow?.scrollIntoView({ block: 'center' });
-  else panelBody.scrollTop = scrollTop;
+  // (the next stop in the middle of the list: the list scrolled alone, as scrollIntoView would scroll the sheet around it
+  // as well, and on a phone push its head, the way back and its buttons, out above its top)
+  if (scrollToNext) {
+    if (nextRow) panelBody.scrollTop += nextRow.getBoundingClientRect().top - panelBody.getBoundingClientRect().top - (panelBody.clientHeight - nextRow.offsetHeight) / 2;
+  } else panelBody.scrollTop = scrollTop;
 
   // Once, when the trip is opened at its address (#178): the map on where it
   // is, between the stop it left last and the next one; where it is not
