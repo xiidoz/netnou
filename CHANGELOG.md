@@ -8,6 +8,20 @@ This file is written by
 messages when a release is made. Do not edit it by hand; see
 [Releases](CONTRIBUTING.md#releases).
 
+## [0.26.0](https://github.com/xiidoz/netnou/compare/v0.25.1...v0.26.0) (2026-11-07)
+
+
+### Features
+
+* **page:** a departure without a delay reported has the map's "?", not taken for one on time ([#321](https://github.com/xiidoz/netnou/issues/321)) ([ed6f4d7](https://github.com/xiidoz/netnou/commit/ed6f4d7bc490a7c073a07f615f8a74c65cd35d8a))
+* **page:** tram 4 and bus 4 at one stop say their kind in the badge, not by colour alone ([#322](https://github.com/xiidoz/netnou/issues/322)) ([352f084](https://github.com/xiidoz/netnou/commit/352f084be199621b083251bd25cfb8228aeeafe6))
+
+
+### Bug Fixes
+
+* **page:** a trip opened on a phone keeps its way back and buttons in sight ([#319](https://github.com/xiidoz/netnou/issues/319)) ([b255b0e](https://github.com/xiidoz/netnou/commit/b255b0e4ded2aaff7903c09e9df7ad988b6a7bc3))
+* **page:** the filter checks the directions chosen instead of crossing out all others ([#323](https://github.com/xiidoz/netnou/issues/323)) ([2fbd947](https://github.com/xiidoz/netnou/commit/2fbd947235a03cff30fd5abece3deef8bc54f017))
+
 ## [0.25.1](https://github.com/xiidoz/netnou/compare/v0.25.0...v0.25.1) (2026-11-06)
 
 
