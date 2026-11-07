@@ -691,6 +691,9 @@ button:focus-visible, select:focus-visible, .row:focus-visible, .panel:focus-vis
 .choice-list { margin-top: 12px; }
 /* (as far apart, one below the other, as a finger needs: see "room for a finger") */
 .choice-lines { list-style: none; margin: 10px 0 0; padding: 0; display: grid; gap: 15px; }
+/* The kinds of the lines, where there are several (renderChoice in app.js), as in "Alle Linien". */
+.choice-list .rows-head { padding: 22px 0 0; }
+.choice-list > .rows-head:first-child { padding-top: 4px; }
 .choice-lines li { display: flex; flex-wrap: wrap; gap: 15px 6px; }
 .choice-list .chip { white-space: normal; text-align: left; }
 .choice-list .chip .direction-sign { margin: -5px -2px -5px -4px; }
@@ -987,6 +990,11 @@ summary.days-head .icon { align-self: center; width: 20px; height: 20px; color: 
    time, the platform. A row is then a finger high, 47 px. */
 .row.departure { grid-template-columns: auto minmax(0, 1fr) auto; grid-template-rows: auto auto; row-gap: 0; padding-block: 5px; }
 .row.departure > .badge { grid-column: 1; grid-row: 1 / 3; }
+/* The departures of a stop share their columns, as the board's do (departureLists in panel.js): the badges are all
+   as wide as the widest, so that a "Tram 4" beside a "Bus 4" (lineBadge) leaves the destinations in one column. */
+.rows.departures { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; }
+.rows.departures > li { display: grid; grid-column: 1 / -1; grid-template-columns: subgrid; }
+.rows.departures > li > .row.departure { grid-column: 1 / -1; grid-template-columns: subgrid; }
 .row.departure > .name { grid-row: 1; }
 .row.departure > .details { grid-row: 2; display: flex; align-items: baseline; gap: 6px; min-width: 0; overflow: hidden; color: var(--text-muted); font-size: 12.5px; white-space: nowrap; }
 .row.departure > .details > :empty { display: none; }

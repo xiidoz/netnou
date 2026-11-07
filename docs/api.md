@@ -727,7 +727,9 @@ it (#254). `path` is the address of the station's page, as
 line below its name on the page says it: `first` and `last`, the times of
 its first and last departure, `null` where nothing leaves it that day;
 `lines`, how many lines leave it that day, and `all`, how many on any day
-of the timetable. Yesterday's service day counts while its last departure
+of the timetable; `twoKinds`, the names it has that day in more than one
+kind, such as tram 4 and a bus 4 that stands in for it, whose badges on the
+page then say their kind. Yesterday's service day counts while its last departure
 after midnight is still to come.
 `cancelled` is true when the run is cancelled or skips this station. `notes`
 are notes of the feed about the station, such as a lift out of order, each

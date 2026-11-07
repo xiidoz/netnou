@@ -437,7 +437,7 @@ test('/api/departures', async () => {
   // (with its address, which the page writes into its own, #288)
   assert.deepEqual(board, { id: 'A', name: 'Alpha', town: null, lat: 49.4, lon: 11, notes: [{ title: 'Aufzug gestört', text: 'Aufzug außer Betrieb', severity: 'info' }], path: 'stop/alpha' });
   // and what leaves it on the service day (#289): one line, every hour of the day
-  assert.deepEqual([day.lines, day.last - day.first], [1, 23 * 3600]);
+  assert.deepEqual([day.lines, day.last - day.first, day.twoKinds], [1, 23 * 3600, []]);
   // one an hour from each of the runs under way: four to nine in the next two hours, and as that is fewer than ten, the next ones up to ten (#165)
   const soon = departures.filter((d) => d.planned <= now + 7200).length;
   assert.ok(soon >= 4 && soon <= 9, `${soon} departures in two hours`);
@@ -680,7 +680,7 @@ test('the address of a stop or a line is a page of its own, found again by its n
   // and behind the switch all its lines, each a link to its page (#255)
   assert.ok(page.includes('<div class="view-lines" hidden><ul class="line-rows signed"><li><a class="to-line" href="line/testbetrieb/subway/u1" aria-label="Zur Linie U1" title="Zur Linie U1" data-line='));
   // (after half past eleven the next one is tomorrow's, which a heading says before it)
-  assert.match(page, /<div id="panel-body" data-sent>(<h3 class="rows-head day-head">morgen<\/h3>)?<ul class="rows signed"><li><button type="button" class="row departure times-both" data-trip="T1_\d{8}"><span class="badge" data-mode="[a-z]+">U1<\/span><span class="name" title="[^"]+">[^<]+<\/span><span class="details"><span class="time">\d\d:\d\d<\/span>/);
+  assert.match(page, /<div id="panel-body" data-sent>(<h3 class="rows-head day-head">morgen<\/h3>)?<ul class="rows departures signed"><li><button type="button" class="row departure times-both" data-trip="T1_\d{8}"><span class="badge" data-mode="[a-z]+">U1<\/span><span class="name" title="[^"]+">[^<]+<\/span><span class="details"><span class="time">\d\d:\d\d<\/span>/);
   assert.ok(page.includes('<span class="badge" data-mode="subway">U1</span><span class="name" title="Rundkurs">Rundkurs</span>'));
   assert.ok(page.includes('<div class="site-name">Netnou</div>'));
   assert.deepEqual(page.match(/<h1\b/g), ['<h1']);

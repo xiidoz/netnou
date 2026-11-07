@@ -13,7 +13,7 @@ import { APP_NAME, READMES, chooseLanguage, dayOf, formatHour, formatList, forma
 import { FAVOURITE_NAME_ZOOM, HEART_MIDDLE, PLACES_ZOOM, RAIL_MODES, heartMark, joiningLines, mergePlaces, namePrecedence, namedAt, placeNames, stopMark, townToShow, townsAlong, withoutStyleStops } from './stops.js';
 import { favouritesFrom, isFavourite, lineFavourite, sameStop, stopFavourite, withChoice, withFavourite } from './favourites.js';
 import { choiceValue, readChoice, toggled } from './choice.js';
-import { DELAY_MAJOR_S, DELAY_MINOR_S, DELAY_SEVERE_S, MINUTES_MAX, NOTE_CHARS, badge as badgeOf, choiceChip as choiceChipOf, clockOf, delayCell as delayCellOf, delayClass, delayNode as delayNodeOf, delaySum as delaySumOf, unknownDelay as unknownDelayOf, delayFlag, delayText, departureLists, departuresSub as departuresSubOf, directionSign as directionSignOf, leavesAt, lineHead, lineLists, lineStops, lineTimetable, minutesNode as minutesNodeOf, trackAt, VEHICLE_R, panelHead as panelHeadOf, stopHeading, stopToday, tomorrowAt as tomorrowAtOf, untilText as untilTextOf, vehicleLabel, warningSign as warningSignOf, warns } from './panel.js';
+import { DELAY_MAJOR_S, DELAY_MINOR_S, DELAY_SEVERE_S, MINUTES_MAX, NOTE_CHARS, badge as badgeOf, choiceChip as choiceChipOf, clockOf, delayCell as delayCellOf, delayClass, delayNode as delayNodeOf, delaySum as delaySumOf, unknownDelay as unknownDelayOf, delayFlag, delayText, departureLists, departuresSub as departuresSubOf, directionSign as directionSignOf, leavesAt, lineBadge, lineHead, lineLists, lineSaid as lineSaidOf, lineStops, lineTimetable, minutesNode as minutesNodeOf, trackAt, twoKinds, VEHICLE_R, panelHead as panelHeadOf, stopHeading, stopToday, tomorrowAt as tomorrowAtOf, untilText as untilTextOf, vehicleLabel, warningSign as warningSignOf, warns } from './panel.js';
 import { BOARD_MAX, BOARD_SHARE, BOARD_STOPS, boardBlocks, boardQuery, boardShare, displayQuery, ledBy, readBoard, readDisplay, readStops } from './display.js';
 import { mdiChevronLeft, mdiChevronRight, mdiCityVariantOutline, mdiFullscreen, mdiFullscreenExit, mdiHeart, mdiHeartOutline, mdiMinusCircleOutline, mdiPlus } from './vendor/material-design-icons/icons.js';
 import { AttributionControl, MapLibreMap, NavigationControl } from './vendor/maplibre-gl/maplibre-gl.mjs';
@@ -853,17 +853,24 @@ function renderChoice() {
     if (last && last.mode === direction.mode && last.line === direction.line) last.directions.push(direction);
     else lines.push({ mode: direction.mode, line: direction.line, directions: [direction] });
   }
+  const line = ({ directions }) => el('li', {}, directions.map((direction) => {
+    const name = directionName(direction, list);
+    const on = all || state.lines.includes(direction.key) || state.lines.includes(direction.key.split('~')[0]);
+    const button = chip(direction.key, on, [directionSign(direction), el('span', { class: 'name', text: name })], () => applyChoice(toggled(state.lines, direction.key)));
+    button.dataset.mode = direction.mode;
+    button.setAttribute('aria-label', t('choice.direction', { line: lineSaid(direction.line, direction.mode), to: name }));
+    return button;
+  }));
+  // (under their kinds where there are several, as "Alle Linien" has them: a tram 4 and a bus 4 are not told apart by colour alone)
+  const kindOf = (mode) => (DRAW_ORDER.includes(mode) ? mode : 'other');
+  const kinds = [...new Set(lines.map(({ mode }) => kindOf(mode)))];
   node.replaceChildren(
     // (every line again, where only some are shown: while all are, it would do nothing)
     ...(all ? [] : [chip('', false, [el('span', { class: 'name', text: t('choice.all') })], () => applyChoice([]))]),
-    el('ul', { class: 'choice-lines' }, lines.map(({ directions }) => el('li', {}, directions.map((direction) => {
-      const name = directionName(direction, list);
-      const on = all || state.lines.includes(direction.key) || state.lines.includes(direction.key.split('~')[0]);
-      const button = chip(direction.key, on, [directionSign(direction), el('span', { class: 'name', text: name })], () => applyChoice(toggled(state.lines, direction.key)));
-      button.dataset.mode = direction.mode;
-      button.setAttribute('aria-label', t('choice.direction', { line: direction.line, to: name }));
-      return button;
-    })))),
+    ...kinds.flatMap((kind) => [
+      ...(kinds.length > 1 ? [el('h3', { class: 'rows-head', text: t(`mode.${kind}`) })] : []),
+      el('ul', { class: 'choice-lines' }, lines.filter(({ mode }) => kindOf(mode) === kind).map(line)),
+    ]),
   );
   if (focused !== null && focused !== undefined) node.querySelector(`[data-key="${CSS.escape(focused)}"]`)?.focus({ preventScroll: true });
 }
@@ -2770,13 +2777,9 @@ function stopTitle(name, town = null) {
   return `${t('address.stopTitle', { stop: shown ? t('address.stopWithTown', { stop: name, town: shown }) : name })} – ${siteName}`;
 }
 
-/**
- * A line as a rider says it: a name that is a number with the kind of the
- * line before it, "Tram 10", "Bus 36"; "U1" or "RE 31" as they are. As the
- * server names it (labelled in server/lib/addresses.js).
- */
+/** A line as a rider says it, "Tram 10", "U1" (lineSaid in panel.js). */
 function lineSaid(name, mode) {
-  return /^\d/.test(name) ? `${t(`address.kind.${mode}`)} ${name}` : name;
+  return lineSaidOf(name, mode, { t });
 }
 
 function lineTitle({ name, mode }) {
@@ -3468,7 +3471,7 @@ function renderTrip(trip, scrollToNext) {
   // The badge leads to the line, whichever way the trip was chosen (#147),
   // with a sign in it: a finger cannot rest on it to find out.
   const line = { name: trip.line, mode: trip.mode, agency: trip.agency, at: trip.lineAt };
-  const toLine = el('button', { type: 'button', class: 'to-line', 'aria-label': t('line.open', { line: trip.line }), title: t('line.open', { line: trip.line }), onclick: () => selectLine(line, { fromTrip: trip.id, from: sheetName() }) }, [
+  const toLine = el('button', { type: 'button', class: 'to-line', 'aria-label': t('line.open', { line: lineSaid(trip.line, trip.mode) }), title: t('line.open', { line: lineSaid(trip.line, trip.mode) }), onclick: () => selectLine(line, { fromTrip: trip.id, from: sheetName() }) }, [
     badge(trip.line, trip.mode, icon(mdiChevronRight)),
   ]);
   fillPanel(
@@ -4014,7 +4017,7 @@ function addStop(blocks) {
 }
 
 /** One departure on a board; in a list of several stops, with the stop it leaves from under where it goes. */
-function boardRow(dep, times, from = null) {
+function boardRow(dep, times, from = null, both = false) {
   // (a delay shows where there is one: on time the board says nothing; with none reported while delays come in for
   // others, the map's question mark, which tells it from one on time)
   const delay = Math.round((dep.delay ?? 0) / 60) === 0 ? null : dep.delay;
@@ -4033,7 +4036,7 @@ function boardRow(dep, times, from = null) {
     ? el('span', { class: 'name', text: dep.to })
     : el('span', { class: 'name from' }, [el('span', { class: 'to', text: dep.to }), el('span', { class: 'stop', text: t('board.from', { stop: from }) })]);
   return el('li', { class: dep.cancelled ? 'cancelled' : '' }, [
-    badge(dep.line, dep.mode),
+    toDom(lineBadge(dep.line, dep.mode, drawing(), both)),
     name,
     el('span', { class: 'platform', text: platformText(dep.platform) }),
     el('span', { class: `when times-${times}` }, when),
@@ -4049,7 +4052,9 @@ function blockRows(block, times) {
   const { rows: from } = namesOf(block);
   const merged = shown.length > 1;
   const departures = merged ? mergedDepartures(shown) : shown[0].known.departures.departures.map((dep) => ({ dep, from: null }));
-  const rows = departures.map((each) => boardRow(each.dep, times, merged ? from[block.indexOf(each.from)] : null));
+  // (the badges of a name the block's stops have in two kinds say their kind)
+  const kinds = twoKinds(shown.map((entry) => entry.known.departures.today), departures.map(({ dep }) => dep));
+  const rows = departures.map((each) => boardRow(each.dep, times, merged ? from[block.indexOf(each.from)] : null, kinds.has(each.dep.line)));
   // (where the next day begins, a line across the board says so)
   const split = tomorrowAt(departures.map(({ dep }) => dep));
   if (split >= 0) rows.splice(split, 0, el('li', { class: 'day' }, [el('span', { text: t('departures.tomorrow') })]));

@@ -79,6 +79,48 @@ export function delayText(delay) {
 /** The name of a line on the colour of its kind (style.css gives the colour by data-mode). */
 export const badge = (line, mode, ...more) => h('span', { class: 'badge', 'data-mode': kindOf(mode) }, line, ...more);
 
+/**
+ * A line as a rider says it: a name that is a number with the kind of the
+ * line before it, "Tram 10", "Bus 36"; "U1" or "RE 31" as they are, as the
+ * server names it (labelled in server/lib/addresses.js). Where its stop has
+ * the name in two kinds (`both`), with the kind whatever the name is: a bus
+ * named U1 that stands in for the U-Bahn is "Bus U1".
+ */
+export const lineSaid = (name, mode, { t }, both = false) => (both || /^\d/.test(name) ? `${t(`address.kind.${kindOf(mode)}`)} ${name}` : name);
+
+/**
+ * The badge of a line in a list of departures: where its stop has the name
+ * in two kinds (`both`), such as tram 4 and a bus 4 that stands in for it,
+ * with the short name of its kind before the name, "Tram 4" and "Bus 4", as
+ * colour alone would not tell them apart; not where the name begins with it
+ * already ("U1"). A screen reader hears the line as a rider says it (lineSaid).
+ */
+export function lineBadge(name, mode, context, both = false) {
+  const short = both ? context.t(`badge.kind.${kindOf(mode)}`) : '';
+  const shown = short && !name.startsWith(short) ? `${short} ${name}` : name;
+  const said = lineSaid(name, mode, context, both);
+  return said === shown ? badge(shown, mode) : badge([], mode, h('span', { 'aria-hidden': 'true' }, shown), h('span', { class: 'spoken' }, said));
+}
+
+/**
+ * The names whose badges say their kind (lineBadge) in departures from one
+ * stop or several: those each stop has that day in more than one kind (its
+ * `today.twoKinds` from api/departures), and those the departures show in
+ * more than one, as where one stop of several has the tram and another the
+ * bus, or after midnight.
+ * @param todays the `today` of each stop, or null
+ */
+export function twoKinds(todays, departures) {
+  const names = new Set(todays.flatMap((today) => today?.twoKinds ?? []));
+  const kinds = new Map();
+  for (const { line, mode } of departures) {
+    if (!kinds.has(line)) kinds.set(line, new Set());
+    kinds.get(line).add(kindOf(mode));
+  }
+  for (const [name, modes] of kinds) if (modes.size > 1) names.add(name);
+  return names;
+}
+
 export const delayNode = (delay) => h('span', { class: 'delay', 'data-delay': delayClass(delay) }, delayText(delay));
 
 /**
@@ -200,10 +242,12 @@ export function tomorrowAt(departures, { day, now }) {
 export function departureLists(board, context) {
   const { t } = context;
   const signed = board.departures.some((dep) => dep.warnings.length > 0);
-  const rows = board.departures.map((dep) => h('li', {}, departureRow(dep, signed, context)));
+  // (the badges of a name the stop has in two kinds say their kind)
+  const withKinds = { ...context, twoKinds: twoKinds([board.today], board.departures) };
+  const rows = board.departures.map((dep) => h('li', {}, departureRow(dep, signed, withKinds)));
   // (the 24 hours the text speaks of are the furthest departures() in server/lib/timetable.js looks)
   if (!rows.length) return [h('p', { class: 'panel-empty' }, t('departures.none'))];
-  const list = (part) => h('ul', { class: `rows${signed ? ' signed' : ''}` }, part);
+  const list = (part) => h('ul', { class: `rows departures${signed ? ' signed' : ''}` }, part);
   const split = tomorrowAt(board.departures, context);
   if (split < 0) return [list(rows)];
   return [split > 0 ? list(rows.slice(0, split)) : null, h('h3', { class: 'rows-head day-head' }, t('departures.tomorrow')), list(rows.slice(split))].filter(Boolean);
@@ -217,7 +261,8 @@ export function departureLists(board, context) {
  * minutes stand on the right, the delay as a sum with the planned time
  * (delaySum; beside minutes alone), and the platform. Without a delay
  * reported while delays come in for others (`live`), the map's question
- * mark (unknownDelay).
+ * mark (unknownDelay). The badge says the kind where the stop has the line's
+ * name in two kinds (context.twoKinds, lineBadge).
  * @param signed whether a train of its list has something wrong with it (delayCell)
  * @param byLine whether it is the next departure of a way in the list of a
  *   stop's lines (lineLists): without the badge, which its line has, and
@@ -233,7 +278,7 @@ function departureRow(dep, signed, context, byLine = false) {
     : times === 'time' ? leaves()
       : minutesNode(dep, times === 'minutes' ? 'time' : 'none', context);
   return h('button', { type: 'button', class: `row departure times-${times}${byLine ? ' by-line' : ''}${dep.cancelled ? ' cancelled' : ''}`, 'data-trip': dep.trip },
-    byLine ? null : badge(dep.line, dep.mode),
+    byLine ? null : lineBadge(dep.line, dep.mode, context, context.twoKinds?.has(dep.line)),
     h('span', { class: 'name', title: dep.to }, dep.to),
     h('span', { class: 'details' },
       times === 'both' || later ? leaves() : null,
@@ -251,8 +296,8 @@ function departureRow(dep, signed, context, byLine = false) {
  * its details instead, by what data-line says of it.
  * @param line { name, mode, agency, at, path } as api/departures?list=lines has it
  */
-export function lineLink(line, { t }) {
-  const label = t('line.open', { line: line.name });
+export function lineLink(line, context) {
+  const label = context.t('line.open', { line: lineSaid(line.name, line.mode, context) });
   const { name, mode, agency, at } = line;
   return h('a', { class: 'to-line', href: line.path, 'aria-label': label, title: label, 'data-line': JSON.stringify({ name, mode, agency, at }) },
     badge(line.name, line.mode, iconOf(mdiChevronRight)));

@@ -18,7 +18,7 @@ const read = (file) => fs.readFileSync(new URL(file, publicDir), 'utf8');
 
 // Keys that are put together while the page runs, by what they start with. The
 // rest of each is checked where it comes from (mode.<id>: see the mode ids below).
-const DYNAMIC_KEYS = ['mode.', 'address.kind.'];
+const DYNAMIC_KEYS = ['mode.', 'address.kind.', 'badge.kind.'];
 
 // A comment or a string literal. Good enough for the code as it is written
 // here: no regular expression in it contains a quote or two slashes, and no
@@ -456,6 +456,8 @@ test('the mode ids of the server, the page, the style sheet and the texts are th
   assert.deepEqual(arrayIn(app, 'DRAW_ORDER').sort(), expected, 'DRAW_ORDER in app.js');
   assert.deepEqual([...new Set([...read('style.css').matchAll(/^\s*--mode-([a-z]+):/gm)].map((match) => match[1]))].sort(), expected, '--mode-* in style.css');
   assert.deepEqual(Object.keys(en).filter((key) => key.startsWith('mode.')).map((key) => key.slice('mode.'.length)).sort(), expected, 'mode.* in locales/en.js');
+  // (each with the short name its badges have where a stop has a name in two kinds)
+  assert.deepEqual(Object.keys(en).filter((key) => key.startsWith('badge.kind.')).map((key) => key.slice('badge.kind.'.length)).sort(), expected, 'badge.kind.* in locales/en.js');
   for (const mode of arrayIn(app, 'MODES')) assert.ok(MODES.includes(mode), `${mode} in MODES of app.js`);
   for (const mode of arrayIn(read('stops.js'), 'RAIL_MODES')) assert.ok(MODES.includes(mode), `${mode} in RAIL_MODES of stops.js`);
 });
