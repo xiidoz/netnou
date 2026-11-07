@@ -398,7 +398,7 @@ test('/api/trip', async () => {
   assert.equal(stops.length, 102);
   assert.equal(line.length, 101 * 4); // no route geometry: a straight line per hop
   const dayStart = Date.parse(`${today.slice(0, 4)}-${today.slice(4, 6)}-${today.slice(6)}T00:00:00Z`) / 1000;
-  assert.deepEqual(stops[1], { station: 'B', name: 'Beta', town: null, platform: '', lat: 49.5, lon: 11, arr: dayStart + 1800, dep: dayStart + 1800, arrDelay: 120, depDelay: 120, skipped: false, to: 'Rundkurs' });
+  assert.deepEqual(stops[1], { station: 'B', name: 'Beta', modes: ['subway', 'longdistance'], town: null, platform: '', lat: 49.5, lon: 11, arr: dayStart + 1800, dep: dayStart + 1800, arrDelay: 120, depDelay: 120, skipped: false, to: 'Rundkurs' });
 
   // yesterday's run has no delays; notes and source belong to the trip, whatever the day
   const { json: yesterday } = await get(`/api/trip?id=T1_${addDays(today, -1)}`);
@@ -726,7 +726,7 @@ test('the address of a stop or a line is a page of its own, found again by its n
   // after its stops its timetable of the coming days, alike as far as the timetable goes (#289), its heading before it
   assert.match(line, /<\/div><h2 class="timetable-head"><button type="button" class="to-timetable"><span class="what"><span class="title">Fahrplan der nächsten 7 Tage<\/span><span class="from">ab Alpha<\/span><\/span><svg [^>]*><path [^>]*><\/path><\/svg><\/button><\/h2><section class="line-timetable"><ul class="timetable-days">(<li><div class="days-head"><span class="when">[^<]+(<span class="today">heute<\/span>)?<\/span><span class="said"><span class="span">00:00–00:00<\/span><span class="often">1 Fahrt<\/span><\/span><\/div><\/li>)+<\/ul><div class="along"><p>3[,.]?030 Min\. von Ende zu Ende · 102 Haltestellen<\/p><\/div><\/section>/);
   assert.ok(line.includes('<div id="panel-body" data-sent><div class="line-body"><ul class="line-stops" data-mode="subway"><li class="on-line station first"><a class="row on-line" href="stop/alpha" data-station="A" title="Alpha">'));
-  assert.equal(line.match(/<g class="line-vehicle" transform="translate\(36\.0 [\d.]+\)" data-trip="T1_\d{8}" role="button" tabindex="0" aria-label="U1 nach Rundkurs[^"]*" data-mode="subway" data-track="[\d.,]+">/g).length, 2);
+  assert.equal(line.match(/<g class="line-vehicle" transform="translate\(30\.0 [\d.]+\)" data-trip="T1_\d{8}" role="button" tabindex="0" aria-label="U1 nach Rundkurs[^"]*" data-mode="subway" data-track="[\d.,]+">/g).length, 2);
   const otherKind = await request('/line/testbetrieb/bus/u1');
   assert.equal(otherKind.status, 404);
   assert.ok(otherKind.body.toString().includes('Diese Linie ist nicht im Fahrplan.'));

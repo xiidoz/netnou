@@ -836,40 +836,28 @@ button:focus-visible, select:focus-visible, .row:focus-visible, .panel:focus-vis
 .line-stops[data-mode="cable"] { --rail: var(--mode-cable); }
 .line-stops ul { list-style: none; margin: 0; padding: 0; }
 .row.on-line { grid-template-columns: 44px minmax(0, 1fr); height: 32px; padding-block: 0; color: inherit; text-decoration: none; }
-.row.on-line.in-town { height: 44px; }
+.row.on-line.in-town, .row.on-line.tall { height: 44px; }
 .row.on-line > .name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .on-line .rail { position: relative; align-self: stretch; }
-.on-line .rail::before { content: ""; position: absolute; left: 20.5px; top: 0; bottom: 0; width: 3px; background: var(--rail); opacity: 0.85; }
+.on-line .rail::before { content: ""; position: absolute; left: 14.5px; top: 0; bottom: 0; width: 3px; background: var(--rail); opacity: 0.85; }
 .on-line.first > .row .rail::before { top: 50%; }
 .on-line.last > .row .rail::before { bottom: 50%; }
-.on-line .rail::after {
-  content: "";
-  position: absolute;
-  left: 17px;
-  top: 50%;
-  width: 7px;
-  height: 7px;
-  margin-top: -5.5px;
-  border-radius: 50%;
-  background: var(--bg);
-  border: 2px solid var(--rail);
-}
 /* The line beside a branch, not beside one that is apart from it: in the background of each of its rows, over the colour
    a row has under the pointer, as a row of the line keeps its own (a line beside them would be covered by it). */
-.line-stops .branch-part:not(.apart) .row.on-line { background-image: linear-gradient(color-mix(in srgb, var(--rail) 85%, transparent) 0 0); background-repeat: no-repeat; background-position: 34.5px 0; background-size: 3px 100%; }
+.line-stops .branch-part:not(.apart) .row.on-line { background-image: linear-gradient(color-mix(in srgb, var(--rail) 85%, transparent) 0 0); background-repeat: no-repeat; background-position: 28.5px 0; background-size: 3px 100%; }
 .line-stops .branch { position: relative; }
-.line-stops .branch .row.on-line { padding-left: 32px; }
-.line-stops .branch::before, .line-stops .branch::after { content: ""; position: absolute; box-sizing: border-box; left: 34.5px; width: 21px; height: 34px; border: 0 solid var(--rail); opacity: 0.85; }
+.line-stops .branch .row.on-line { padding-left: 42px; }
+.line-stops .branch::before, .line-stops .branch::after { content: ""; position: absolute; box-sizing: border-box; left: 28.5px; width: 31px; height: 34px; border: 0 solid var(--rail); opacity: 0.85; }
 /* (one that leaves curves off the line above its first stop, one that joins curves into it below its last) */
 .line-stops .leaves > .branch::before { top: -16px; border-width: 3px 3px 0 0; border-top-right-radius: 16px; }
 .line-stops .joins > .branch::after { bottom: -16px; border-width: 0 3px 3px 0; border-bottom-right-radius: 16px; }
 /* The vehicles on it, as the map draws them (lineVehicle in panel.js): in
    the colour of their kind, or of their delay where the map has them so,
    with white edges and the flag of their delay. */
-svg.line-vehicles { position: absolute; left: 0; top: 0; width: 100%; overflow: visible; pointer-events: none; }
+svg.line-vehicles { position: absolute; z-index: 2; left: 0; top: 0; width: 100%; overflow: visible; pointer-events: none; }
 /* (in the page, drawn on a canvas over the line of the list as the map draws them, which moves them smoothly in
    every browser, each under a button that cannot be seen; drawLineVehicles in app.js, LINE_CANVAS_PX its width) */
-div.line-vehicles { position: absolute; left: 0; top: 0; bottom: 0; width: 100px; pointer-events: none; }
+div.line-vehicles { position: absolute; z-index: 2; left: 0; top: 0; bottom: 0; width: 100px; pointer-events: none; }
 canvas.line-canvas { display: block; width: 100%; height: 100%; }
 button.line-vehicle { position: absolute; left: -18px; top: -18px; width: 36px; height: 36px; padding: 0; border: 0; border-radius: 50%; background: none; opacity: 0; pointer-events: auto; }
 .line-vehicle { pointer-events: auto; cursor: pointer; --sign: var(--mode-other); }
@@ -1014,7 +1002,9 @@ summary.days-head .icon { align-self: center; width: 20px; height: 20px; color: 
 .row.departure .late .delay { width: auto; }
 .row.departure > :is(.minutes, .time, .day, .later) { grid-column: -2; grid-row: 1 / 3; justify-self: end; }
 .row.departure > .time { font-weight: 650; }
-.row.stop { grid-template-columns: 14px var(--time-width) var(--late-width) 1fr auto; }
+.row.stop { grid-template-columns: 32px var(--time-width) var(--late-width) 1fr auto; }
+/* (a stop whose mark needs it as high as one with its town below its name) */
+.row.stop.tall { min-height: 44px; }
 .row.stop.past { color: var(--text-muted); }
 .row.stop.next .name { font-weight: 650; }
 
@@ -1023,7 +1013,7 @@ summary.days-head .icon { align-self: center; width: 20px; height: 20px; color: 
 .row.stop .rail::before {
   content: "";
   position: absolute;
-  left: 5px;
+  left: 14.5px;
   top: -6px;
   bottom: -6px;
   width: 3px;
@@ -1032,20 +1022,23 @@ summary.days-head .icon { align-self: center; width: 20px; height: 20px; color: 
 }
 li:first-child > .row.stop .rail::before { top: 50%; }
 li:last-child > .row.stop .rail::before { bottom: 50%; }
-.row.stop .rail::after {
-  content: "";
-  position: absolute;
-  left: 1px;
-  top: 50%;
-  width: 7px;
-  height: 7px;
-  margin-top: -5.5px;
-  border-radius: 50%;
-  background: var(--bg);
-  border: 2px solid var(--badge-color);
-}
-.row.stop.past .rail::before, .row.stop.past .rail::after { opacity: 0.4; }
-.row.stop.next .rail::after { background: var(--badge-color); }
+/* The stops on the line of a trip or of a line as the map draws them
+   (stopSign in panel.js, drawStop in app.js): a white pill, or a white heart
+   for a favourite, with a dot for each kind that calls there, the same in
+   both themes, as on the map. Those passed and those skipped faded. */
+.rail .stop-sign { position: absolute; left: 16px; top: 50%; z-index: 1; overflow: visible; transform: translate(-50%, -50%); }
+.stop-sign .edge { fill: #fff; stroke: var(--stop-edge); stroke-width: 1.5px; stroke-linejoin: round; vector-effect: non-scaling-stroke; }
+.stop-sign circle { fill: var(--mode-other); }
+.stop-sign circle[data-mode="subway"] { fill: var(--mode-subway); }
+.stop-sign circle[data-mode="tram"] { fill: var(--mode-tram); }
+.stop-sign circle[data-mode="bus"] { fill: var(--mode-bus); }
+.stop-sign circle[data-mode="suburban"] { fill: var(--mode-suburban); }
+.stop-sign circle[data-mode="regional"] { fill: var(--mode-regional); }
+.stop-sign circle[data-mode="longdistance"] { fill: var(--mode-longdistance); }
+.stop-sign circle[data-mode="ferry"] { fill: var(--mode-ferry); }
+.stop-sign circle[data-mode="cable"] { fill: var(--mode-cable); }
+.row.stop.past .stop-sign, .row.stop.cancelled .stop-sign { opacity: 0.45; }
+.row.stop.past .rail::before { opacity: 0.4; }
 
 /* As text a delay is one class "hotter" than as a dot: the yellow is too pale to read on the card. */
 .delay { font-size: 12.5px; font-weight: 650; font-variant-numeric: tabular-nums; white-space: nowrap; }

@@ -13,7 +13,7 @@ import { APP_NAME, READMES, chooseLanguage, dayOf, formatHour, formatList, forma
 import { FAVOURITE_NAME_ZOOM, HEART_MIDDLE, PLACES_ZOOM, RAIL_MODES, heartMark, joiningLines, mergePlaces, namePrecedence, namedAt, placeNames, stopMark, townToShow, townsAlong, withoutStyleStops } from './stops.js';
 import { favouritesFrom, isFavourite, lineFavourite, sameStop, stopFavourite, withChoice, withFavourite } from './favourites.js';
 import { choiceValue, readChoice, toggled } from './choice.js';
-import { DELAY_MAJOR_S, DELAY_MINOR_S, DELAY_SEVERE_S, MINUTES_MAX, NOTE_CHARS, badge as badgeOf, choiceChip as choiceChipOf, clockOf, delayCell as delayCellOf, delayClass, delayNode as delayNodeOf, delaySum as delaySumOf, unknownDelay as unknownDelayOf, delayFlag, delayText, departureLists, departuresSub as departuresSubOf, directionSign as directionSignOf, leavesAt, lineBadge, lineHead, lineLists, lineSaid as lineSaidOf, lineStops, lineTimetable, minutesNode as minutesNodeOf, trackAt, twoKinds, VEHICLE_R, panelHead as panelHeadOf, stopHeading, stopToday, tomorrowAt as tomorrowAtOf, untilText as untilTextOf, vehicleLabel, warningSign as warningSignOf, warns } from './panel.js';
+import { DELAY_MAJOR_S, DELAY_MINOR_S, DELAY_SEVERE_S, MINUTES_MAX, NOTE_CHARS, badge as badgeOf, choiceChip as choiceChipOf, clockOf, delayCell as delayCellOf, delayClass, delayNode as delayNodeOf, delaySum as delaySumOf, unknownDelay as unknownDelayOf, delayFlag, delayText, departureLists, departuresSub as departuresSubOf, directionSign as directionSignOf, leavesAt, lineBadge, lineHead, lineLists, lineSaid as lineSaidOf, lineStops, lineTimetable, minutesNode as minutesNodeOf, twoKinds, vehicleSpot, VEHICLE_R, panelHead as panelHeadOf, stopHeading, stopSaid, stopSign, stopToday, tallMark, tomorrowAt as tomorrowAtOf, untilText as untilTextOf, vehicleLabel, warningSign as warningSignOf, warns } from './panel.js';
 import { BOARD_MAX, BOARD_SHARE, BOARD_STOPS, boardBlocks, boardQuery, boardShare, displayQuery, ledBy, readBoard, readDisplay, readStops } from './display.js';
 import { mdiArrowCollapse, mdiArrowExpand, mdiCheck, mdiChevronLeft, mdiChevronRight, mdiCityVariantOutline, mdiFullscreen, mdiFullscreenExit, mdiHeart, mdiHeartOutline, mdiMinusCircleOutline, mdiPlus } from './vendor/material-design-icons/icons.js';
 import { AttributionControl, MapLibreMap, NavigationControl } from './vendor/maplibre-gl/maplibre-gl.mjs';
@@ -182,7 +182,7 @@ function toDom(node, svg = false) {
  * whether delays come in and how the vehicles are coloured and flagged.
  */
 function drawing() {
-  return { t, time: formatTime, day: dayOf, hour: formatHour, weekday: formatWeekday, list: formatList, now: now(), times: state.times, live: realtimeState() === 'live', colorBy: state.colorBy, flags: state.flags, moving: true };
+  return { t, time: formatTime, day: dayOf, hour: formatHour, weekday: formatWeekday, list: formatList, now: now(), times: state.times, live: realtimeState() === 'live', colorBy: state.colorBy, flags: state.flags, moving: true, favourite: favouriteStop };
 }
 
 // The icons on the page's own buttons are from Material Design Icons
@@ -1651,18 +1651,18 @@ function drawLineVehicles(paper) {
   const live = realtimeState() === 'live';
   const at = now();
   let focused = null;
-  for (const node of paper.parentNode.querySelectorAll('button.line-vehicle')) {
+  for (const node of paper.parentNode.querySelectorAll('.line-vehicle')) {
     if (!lineTracks.has(node)) lineTracks.set(node, node.dataset.track ? node.dataset.track.split(',').map(Number) : [0, ...node.dataset.at.split(',').map(Number)]);
-    const [x, y] = trackAt(lineTracks.get(node), at);
+    const { x, y, standing } = vehicleSpot(lineTracks.get(node), at);
     // (its button where it is: one that cannot be seen may well go by whole pixels)
     node.style.transform = `translate(${x.toFixed(1)}px, ${y.toFixed(1)}px)`;
     const v = { mode: node.dataset.mode, delay: node.dataset.late === undefined ? null : Number(node.dataset.late), label: node.dataset.label };
     c.strokeStyle = '#fff';
     c.fillStyle = vehicleColor(v);
     c.lineWidth = 1.5;
-    drawArrow(x, y, VEHICLE_R, Math.PI / 2, c);
+    if (!standing) drawArrow(x, y, VEHICLE_R, Math.PI / 2, c);
     drawDisc(x, y, VEHICLE_R, v, true, c);
-    const flag = flagOf(v, live);
+    const flag = node.dataset.flag === 'none' ? null : flagOf(v, live);
     const width = flag ? drawFlag(x + VEHICLE_R * 0.55, y - VEHICLE_R - 5, flag, c) : 0;
     if (node.matches(':focus-visible')) focused = { x, y, width };
   }
@@ -2970,6 +2970,11 @@ function showBoardButton() {
 const favouriteButton = $('panel-favourite');
 const favouriteNote = $('panel-favourited');
 
+/** Whether a stop of a list (a trip's, a line's: with its name and place) is a favourite, which it then draws as a heart. */
+function favouriteStop(stop) {
+  return stop.lat !== undefined && isFavourite(favourites, 'stops', stop);
+}
+
 /** What is open as it is kept as a favourite: { kind, item } of a stop or a line, else null. */
 function openFavourite() {
   const selection = state.selection;
@@ -3454,6 +3459,40 @@ function showNotes(notes, heading, from) {
   $('notes-text').parentNode.scrollTop = 0;
 }
 
+/**
+ * The track of the vehicle of a trip on the line of its stops [time, x, y,
+ * …], as the line card's have theirs (lineStops in panel.js): at each stop it
+ * calls at from when it arrives to when it leaves, as its delays have it,
+ * where its row is laid out; then drawn with the frames.
+ */
+function placeTripVehicle(trip, vehicle, body, stopRows) {
+  const box = body.getBoundingClientRect();
+  const track = [];
+  trip.stops.forEach((stop, i) => {
+    const row = stopRows[i];
+    if (stop.skipped || !row) return;
+    const rail = row.querySelector('.rail').getBoundingClientRect();
+    const r = row.getBoundingClientRect();
+    const x = Math.round((rail.left + rail.width / 2 - box.left) * 10) / 10;
+    const y = Math.round((r.top + r.height / 2 - box.top) * 10) / 10;
+    const arrives = stop.arr + (stop.arrDelay ?? stop.depDelay ?? 0);
+    const leaves = Math.max(arrives, stop.dep + (stop.depDelay ?? stop.arrDelay ?? 0));
+    track.push(arrives, x, y, leaves, x, y);
+  });
+  if (!track.length) return;
+  vehicle.dataset.track = track.join(',');
+  // (its colour by its delay, where the vehicles are coloured so: that at its next stop)
+  const next = trip.stops.find((stop, i) => stopRows[i]?.classList.contains('next'));
+  const late = next ? (next.arrDelay ?? next.depDelay) : null;
+  if (late !== null && late !== undefined) vehicle.dataset.late = String(late);
+  const paper = lineCanvas();
+  if (paper) {
+    fitLineCanvas(paper);
+    drawLineVehicles(paper);
+    nextFrame();
+  }
+}
+
 function renderTrip(trip, scrollToNext) {
   const scrollTop = panelBody.scrollTop;
   const lastIndex = trip.stops.length - 1;
@@ -3463,6 +3502,9 @@ function renderTrip(trip, scrollToNext) {
   let to = trip.stops[lastIndex].to;
   // the town of a stop whose name does not say it, below the name as in the search (#246)
   const towns = townsAlong(trip.stops);
+  const drawn = drawing();
+  // (the row of each stop, for where its vehicle is drawn)
+  const stopRows = [];
 
   const rows = trip.stops.map((stop, i) => {
     const isLast = i === lastIndex;
@@ -3480,19 +3522,32 @@ function renderTrip(trip, scrollToNext) {
     if (isNext) classes.push('next');
     if (stop.skipped) classes.push('cancelled');
     if (towns[i]) classes.push('in-town');
+    // (the stop on the line as the map draws it, its kinds and a favourite's heart; its row as high as its mark needs)
+    const favourite = favouriteStop(stop);
+    if (!towns[i] && tallMark(stop.modes, trip.mode)) classes.push('tall');
+    const said = `${stopSaid(stop.modes, trip.mode, favourite, drawn)}${isNext ? `, ${t('trip.next')}` : ''}`;
     const row = el('button', { type: 'button', class: classes.join(' '), onclick: () => select('station', stop.station, { from: sheetName() }) }, [
-      el('span', { class: 'rail' }),
+      el('span', { class: 'rail' }, [toDom(stopSign(stop.modes, trip.mode, favourite))]),
       el('span', { class: 'time', text: formatTime(leavesAt({ planned, delay })) }),
       stop.skipped ? el('span') : delaySum(planned, delay),
       nameInTown(stop.name, towns[i], { title: stop.name }),
+      ...(said ? [el('span', { class: 'spoken', text: said })] : []),
       el('span', { class: 'platform', text: stop.skipped ? t('stop.skipped') : platformText(stop.platform) }),
     ]);
+    stopRows[i] = row;
     if (isNext) nextRow = row;
     return el('li', {}, [row]);
   });
 
   const list = el('ul', { class: 'rows' }, rows);
   list.style.setProperty('--badge-color', `var(--mode-${trip.mode})`);
+  // The vehicle on the line of its stops, as the line card draws its own
+  // (drawLineVehicles): its disc on a stop or halfway between two, moving
+  // with the time; no flag, as each row says its delay. Not where it is not
+  // under way: cancelled, or past its last stop.
+  const moving = !trip.cancelled && nextRow !== null;
+  const vehicle = moving ? el('span', { class: 'line-vehicle', 'aria-hidden': 'true', data: { mode: DRAW_ORDER.includes(trip.mode) ? trip.mode : 'other', label: vehicleLabel(trip.line), flag: 'none' } }) : null;
+  const body = el('div', { class: 'line-body' }, [list, ...(vehicle ? [el('div', { class: 'line-vehicles' }, [el('canvas', { class: 'line-canvas', 'aria-hidden': 'true' }), vehicle])] : [])]);
   const mode = t(`mode.${DRAW_ORDER.includes(trip.mode) ? trip.mode : 'other'}`);
   // Who provides the realtime data shown leads the notes, which are feed
   // content and stay as they are – where that is another than the operator
@@ -3514,8 +3569,9 @@ function renderTrip(trip, scrollToNext) {
         notesList(trip.notes, source, trip.cancelled ? t('trip.cancelled') : null),
       ]),
     ],
-    list,
+    body,
   );
+  if (vehicle) placeTripVehicle(trip, vehicle, body, stopRows);
   // (the next stop in the middle of the list: the list scrolled alone, as scrollIntoView would scroll the sheet around it
   // as well, and on a phone push its head, the way back and its buttons, out above its top)
   if (scrollToNext) {

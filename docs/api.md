@@ -501,9 +501,9 @@ way they go.
   {
     "to": "Langwasser Süd",
     "stops": [
-      { "id": "1041", "name": "Fürth Hardhöhe", "town": "Fürth", "path": "stop/fuerth-hardhoehe", "start": false, "end": false },
+      { "id": "1041", "name": "Fürth Hardhöhe", "town": "Fürth", "path": "stop/fuerth-hardhoehe", "modes": ["subway", "bus"], "lat": 49.48352, "lon": 10.96339, "start": false, "end": false },
       …,
-      { "id": "384784", "name": "Nürnberg Eberhardshof", "town": "Nürnberg", "path": "stop/nuernberg-eberhardshof", "start": true, "end": false },
+      { "id": "384784", "name": "Nürnberg Eberhardshof", "town": "Nürnberg", "path": "stop/nuernberg-eberhardshof", "modes": ["subway", "bus"], "lat": 49.45573, "lon": 11.03564, "start": true, "end": false },
       …
     ],
     "branches": [],
@@ -519,6 +519,8 @@ way they go.
 
 | Field | Type | Meaning |
 | --- | --- | --- |
+| `stops[].modes` | array of strings | the [modes](#modes) that call at the station, in the order of that table, which the page draws it with as the map does: empty where it is beyond the area |
+| `stops[].lat`, `lon` | number | where the station is, which the page knows a favourite by |
 | `stops[].start`, `end` | boolean | whether at least a twentieth of the trips of the direction start or end there, on the way: at its first and last stops they all do |
 | `branches[].after`, `before` | integer or `null` | the place in `stops` of the station the branch leaves the line after, and of the one it joins it before; `null` where it does not |
 | `branches[].stops` | array | its stations, as in `stops` without `start` and `end` |
@@ -624,9 +626,9 @@ address where visits are counted ([Counting visits](configuration.md#counting-vi
   "address": "trip/verkehrsag-nuernberg/tram/10/2026-10-04/1546-nuernberg-am-wegfeld",
   "path": [49.49253, 11.05405, 49.49195, 11.0543, 49.49181, 11.05421, …],
   "stops": [
-    { "station": "637231", "name": "Nürnberg Am Wegfeld", "town": "Nürnberg", "platform": "", "lat": 49.492527, "lon": 11.05403,
+    { "station": "637231", "name": "Nürnberg Am Wegfeld", "modes": ["tram", "bus"], "town": "Nürnberg", "platform": "", "lat": 49.492527, "lon": 11.05403,
       "arr": 1791147960, "dep": 1791147960, "arrDelay": null, "depDelay": null, "skipped": false, "to": "Dutzendteich" },
-    { "station": "56536", "name": "Nürnberg Bamberger Str.", "town": "Nürnberg", "platform": "", "lat": 49.483826, "lon": 11.059016,
+    { "station": "56536", "name": "Nürnberg Bamberger Str.", "modes": ["tram", "bus"], "town": "Nürnberg", "platform": "", "lat": 49.483826, "lon": 11.059016,
       "arr": 1791148080, "dep": 1791148080, "arrDelay": 41, "depDelay": 41, "skipped": false, "to": "Dutzendteich" },
     …
   ]
@@ -647,6 +649,7 @@ address where visits are counted ([Counting visits](configuration.md#counting-vi
 | `path` | array of numbers | the whole route as a flat list `lat, lon, lat, lon, …` |
 | `stops[].station` | string | id for `/api/departures` |
 | `stops[].name`, `platform` | string | name of the stop; platform, `""` if unknown |
+| `stops[].modes` | array of strings | the [modes](#modes) that call at its station, in the order of that table, which the page draws it with as the map does: empty where it is beyond the area |
 | `stops[].town` | string or null | the town its station is in, as in [`/api/search`](#get-apisearch); `null` where none is known. The page shows it below the name where the trip runs through more than one town and the name does not say it |
 | `stops[].arr`, `dep` | time | arrival and departure according to the timetable |
 | `stops[].arrDelay`, `depDelay` | delay or null | reported delays; `null` where nothing is known. Where the trip runs coupled with others, the delays all of them share (see `unit` of [`/api/vehicles`](#get-apivehicles)) |
