@@ -215,6 +215,7 @@ export default {
 
   'trip.realtime': 'with delay data',
   'trip.scheduleOnly': 'timetable only',
+  'trip.next': 'next stop',
   // {source} is the operator the delay data of the trip comes from (not who caused the delay)
   'trip.source': 'Delay data from {source}',
   'trip.cancelled': 'Trip cancelled',

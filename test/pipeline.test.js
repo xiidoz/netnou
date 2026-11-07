@@ -853,7 +853,7 @@ test('a line has its stops in each direction, and its vehicles between them (#25
   const beta = timetable.departures('B', at('09:50'), null).departures.find((dep) => dep.line === 'U1').to;
   const [there, back] = timetable.lineStops(u1, [], pathOf);
   assert.deepEqual([there.to, names(there), back.to, names(back)], [beta, ['Alpha', 'Beta, Markt', 'Gamma'], 'Alpha', ['Gamma', 'Alpha']]);
-  assert.deepEqual(there.stops[0], { id: 'SA', name: 'Alpha', town: null, path: 'stop/alpha', start: false, end: false });
+  assert.deepEqual(there.stops[0], { id: 'SA', name: 'Alpha', town: null, path: 'stop/alpha', modes: ['subway'], lat: 49.4, lon: 11, start: false, end: false });
   assert.deepEqual([timetable.wayOfTrip(u1, trip('T1')), timetable.wayOfTrip(u1, trip('T4'))], [0, 1]);
   // at 10:15 T1 has left Beta at 10:12 for Gamma at 10:20: three eighths of the way
   const vehicles = timetable.vehicles(at('10:15'), null).filter((v) => v.lineIndex === u1);
@@ -877,7 +877,7 @@ test('a line has its stops in each direction, and its vehicles between them (#25
   const morePathOf = (s) => new Addresses(more).stopAddress(s);
   const [way] = more.lineStops(line, [], morePathOf);
   assert.deepEqual([names(way), way.stops.map((stop) => [stop.start, stop.end])], [['Alpha', 'Beta, Markt', 'Gamma'], [[false, false], [true, false], [false, false]]]);
-  assert.deepEqual(way.branches, [{ after: 1, before: null, stops: [{ id: 'D', name: 'Delta', town: null, path: 'stop/delta' }] }]);
+  assert.deepEqual(way.branches, [{ after: 1, before: null, stops: [{ id: 'D', name: 'Delta', town: null, path: 'stop/delta', modes: ['subway'], lat: 49.55, lon: 11.2 }] }]);
   // T6 between Beta and Delta: from the line onto the branch
   const onBranch = more.lineStops(line, more.vehicles(at('12:16'), null).filter((v) => v.lineIndex === line), morePathOf)[0].vehicles;
   assert.deepEqual(onBranch.map(({ id, branch, from, until, come }) => [id, branch, from, until, come]), [[`T6_${DAY}`, 0, -1, 0, 0.5]]);

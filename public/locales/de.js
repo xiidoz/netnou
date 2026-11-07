@@ -165,6 +165,7 @@ export default {
 
   'trip.realtime': 'mit Verspätungsdaten',
   'trip.scheduleOnly': 'nur nach Fahrplan',
+  'trip.next': 'nächster Halt',
   'trip.source': 'Verspätungsdaten von {source}',
   'trip.cancelled': 'Fahrt fällt aus',
 

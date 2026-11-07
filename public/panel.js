@@ -11,8 +11,8 @@
 // Without the page around it, so that it runs on the server and in the tests
 // as it is (test/panel.test.js).
 
-import { townToShow, townsAlong } from './stops.js';
-import { mdiAlert, mdiChevronRight, mdiChevronUp, mdiClose, mdiFilterVariant } from './vendor/material-design-icons/icons.js';
+import { HEART_MIDDLE, heartMark, stopMark, townToShow, townsAlong } from './stops.js';
+import { mdiAlert, mdiChevronRight, mdiChevronUp, mdiClose, mdiFilterVariant, mdiHeart } from './vendor/material-design-icons/icons.js';
 
 // The kinds of transport, as the API names them; any other is drawn as "other".
 const KINDS = ['subway', 'tram', 'bus', 'suburban', 'regional', 'longdistance', 'ferry', 'cable', 'other'];
@@ -596,14 +596,95 @@ export function lineTimetable(facts, context, way = 0, open = new Set()) {
 
 // ---------- a line ----------
 
+// A stop on the line of a trip or of a line is drawn as the map draws it
+// (drawStop, drawHeartStop in app.js), at its small size: a white pill with a
+// dot in the colour of each kind that calls there, the line's own always
+// among them, also where nothing else is known of it (beyond the area); a
+// white heart with them for a favourite. Where more than three kinds call
+// (a pill of two rows; a heart that large), its row is as high as one with a
+// line below its name, NOTED_ROW.
+const TALL_KINDS = 3;
+
+/** The kinds a stop of a list is drawn with: those that call there, in the order of the map's dots, its line's own among them. */
+const kindsOf = (modes, own) => KINDS.filter((kind) => kind === kindOf(own) || (modes ?? []).includes(kind));
+
+/** The mark of a stop of a list, its pill or its heart (stopMark, heartMark in stops.js), with its middle and its half height. */
+function markOf(kinds, favourite) {
+  if (!favourite) {
+    const mark = stopMark(kinds.length, false);
+    return { mark, heart: false, half: mark.h / 2 };
+  }
+  const mark = heartMark(kinds.length, false);
+  const unit = mark.size / 24;
+  // (the heart reaches further below its middle than above it: its box as high as the lower half twice, so that its middle is the box's)
+  return { mark, heart: true, unit, half: (21.35 - HEART_MIDDLE[1]) * unit };
+}
+
+/** Whether the mark of a stop of a list needs a row as high as one with a line below its name. */
+export const tallMark = (modes, own) => kindsOf(modes, own).length > TALL_KINDS;
+
+/**
+ * The mark of a stop on the line of a trip or a line: as the map draws it
+ * (see TALL_MARK), its dots coloured by style.css by the kind each is of.
+ * @param modes the kinds that call there, as the server has them
+ * @param own the kind of the line, which is always among them
+ */
+export function stopSign(modes, own, favourite = false) {
+  const kinds = kindsOf(modes, own);
+  const { mark, heart, unit, half } = markOf(kinds, favourite);
+  const w = mark.w / 2 + 1;
+  const y = half + 1;
+  const dots = mark.dots.map(([cx, cy], i) => h('circle', { 'data-mode': kinds[i], cx: cx.toFixed(2), cy: cy.toFixed(2), r: mark.dot }));
+  const edge = heart
+    ? h('path', { class: 'edge', d: mdiHeart, transform: `translate(${(-HEART_MIDDLE[0] * unit).toFixed(2)} ${(-HEART_MIDDLE[1] * unit).toFixed(2)}) scale(${unit.toFixed(4)})` })
+    : h('rect', { class: 'edge', x: (-mark.w / 2).toFixed(2), y: (-mark.h / 2).toFixed(2), width: mark.w, height: mark.h, rx: mark.corner });
+  return h('svg', { class: `stop-sign${heart ? ' loved' : ''}`, viewBox: `${(-w).toFixed(2)} ${(-y).toFixed(2)} ${(2 * w).toFixed(2)} ${(2 * y).toFixed(2)}`, width: (2 * w).toFixed(2), height: (2 * y).toFixed(2), 'aria-hidden': 'true' }, edge, dots);
+}
+
+/**
+ * What a screen reader hears of a stop of a list besides its name: the kinds
+ * its mark shows by colour, but for the line's own, and that it is a
+ * favourite, as the search says it (#325).
+ */
+export function stopSaid(modes, own, favourite, { t, list }) {
+  const others = kindsOf(modes, own).filter((kind) => kind !== kindOf(own)).map((kind) => t(`mode.${kind}`));
+  return [others.length ? list(others) : null, favourite ? t('search.favourite') : null].filter(Boolean).map((part) => `, ${part}`).join('');
+}
+
+// (how far up from halfway a vehicle between two stops is drawn: its disc reaches 11 px up, its arrowhead 17 px down)
+const HALFWAY_UP = 3;
+
+/**
+ * Where a vehicle is drawn on the line of a list (a trip, a line), by its
+ * track [time, x, y, …] (trackAt): never half over the mark of a stop. On a
+ * stop while it stands there, and for the first and last quarter of its way
+ * from one to the next; else halfway between them, HALFWAY_UP px up, so that
+ * its disc above and its arrowhead below reach as far into the two marks.
+ * standing: it waits at a stop, and has no arrowhead.
+ */
+export function vehicleSpot(track, now) {
+  if (now <= track[0]) return { x: track[1], y: track[2], standing: true };
+  for (let k = 3; k < track.length; k += 3) {
+    if (now >= track[k]) continue;
+    const [x0, y0, x1, y1] = [track[k - 2], track[k - 1], track[k + 1], track[k + 2]];
+    if (x0 === x1 && y0 === y1) return { x: x0, y: y0, standing: true };
+    const share = (now - track[k - 3]) / (track[k] - track[k - 3]);
+    if (share < 0.25) return { x: x0, y: y0, standing: false };
+    if (share > 0.75) return { x: x1, y: y1, standing: false };
+    return { x: (x0 + x1) / 2, y: (y0 + y1) / 2 - HALFWAY_UP, standing: false };
+  }
+  return { x: track[track.length - 2], y: track[track.length - 1], standing: true };
+}
+
 // The rows of the stops of a line (#256), in px, as style.css has them: a
 // station, and one with a line below its name; and the padding above them.
 export const STOP_ROW = 32;
 export const NOTED_ROW = 44;
 const STOPS_TOP = 6;
 // Where its line runs, from the left of the list, and that of a branch.
-const LINE_X = 36;
-const BRANCH_X = LINE_X + 18;
+// (that of a trip at the same place, style.css; a branch far enough out for the pills of both)
+const LINE_X = 30;
+const BRANCH_X = LINE_X + 28;
 // A vehicle as the map draws it from zoom 14 (app.js): its radius, and its
 // arrowhead from the edge of the disc at ±0.6 rad to 6 px beyond, pointing
 // down the list, the way it goes.
@@ -679,11 +760,15 @@ export function lineStops(line, context, way = 0) {
   let y = STOPS_TOP;
   const row = (stop, town, note, className) => {
     const below = [town, note].filter(Boolean).join(' · ');
-    const height = below ? NOTED_ROW : STOP_ROW;
+    const favourite = context.favourite?.(stop) ?? false;
+    const tall = !below && tallMark(stop.modes, line.mode);
+    const said = stopSaid(stop.modes, line.mode, favourite, context);
+    const height = below || tall ? NOTED_ROW : STOP_ROW;
     const middle = y + height / 2;
     y += height;
     const name = below ? h('span', { class: 'name' }, h('span', { class: 'stop' }, stop.name), h('span', { class: 'town' }, below)) : h('span', { class: 'name' }, stop.name);
-    return { middle, node: h('li', { class: className }, h('a', { class: `row on-line${below ? ' in-town' : ''}`, href: stop.path, 'data-station': stop.id, title: stop.name }, h('span', { class: 'rail' }), name)) };
+    return { middle, node: h('li', { class: className }, h('a', { class: `row on-line${below ? ' in-town' : ''}${tall ? ' tall' : ''}`, href: stop.path, 'data-station': stop.id, title: stop.name },
+      h('span', { class: 'rail' }, stopSign(stop.modes, line.mode, favourite)), name, said ? h('span', { class: 'spoken' }, said) : null)) };
   };
   const ends = (i, n) => `on-line station${i === 0 ? ' first' : ''}${i === n - 1 ? ' last' : ''}`;
   const middles = [];
@@ -721,8 +806,9 @@ export function lineStops(line, context, way = 0) {
     const track = (v.track ?? []).flatMap((value, k) => (k % 2 === 0 ? [value] : at(v, value).map((px) => Math.round(px * 10) / 10)));
     const [x0, y0] = at(v, v.from);
     const [x1, y1] = at(v, v.until);
-    const [x, y] = track.length ? trackAt(track, context.now) : [x0 + (x1 - x0) * v.come, y0 + (y1 - y0) * v.come];
-    return (context.moving ? movingVehicle : lineVehicle)(line, v, x, y, context, track);
+    // (without a track, from the stop it left to the next one, which it has come this share of the way)
+    const spot = vehicleSpot(track.length ? track : [0, x0, y0, 1, x1, y1], track.length ? context.now : v.come);
+    return (context.moving ? movingVehicle : lineVehicle)(line, v, spot, context, track);
   });
   const list = h('ul', { class: 'line-stops', 'data-mode': kindOf(line.mode) }, items);
   if (!vehicles.length) return [h('div', { class: 'line-body' }, list)];
@@ -751,7 +837,7 @@ export function trackAt(track, now) {
  * the middle of its disc: its parts, what it is called, and what its
  * colour goes by.
  */
-function vehicleSign(line, v, { t, live = false, colorBy = 'mode', flags = true }) {
+function vehicleSign(line, v, { t, live = false, colorBy = 'mode', flags = true }, arrow = true) {
   const label = vehicleLabel(line.name);
   const font = label.length > 3 ? 8 : label.length > 2 ? 9.5 : 11;
   // (no flag where the colour says the delay, nor where the visitor switched them off, as on the map)
@@ -764,7 +850,7 @@ function vehicleSign(line, v, { t, live = false, colorBy = 'mode', flags = true 
     'data-delay': colorBy === 'delay' ? delayClass(v.delay) : null,
   };
   const parts = [
-    h('path', { d: ARROW_DOWN }),
+    arrow ? h('path', { d: ARROW_DOWN }) : null,
     h('circle', { r: VEHICLE_R }),
     h('text', { y: (font * 0.36).toFixed(1), 'font-size': font }, label),
     flag ? h('g', { class: `flag ${flag.color}`, transform: `translate(${VEHICLE_R * 0.55} ${-VEHICLE_R - 5})` },
@@ -777,8 +863,8 @@ function vehicleSign(line, v, { t, live = false, colorBy = 'mode', flags = true 
 }
 
 /** A vehicle on the line of the stops (lineStops) in its place, as the page sent has it: a button drawn there, with its track in px. */
-function lineVehicle(line, v, x, y, context, track = []) {
-  const { attrs, parts } = vehicleSign(line, v, context);
+function lineVehicle(line, v, { x, y, standing }, context, track = []) {
+  const { attrs, parts } = vehicleSign(line, v, context, !standing);
   return h('g', { class: 'line-vehicle', transform: `translate(${x.toFixed(1)} ${y.toFixed(1)})`, 'data-trip': v.id, role: 'button', tabindex: '0', ...attrs, 'data-track': track.length ? track.join(',') : null },
     h('rect', { class: 'hit', x: -18, y: -18, width: 36, height: 36, rx: 18 }), parts);
 }
@@ -789,7 +875,7 @@ function lineVehicle(line, v, x, y, context, track = []) {
  * tap, the keyboard and a screen reader, with what the page draws it by:
  * where it is (data-at), its track in px, its kind, delay and label.
  */
-function movingVehicle(line, v, x, y, { t }, track = []) {
+function movingVehicle(line, v, { x, y }, { t }, track = []) {
   return h('button', { type: 'button', class: 'line-vehicle', 'data-trip': v.id, 'aria-label': [line.name, t('line.to', { destination: v.to }), delayText(v.delay)].filter(Boolean).join(' '),
     'data-mode': kindOf(line.mode), 'data-late': v.delay ?? null, 'data-label': vehicleLabel(line.name),
     'data-at': `${x.toFixed(1)},${y.toFixed(1)}`, 'data-track': track.length ? track.join(',') : null });

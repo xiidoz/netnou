@@ -782,6 +782,8 @@ export class Timetable extends Schedule {
     // (of the lines of a name the busiest first: the one meant where nothing says which)
     for (const numbers of this.lineIndex.values()) numbers.sort((a, b) => this.lines[b].trips - this.lines[a].trips || a - b);
 
+    // (the kinds that call at each station in the area, by its stop: modesAt)
+    this.stationModes = stationModes;
     this.stations = order.map((s) => {
       const station = {
         id: this.stops.id.get(s),
@@ -1264,7 +1266,8 @@ export class Timetable extends Schedule {
    * @param pathOf (stop number) => the address of that station
    */
   lineStops(index, vehicles, pathOf) {
-    const stop = (s) => ({ id: this.stops.id.get(s), name: this.stops.name[s], town: this.towns[this.stops.town[s]]?.name ?? null, path: pathOf(s) });
+    // (with the kinds that call there, which the card draws it with as the map does, and where it is, to know a favourite by)
+    const stop = (s) => ({ id: this.stops.id.get(s), name: this.stops.name[s], town: this.towns[this.stops.town[s]]?.name ?? null, path: pathOf(s), modes: this.modesAt(s), lat: round5(this.stops.lat[s]), lon: round5(this.stops.lon[s]) });
     const ways = this.lineWays(index);
     const placed = ways.map(() => []);
     for (const v of vehicles) {
@@ -1455,6 +1458,11 @@ export class Timetable extends Schedule {
     return ways;
   }
 
+  /** The kinds that call at a station, by the index of its stop, in the order of MODES: none where it is not in the area. */
+  modesAt(station) {
+    return MODES.filter((_, bit) => this.stationModes[station] & (1 << bit));
+  }
+
   /** Which of the ways of line number `index` (lineWays) trip t goes: -1 for none. */
   wayOfTrip(index, t) {
     return this.lineWays(index).findIndex((way) => way.patterns.has(this.tripPattern[t]));
@@ -1577,6 +1585,8 @@ export class Timetable extends Schedule {
       stops: Array.from(stops, (s, p) => ({
         station: this.stops.id.get(this.stationOf[s]),
         name: this.stops.name[s],
+        // (the kinds that call at its station, which the page draws it with as the map does)
+        modes: this.modesAt(this.stationOf[s]),
         // (the town of its station, which the page shows where the name does not say it, #246)
         town: this.towns[this.stops.town[this.stationOf[s]]]?.name ?? null,
         platform: this.stops.platform[s],
