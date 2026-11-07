@@ -118,8 +118,8 @@ test('where the next day begins among the departures, a line says so between two
   const late = Date.parse('2026-10-23T23:50:00Z') / 1000;
   const board = { name: 'Plärrer', departures: [5, 15, 25].map((minutes) => ({ ...departure(minutes), planned: late + minutes * 60 })) };
   const parts = departureLists(board, drawing('time', late));
-  assert.deepEqual(parts.map((node) => node.tag), ['ul', 'h3', 'ul']);
-  assert.equal(toHtml(parts[1]), `<h3 class="rows-head day-head">${en['departures.tomorrow']}</h3>`);
+  assert.deepEqual(parts.map((node) => node.tag), ['ul', 'h2', 'ul']);
+  assert.equal(toHtml(parts[1]), `<h2 class="rows-head day-head">${en['departures.tomorrow']}</h2>`);
   assert.deepEqual(parts.map((node) => node.children.length), [1, 1, 2]);
 });
 
@@ -172,13 +172,13 @@ test('all lines of a stop: the badge of each leading to it, beside its ways with
   const tram = { name: '4', mode: 'tram', agency: 'VAG', at: [49.44, 11.06], path: 'line/vag/tram/4', ways: [{ to: 'Gibitzenhof', departure: departure(20 * 60, { line: 'x', mode: 'bus', to: 'Gibitzenhof', platform: '3' }) }] };
   const out = html(lineLists({ lines: [u1, tram] }, drawing('both')));
   // the badge is a link to the line's page, which the page opens itself by what data-line says
-  assert.ok(out.startsWith(`<h3 class="rows-head">${en['mode.subway']}</h3><ul class="line-rows"><li><a class="to-line" href="line/vag/subway/u1" aria-label="To line U1" title="To line U1" data-line="{&#34;name&#34;:&#34;U1&#34;,&#34;mode&#34;:&#34;subway&#34;,&#34;agency&#34;:&#34;VAG&#34;,&#34;at&#34;:[49.45,11.07]}"><span class="badge" data-mode="subway">U1<svg class="icon"`));
+  assert.ok(out.startsWith(`<h2 class="rows-head">${en['mode.subway']}</h2><ul class="line-rows"><li><a class="to-line" href="line/vag/subway/u1" aria-label="To line U1" title="To line U1" data-line="{&#34;name&#34;:&#34;U1&#34;,&#34;mode&#34;:&#34;subway&#34;,&#34;agency&#34;:&#34;VAG&#34;,&#34;at&#34;:[49.45,11.07]}"><span class="badge" data-mode="subway">U1<svg class="icon"`));
   // a way: its next departure as a row without the badge, which opens its trip, going where that trip goes
   assert.ok(out.includes(`<ul><li><button type="button" class="row departure times-both by-line" data-trip="T4_20261023"><span class="name" title="Messe">Messe</span><span class="details"><span class="time">10:06</span><span class="delay" data-delay="minor"><span class="planned"><span aria-hidden="true">10:04</span><span class="spoken">planned 10:04 </span></span>+2</span><span class="platform"></span></span><span class="minutes" data-leaves="${NOW + 6 * 60}"`));
   // one with no departure in the next 24 hours: in short where the minutes stand, in full under a mouse; it opens nothing
   assert.ok(out.includes(`<li><div class="row departure times-both by-line resting"><span class="name" title="Fürth Hardhöhe">Fürth Hardhöhe</span><abbr class="later" title="${en['lines.laterLong']}">${en['lines.later']}</abbr></div></li></ul></li></ul>`));
   // of another day: it says so where the minutes stand; and the kind and name are the line's
-  assert.ok(out.includes(`<h3 class="rows-head">${en['mode.tram']}</h3><ul class="line-rows"><li><a class="to-line" href="line/vag/tram/4"`));
+  assert.ok(out.includes(`<h2 class="rows-head">${en['mode.tram']}</h2><ul class="line-rows"><li><a class="to-line" href="line/vag/tram/4"`));
   assert.ok(out.includes(`<span class="name" title="Gibitzenhof">Gibitzenhof</span><span class="details"><span class="time">06:00</span><span class="delay" data-delay="none"></span><span class="platform">Plat. 3</span></span><span class="day">${en['departures.tomorrow']}</span></button>`));
   // of one kind only, no heading; in minutes, the minutes where the time stands; none at all, as the departures say it
   const minutes = html(lineLists({ lines: [u1] }, drawing('minutes')));

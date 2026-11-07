@@ -561,6 +561,11 @@ button:focus-visible, select:focus-visible, .row:focus-visible, .panel:focus-vis
   overflow: hidden;
 }
 /* What the details are of stays; what is listed scrolls below it. */
+/* Where there is room beside the card, as wide as the phone the details are made on: the head of a stop in one
+   row, its switch, "Tafel" and "Filter", and a line of how often a way runs mostly in one. */
+@media (min-width: 900px) {
+  .panel { width: 390px; }
+}
 #panel-head { flex: none; }
 #panel-body { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
 /* the bar that moves the details where they are a sheet, see the small screens below */
