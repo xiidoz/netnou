@@ -440,9 +440,11 @@ export function panelHtml(kind, data, { language, texts, timeZone, now, fixed = 
   const weekday = new Intl.DateTimeFormat(language, { weekday: 'short', timeZone });
   const list = new Intl.ListFormat(language, { type: 'conjunction' });
   const drawing = { t: (key, params) => t(key, params, texts), time: (epoch) => time.format(epoch * 1000), day: (epoch) => day.format(epoch * 1000), hour: (epoch) => hour.format(epoch * 1000), weekday: (epoch) => weekday.format(epoch * 1000), list: (words) => list.format(words), now, times: 'both' };
+  // (a stop's delays come in where one of its departures has one: the others then have the map's question mark)
+  const live = kind === 'stop' && data.departures.some((d) => d.delay !== null && d.delay !== undefined);
   const [head, body] = kind === 'stop'
     ? [panelHead(stopHeading(data.name, data.town), fixed ? null : stopToday(data.today, drawing), fixed ? departuresSub(null, null, drawing) : departuresSub('departures', choiceChip([], drawing), drawing, 'details')),
-      [...departureLists(data, drawing), fixed ? null : h('div', { class: 'view-lines', hidden: true }, lineLists(data, drawing))].filter(Boolean)]
+      [...departureLists(data, { ...drawing, live }), fixed ? null : h('div', { class: 'view-lines', hidden: true }, lineLists(data, { ...drawing, live }))].filter(Boolean)]
     : [lineHead(data, drawing, 0), [...lineStops(data, { ...drawing, live: data.vehicles.some((v) => v.delay !== null) }, 0), ...(lineTimetable(data.facts, drawing) ?? [])]];
   return { head: toHtml(head), body: body.map(toHtml).join('') };
 }

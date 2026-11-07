@@ -94,7 +94,7 @@ export default {
   'about.fact': 'Positionen berechnet, nicht per GPS.',
   'about.title': 'So funktioniert’s',
   'about.positions': 'Positionen',
-  'about.positionsText': 'Kein Fahrzeug meldet dieser Karte seinen Standort. Jedes wird dort gezeichnet, wo es laut Fahrplan gerade sein müsste, verschoben um die gemeldete Verspätung. Ein Fahrzeug kann deshalb etwas vor oder hinter seiner Markierung sein. Fahrzeuge ohne gemeldete Verspätung tragen ein Fragezeichen und fahren hier nach Fahrplan.',
+  'about.positionsText': 'Kein Fahrzeug meldet dieser Karte seinen Standort. Jedes wird dort gezeichnet, wo es laut Fahrplan gerade sein müsste, verschoben um die gemeldete Verspätung. Ein Fahrzeug kann deshalb etwas vor oder hinter seiner Markierung sein. Fahrzeuge ohne gemeldete Verspätung tragen ein Fragezeichen und fahren hier nach Fahrplan. In den Abfahrten steht dann ein Fragezeichen statt der Verspätung.',
   'about.routes': 'Streckenverlauf',
   'about.routesText': 'Auch der Streckenverlauf zwischen zwei Halten ist berechnet: der kürzeste plausible Weg über Straßen und Gleise aus OpenStreetMap, nicht der offizielle des Betreibers. Zwischen nahen Halten ist das fast immer derselbe. Wo er abweicht, nimmt ein Fahrzeug auf der Karte einen anderen Weg als in Wirklichkeit; wo sich keiner findet, fährt es Luftlinie.',
   'about.thinned': 'Herausgezoomt',
@@ -229,6 +229,7 @@ export default {
   'departures.cancelled': 'fällt aus',
   'departures.now': 'jetzt',
   'departures.planned': 'geplant {time}',
+  'departures.noDelay': 'ohne gemeldete Verspätung',
   'departures.minutes': '{count} min',
   'departures.tomorrow': 'morgen',
 

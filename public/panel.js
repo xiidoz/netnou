@@ -107,6 +107,15 @@ export function delaySum(planned, delay, { t, time }) {
     text);
 }
 
+/**
+ * Where no delay of a departure is reported while delays come in for others:
+ * the map's question mark (delayFlag) in the place of the delay, so that it
+ * is not taken for one on time; a screen reader hears what it means.
+ * @param withPlanned whether the place of the planned time comes before it, as in a sum (delaySum): it then lines up with the other delays
+ */
+export const unknownDelay = ({ t }, withPlanned = true) => h('span', { class: 'delay', 'data-delay': 'none' },
+  withPlanned ? h('span', { class: 'planned' }) : null, h('span', { 'aria-hidden': 'true' }, '?'), h('span', { class: 'spoken' }, t('departures.noDelay')));
+
 /** Whether a note of the feed warns: of what is wrong with a trip or a stop right now, such as the reason for a delay. */
 export const warns = (note) => note.severity === 'warning' || note.severity === 'severe';
 
@@ -206,15 +215,18 @@ export function departureLists(board, context) {
  * leaves, the minutes until then or, where the visitor chose times of day,
  * the time; below where it goes, in small print, the time it leaves where the
  * minutes stand on the right, the delay as a sum with the planned time
- * (delaySum; beside minutes alone), and the platform.
+ * (delaySum; beside minutes alone), and the platform. Without a delay
+ * reported while delays come in for others (`live`), the map's question
+ * mark (unknownDelay).
  * @param signed whether a train of its list has something wrong with it (delayCell)
  * @param byLine whether it is the next departure of a way in the list of a
  *   stop's lines (lineLists): without the badge, which its line has, and
  *   one of another day says so where the minutes stand
  */
 function departureRow(dep, signed, context, byLine = false) {
-  const { t, time, day, now, times } = context;
+  const { t, time, day, now, times, live } = context;
   const later = byLine && day(dep.planned) > day(now);
+  const unknown = live && !dep.cancelled && (dep.delay === null || dep.delay === undefined);
   const leaves = () => h('span', { class: 'time' }, time(leavesAt(dep)));
   // (on the right: one of another day says so; with both, beyond the hour nothing, as the time is below)
   const when = later ? h('span', { class: 'day' }, t('departures.tomorrow'))
@@ -225,7 +237,7 @@ function departureRow(dep, signed, context, byLine = false) {
     h('span', { class: 'name', title: dep.to }, dep.to),
     h('span', { class: 'details' },
       times === 'both' || later ? leaves() : null,
-      delayCell(dep.cancelled ? h('span', { class: 'delay' }) : times === 'minutes' ? delayNode(dep.delay) : delaySum(dep.planned, dep.delay, context), dep.warnings, signed, context),
+      delayCell(dep.cancelled ? h('span', { class: 'delay' }) : unknown ? unknownDelay(context, times !== 'minutes') : times === 'minutes' ? delayNode(dep.delay) : delaySum(dep.planned, dep.delay, context), dep.warnings, signed, context),
       h('span', { class: 'platform' }, dep.cancelled ? t('departures.cancelled') : dep.platform ? t('stop.platform', { platform: dep.platform }) : '')),
     when,
   );

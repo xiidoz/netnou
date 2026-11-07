@@ -13,7 +13,7 @@ import { APP_NAME, READMES, chooseLanguage, dayOf, formatHour, formatList, forma
 import { FAVOURITE_NAME_ZOOM, HEART_MIDDLE, PLACES_ZOOM, RAIL_MODES, heartMark, joiningLines, mergePlaces, namePrecedence, namedAt, placeNames, stopMark, townToShow, townsAlong, withoutStyleStops } from './stops.js';
 import { favouritesFrom, isFavourite, lineFavourite, sameStop, stopFavourite, withChoice, withFavourite } from './favourites.js';
 import { choiceValue, readChoice, toggled } from './choice.js';
-import { DELAY_MAJOR_S, DELAY_MINOR_S, DELAY_SEVERE_S, MINUTES_MAX, NOTE_CHARS, badge as badgeOf, choiceChip as choiceChipOf, clockOf, delayCell as delayCellOf, delayClass, delayNode as delayNodeOf, delaySum as delaySumOf, delayFlag, delayText, departureLists, departuresSub as departuresSubOf, directionSign as directionSignOf, leavesAt, lineHead, lineLists, lineStops, lineTimetable, minutesNode as minutesNodeOf, trackAt, VEHICLE_R, panelHead as panelHeadOf, stopHeading, stopToday, tomorrowAt as tomorrowAtOf, untilText as untilTextOf, vehicleLabel, warningSign as warningSignOf, warns } from './panel.js';
+import { DELAY_MAJOR_S, DELAY_MINOR_S, DELAY_SEVERE_S, MINUTES_MAX, NOTE_CHARS, badge as badgeOf, choiceChip as choiceChipOf, clockOf, delayCell as delayCellOf, delayClass, delayNode as delayNodeOf, delaySum as delaySumOf, unknownDelay as unknownDelayOf, delayFlag, delayText, departureLists, departuresSub as departuresSubOf, directionSign as directionSignOf, leavesAt, lineHead, lineLists, lineStops, lineTimetable, minutesNode as minutesNodeOf, trackAt, VEHICLE_R, panelHead as panelHeadOf, stopHeading, stopToday, tomorrowAt as tomorrowAtOf, untilText as untilTextOf, vehicleLabel, warningSign as warningSignOf, warns } from './panel.js';
 import { BOARD_MAX, BOARD_SHARE, BOARD_STOPS, boardBlocks, boardQuery, boardShare, displayQuery, ledBy, readBoard, readDisplay, readStops } from './display.js';
 import { mdiChevronLeft, mdiChevronRight, mdiCityVariantOutline, mdiFullscreen, mdiFullscreenExit, mdiHeart, mdiHeartOutline, mdiMinusCircleOutline, mdiPlus } from './vendor/material-design-icons/icons.js';
 import { AttributionControl, MapLibreMap, NavigationControl } from './vendor/maplibre-gl/maplibre-gl.mjs';
@@ -4015,10 +4015,13 @@ function addStop(blocks) {
 
 /** One departure on a board; in a list of several stops, with the stop it leaves from under where it goes. */
 function boardRow(dep, times, from = null) {
-  // (a delay shows where there is one: on time the board says nothing)
+  // (a delay shows where there is one: on time the board says nothing; with none reported while delays come in for
+  // others, the map's question mark, which tells it from one on time)
   const delay = Math.round((dep.delay ?? 0) / 60) === 0 ? null : dep.delay;
+  const unknown = realtimeState() === 'live' && !dep.cancelled && (dep.delay === null || dep.delay === undefined);
   // (with the time it leaves, as a sum with the planned time; before the minutes, alone)
-  const late = delayCell(times === 'minutes' ? delayNode(delay) : delaySum(dep.planned, delay), dep.warnings, dep.warnings.length > 0);
+  const shown = unknown ? toDom(unknownDelayOf(drawing(), times !== 'minutes')) : times === 'minutes' ? delayNode(delay) : delaySum(dep.planned, delay);
+  const late = delayCell(shown, dep.warnings, dep.warnings.length > 0);
   // (further off than an hour, the time of day stands where the minutes do, and with both not twice)
   const far = minutesUntil(leavesAt(dep)) > MINUTES_MAX;
   const at = (shown = true) => el('span', { class: 'at', text: shown ? formatTime(leavesAt(dep)) : '' });
