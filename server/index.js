@@ -307,8 +307,23 @@ function addressed(asked) {
  */
 const stopFacts = (stationId, now) => facts(timetable).stop(timetable.stopIndex.get(stationId), now);
 
-/** Of the facts of a station (stopFacts), what the line below its name says. */
-const todayOf = (known) => ({ first: known.first, last: known.last, lines: known.lines.size, all: known.all });
+/**
+ * Of the facts of a station (stopFacts), what the line below its name says;
+ * and the names it has that day in more than one kind, such as tram 4 and a
+ * bus 4 that stands in for it, whose badges then say their kind.
+ */
+const todayOf = (known) => ({ first: known.first, last: known.last, lines: known.lines.size, all: known.all, twoKinds: twoKinds(known.lines.keys()) });
+
+/** Of lines by their index, the names that more than one kind of them has. */
+function twoKinds(indexes) {
+  const kinds = new Map();
+  for (const index of indexes) {
+    const { name, mode } = timetable.lines[index];
+    if (!kinds.has(name)) kinds.set(name, new Set());
+    kinds.get(name).add(mode);
+  }
+  return [...kinds].filter(([, modes]) => modes.size > 1).map(([name]) => name);
+}
 
 /**
  * Every line of a station with its next departure each way (Timetable.linesAt, #255), each with the address of its page

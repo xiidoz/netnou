@@ -77,6 +77,16 @@ export default {
   'mode.ferry': 'Fähre',
   'mode.cable': 'Seil- & Schwebebahn',
   'mode.other': 'Sonstige',
+  // (short, before the name in a badge where a stop has the name in two kinds: "Tram 4", "Bus 4")
+  'badge.kind.subway': 'U',
+  'badge.kind.tram': 'Tram',
+  'badge.kind.bus': 'Bus',
+  'badge.kind.suburban': 'S',
+  'badge.kind.regional': 'Zug',
+  'badge.kind.longdistance': 'Fernzug',
+  'badge.kind.ferry': 'Fähre',
+  'badge.kind.cable': 'Bahn',
+  'badge.kind.other': 'Linie',
 
 
   'display.wall': 'Als Wandbildschirm',

@@ -106,6 +106,16 @@ export default {
   'mode.ferry': 'Ferry',
   'mode.cable': 'Cable car & monorail',
   'mode.other': 'Other',
+  // (short, before the name in a badge where a stop has the name in two kinds: "Tram 4", "Bus 4")
+  'badge.kind.subway': 'U',
+  'badge.kind.tram': 'Tram',
+  'badge.kind.bus': 'Bus',
+  'badge.kind.suburban': 'S',
+  'badge.kind.regional': 'Train',
+  'badge.kind.longdistance': 'Intercity',
+  'badge.kind.ferry': 'Ferry',
+  'badge.kind.cable': 'Cable',
+  'badge.kind.other': 'Line',
 
 
   // the button with the eye next to the settings: it takes the controls of the page away, and brings them back

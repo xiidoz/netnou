@@ -41,9 +41,9 @@ test('a delay is shown in whole minutes, and its colour is that of what it shows
 test('the departures of a stop: a row each that opens its trip, in two lines in the order of a board: line, destination and when it leaves; below, small, the delay and platform', () => {
   const board = { name: 'Plärrer', departures: [departure(4, { delay: 120, platform: '2' }), departure(70, { line: '4', mode: 'tram', to: 'Gibitzenhof' })] };
   // the time it leaves on the right; below the destination the delay as a sum with the planned time, which a screen reader is told is planned
-  assert.equal(html(departureLists(board, drawing('time'))), '<ul class="rows">'
+  assert.equal(html(departureLists(board, drawing('time'))), '<ul class="rows departures">'
     + '<li><button type="button" class="row departure times-time" data-trip="T4_20261023"><span class="badge" data-mode="subway">U1</span><span class="name" title="Langwasser Süd">Langwasser Süd</span><span class="details"><span class="delay" data-delay="minor"><span class="planned"><span aria-hidden="true">10:04</span><span class="spoken">planned 10:04 </span></span>+2</span><span class="platform">Plat. 2</span></span><span class="time">10:06</span></button></li>'
-    + '<li><button type="button" class="row departure times-time" data-trip="T70_20261023"><span class="badge" data-mode="tram">4</span><span class="name" title="Gibitzenhof">Gibitzenhof</span><span class="details"><span class="delay" data-delay="none"></span><span class="platform"></span></span><span class="time">11:10</span></button></li>'
+    + '<li><button type="button" class="row departure times-time" data-trip="T70_20261023"><span class="badge" data-mode="tram"><span aria-hidden="true">4</span><span class="spoken">tram 4</span></span><span class="name" title="Gibitzenhof">Gibitzenhof</span><span class="details"><span class="delay" data-delay="none"></span><span class="platform"></span></span><span class="time">11:10</span></button></li>'
     + '</ul>');
   // with a 12-hour clock the planned time leaves out "AM", which the time before it says; a screen reader hears it all
   const twelve = new Intl.DateTimeFormat('en-US', { timeStyle: 'short', timeZone: 'UTC' });
@@ -81,12 +81,34 @@ test('a departure without a delay reported while delays come in for others has t
   assert.ok(!html(departureLists(board, drawing('time'))).includes('?'));
 });
 
+test('where a stop has a number in two kinds, the badges say the kind: a tram 4 and the bus 4 standing in for it are not told apart by colour alone', () => {
+  const board = { name: 'Plärrer', today: { twoKinds: ['4'] }, departures: [departure(4), departure(5, { line: '4', mode: 'tram', to: 'Gibitzenhof' }), departure(6, { line: '4', mode: 'bus', to: 'Gibitzenhof' }), departure(7, { line: '36', mode: 'bus', to: 'Doku-Zentrum' })] };
+  const out = html(departureLists(board, drawing('time')));
+  // the short name of the kind before the number; a screen reader hears the kind in full
+  assert.ok(out.includes('<span class="badge" data-mode="tram"><span aria-hidden="true">Tram 4</span><span class="spoken">tram 4</span></span>'), out);
+  assert.ok(out.includes('<span class="badge" data-mode="bus"><span aria-hidden="true">Bus 4</span><span class="spoken">bus 4</span></span>'));
+  // a number the stop has in one kind alone, said with its kind; a name with its letters as it is
+  assert.ok(out.includes('<span class="badge" data-mode="bus"><span aria-hidden="true">36</span><span class="spoken">bus 36</span></span>'));
+  assert.ok(out.includes('<span class="badge" data-mode="subway">U1</span>'));
+  // so too where only the departures show both, as one after midnight of the next day's lines
+  assert.ok(html(departureLists({ ...board, today: null }, drawing('time'))).includes('<span aria-hidden="true">Bus 4</span>'));
+  // a name that begins with the short name of its kind has it once: a bus U1 standing in for the U-Bahn is "Bus U1", the U-Bahn "U1"
+  const u1 = html(departureLists({ name: 'Plärrer', today: { twoKinds: ['U1'] }, departures: [departure(4), departure(5, { mode: 'bus' })] }, drawing('time')));
+  assert.ok(u1.includes('<span class="badge" data-mode="subway"><span aria-hidden="true">U1</span><span class="spoken">U-Bahn U1</span></span>'), u1);
+  assert.ok(u1.includes('<span class="badge" data-mode="bus"><span aria-hidden="true">Bus U1</span><span class="spoken">bus U1</span></span>'));
+  // a kind the page has no name of is a line
+  const other = html(departureLists({ name: 'Plärrer', departures: [departure(4, { line: '4', mode: 'tram' }), departure(5, { line: '4', mode: 'gondola' })] }, drawing('time')));
+  assert.ok(other.includes(`<span class="badge" data-mode="other"><span aria-hidden="true">${en['badge.kind.other']} 4</span><span class="spoken">${en['address.kind.other']} 4</span></span>`), other);
+  // the link to a line says it as a rider does
+  assert.ok(html(lineLists({ lines: [{ name: '4', mode: 'tram', agency: 'VAG', at: [49.44, 11.06], path: 'line/vag/tram/4', ways: [] }] }, drawing())).includes('aria-label="To line tram 4" title="To line tram 4"'));
+});
+
 test('a departure that is cancelled says so, and one with something wrong with it has the sign of a warning that says what', () => {
   const warned = departure(5, { warnings: [{ title: null, text: 'Signal failure', severity: 'warning' }] });
   const board = { name: 'Plärrer', departures: [warned, departure(8, { cancelled: true, platform: '1' })] };
   const out = html(departureLists(board, drawing('time')));
   // every row of a list with a warning keeps the place of its sign
-  assert.ok(out.startsWith('<ul class="rows signed">'));
+  assert.ok(out.startsWith('<ul class="rows departures signed">'));
   assert.ok(out.includes('<span class="late"><span class="delay" data-delay="none"></span><svg class="icon sign" viewBox="0 0 24 24" role="img" aria-label="Warning: Signal failure" data-said="Signal failure"><path d="'));
   assert.ok(out.includes(`<button type="button" class="row departure times-time cancelled" data-trip="T8_20261023"><span class="badge" data-mode="subway">U1</span><span class="name" title="Langwasser Süd">Langwasser Süd</span><span class="details"><span class="late"><span class="delay"></span></span><span class="platform">${en['departures.cancelled']}</span></span><span class="time">10:08</span></button>`));
 });
