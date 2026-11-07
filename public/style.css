@@ -685,7 +685,6 @@ button:focus-visible, select:focus-visible, .row:focus-visible, .panel:focus-vis
 .direction-sign[data-mode="cable"] { --sign: var(--mode-cable); }
 .direction-sign path, .direction-sign circle { fill: var(--sign); stroke: #fff; stroke-width: 1.5; stroke-linejoin: round; }
 .direction-sign text { fill: var(--letters); font: 700 9px system-ui, sans-serif; }
-.chip[aria-pressed="false"] .direction-sign { --sign: var(--delay-none); }
 
 /* the sheet: every line a row of its directions */
 .choice-list { margin-top: 12px; }
@@ -693,10 +692,16 @@ button:focus-visible, select:focus-visible, .row:focus-visible, .panel:focus-vis
 .choice-lines { list-style: none; margin: 10px 0 0; padding: 0; display: grid; gap: 15px; }
 /* The kinds of the lines, where there are several (renderChoice in app.js), as in "Alle Linien". */
 .choice-list .rows-head { padding: 22px 0 0; }
-.choice-list > .rows-head:first-child { padding-top: 4px; }
 .choice-lines li { display: flex; flex-wrap: wrap; gap: 15px 6px; }
 .choice-list .chip { white-space: normal; text-align: left; }
 .choice-list .chip .direction-sign { margin: -5px -2px -5px -4px; }
+/* What is chosen has a check mark and the colour of what is chosen on the page; the rest is plain, as a tap
+   chooses (renderChoice in app.js): not crossed out as a kind switched off in the legend, which hides it. */
+.choice-list .chip[aria-pressed="false"] { color: var(--text); background: var(--bg); }
+.choice-list .chip[aria-pressed="false"] .name { text-decoration: none; }
+.choice-list .chip[aria-pressed="true"] { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 13%, var(--bg)); box-shadow: inset 0 0 0 1px var(--accent); font-weight: 600; }
+.choice-list .chip .check { display: none; width: 18px; height: 18px; margin: 0 -1px 0 -2px; color: var(--accent); }
+.choice-list .chip[aria-pressed="true"] .check { display: block; }
 /* (the notes go out to the edge the rows below end at: the button that closes is above them) */
 .panel-head .notes { margin: 8px -34px 0 0; padding: 0; list-style: none; font-size: 12.5px; color: var(--text-muted); }
 .panel-head .notes li { padding-left: 14px; position: relative; }

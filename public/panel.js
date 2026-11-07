@@ -364,12 +364,14 @@ export function directionSign({ line, mode, heading = null }) {
  * cross that shows all again.
  * @param chosen the directions chosen, each with its `name` (directionName in app.js)
  */
-export function choiceChip(chosen, { t }) {
+export function choiceChip(chosen, context) {
+  const { t } = context;
   const parts = !chosen.length
     ? [h('span', {}, t('choice.filter'))]
     : chosen.length === 1 ? [h('span', {}, t('choice.only')), directionSign(chosen[0]), h('span', {}, chosen[0].name)]
       : [h('span', {}, t('choice.several', { count: chosen.length }))];
-  const label = chosen.length ? `${t('choice.only')} ${chosen.map((direction) => `${direction.line} ${direction.name}`).join(', ')}` : t('choice.filter');
+  // (a line named by a number said with its kind, as a tram 4 and a bus 4 may go to the same place)
+  const label = chosen.length ? `${t('choice.only')} ${chosen.map((direction) => `${lineSaid(direction.line, direction.mode, context)} ${direction.name}`).join(', ')}` : t('choice.filter');
   return h('span', { class: `choice${chosen.length ? ' chosen' : ''}` },
     h('button', { type: 'button', class: 'choice-open', 'aria-label': label, 'aria-haspopup': 'dialog', title: t('choice.title') }, iconOf(mdiFilterVariant), parts),
     chosen.length ? h('button', { type: 'button', class: 'choice-clear', 'aria-label': t('choice.clear'), title: t('choice.clear') }, iconOf(mdiClose)) : null,

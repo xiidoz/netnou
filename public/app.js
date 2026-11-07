@@ -15,7 +15,7 @@ import { favouritesFrom, isFavourite, lineFavourite, sameStop, stopFavourite, wi
 import { choiceValue, readChoice, toggled } from './choice.js';
 import { DELAY_MAJOR_S, DELAY_MINOR_S, DELAY_SEVERE_S, MINUTES_MAX, NOTE_CHARS, badge as badgeOf, choiceChip as choiceChipOf, clockOf, delayCell as delayCellOf, delayClass, delayNode as delayNodeOf, delaySum as delaySumOf, unknownDelay as unknownDelayOf, delayFlag, delayText, departureLists, departuresSub as departuresSubOf, directionSign as directionSignOf, leavesAt, lineBadge, lineHead, lineLists, lineSaid as lineSaidOf, lineStops, lineTimetable, minutesNode as minutesNodeOf, trackAt, twoKinds, VEHICLE_R, panelHead as panelHeadOf, stopHeading, stopToday, tomorrowAt as tomorrowAtOf, untilText as untilTextOf, vehicleLabel, warningSign as warningSignOf, warns } from './panel.js';
 import { BOARD_MAX, BOARD_SHARE, BOARD_STOPS, boardBlocks, boardQuery, boardShare, displayQuery, ledBy, readBoard, readDisplay, readStops } from './display.js';
-import { mdiChevronLeft, mdiChevronRight, mdiCityVariantOutline, mdiFullscreen, mdiFullscreenExit, mdiHeart, mdiHeartOutline, mdiMinusCircleOutline, mdiPlus } from './vendor/material-design-icons/icons.js';
+import { mdiCheck, mdiChevronLeft, mdiChevronRight, mdiCityVariantOutline, mdiFullscreen, mdiFullscreenExit, mdiHeart, mdiHeartOutline, mdiMinusCircleOutline, mdiPlus } from './vendor/material-design-icons/icons.js';
 import { AttributionControl, MapLibreMap, NavigationControl } from './vendor/maplibre-gl/maplibre-gl.mjs';
 
 // The modes, each with a chip where the timetable has it. Same ids as MODES in
@@ -846,7 +846,12 @@ function renderChoice() {
   }
   const focused = node.contains(document.activeElement) ? document.activeElement.dataset.key : null;
   const all = !state.lines.length;
-  const chip = (key, pressed, children, onclick) => el('button', { type: 'button', class: 'chip', 'aria-pressed': String(pressed), data: { key }, onclick }, children);
+  // (one chosen has a check mark, style.css)
+  const chip = (key, pressed, children, onclick) => {
+    const mark = icon(mdiCheck);
+    mark.classList.add('check');
+    return el('button', { type: 'button', class: 'chip', 'aria-pressed': String(pressed), data: { key }, onclick }, [mark, ...children]);
+  };
   const lines = [];
   for (const direction of list) {
     const last = lines.at(-1);
@@ -855,7 +860,7 @@ function renderChoice() {
   }
   const line = ({ directions }) => el('li', {}, directions.map((direction) => {
     const name = directionName(direction, list);
-    const on = all || state.lines.includes(direction.key) || state.lines.includes(direction.key.split('~')[0]);
+    const on = state.lines.includes(direction.key) || state.lines.includes(direction.key.split('~')[0]);
     const button = chip(direction.key, on, [directionSign(direction), el('span', { class: 'name', text: name })], () => applyChoice(toggled(state.lines, direction.key)));
     button.dataset.mode = direction.mode;
     button.setAttribute('aria-label', t('choice.direction', { line: lineSaid(direction.line, direction.mode), to: name }));
@@ -865,8 +870,8 @@ function renderChoice() {
   const kindOf = (mode) => (DRAW_ORDER.includes(mode) ? mode : 'other');
   const kinds = [...new Set(lines.map(({ mode }) => kindOf(mode)))];
   node.replaceChildren(
-    // (every line again, where only some are shown: while all are, it would do nothing)
-    ...(all ? [] : [chip('', false, [el('span', { class: 'name', text: t('choice.all') })], () => applyChoice([]))]),
+    // (every direction: chosen while none is, and a tap on it takes back what is)
+    chip('', all, [el('span', { class: 'name', text: t('choice.all') })], () => applyChoice([])),
     ...kinds.flatMap((kind) => [
       ...(kinds.length > 1 ? [el('h3', { class: 'rows-head', text: t(`mode.${kind}`) })] : []),
       el('ul', { class: 'choice-lines' }, lines.filter(({ mode }) => kindOf(mode) === kind).map(line)),
