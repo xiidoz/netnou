@@ -821,8 +821,8 @@ otherwise a server would load a file written by older code:
   back to the middle. The height holds while the details stay open, and
   what is chosen on the map is moved into the part the sheet leaves free.
   Its button to close is in sight, as on a wide screen, beside the share
-  button and the heart; "Tafel" below the name of a stop makes the details
-  its board. "How it works" is such a sheet too, with its button to close,
+  button and the heart; between them, for a stop, the button that makes the
+  details its board. "How it works" is such a sheet too, with its button to close,
   and closes when it is dragged down as well. Details opened from other
   details have the way back to them above their name, named after them
   ("‹ Nürnberg Plärrer", "‹ 84 → Dr. Erler Kliniken"): the step back the
@@ -901,9 +901,12 @@ otherwise a server would load a file written by older code:
   transform set every frame, a layer of its own or an animation moved it;
   a canvas draws it where it is. Each opens its trip, and from a trip the
   line opens in its direction.
-- **The board of a stop.** The chip "Tafel" below the name of a stop makes
-  its details a board of its departures, and pressed there, the details
-  again
+- **The board of a stop.** The button with outward arrows in the corner of
+  a stop's details, between the heart and the share button, makes them a
+  board of its departures; in the same place on the board, its arrows
+  inward, it makes them the details again. It is in the corner, with what
+  changes what the details are, and not beside the switch of the views and
+  the filter of the departures, which change what they show
   ([#81](https://github.com/xiidoz/netnou/issues/81)), the same on every
   screen: beside the map on a screen wider than high, below it on one
   standing upright, a phone among them. The map gives the board its share of

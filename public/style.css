@@ -575,10 +575,11 @@ button:focus-visible, select:focus-visible, .row:focus-visible, .panel:focus-vis
 
 /* The details of a stop or a line can be shared (#37): beside the close
    button. Before the share button the heart, which makes the stop or the line
-   a favourite (#245): red and filled where it is one. The chip "Tafel" below
-   the name makes the details of a stop its board (#81), and the board the
-   details again (.board-open). */
-.close, .share, .heart {
+   a favourite (#245): red and filled where it is one. Between them, for a
+   stop, the button that makes its details its board (#81), and the board the
+   details again, in the same place (.board-toggle): it changes what the
+   details are, as the others do, and so is not among what they show. */
+.close, .share, .board-toggle, .heart {
   position: absolute;
   z-index: 2;
   top: 8px;
@@ -594,7 +595,9 @@ button:focus-visible, select:focus-visible, .row:focus-visible, .panel:focus-vis
   cursor: pointer;
 }
 .share { right: 52px; }
+.board-toggle { right: 96px; }
 .heart { right: 96px; }
+.panel.boardable .heart { right: 140px; }
 .heart.on { color: var(--delay-severe); }
 /* (what says that the address was copied, where there is nothing to share it with: under the button, for a moment) */
 .copied {
@@ -621,6 +624,7 @@ button:focus-visible, select:focus-visible, .row:focus-visible, .panel:focus-vis
 /* (the heading beside the two buttons; what is below it is clear of them) */
 .panel.shareable .panel-head h1, .panel.shareable .panel-head h2 { padding-right: 44px; }
 .panel.favourable .panel-head h1, .panel.favourable .panel-head h2 { padding-right: 88px; }
+.panel.boardable .panel-head h1, .panel.boardable .panel-head h2 { padding-right: 132px; }
 /* the main heading of the page while the details are open (#254); a board has h2 */
 .panel-head h1, .panel-head h2 {
   margin: 0;
@@ -653,11 +657,7 @@ button:focus-visible, select:focus-visible, .row:focus-visible, .panel:focus-vis
 .choice-open > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .choice .icon { width: 1.1em; height: 1.1em; }
 /* "Tafel": a chip as "Filter" is, which makes the details of a stop its board, with the sign the board has for going back */
-.board-open { display: inline-flex; align-items: center; gap: 0.35em; padding: 0.2em 0.7em 0.2em 0.55em; border: 1px solid var(--border); border-radius: 999px; background: var(--bg); color: var(--text); font: inherit; font-size: 0.96em; white-space: nowrap; cursor: pointer; }
-.board-open .icon { width: 1.1em; height: 1.1em; }
-.board-open:hover { border-color: var(--accent); }
 /* (on the board: pressed, as a switch that is on, and its sign points back) */
-.board-open[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--bg); font-weight: 600; }
 /* (as large as in the sheet, the chip no higher for it) */
 .choice-open .direction-sign { width: 2.4em; height: 2.4em; margin: -0.6em -0.15em -0.6em -0.2em; }
 /* (the focus ring around the whole pill, as the badge of a trip has it: the button is only its larger part) */
@@ -1247,11 +1247,11 @@ li:last-child > .row.stop .rail::before { bottom: 50%; }
    not that room the area is as large as there is room. The sizes are for the
    places the buttons have; each says what is next to it. */
 .settings-open, .search-open, .search-close, .chips-more span, .segmented button, .wall-start,
-.view-switch button, .choice-open, .choice-clear, .board-open, .panel-back, .maplibregl-ctrl-group button,
+.view-switch button, .choice-open, .choice-clear, .panel-back, .maplibregl-ctrl-group button,
 .offer-close, .offer-switch, .offer-never { position: relative; }
-.settings-open::after, .search-open::after, .search-close::after, .close::after, .share::after, .heart::after,
+.settings-open::after, .search-open::after, .search-close::after, .close::after, .share::after, .board-toggle::after, .heart::after,
 .chips-more span::after, .segmented button::after, .wall-start::after, .view-switch button::after,
-.choice-open::after, .choice-clear::after, .board-open::after, .panel-back::before, .panel-back::after,
+.choice-open::after, .choice-clear::after, .panel-back::before, .panel-back::after,
 .maplibregl-ctrl-group button::after, .maplibregl-ctrl-attrib-button::after,
 .offer-close::after, .offer-switch::after, .offer-never::after { content: ""; position: absolute; }
 /* (the round buttons of the title row: the gear and the lens; above them the edge of the screen, below them the field of the search or the line that positions are calculated) */
@@ -1259,7 +1259,7 @@ li:last-child > .row.stop .rail::before { bottom: 50%; }
 .search-open { margin-right: 6px; }
 .search-close::after { inset: -5px; }
 /* (the buttons in the corner of the details and the sheets, 44 px apart) */
-.close::after, .share::after, .heart::after { inset: -6px; }
+.close::after, .share::after, .board-toggle::after, .heart::after { inset: -6px; }
 /* (the offer of a language: its ✕ up to the edge of the bubble and down to the
    buttons below it, which are 8 px apart side by side) */
 .offer-close::after { inset: -6px -6px -4px; }
@@ -1415,11 +1415,15 @@ li:last-child > .row.stop .rail::before { bottom: 50%; }
   .panel.shareable .panel-head h1, .panel.shareable .panel-head h2 { padding-right: 80px; }
   /* (the heart before the share button) */
   .panel .heart { top: 14px; right: 100px; }
+  /* (for a stop, the button of its board between them) */
+  .panel .board-toggle { top: 14px; right: 100px; }
+  .panel.boardable .heart { right: 144px; }
   .panel .copied.favourited { top: 52px; right: 12px; }
   .panel.favourable .panel-head h1, .panel.favourable .panel-head h2 { padding-right: 124px; }
+  .panel.boardable .panel-head h1, .panel.boardable .panel-head h2 { padding-right: 168px; }
   /* (for a finger, see "room for a finger": the buttons from the bar of the sheet down, the chips under them, side by side, from there to the departures) */
-  .panel .close::after, .panel .share::after, .panel .heart::after { inset: -12px -6px 0; }
-  .panel-head .view-switch button::after, .panel-head .choice-open::after, .panel-head .choice-clear::after, .panel-head .board-open::after { left: 0; right: 0; top: calc(50% - 20px); height: 44px; }
+  .panel .close::after, .panel .share::after, .panel .board-toggle::after, .panel .heart::after { inset: -12px -6px 0; }
+  .panel-head .view-switch button::after, .panel-head .choice-open::after, .panel-head .choice-clear::after { left: 0; right: 0; top: calc(50% - 20px); height: 44px; }
   /* (and where they take two lines, as with directions chosen, the second as far below the first as these areas need) */
   .panel-head .sub.with-choice { row-gap: 20px; }
   /* (the cross that shows all lines again is narrow: its area takes the end of the chip it is in, and half the room beside it) */
@@ -1553,9 +1557,11 @@ li:last-child > .row.stop .rail::before { bottom: 50%; }
 /* Its buttons are at its top on every screen, the one that closes it
    among them: a board is no sheet that is dragged away. */
 :root[data-board] .panel .close,
-:root[data-board] .panel .share { top: 8px; width: 32px; height: 32px; }
+:root[data-board] .panel .share,
+:root[data-board] .panel .board-toggle { top: 8px; width: 32px; height: 32px; }
 :root[data-board] .panel .close { right: calc(8px + var(--safe-right)); }
 :root[data-board] .panel .share { right: calc(52px + var(--safe-right)); }
+:root[data-board] .panel .board-toggle { right: calc(96px + var(--safe-right)); }
 :root[data-board] .panel .copied { top: 46px; right: calc(52px + var(--safe-right)); }
 
 /* The type of a board grows with it: a share of its height, or of its width
@@ -1578,7 +1584,7 @@ li:last-child > .row.stop .rail::before { bottom: 50%; }
   padding: 0.6em 0.9em 0.3em;
   border-bottom: 0;
 }
-.panel.boardable .board-head h2 { grid-area: title; font-size: 1.3em; padding-right: 78px; }
+.panel.boardable .board-head h2 { grid-area: title; font-size: 1.3em; padding-right: 122px; }
 .board-head .sub { grid-area: sub; margin: 0.1em 0 0; font-size: max(13px, 0.6em); }
 .board-clock { grid-area: clock; margin: 0; font-size: 1.3em; font-weight: 700; font-variant-numeric: tabular-nums; line-height: 1.15; }
 .board-head .notes { grid-area: notes; margin: 0.4em 0 0; font-size: max(12.5px, 0.55em); }
@@ -1659,7 +1665,7 @@ li:last-child > .row.stop .rail::before { bottom: 50%; }
 .board-block > .sub { flex: none; margin: 0.1em 0 0; color: var(--text-muted); font-size: max(13px, 0.6em); }
 .board-block > .notes { flex: none; margin: 0.4em 0 0; font-size: max(12.5px, 0.55em); }
 .panel .board-head.columns { grid-template-areas: "notes clock"; min-height: 32px; }
-.panel.boardable .board-head.columns { padding-right: calc(0.9em + 78px); }
+.panel.boardable .board-head.columns { padding-right: calc(0.9em + 122px); }
 :root[data-display="fixed"] .panel.boardable .board-head.columns { padding-right: 0.9em; }
 /* The names of its stops, and with the controls a minus after each and the
    button that adds a stop to its list. */

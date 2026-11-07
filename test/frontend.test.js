@@ -637,3 +637,12 @@ test('the next day begins with the first departure planned for it, not with a la
   assert.equal(tomorrowAt('2026-10-17T23:50+02:00', ['2026-10-18T00:05+02:00']), 0);
   assert.equal(tomorrowAt('2026-10-17T23:50+02:00', ['2026-10-17T23:55+02:00']), -1);
 });
+
+// What makes the details of a stop its board is in their corner, between the
+// heart and the share button (#81): it changes what the details are, as they do.
+test('the button of the board is in the corner of the details, between the heart and the share button', () => {
+  const page = read('index.html');
+  const at = (id) => page.indexOf(`id="${id}"`);
+  assert.ok(at('panel-favourite') > 0 && at('panel-favourite') < at('panel-board') && at('panel-board') < at('panel-share') && at('panel-share') < at('panel-close'));
+  assert.match(page, /<button type="button" class="board-toggle" id="panel-board" hidden aria-pressed="false" aria-label="Enlarge" data-i18n-aria-label="panel\.enlarge" title="Enlarge" data-i18n-title="panel\.enlarge" data-icon="mdiArrowExpand"><\/button>/);
+});
