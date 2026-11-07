@@ -200,7 +200,6 @@ export default {
   'panel.favourited': 'Favourited: at the top of the search',
   // the button that enlarges the details of a stop into a board of its departures, and the one that makes the board the details again
   'panel.enlarge': 'Enlarge',
-  'panel.board': 'Board',
   // a board of several stops (#163): the button at its foot that adds a stop as a block of its own, and what the search says while it adds one
   'board.another': 'Another stop',
   'board.addTitle': 'Add to the board',

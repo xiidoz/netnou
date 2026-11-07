@@ -15,7 +15,7 @@ import { favouritesFrom, isFavourite, lineFavourite, sameStop, stopFavourite, wi
 import { choiceValue, readChoice, toggled } from './choice.js';
 import { DELAY_MAJOR_S, DELAY_MINOR_S, DELAY_SEVERE_S, MINUTES_MAX, NOTE_CHARS, badge as badgeOf, choiceChip as choiceChipOf, clockOf, delayCell as delayCellOf, delayClass, delayNode as delayNodeOf, delaySum as delaySumOf, unknownDelay as unknownDelayOf, delayFlag, delayText, departureLists, departuresSub as departuresSubOf, directionSign as directionSignOf, leavesAt, lineBadge, lineHead, lineLists, lineSaid as lineSaidOf, lineStops, lineTimetable, minutesNode as minutesNodeOf, trackAt, twoKinds, VEHICLE_R, panelHead as panelHeadOf, stopHeading, stopToday, tomorrowAt as tomorrowAtOf, untilText as untilTextOf, vehicleLabel, warningSign as warningSignOf, warns } from './panel.js';
 import { BOARD_MAX, BOARD_SHARE, BOARD_STOPS, boardBlocks, boardQuery, boardShare, displayQuery, ledBy, readBoard, readDisplay, readStops } from './display.js';
-import { mdiCheck, mdiChevronLeft, mdiChevronRight, mdiCityVariantOutline, mdiFullscreen, mdiFullscreenExit, mdiHeart, mdiHeartOutline, mdiMinusCircleOutline, mdiPlus } from './vendor/material-design-icons/icons.js';
+import { mdiArrowCollapse, mdiArrowExpand, mdiCheck, mdiChevronLeft, mdiChevronRight, mdiCityVariantOutline, mdiFullscreen, mdiFullscreenExit, mdiHeart, mdiHeartOutline, mdiMinusCircleOutline, mdiPlus } from './vendor/material-design-icons/icons.js';
 import { AttributionControl, MapLibreMap, NavigationControl } from './vendor/maplibre-gl/maplibre-gl.mjs';
 
 // The modes, each with a chip where the timetable has it. Same ids as MODES in
@@ -795,8 +795,7 @@ function directionName(direction, list) {
  * is to choose there.
  */
 function departuresSub(board = false) {
-  // (the chip of the board, there and back, not on a wall)
-  return toDom(departuresSubOf(FIXED || board ? null : state.view, FIXED ? null : choiceChip(), drawing(), FIXED ? null : board ? 'board' : 'details'));
+  return toDom(departuresSubOf(FIXED || board ? null : state.view, FIXED ? null : choiceChip(), drawing()));
 }
 
 /** Shows the stops of the open line in its other direction (#256), with what the last answer had of them. */
@@ -2945,6 +2944,24 @@ function shareable(yes, board = false) {
   panel.classList.toggle('shareable', yes);
   panel.classList.toggle('boardable', board);
   showFavourite();
+  showBoardButton();
+}
+
+// The button that makes the details of a stop its board, and the board the
+// details again (#81): in their corner, beside the heart and the share
+// button, as it changes what the details are, as they do; in the same place
+// on the board, its arrows turned inward. Not on a screen on a wall, where
+// nothing is to be touched (style.css). A screen reader hears "Als Tafel
+// zeigen", pressed on the board.
+const boardButton = $('panel-board');
+boardButton.addEventListener('click', () => setBoard(state.board === null ? boardWas : null));
+
+/** Shows the button of the board where a stop is open, as the board is shown or not. */
+function showBoardButton() {
+  const on = state.board !== null;
+  boardButton.hidden = !panel.classList.contains('boardable');
+  boardButton.setAttribute('aria-pressed', String(on));
+  boardButton.replaceChildren(icon(on ? mdiArrowCollapse : mdiArrowExpand));
 }
 
 // The heart before the share button (#245): a stop or a line is made a
@@ -3217,7 +3234,6 @@ panel.addEventListener('click', (event) => {
   else if (view) showView(view.dataset.view);
   else if (event.target.closest('.choice-open')) openChoice();
   else if (event.target.closest('.choice-clear')) applyChoice([]);
-  else if (event.target.closest('.board-open')) setBoard(state.board === null ? boardWas : null);
 });
 
 // The hours of a kind of day in the timetable of a line (#289), opened or
@@ -3944,6 +3960,7 @@ function setBoard(share, written = true) {
       if (state.extra.length) loadSelection();
     }
   }
+  showBoardButton();
   if (written) writeBoard();
 }
 

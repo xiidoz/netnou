@@ -351,8 +351,10 @@ https://example.org/stop/nuernberg-plaerrer?display=fixed&board=50&lang=de
 | --- | --- | --- |
 | `board=<share>` | the departures as a board that takes this share of the screen in percent, from 25 to 75: on the right of the map, or below it on a screen standing upright; `board=100` is all of the screen, without the map | the map alone |
 
-To set it up, open the stop and press "Tafel" ("Board") below its name in
-its details; on the board the same chip, pressed, goes back. Drag the edge between map and board to where it should be, and set
+To set it up, open the stop and press the button with the arrows pointing
+outward ("Als Tafel zeigen", "Enlarge") in the corner of its details,
+beside the share button; on the board the same button, its arrows inward,
+goes back. Drag the edge between map and board to where it should be, and set
 how the times show and whether the board has a clock behind the gear. Then
 press "Als Wandbildschirm" there, as above.
 

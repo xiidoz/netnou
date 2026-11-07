@@ -155,7 +155,6 @@ export default {
   'panel.unfavourite': 'Aus Favoriten entfernen',
   'panel.favourited': 'Favorisiert: steht in der Suche oben',
   'panel.enlarge': 'Als Tafel zeigen',
-  'panel.board': 'Tafel',
   'board.another': 'Weitere Haltestelle',
   'board.addTitle': 'Zur Tafel hinzufügen',
   'board.own': 'Als eigene Liste',

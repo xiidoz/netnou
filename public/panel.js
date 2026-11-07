@@ -12,7 +12,7 @@
 // as it is (test/panel.test.js).
 
 import { townToShow, townsAlong } from './stops.js';
-import { mdiAlert, mdiArrowCollapse, mdiArrowExpand, mdiChevronRight, mdiChevronUp, mdiClose, mdiFilterVariant } from './vendor/material-design-icons/icons.js';
+import { mdiAlert, mdiChevronRight, mdiChevronUp, mdiClose, mdiFilterVariant } from './vendor/material-design-icons/icons.js';
 
 // The kinds of transport, as the API names them; any other is drawn as "other".
 const KINDS = ['subway', 'tram', 'bus', 'suburban', 'regional', 'longdistance', 'ferry', 'cable', 'other'];
@@ -382,28 +382,17 @@ export function choiceChip(chosen, context) {
 export const VIEWS = ['departures', 'lines'];
 
 /**
- * The chip that makes the details of a stop its board and the board the
- * details again (#81): "Tafel", in the same place in both, pressed on the
- * board; its sign says which way it goes. A screen reader is told "Als Tafel
- * zeigen", pressed or not.
- * @param on whether the board is shown
- */
-export function boardChip({ t }, on = false) {
-  return h('button', { type: 'button', class: 'board-open', 'aria-pressed': String(on), 'aria-label': t('panel.enlarge'), title: t('panel.enlarge') }, iconOf(on ? mdiArrowCollapse : mdiArrowExpand), h('span', {}, t('panel.board')));
-}
-
-/**
  * The line below the name of a stop: the switch between its next departures
- * and all its lines, with the departures the chip of the lines they are of,
- * and where there can be a board, the chip that makes it and goes back. A
+ * and all its lines, with the departures the chip of the lines they are of.
+ * What makes the details the board is not here but in their corner (app.js,
+ * "the board"): it changes what the details are, not what they show. A
  * board has no switch (view null), as it shows the departures alone:
  * "Departures" and the chip; on a screen on a wall set up for one purpose,
  * as at a platform, not even the chip (null), as nobody is to choose there.
  * @param view what is shown, of VIEWS, or null
  * @param chip the chip (choiceChip), or null
- * @param board 'details' or 'board' where the chip of the board is there (boardChip), else null
  */
-export function departuresSub(view, chip, context, board = null) {
+export function departuresSub(view, chip, context) {
   const { t } = context;
   if (!view && !chip) return h('p', { class: 'sub' }, t('departures.title'));
   const names = { departures: t('view.departures'), lines: t('view.lines') };
@@ -411,7 +400,7 @@ export function departuresSub(view, chip, context, board = null) {
     ? h('span', { class: 'view-switch', role: 'group', 'aria-label': t('view.label') },
       VIEWS.map((one) => h('button', { type: 'button', 'aria-pressed': String(one === view), 'data-view': one }, names[one])))
     : h('span', {}, t('departures.title'));
-  return h('p', { class: 'sub with-choice' }, label, view === 'lines' ? null : chip, board ? boardChip(context, board === 'board') : null);
+  return h('p', { class: 'sub with-choice' }, label, view === 'lines' ? null : chip);
 }
 
 /**
