@@ -2015,11 +2015,16 @@ function listResults(towns, lines, stops, note = '', nearby = []) {
     el('span', { class: 'sign' }, [icon(mdiCityVariantOutline)]),
     nameInTown(town.name, town.district),
   ]));
-  // A line begins with its name on the colour of its mode, as in the departures.
+  // A line begins with its name on the colour of its mode, as in the departures,
+  // and as there with its kind where the lines found have the number in two
+  // kinds, "Tram 10" and "Bus 10" (lineBadge, #322); a screen reader hears it
+  // with its kind wherever the name is a number.
   // A favourite has a heart at the end of its row: a mark, not a button (#245).
   const heart = (item) => (item.favourite ? [el('span', { class: 'favourite', role: 'img', 'aria-label': t('search.favourite'), title: t('search.favourite') }, [icon(mdiHeart)])] : []);
+  const context = drawing();
+  const both = twoKinds([], lines.map(({ name, mode }) => ({ line: name, mode })));
   const lineRows = lines.map((line) => option(() => chooseLine(line), { class: 'line' }, [
-    badge(line.name, line.mode),
+    toDom(lineBadge(line.name, line.mode, context, both.has(line.name))),
     el('span', { class: 'name' }, [el('span', { class: 'to', text: line.to.join(' – ') }), el('span', { class: 'agency', text: line.agency })]),
     ...heart(line),
   ]));
@@ -2031,7 +2036,9 @@ function listResults(towns, lines, stops, note = '', nearby = []) {
       return dot;
     });
     // Below its name the town it is in, where the name does not say that: in small print, as a line has who runs it.
-    return option(() => chooseStop(stop), { class: stop.town ? 'in-town' : '', title: stop.modes.map((mode) => t(`mode.${mode}`)).join(', ') }, [el('span', { class: 'dots' }, dots), nameInTown(stop.name, stop.town), ...heart(stop)]);
+    // (what the dots say, for a screen reader: they say it by colour)
+    const kinds = stop.modes.map((mode) => t(`mode.${mode}`));
+    return option(() => chooseStop(stop), { class: stop.town ? 'in-town' : '', title: kinds.join(', ') }, [el('span', { class: 'dots' }, dots), nameInTown(stop.name, stop.town), el('span', { class: 'spoken', text: `, ${formatList(kinds)}` }), ...heart(stop)]);
   };
   const stopRows = stops.map(stopRow);
   const nearbyRows = nearby.map(stopRow);
@@ -2043,6 +2050,10 @@ function listResults(towns, lines, stops, note = '', nearby = []) {
   setActive(-1);
   // (where a stop is added to a board, what it is added to is said above, also before anything is typed)
   searchBox.classList.toggle('open', found.length > 0 || note !== '' || state.adding !== null);
+  // (the badges of the lines found as wide as the widest, so that their names stand in one column, as in the departures)
+  searchResults.style.removeProperty('--line-badge');
+  const lineBadges = [...searchResults.querySelectorAll('.line .badge')];
+  if (lineBadges.length > 1) searchResults.style.setProperty('--line-badge', `${Math.max(...lineBadges.map((node) => node.getBoundingClientRect().width))}px`);
   searchField.setAttribute('aria-expanded', String(found.length > 0));
 }
 
