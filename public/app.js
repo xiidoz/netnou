@@ -13,7 +13,7 @@ import { APP_NAME, READMES, chooseLanguage, dayOf, formatHour, formatList, forma
 import { FAVOURITE_NAME_ZOOM, HEART_MIDDLE, PLACES_ZOOM, RAIL_MODES, heartMark, joiningLines, mergePlaces, namePrecedence, namedAt, placeNames, stopMark, townToShow, townsAlong, withoutStyleStops } from './stops.js';
 import { favouritesFrom, isFavourite, lineFavourite, sameStop, stopFavourite, withChoice, withFavourite } from './favourites.js';
 import { choiceValue, readChoice, toggled } from './choice.js';
-import { DELAY_MAJOR_S, DELAY_MINOR_S, DELAY_SEVERE_S, MINUTES_MAX, NOTE_CHARS, badge as badgeOf, choiceChip as choiceChipOf, clockOf, delayCell as delayCellOf, delayClass, delayNode as delayNodeOf, delaySum as delaySumOf, unknownDelay as unknownDelayOf, delayFlag, delayText, departureLists, departuresSub as departuresSubOf, directionSign as directionSignOf, leavesAt, lineBadge, lineHead, lineLists, lineSaid as lineSaidOf, lineStops, lineTimetable, minutesNode as minutesNodeOf, twoKinds, vehicleSpot, VEHICLE_R, panelHead as panelHeadOf, stopHeading, stopSaid, stopSign, stopToday, tallMark, tomorrowAt as tomorrowAtOf, untilText as untilTextOf, vehicleLabel, warningSign as warningSignOf, warns } from './panel.js';
+import { DELAY_MAJOR_S, DELAY_MINOR_S, DELAY_SEVERE_S, MINUTES_MAX, NOTE_CHARS, badge as badgeOf, choiceChip as choiceChipOf, clockOf, delayCell as delayCellOf, delayClass, delayNode as delayNodeOf, delaySum as delaySumOf, unknownDelay as unknownDelayOf, delayFlag, delayText, departureLists, departuresSub as departuresSubOf, directionSign as directionSignOf, leavesAt, lineBadge, lineHead, lineLists, lineSaid as lineSaidOf, lineStops, lineTimetable, minutesNode as minutesNodeOf, twoKinds, vehicleSpot, VEHICLE_R, panelHead as panelHeadOf, stopHeading, stopRing, stopSaid, stopSign, stopToday, tallMark, tomorrowAt as tomorrowAtOf, untilText as untilTextOf, vehicleLabel, warningSign as warningSignOf, warns } from './panel.js';
 import { BOARD_MAX, BOARD_SHARE, BOARD_STOPS, boardBlocks, boardQuery, boardShare, displayQuery, ledBy, readBoard, readDisplay, readStops } from './display.js';
 import { mdiArrowCollapse, mdiArrowExpand, mdiCheck, mdiChevronLeft, mdiChevronRight, mdiCityVariantOutline, mdiFullscreen, mdiFullscreenExit, mdiHeart, mdiHeartOutline, mdiMinusCircleOutline, mdiPlus } from './vendor/material-design-icons/icons.js';
 import { AttributionControl, MapLibreMap, NavigationControl } from './vendor/maplibre-gl/maplibre-gl.mjs';
@@ -182,7 +182,7 @@ function toDom(node, svg = false) {
  * whether delays come in and how the vehicles are coloured and flagged.
  */
 function drawing() {
-  return { t, time: formatTime, day: dayOf, hour: formatHour, weekday: formatWeekday, list: formatList, now: now(), times: state.times, live: realtimeState() === 'live', colorBy: state.colorBy, flags: state.flags, moving: true, favourite: favouriteStop };
+  return { t, time: formatTime, day: dayOf, hour: formatHour, weekday: formatWeekday, list: formatList, now: now(), times: state.times, live: realtimeState() === 'live', colorBy: state.colorBy, flags: state.flags, moving: true, favourite: favouriteStop, chosen: (stop) => stop.id === state.selection?.fromStop?.id };
 }
 
 // The icons on the page's own buttons are from Material Design Icons
@@ -1147,7 +1147,8 @@ function draw() {
     for (const part of parts) {
       const hit = { x: part.x, y: part.y, r: STOP_HIT_PX, station };
       hits.push(hit);
-      const ringed = calledAt && part.modes.includes(route.mode);
+      // (not the stop the trip or line was opened from: it has the ring of an open stop, below)
+      const ringed = calledAt && part.modes.includes(route.mode) && station.id !== selection?.fromStop?.id;
       marks.push({ x: part.x, y: part.y, kinds: part.modes, id: station.id, name: station.name, modes: station.modes, favourite, hit, ...(ringed ? { ringed, key: route.keyOf(station), space: ROUTE_RING_GAP + RING_WIDTH + 4 } : {}) });
     }
   }
@@ -1175,39 +1176,40 @@ function draw() {
   // The station whose departures are open, at any zoom, and the further stops
   // of its board: on top of the others, each of their marks in a ring in the
   // colours of its kinds (kindsRing), as the chosen vehicle has one in its
-  // own, and with their names.
+  // own, and with their names. So too, while a trip or a line opened from a
+  // stop's details is open, that stop (fromStop), chosen as in their list.
   const open = [];
-  if (selection?.type === 'station' && selection.data?.lat !== undefined) {
-    const further = state.board === null ? [] : state.extra.map((stop) => boardStopData.get(stop.path)).filter((place) => place && !place.gone);
-    for (const place of [selection.data, ...further]) {
-      const { id, modes, places } = openStop(place);
-      const parts = marksOf({ lat: place.lat, lon: place.lon, modes }, places, zoom, big, project);
-      // (its lines, where its marks are not on the map with the others)
-      if (!drawn.has(id)) drawJoins(joiningLines(parts).map(([a, b]) => [parts[a], parts[b]]));
-      // (the name of the mark nearest the station's own point goes wherever it falls, as an open stop's does)
-      const [px, py] = project(place.lat, place.lon);
-      const nearest = parts.reduce((best, part) => (Math.hypot(part.x - px, part.y - py) < Math.hypot(best.x - px, best.y - py) ? part : best));
-      // (an open favourite has its hearts in rings of their shape, above the vehicles where the others are, see "Stops")
-      const loved = isFavouriteStop(place);
-      for (const { x, y, modes: kinds } of parts) {
-        if (loved) {
-          if (!above) heartRing(x, y, kinds, big);
-          const mark = above ? heartMark(kinds.length, big) : drawHeartStop(x, y, kinds, big);
-          open.push({ x, y, ...mark, kinds, id, name: place.name, modes, open: x === nearest.x && y === nearest.y, ringed: true, space: RING_GAP + RING_WIDTH + 4, favourite: true, lifted: above });
-          continue;
-        }
-        const mark = stopMark(kinds.length, big);
-        // (the outline of the pill moved out by RING_GAP, with white edges, as drawRing has it)
-        roundedBox(x - mark.w / 2 - RING_GAP, y - mark.h / 2 - RING_GAP, mark.w + 2 * RING_GAP, mark.h + 2 * RING_GAP, mark.corner + RING_GAP);
-        ctx.strokeStyle = '#fff';
-        ctx.lineWidth = RING_WIDTH + 2 * RING_EDGE;
-        ctx.stroke();
-        ctx.strokeStyle = kindsRing(x, y, kinds);
-        ctx.lineWidth = RING_WIDTH;
-        ctx.stroke();
-        drawStop(x, y, kinds, big);
-        open.push({ x, y, ...mark, id, name: place.name, modes, open: x === nearest.x && y === nearest.y, ringed: true, space: RING_GAP + RING_WIDTH + 4 });
+  const openPlaces = selection?.type === 'station' && selection.data?.lat !== undefined
+    ? [selection.data, ...(state.board === null ? [] : state.extra.map((stop) => boardStopData.get(stop.path)).filter((place) => place && !place.gone))]
+    : (selection?.type === 'trip' || selection?.type === 'line') && selection.fromStop ? [selection.fromStop] : [];
+  for (const place of openPlaces) {
+    const { id, modes, places } = openStop(place);
+    const parts = marksOf({ lat: place.lat, lon: place.lon, modes }, places, zoom, big, project);
+    // (its lines, where its marks are not on the map with the others)
+    if (!drawn.has(id)) drawJoins(joiningLines(parts).map(([a, b]) => [parts[a], parts[b]]));
+    // (the name of the mark nearest the station's own point goes wherever it falls, as an open stop's does)
+    const [px, py] = project(place.lat, place.lon);
+    const nearest = parts.reduce((best, part) => (Math.hypot(part.x - px, part.y - py) < Math.hypot(best.x - px, best.y - py) ? part : best));
+    // (an open favourite has its hearts in rings of their shape, above the vehicles where the others are, see "Stops")
+    const loved = isFavouriteStop(place);
+    for (const { x, y, modes: kinds } of parts) {
+      if (loved) {
+        if (!above) heartRing(x, y, kinds, big);
+        const mark = above ? heartMark(kinds.length, big) : drawHeartStop(x, y, kinds, big);
+        open.push({ x, y, ...mark, kinds, id, name: place.name, modes, open: x === nearest.x && y === nearest.y, ringed: true, space: RING_GAP + RING_WIDTH + 4, favourite: true, lifted: above });
+        continue;
       }
+      const mark = stopMark(kinds.length, big);
+      // (the outline of the pill moved out by RING_GAP, with white edges, as drawRing has it)
+      roundedBox(x - mark.w / 2 - RING_GAP, y - mark.h / 2 - RING_GAP, mark.w + 2 * RING_GAP, mark.h + 2 * RING_GAP, mark.corner + RING_GAP);
+      ctx.strokeStyle = '#fff';
+      ctx.lineWidth = RING_WIDTH + 2 * RING_EDGE;
+      ctx.stroke();
+      ctx.strokeStyle = kindsRing(x, y, kinds);
+      ctx.lineWidth = RING_WIDTH;
+      ctx.stroke();
+      drawStop(x, y, kinds, big);
+      open.push({ x, y, ...mark, id, name: place.name, modes, open: x === nearest.x && y === nearest.y, ringed: true, space: RING_GAP + RING_WIDTH + 4 });
     }
   }
   const openIds = new Set(open.map((mark) => mark.id));
@@ -1651,6 +1653,9 @@ function drawLineVehicles(paper) {
   const live = realtimeState() === 'live';
   const at = now();
   let focused = null;
+  // (the stop the list was opened from: its ring over a vehicle there, which it rings, and under one going by)
+  const chosen = paper.parentNode.dataset.chosen?.split(',').map(Number);
+  let atChosen = false;
   for (const node of paper.parentNode.querySelectorAll('.line-vehicle')) {
     if (!lineTracks.has(node)) lineTracks.set(node, node.dataset.track ? node.dataset.track.split(',').map(Number) : [0, ...node.dataset.at.split(',').map(Number)]);
     const { x, y, standing } = vehicleSpot(lineTracks.get(node), at);
@@ -1664,8 +1669,12 @@ function drawLineVehicles(paper) {
     drawDisc(x, y, VEHICLE_R, v, true, c);
     const flag = node.dataset.flag === 'none' ? null : flagOf(v, live);
     const width = flag ? drawFlag(x + VEHICLE_R * 0.55, y - VEHICLE_R - 5, flag, c) : 0;
-    if (node.matches(':focus-visible')) focused = { x, y, width };
+    const there = chosen !== undefined && Math.abs(x - chosen[0]) < 0.05 && Math.abs(y - chosen[1]) < 0.05;
+    if (node.matches(':focus-visible')) focused = { x, y, width, there };
+    else if (there) atChosen = true;
   }
+  // (but not over the ring of the keyboard focus, which is over everything)
+  paper.closest('.line-body')?.querySelector('.stop-ring')?.classList.toggle('over', atChosen && !focused?.there);
   // the ring of the keyboard focus last, over all of them: round the whole of its vehicle, its flag inside
   if (focused) {
     roundedBox(focused.x - 19, focused.y - 21, 19 + Math.max(19, VEHICLE_R * 0.55 + focused.width + 3), 42, 10, c);
@@ -2831,14 +2840,14 @@ const stopPathOf = ({ name, lat, lon }) => stopPathAt(name, Math.round(lat * 1e5
  * @param from the name of the details this was opened from (sheetName), kept
  *   with the step for the way back to them (see "the way back")
  */
-function showAddress(path, title, from = null) {
+function showAddress(path, title, from = null, fromStop = null) {
   if (path !== servedAt) {
     document.title = title ?? pageTitle;
     servedAt = null;
   }
   if (path === here()) return;
   // (the settings of the page in its address stay; a board, with its further stops, only where one is shown)
-  history.pushState(from ? { from } : null, '', new URL(`${path}${boardQuery(location.search, state.board, state.extra, state.lines)}`, document.baseURI));
+  history.pushState(from ? { from, ...(fromStop ? { fromStop } : {}) } : null, '', new URL(`${path}${boardQuery(location.search, state.board, state.extra, state.lines)}`, document.baseURI));
 }
 
 /**
@@ -2864,12 +2873,12 @@ async function openAddress(loaded = false) {
   const search = found.type === 'stop' ? location.search : boardQuery(location.search, null);
   if (found.path !== path || search !== location.search) history.replaceState(history.state, '', new URL(`${found.path}${search}`, document.baseURI));
   if (found.type === 'line') {
-    selectLine(found, { counted: loaded, from: history.state?.from });
+    selectLine(found, { counted: loaded, from: history.state?.from, fromStop: history.state?.fromStop });
     return true;
   }
   // (a trip, #178: the map is brought to it once it is there, see renderTrip, unless a display's address says where the map is)
   if (found.type === 'trip') {
-    select('trip', found.id, { counted: loaded, fit: !(loaded && state.viewAsked), from: history.state?.from });
+    select('trip', found.id, { counted: loaded, fit: !(loaded && state.viewAsked), from: history.state?.from, fromStop: history.state?.fromStop });
     return true;
   }
   // (the board of the stop, where the address has one: a line has none; and its further stops, read before the board is written into the address again)
@@ -3134,11 +3143,11 @@ async function loadSelection(first = false) {
         selection.line = { ...selection.line, at: data.at };
         // (opened from a trip, in the direction that trip goes)
         if (data.way !== undefined) selection.way = data.way;
-        showAddress(data.path, lineTitle(data), selection.from);
+        showAddress(data.path, lineTitle(data), selection.from, selection.fromStop);
         shareable(true);
       }
       if (first && selection.type === 'trip') {
-        showAddress(data.address, tripTitle(data), selection.from);
+        showAddress(data.address, tripTitle(data), selection.from, selection.fromStop);
         shareable(true);
       }
       showSelection(first);
@@ -3232,10 +3241,10 @@ panel.addEventListener('click', (event) => {
   if ((toLine || station) && (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey)) return;
   if (toLine || station) event.preventDefault();
   // (what these details open has the way back to them: see "the way back")
-  if (row) select('trip', row.dataset.trip, { fit: 'unseen', from: sheetName() });
+  if (row) select('trip', row.dataset.trip, { fit: 'unseen', from: sheetName(), fromStop: stopOpen() });
   else if (station) select('station', station.dataset.station, { from: sheetName() });
   else if (way) showWay(Number(way.dataset.way));
-  else if (toLine) selectLine(JSON.parse(toLine.dataset.line), { from: sheetName() });
+  else if (toLine) selectLine(JSON.parse(toLine.dataset.line), { from: sheetName(), fromStop: stopOpen() });
   else if (view) showView(view.dataset.view);
   else if (event.target.closest('.choice-open')) openChoice();
   else if (event.target.closest('.choice-clear')) applyChoice([]);
@@ -3275,6 +3284,17 @@ function sheetName() {
   const said = (name, mode) => { const words = lineSaid(name, mode); return `${words.charAt(0).toUpperCase()}${words.slice(1)}`; };
   if (type === 'trip') return `${said(data.line, data.mode)} → ${data.to}`;
   return type === 'line' ? said(data.name, data.mode) : data.name ?? null;
+}
+
+/**
+ * The stop whose details are open, as a trip or a line opened from them keeps
+ * it (fromStop, with the way back in the history: see "the way back"): its
+ * stop is chosen, with a ring in their list and on the map, and they open
+ * with it in view. Null where no stop is open.
+ */
+function stopOpen() {
+  const data = state.selection?.type === 'station' ? state.selection.data : null;
+  return data?.lat === undefined ? null : { id: data.id, name: data.name, lat: data.lat, lon: data.lon };
 }
 
 /** Puts the way back above the name in the head of the details, where they were opened from others. */
@@ -3460,6 +3480,22 @@ function showNotes(notes, heading, from) {
 }
 
 /**
+ * Scrolls the details to show a row, and another with it where both fit:
+ * the two in the middle together, else the first alone in the middle.
+ */
+function showRows(row, also = null) {
+  const target = row ?? also;
+  if (!target) return;
+  const box = panelBody.getBoundingClientRect();
+  const a = target.getBoundingClientRect();
+  const b = row && also && also !== row ? also.getBoundingClientRect() : null;
+  const top = b ? Math.min(a.top, b.top) : a.top;
+  const bottom = b ? Math.max(a.bottom, b.bottom) : a.bottom;
+  const [from, to] = b && bottom - top <= panelBody.clientHeight - 24 ? [top, bottom] : [a.top, a.bottom];
+  panelBody.scrollTop += from - box.top - (panelBody.clientHeight - (to - from)) / 2;
+}
+
+/**
  * The track of the vehicle of a trip on the line of its stops [time, x, y,
  * …], as the line card's have theirs (lineStops in panel.js): at each stop it
  * calls at from when it arrives to when it leaves, as its delays have it,
@@ -3478,6 +3514,7 @@ function placeTripVehicle(trip, vehicle, body, stopRows) {
     const arrives = stop.arr + (stop.arrDelay ?? stop.depDelay ?? 0);
     const leaves = Math.max(arrives, stop.dep + (stop.depDelay ?? stop.arrDelay ?? 0));
     track.push(arrives, x, y, leaves, x, y);
+    if (row.querySelector('.stop-ring')) vehicle.parentNode.dataset.chosen = `${x},${y}`;
   });
   if (!track.length) return;
   vehicle.dataset.track = track.join(',');
@@ -3505,6 +3542,11 @@ function renderTrip(trip, scrollToNext) {
   const drawn = drawing();
   // (the row of each stop, for where its vehicle is drawn)
   const stopRows = [];
+  // (the stop it was opened from, chosen: where it calls there more than once, as round a loop, the first time it is still to come)
+  const fromId = state.selection?.fromStop?.id;
+  const calls = trip.stops.map((stop, i) => i).filter((i) => fromId !== undefined && trip.stops[i].station === fromId);
+  const chosenAt = calls.find((i) => (trip.stops[i].dep + (trip.stops[i].depDelay ?? trip.stops[i].arrDelay ?? 0)) >= trip.now) ?? calls[0] ?? -1;
+  let chosenRow = null;
 
   const rows = trip.stops.map((stop, i) => {
     const isLast = i === lastIndex;
@@ -3525,9 +3567,10 @@ function renderTrip(trip, scrollToNext) {
     // (the stop on the line as the map draws it, its kinds and a favourite's heart; its row as high as its mark needs)
     const favourite = favouriteStop(stop);
     if (!towns[i] && tallMark(stop.modes, trip.mode)) classes.push('tall');
-    const said = `${stopSaid(stop.modes, trip.mode, favourite, drawn)}${isNext ? `, ${t('trip.next')}` : ''}`;
+    const chosen = i === chosenAt;
+    const said = `${stopSaid(stop.modes, trip.mode, favourite, drawn)}${isNext ? `, ${t('trip.next')}` : ''}${chosen ? `, ${t('stop.chosen')}` : ''}`;
     const row = el('button', { type: 'button', class: classes.join(' '), onclick: () => select('station', stop.station, { from: sheetName() }) }, [
-      el('span', { class: 'rail' }, [toDom(stopSign(stop.modes, trip.mode, favourite))]),
+      el('span', { class: 'rail' }, [toDom(stopSign(stop.modes, trip.mode, favourite)), ...(chosen ? [toDom(stopRing(stop.modes, trip.mode, favourite, `ring-${i}`))] : [])]),
       el('span', { class: 'time', text: formatTime(leavesAt({ planned, delay })) }),
       stop.skipped ? el('span') : delaySum(planned, delay),
       nameInTown(stop.name, towns[i], { title: stop.name }),
@@ -3536,6 +3579,7 @@ function renderTrip(trip, scrollToNext) {
     ]);
     stopRows[i] = row;
     if (isNext) nextRow = row;
+    if (chosen) chosenRow = row;
     return el('li', {}, [row]);
   });
 
@@ -3572,11 +3616,11 @@ function renderTrip(trip, scrollToNext) {
     body,
   );
   if (vehicle) placeTripVehicle(trip, vehicle, body, stopRows);
-  // (the next stop in the middle of the list: the list scrolled alone, as scrollIntoView would scroll the sheet around it
-  // as well, and on a phone push its head, the way back and its buttons, out above its top)
-  if (scrollToNext) {
-    if (nextRow) panelBody.scrollTop += nextRow.getBoundingClientRect().top - panelBody.getBoundingClientRect().top - (panelBody.clientHeight - nextRow.offsetHeight) / 2;
-  } else panelBody.scrollTop = scrollTop;
+  // (opened: the stop it was opened from and the next one in view, where both fit, else the chosen one, without one the next,
+  // in the middle; the list scrolled alone, as scrollIntoView would scroll the sheet around it as well, and on a phone push
+  // its head, the way back and its buttons, out above its top)
+  if (scrollToNext) showRows(chosenRow, nextRow);
+  else panelBody.scrollTop = scrollTop;
 
   // Once, when the trip is opened at its address (#178): the map on where it
   // is, between the stop it left last and the next one; where it is not
@@ -3667,7 +3711,12 @@ function renderLine(line, first) {
   // (and after them its timetable of the coming days that way, #289, with the hours shown of the days they were opened for)
   const timetableOf = lineTimetable(line.facts, drawn, way, selection.hours ?? new Set()) ?? [];
   fillPanel([toDom(lineHead(line, drawn, way))], ...[...lineStops(line, drawn, way), ...timetableOf].map((node) => toDom(node)));
-  panelBody.scrollTop = scrollTop;
+  // (opened from a stop's details: that stop, chosen, in the middle of the list, once)
+  const chosen = selection.fromStop && !selection.chosenShown ? panelBody.querySelector(`.line-stops a.row[data-station="${CSS.escape(selection.fromStop.id)}"]`) : null;
+  if (chosen) {
+    selection.chosenShown = true;
+    showRows(chosen);
+  } else panelBody.scrollTop = scrollTop;
   pinTimetable();
   // (its vehicles drawn at once, as high as the list, and with the frames from now on)
   const paper = lineCanvas();

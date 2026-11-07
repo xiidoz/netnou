@@ -280,6 +280,8 @@ export default {
 
   'stop.platform': 'Plat. {platform}',
   'stop.skipped': 'skipped',
+  // (the stop a trip or a line was opened from, with the ring of a chosen stop: what a screen reader hears of it)
+  'stop.chosen': 'selected',
 
   // what a stop on a screen on a wall shows, which has nothing to choose
   'departures.title': 'Departures',

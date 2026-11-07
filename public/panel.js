@@ -632,13 +632,65 @@ export const tallMark = (modes, own) => kindsOf(modes, own).length > TALL_KINDS;
 export function stopSign(modes, own, favourite = false) {
   const kinds = kindsOf(modes, own);
   const { mark, heart, unit, half } = markOf(kinds, favourite);
-  const w = mark.w / 2 + 1;
-  const y = half + 1;
   const dots = mark.dots.map(([cx, cy], i) => h('circle', { 'data-mode': kinds[i], cx: cx.toFixed(2), cy: cy.toFixed(2), r: mark.dot }));
   const edge = heart
     ? h('path', { class: 'edge', d: mdiHeart, transform: `translate(${(-HEART_MIDDLE[0] * unit).toFixed(2)} ${(-HEART_MIDDLE[1] * unit).toFixed(2)}) scale(${unit.toFixed(4)})` })
     : h('rect', { class: 'edge', x: (-mark.w / 2).toFixed(2), y: (-mark.h / 2).toFixed(2), width: mark.w, height: mark.h, rx: mark.corner });
-  return h('svg', { class: `stop-sign${heart ? ' loved' : ''}`, viewBox: `${(-w).toFixed(2)} ${(-y).toFixed(2)} ${(2 * w).toFixed(2)} ${(2 * y).toFixed(2)}`, width: (2 * w).toFixed(2), height: (2 * y).toFixed(2), 'aria-hidden': 'true' }, edge, dots);
+  return h('svg', { class: `stop-sign${heart ? ' loved' : ''}`, ...markBox(mark, half), 'aria-hidden': 'true' }, edge, dots);
+}
+
+// The box of the mark of a stop, and of its ring, which reaches out of it: the
+// same for both, so that the browser puts both on the same pixels at any zoom.
+function markBox(mark, half) {
+  const w = mark.w / 2 + 1;
+  const y = half + 1;
+  return { viewBox: `${(-w).toFixed(2)} ${(-y).toFixed(2)} ${(2 * w).toFixed(2)} ${(2 * y).toFixed(2)}`, width: (2 * w).toFixed(2), height: (2 * y).toFixed(2) };
+}
+
+// The ring of a stop that is chosen, as the map draws that of an open stop:
+// round a pill (drawRing in app.js) the pill's outline RING_GAP out, as wide
+// as RING_WIDTH; round a heart (cutHeartRing) from RING_GAP to RING_GAP +
+// RING_WIDTH outside it; in the colours of the stop's kinds, each on an equal
+// share of the way round from the top (kindsRing), on edges of white
+// RING_EDGE wide. Cut from bands round the outline of the mark: a mask of
+// that outline grown by one width and less it grown by a smaller one.
+const RING_GAP = 5;
+const RING_WIDTH = 2.5;
+const RING_EDGE = 1;
+
+/**
+ * The ring of a stop of a list that is chosen, the stop the details were
+ * opened from: over its mark, under a vehicle going by and over one at that
+ * stop (app.js, drawLineVehicles). Drawn in the box of the mark (markBox),
+ * out of which it reaches.
+ * @param key what its masks are named by, of its own in the page
+ */
+export function stopRing(modes, own, favourite, key) {
+  const kinds = kindsOf(modes, own);
+  const { mark, heart, unit, half } = markOf(kinds, favourite);
+  // (from where to where outside the outline the colours lie, and the white)
+  const [from, to] = heart ? [RING_GAP, RING_GAP + RING_WIDTH] : [RING_GAP - RING_WIDTH / 2, RING_GAP + RING_WIDTH / 2];
+  const outline = (attrs) => (heart
+    ? h('path', { d: mdiHeart, transform: `translate(${(-HEART_MIDDLE[0] * unit).toFixed(2)} ${(-HEART_MIDDLE[1] * unit).toFixed(2)}) scale(${unit.toFixed(4)})`, 'stroke-linejoin': 'round', ...attrs, 'stroke-width': attrs['stroke-width'] === undefined ? undefined : (attrs['stroke-width'] / unit).toFixed(3) })
+    : h('rect', { x: (-mark.w / 2).toFixed(2), y: (-mark.h / 2).toFixed(2), width: mark.w, height: mark.h, rx: mark.corner, ...attrs }));
+  const band = (id, inner, outer) => h('mask', { id },
+    outline({ fill: 'none', stroke: '#fff', 'stroke-width': 2 * outer }),
+    outline({ fill: '#000', stroke: '#000', 'stroke-width': 2 * inner }));
+  const w = mark.w / 2 + to + RING_EDGE + 1;
+  const y = half + to + RING_EDGE + 1;
+  // (a wedge of the way round for each kind, from the top as the hands of a clock go)
+  const wedge = (i) => {
+    const points = ['0,0'];
+    for (let k = 0; k <= 16; k++) {
+      const angle = -Math.PI / 2 + (2 * Math.PI * (i + k / 16)) / kinds.length;
+      points.push(`${(60 * Math.cos(angle)).toFixed(2)},${(60 * Math.sin(angle)).toFixed(2)}`);
+    }
+    return h('polygon', { class: 'share', 'data-mode': kinds[i], points: points.join(' ') });
+  };
+  return h('svg', { class: 'stop-ring', ...markBox(mark, half), 'aria-hidden': 'true' },
+    h('defs', {}, band(`${key}-edge`, from - RING_EDGE, to + RING_EDGE), band(`${key}-colours`, from, to)),
+    h('rect', { class: 'edges', x: (-w).toFixed(2), y: (-y).toFixed(2), width: (2 * w).toFixed(2), height: (2 * y).toFixed(2), mask: `url(#${key}-edge)` }),
+    h('g', { mask: `url(#${key}-colours)` }, kinds.map((_, i) => wedge(i))));
 }
 
 /**
@@ -762,25 +814,30 @@ export function lineStops(line, context, way = 0) {
     const below = [town, note].filter(Boolean).join(' · ');
     const favourite = context.favourite?.(stop) ?? false;
     const tall = !below && tallMark(stop.modes, line.mode);
-    const said = stopSaid(stop.modes, line.mode, favourite, context);
+    // (the stop the line was opened from, chosen: its ring, which a screen reader hears of)
+    const chosen = context.chosen?.(stop) ?? false;
+    const said = `${stopSaid(stop.modes, line.mode, favourite, context)}${chosen ? `, ${t('stop.chosen')}` : ''}`;
     const height = below || tall ? NOTED_ROW : STOP_ROW;
     const middle = y + height / 2;
     y += height;
     const name = below ? h('span', { class: 'name' }, h('span', { class: 'stop' }, stop.name), h('span', { class: 'town' }, below)) : h('span', { class: 'name' }, stop.name);
-    return { middle, node: h('li', { class: className }, h('a', { class: `row on-line${below ? ' in-town' : ''}${tall ? ' tall' : ''}`, href: stop.path, 'data-station': stop.id, title: stop.name },
-      h('span', { class: 'rail' }, stopSign(stop.modes, line.mode, favourite)), name, said ? h('span', { class: 'spoken' }, said) : null)) };
+    return { middle, chosen, node: h('li', { class: className }, h('a', { class: `row on-line${below ? ' in-town' : ''}${tall ? ' tall' : ''}`, href: stop.path, 'data-station': stop.id, title: stop.name },
+      h('span', { class: 'rail' }, stopSign(stop.modes, line.mode, favourite), chosen ? stopRing(stop.modes, line.mode, favourite, `ring-${stop.id}`) : null), name, said ? h('span', { class: 'spoken' }, said) : null)) };
   };
   const ends = (i, n) => `on-line station${i === 0 ? ' first' : ''}${i === n - 1 ? ' last' : ''}`;
   const middles = [];
   const inBranches = one.branches.map(() => []);
+  // (where the chosen stop is, for the page to tell a vehicle there: app.js lays its ring over that one alone)
+  let chosenAt = null;
   let next = one.stops.length; // (the town of the next stop of a branch, after those of the list)
   const branch = (k) => {
     const { after, before, stops } = one.branches[k];
     // (one that leaves the line, one that joins it, one that does both, as a loop off a station and back, or one apart)
     const kind = [after !== null ? 'leaves' : null, before !== null ? 'joins' : null].filter(Boolean).join(' ') || 'apart';
     return h('li', { class: `branch-part ${kind}` }, h('ul', { class: 'branch' }, stops.map((stop, i) => {
-      const { middle, node } = row(stop, towns[next++], null, ends(i, stops.length));
+      const { middle, chosen, node } = row(stop, towns[next++], null, ends(i, stops.length));
       inBranches[k].push(middle);
+      if (chosen) chosenAt = [BRANCH_X, middle];
       return node;
     })));
   };
@@ -788,8 +845,9 @@ export function lineStops(line, context, way = 0) {
   const items = [];
   one.stops.forEach((stop, i) => {
     one.branches.forEach((b, k) => b.after === null && b.before === i && items.push(branch(k)));
-    const { middle, node } = row(stop, towns[i], noteOf(stop), ends(i, one.stops.length));
+    const { middle, chosen, node } = row(stop, towns[i], noteOf(stop), ends(i, one.stops.length));
     middles.push(middle);
+    if (chosen) chosenAt = [LINE_X, middle];
     items.push(node);
     one.branches.forEach((b, k) => b.after === i && items.push(branch(k)));
   });
@@ -813,7 +871,7 @@ export function lineStops(line, context, way = 0) {
   const list = h('ul', { class: 'line-stops', 'data-mode': kindOf(line.mode) }, items);
   if (!vehicles.length) return [h('div', { class: 'line-body' }, list)];
   return [h('div', { class: 'line-body' }, list, context.moving
-    ? h('div', { class: 'line-vehicles' }, h('canvas', { class: 'line-canvas', 'aria-hidden': 'true' }), vehicles)
+    ? h('div', { class: 'line-vehicles', 'data-chosen': chosenAt ? chosenAt.map((px) => Math.round(px * 10) / 10).join(',') : null }, h('canvas', { class: 'line-canvas', 'aria-hidden': 'true' }), vehicles)
     : h('svg', { class: 'line-vehicles', height: Math.round(y + STOPS_TOP) }, vehicles))];
 }
 
