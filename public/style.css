@@ -1038,6 +1038,21 @@ li:last-child > .row.stop .rail::before { bottom: 50%; }
 .stop-sign circle[data-mode="ferry"] { fill: var(--mode-ferry); }
 .stop-sign circle[data-mode="cable"] { fill: var(--mode-cable); }
 .row.stop.past .stop-sign, .row.stop.cancelled .stop-sign { opacity: 0.45; }
+/* The ring of the stop a trip or a line was opened from (stopRing in panel.js), as the map's of an open stop: in the
+   colours of its kinds on white edges, over its mark, not faded where it is passed. Under a vehicle going by, which
+   covers it as it covers a mark; over one at that stop (app.js, drawLineVehicles), which would hide it whole. */
+.rail .stop-ring { position: absolute; left: 16px; top: 50%; z-index: 1; overflow: visible; transform: translate(-50%, -50%); pointer-events: none; }
+.rail .stop-ring.over { z-index: 3; }
+.stop-ring .edges { fill: #fff; }
+.stop-ring .share { fill: var(--mode-other); }
+.stop-ring .share[data-mode="subway"] { fill: var(--mode-subway); }
+.stop-ring .share[data-mode="tram"] { fill: var(--mode-tram); }
+.stop-ring .share[data-mode="bus"] { fill: var(--mode-bus); }
+.stop-ring .share[data-mode="suburban"] { fill: var(--mode-suburban); }
+.stop-ring .share[data-mode="regional"] { fill: var(--mode-regional); }
+.stop-ring .share[data-mode="longdistance"] { fill: var(--mode-longdistance); }
+.stop-ring .share[data-mode="ferry"] { fill: var(--mode-ferry); }
+.stop-ring .share[data-mode="cable"] { fill: var(--mode-cable); }
 .row.stop.past .rail::before { opacity: 0.4; }
 
 /* As text a delay is one class "hotter" than as a dot: the yellow is too pale to read on the card. */

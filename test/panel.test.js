@@ -6,7 +6,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { t as translate } from '../public/i18n.js';
 import en from '../public/locales/en.js';
-import { badge, stopSaid, stopSign, tallMark, vehicleSpot, choiceChip, clockOf, delayClass, delayFlag, delayText, departureLists, departuresSub, directionSign, h, lineHead, lineLists, lineStops, panelHead, stopHeading, toHtml, trackAt, vehicleLabel } from '../public/panel.js';
+import { badge, stopRing, stopSaid, stopSign, tallMark, vehicleSpot, choiceChip, clockOf, delayClass, delayFlag, delayText, departureLists, departuresSub, directionSign, h, lineHead, lineLists, lineStops, panelHead, stopHeading, toHtml, trackAt, vehicleLabel } from '../public/panel.js';
 
 const NOW = Date.parse('2026-10-23T10:00:00Z') / 1000;
 // (times of day and dates in UTC, so that the test reads the same anywhere)
@@ -247,6 +247,9 @@ test('the stops of a line in one direction, with its vehicles along them as the 
   const moving = html(lineStops(line, { ...drawing(), live: true, moving: true }));
   assert.ok(moving.includes(`<div class="line-vehicles"><canvas class="line-canvas" aria-hidden="true"></canvas><button type="button" class="line-vehicle" data-trip="a" aria-label="U1 to Langwasser Süd +3" data-mode="subway" data-late="180" data-label="U1" data-at="30.0,38.0" data-track="${NOW - 60},30,22,${NOW + 60},30,60,${NOW + 90},30,60"></button>`));
   assert.ok(moving.includes('<button type="button" class="line-vehicle" data-trip="c" aria-label="U1 to Depot ±0" data-mode="subway" data-late="20" data-label="U1" data-at="58.0,98.0"></button>') && !moving.includes('<svg class="line-vehicles"'));
+  // opened from a stop: where that one is, for the page to lay its ring over a vehicle there alone (on the line, on a branch)
+  const from = (name) => html(lineStops(line, { ...drawing(), moving: true, chosen: (stop) => stop.name === name }));
+  assert.ok(from('Gostenhof').includes('<div class="line-vehicles" data-chosen="30,60">') && from('Depot').includes('<div class="line-vehicles" data-chosen="58,98">'));
   // without vehicles under way, no drawing of them; a direction that is not there, nothing
   assert.ok(!html(lineStops({ ...line, ways: [{ ...line.ways[0], vehicles: [] }] }, drawing())).includes('class="line-vehicles"'));
   assert.deepEqual(lineStops(line, drawing(), 1), []);
@@ -268,6 +271,27 @@ test('a stop on the line of a trip or a line is drawn as the map draws it: a pil
   assert.equal(stopSaid(['subway', 'tram', 'bus'], 'bus', false, context), `, ${en['mode.subway']} and ${en['mode.tram']}`);
   assert.equal(stopSaid(['bus'], 'bus', true, context), `, ${en['search.favourite']}`);
   assert.equal(stopSaid([], 'bus', false, context), '');
+});
+
+test('the stop a list was opened from has the ring of an open stop on the map: the colours of its kinds round its mark, on white edges', () => {
+  // round a pill: its outline grown, the colours in a band, a share each from the top, and white on either side
+  const pill = html(stopRing(['subway', 'tram', 'bus'], 'bus', false, 'ring-a'));
+  assert.ok(pill.startsWith('<svg class="stop-ring"') && pill.includes('<mask id="ring-a-edge">') && pill.includes('<mask id="ring-a-colours">'), pill);
+  assert.ok(pill.includes('<rect class="edges"') && pill.includes('mask="url(#ring-a-edge)"') && pill.includes('<g mask="url(#ring-a-colours)">'));
+  assert.deepEqual([...pill.matchAll(/class="share" data-mode="(\w+)"/g)].map((match) => match[1]), ['subway', 'tram', 'bus']);
+  // (the first share from the top, as the hands of a clock go: its first point straight up)
+  assert.ok(pill.includes('points="0,0 0.00,-60.00 '), pill);
+  // round a heart: its outline
+  const heart = html(stopRing(['tram', 'bus'], 'bus', true, 'ring-b'));
+  assert.ok(heart.includes('<path d="M12,21.35') && (heart.match(/class="share"/g) ?? []).length === 2, heart);
+  // in a line card, where the context says which: its row, said so
+  const line = { name: '6', mode: 'bus', agency: 'VAG', vehicles: [], ways: [{ to: 'Westfriedhof', stops: [
+    { id: 'A', name: 'Aufseßplatz', town: null, path: 'stop/a', modes: ['bus'], start: false, end: false },
+    { id: 'P', name: 'Plärrer', town: null, path: 'stop/p', modes: ['subway', 'tram', 'bus'], start: false, end: false },
+  ], branches: [], vehicles: [] }] };
+  const out = html(lineStops(line, { ...drawing(), list: (items) => items.join(' and '), chosen: (stop) => stop.id === 'P' }));
+  assert.equal((out.match(/class="stop-ring"/g) ?? []).length, 1);
+  assert.ok(out.includes(`<span class="spoken">, ${en['mode.subway']} and ${en['mode.tram']}, ${en['stop.chosen']}</span>`), out);
 });
 
 test('a vehicle on the line of a list is on a stop or halfway between two, never half over a mark; standing at a stop, it has no arrowhead', () => {

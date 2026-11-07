@@ -219,6 +219,8 @@ export default {
 
   'stop.platform': 'Gl. {platform}',
   'stop.skipped': 'entfällt',
+  // (the stop a trip or a line was opened from, with the ring of a chosen stop: what a screen reader hears of it)
+  'stop.chosen': 'ausgewählt',
 
   'departures.title': 'Abfahrten',
   'view.label': 'Ansicht',
