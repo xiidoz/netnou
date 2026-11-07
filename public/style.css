@@ -1574,13 +1574,16 @@ li:last-child > .row.stop .rail::before { bottom: 50%; }
 :root[data-board] #panel-body { display: flex; flex-direction: column; padding: 0 0.9em; overflow: hidden; }
 
 /* At its top the name of the stop, and the clock under the buttons; on a
-   wall, where the buttons are not, beside the name. */
+   wall, where the buttons are not, beside the name. Between the name and the
+   row below it room for the tails of its letters (p, g), and between the
+   buttons and the clock, also where the board's type is small, as on a phone. */
 .panel .panel-head.board-head {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   grid-template-areas: "title title" "sub clock" "notes notes";
   align-items: baseline;
   column-gap: 0.6em;
+  row-gap: max(8px, 0.4em);
   padding: 0.6em 0.9em 0.3em;
   border-bottom: 0;
 }
