@@ -845,7 +845,9 @@ otherwise a server would load a file written by older code:
   (`public/choice.js`), as the feed has no directions and the destinations of
   a line vary (the U1 has eleven at Nürnberg Plärrer). Each shows as the line
   is drawn as a vehicle on the map, its arrowhead turned to where it leaves
-  the stop. The server chooses among the departures before it counts them
+  the stop. A direction chosen has a check mark, and "All directions" comes
+  first, chosen while none is: a tap chooses, so nothing is crossed out there
+  as a kind switched off in the legend is. The server chooses among the departures before it counts them
   (`/api/departures?lines=`): the 40 of a busy station would hold few of a
   line that comes twice an hour. The choice is in the address of the stop
   and of its board, and a favourite stop keeps it and opens with it; a

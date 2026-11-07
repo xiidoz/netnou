@@ -295,12 +295,12 @@ export default {
   // the chip beside the switch that opens the sheet to choose which lines the departures are of, while all are shown
   'choice.filter': 'Filter',
   // the button in that sheet that shows all of them again
-  'choice.all': 'All lines',
+  'choice.all': 'All directions',
   'choice.only': 'Only',
   'choice.several': 'Only {count} directions',
-  'choice.clear': 'Show all lines',
+  'choice.clear': 'Show all directions',
   'choice.title': 'Which departures?',
-  'choice.hint': 'Tap a direction to show only it. Tap again to take it out.',
+  'choice.hint': 'Tap directions to show only those.',
   'choice.via': '{to} via {stop}',
   'choice.direction': '{line} to {to}',
   'departures.none': 'No departures in the next 24 hours.',
