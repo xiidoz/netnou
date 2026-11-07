@@ -331,6 +331,8 @@ button { font: inherit; color: inherit; }
 .search-results .sign { display: grid; flex: none; width: 28px; justify-items: center; color: var(--text-muted); }
 .search-results .sign .icon { width: 16px; height: 16px; }
 .search-results .swatch { width: 8px; height: 8px; background: var(--chip-color); }
+/* The badges of the lines found share the widest one's width (listResults in app.js), their names in one column. */
+.search-results .line .badge { flex: none; min-width: max(30px, var(--line-badge, 0px)); }
 .search-results .name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 /* Two lines: a line has where it goes, and below that in small print who
    runs it; a town its district there where another town has the name too;
