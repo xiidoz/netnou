@@ -250,7 +250,7 @@ export function departureLists(board, context) {
   const list = (part) => h('ul', { class: `rows departures${signed ? ' signed' : ''}` }, part);
   const split = tomorrowAt(board.departures, context);
   if (split < 0) return [list(rows)];
-  return [split > 0 ? list(rows.slice(0, split)) : null, h('h3', { class: 'rows-head day-head' }, t('departures.tomorrow')), list(rows.slice(split))].filter(Boolean);
+  return [split > 0 ? list(rows.slice(0, split)) : null, h('h2', { class: 'rows-head day-head' }, t('departures.tomorrow')), list(rows.slice(split))].filter(Boolean);
 }
 
 /**
@@ -327,7 +327,7 @@ export function lineLists(board, context) {
   facts ? h('p', { class: 'line-facts' }, todayText(facts, context)) : null);
   const towns = board.towns?.towns ?? [];
   return [...kinds.flatMap((kind) => [
-    kinds.length > 1 ? h('h3', { class: 'rows-head' }, t(`mode.${kind}`)) : null,
+    kinds.length > 1 ? h('h2', { class: 'rows-head' }, t(`mode.${kind}`)) : null,
     h('ul', { class: `line-rows${signed ? ' signed' : ''}` }, lines.filter((line) => kindOf(line.mode) === kind).map((line) =>
       h('li', {}, lineLink(line, context), h('ul', {}, line.ways.map((one) => way(line, one)))))),
   ]),
@@ -479,6 +479,9 @@ export function hoursText(from, to, context) {
 
 const firstUp = (text) => text.charAt(0).toUpperCase() + text.slice(1);
 
+// (a short part of a line kept whole where the line breaks, "letzte Fahrt 01:04" not after "letzte")
+const whole = (text) => text.replace(/ /g, '\u00a0');
+
 /**
  * What runs now, of a line or of a line at a stop, in a line of the details:
  * how often in the hour it is and until when that holds, and the last trip
@@ -494,10 +497,10 @@ export function todayText(day, context, stop = null) {
   const said = !day || day.first === null ? t('facts.noneToday')
     : now > day.last ? t('facts.overToday')
       : [
-        now < day.first ? t('facts.first', { time: time(day.first) }) : null,
+        now < day.first ? whole(t('facts.first', { time: time(day.first) })) : null,
         run ? t('facts.until', { often: oftenText(run, context), until: hourText(run.to, context) }) : null,
-        t('facts.last', { time: time(day.last) }),
-      ].filter(Boolean).join(' · ');
+        whole(t('facts.last', { time: time(day.last) })),
+      ].filter(Boolean).join('\u00a0· ');
   // (where the figures are of, where that is not the stop shown: a line's last trip at its busiest stop is not that at the next)
   return firstUp(stop ? t('facts.fromStop', { stop, said: said.charAt(0).toLowerCase() + said.slice(1) }) : said);
 }
