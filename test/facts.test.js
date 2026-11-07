@@ -10,7 +10,7 @@ import { after, before, test } from 'node:test';
 import { t as translate } from '../public/i18n.js';
 import de from '../public/locales/de.js';
 import en from '../public/locales/en.js';
-import { daysText, hoursText, hourText, lineLists, lineTimetable, oftenText, stopToday, todayText, toHtml } from '../public/panel.js';
+import { daysText, hoursText, hourText, lineLists, lineTimetable, oftenText, stopToday, todayText as todayTextOf, toHtml } from '../public/panel.js';
 import { Addresses } from '../server/lib/addresses.js';
 import { Area } from '../server/lib/area.js';
 import { readDataset, writeDataset } from '../server/lib/dataset.js';
@@ -279,6 +279,8 @@ test('whole hours as a clock says them, a stretch of them, midnight at its end a
 });
 
 test('the line in the head says how often in the hour it is and until when, and the last trip; the first before it, none after', () => {
+  // (its words as said: where the line breaks, a short part is kept whole and the dot between parts does not begin a line)
+  const todayText = (...args) => todayTextOf(...args).replace(/\u00a0/g, ' ');
   const day = '20261104';
   const today = { first: at(day, '05:30'), last: at(day, '23:40'), runs: [{ from: at(day, '06:00'), to: at(day, '20:00'), every: 10 }, { from: at(day, '20:00'), to: at(day, '23:00'), atMost: 20 }] };
   assert.equal(todayText(today, drawing('de', de, at(day, '13:37'))), 'Bis 20 Uhr alle 10 Min. · letzte Fahrt 23:40');
@@ -295,6 +297,7 @@ test('the line in the head says how often in the hour it is and until when, and 
   assert.equal(todayText(today, drawing('de', de, at(day, '13:37')), 'Nürnberg Plärrer'), 'Ab Nürnberg Plärrer: bis 20 Uhr alle 10 Min. · letzte Fahrt 23:40');
   assert.equal(todayText(today, drawing('de', de, at(day, '23:50')), 'Nürnberg Plärrer'), 'Ab Nürnberg Plärrer: heute keine Fahrt mehr');
   assert.equal(todayText(today, drawing('en-US', en, at(day, '13:37')), 'Nürnberg Plärrer'), 'From Nürnberg Plärrer: every 10 min until 8 PM · last trip 11:40 PM');
+  assert.equal(todayTextOf(today, drawing('de', de, at(day, '13:37'))), 'Bis 20 Uhr alle 10 Min.\u00a0· letzte\u00a0Fahrt\u00a023:40');
 });
 
 test('a stop says below its name how many lines leave it today, from when to when', () => {
@@ -352,7 +355,7 @@ test('all lines of a stop say below each way how often it leaves there now, and 
   const line = { name: '36', mode: 'bus', agency: 'VAG', at: null, path: 'line/vag/bus/36', ways: [{ to: 'Doku-Zentrum', departure: null, facts: { first: at(day, '05:17'), last: at(day, '24:27'), runs: [{ from: at(day, '07:00'), to: at(day, '20:00'), atMost: 10 }] } }, { to: 'Plärrer', departure: null, facts: null }] };
   const html = lineLists({ lines: [line], towns: { towns: ['Nürnberg', 'Fürth', 'Stein'], more: 0 } }, context).map(toHtml).join('');
   // (below the way it is of; a way that nothing leaves by today has none)
-  assert.ok(html.includes('<abbr class="later" title="Nicht in den nächsten 24 Stunden">nicht in 24 h</abbr></div><p class="line-facts">Bis 20 Uhr spätestens alle 10 Min. · letzte Fahrt 00:27</p></li>'), html);
+  assert.ok(html.replace(/\u00a0/g, ' ').includes('<abbr class="later" title="Nicht in den nächsten 24 Stunden">nicht in 24 h</abbr></div><p class="line-facts">Bis 20 Uhr spätestens alle 10 Min. · letzte Fahrt 00:27</p></li>'), html);
   assert.equal(html.match(/class="line-facts"/g).length, 1);
   assert.ok(html.endsWith('<p class="lines-towns">Die Linien fahren nach Nürnberg, Fürth und Stein.</p>'), html);
   const many = lineLists({ lines: [line], towns: { towns: ['Nürnberg', 'Fürth'], more: 3 } }, context).map(toHtml).join('');
