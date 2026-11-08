@@ -13,7 +13,7 @@ import { APP_NAME, READMES, chooseLanguage, dayOf, formatHour, formatList, forma
 import { FAVOURITE_NAME_ZOOM, HEART_MIDDLE, PLACES_ZOOM, RAIL_MODES, heartMark, joiningLines, mergePlaces, namePrecedence, namedAt, placeNames, stopMark, townToShow, townsAlong, withoutStyleStops } from './stops.js';
 import { favouritesFrom, isFavourite, lineFavourite, sameStop, stopFavourite, withChoice, withFavourite } from './favourites.js';
 import { choiceValue, readChoice, toggled } from './choice.js';
-import { DELAY_MAJOR_S, DELAY_MINOR_S, DELAY_SEVERE_S, MINUTES_MAX, NOTE_CHARS, badge as badgeOf, choiceChip as choiceChipOf, clockOf, delayCell as delayCellOf, delayClass, delayNode as delayNodeOf, delaySum as delaySumOf, unknownDelay as unknownDelayOf, delayFlag, delayText, departureLists, departuresSub as departuresSubOf, directionSign as directionSignOf, leavesAt, lineBadge, lineHead, lineLists, lineSaid as lineSaidOf, lineStops, lineTimetable, minutesNode as minutesNodeOf, twoKinds, vehicleSpot, VEHICLE_R, panelHead as panelHeadOf, stopHeading, stopRing, stopSaid, stopSign, stopToday, tallMark, tomorrowAt as tomorrowAtOf, untilText as untilTextOf, vehicleLabel, warningSign as warningSignOf, warns } from './panel.js';
+import { DELAY_MAJOR_S, DELAY_MINOR_S, DELAY_SEVERE_S, MINUTES_MAX, NOTE_CHARS, badge as badgeOf, choiceChip as choiceChipOf, clockOf, delayCell as delayCellOf, delayClass, delayNode as delayNodeOf, delaySum as delaySumOf, unknownDelay as unknownDelayOf, delayFlag, delayText, departureLists, departuresSub as departuresSubOf, directionSign as directionSignOf, leavesAt, lineBadge, lineHead, lineLists, lineSaid as lineSaidOf, lineStops, lineTimetable, leftAlready, GONE_S, minutesNode as minutesNodeOf, twoKinds, vehicleSpot, VEHICLE_R, panelHead as panelHeadOf, stopHeading, stopRing, stopSaid, stopSign, stopToday, tallMark, tomorrowAt as tomorrowAtOf, untilText as untilTextOf, vehicleLabel, warningSign as warningSignOf, warns } from './panel.js';
 import { BOARD_MAX, BOARD_SHARE, BOARD_STOPS, boardBlocks, boardQuery, boardShare, displayQuery, ledBy, readBoard, readDisplay, readStops } from './display.js';
 import { mdiArrowCollapse, mdiArrowExpand, mdiCheck, mdiChevronLeft, mdiChevronRight, mdiCityVariantOutline, mdiFullscreen, mdiFullscreenExit, mdiHeart, mdiHeartOutline, mdiMinusCircleOutline, mdiPlus } from './vendor/material-design-icons/icons.js';
 import { AttributionControl, MapLibreMap, NavigationControl } from './vendor/maplibre-gl/maplibre-gl.mjs';
@@ -182,7 +182,7 @@ function toDom(node, svg = false) {
  * whether delays come in and how the vehicles are coloured and flagged.
  */
 function drawing() {
-  return { t, time: formatTime, day: dayOf, hour: formatHour, weekday: formatWeekday, list: formatList, now: now(), times: state.times, live: realtimeState() === 'live', colorBy: state.colorBy, flags: state.flags, moving: true, favourite: favouriteStop, chosen: (stop) => stop.id === state.selection?.fromStop?.id };
+  return { t, time: formatTime, day: dayOf, hour: formatHour, weekday: formatWeekday, list: formatList, now: now(), times: state.times, live: realtimeState() === 'live', colorBy: state.colorBy, flags: state.flags, moving: true, favourite: favouriteStop, chosen: (stop) => stop.id === state.selection?.fromStop?.id, lost: Boolean(state.selection?.failing) };
 }
 
 // The icons on the page's own buttons are from Material Design Icons
@@ -2304,15 +2304,20 @@ function startAsking() {
 
 function renderBanner() {
   const banner = $('banner');
-  const text = state.note ?? state.banner ?? '';
+  // (that the connection is lost, the details say themselves while they are open, under their name: see "a connection lost")
+  const text = state.note ?? (state.bannerOffline && !panel.hidden ? null : state.banner) ?? '';
   // It is an alert: written only when it changes, so that it is read out once.
   if (banner.textContent !== text) banner.textContent = text;
   banner.hidden = !text;
 }
 
-/** What the visitor has to know for as long as it is so; null takes it away. */
-function showBanner(message) {
+/**
+ * What the visitor has to know for as long as it is so; null takes it away.
+ * @param offline whether it says that the connection is lost, which open details say themselves
+ */
+function showBanner(message, offline = false) {
   state.banner = message;
+  state.bannerOffline = Boolean(message) && offline;
   renderBanner();
 }
 
@@ -2607,6 +2612,7 @@ function setFold(fold) {
 new MutationObserver(() => {
   if (panel.hidden) card.unfolded = false;
   showFold();
+  renderBanner();
 }).observe(panel, { attributes: true, attributeFilter: ['hidden'] });
 narrowScreen.addEventListener('change', showFold);
 showFold();
@@ -3054,6 +3060,8 @@ shareButton.addEventListener('click', async () => {
  *   address of a display put it
  */
 function select(type, id, more = {}) {
+  // (the details it is opened from, as they are, to go back to while it has not loaded: backFromFailed)
+  const back = more.from && state.selection?.data ? { selection: state.selection, view: state.view, lines: state.lines, board: state.board } : null;
   // (the further stops of a board are those of the address it was opened with, else none: see "a board of several stops")
   state.extra = type === 'station' ? (more.stops ?? []) : [];
   // (a board is of a stop: what else is opened is shown as details, at an address of its own; that of the board stays as it was, the step back to it)
@@ -3063,7 +3071,7 @@ function select(type, id, more = {}) {
   // (what they are opened from, to have the focus back when they close)
   if (panel.hidden) panelOpener = document.activeElement === document.body ? null : document.activeElement;
   const picked = pickedQuery();
-  state.selection = { type, id, data: null, ...more };
+  state.selection = { type, id, data: null, ...more, back };
   delete state.selection.stops;
   // (the lines of a stop to show: as the address asks, else as its favourite keeps them, see loadSelection)
   state.lines = type === 'station' ? (more.lines ?? []) : [];
@@ -3106,17 +3114,22 @@ function selectionUrl({ type, id, line, at, route, fromTrip }, open = false, fir
 async function loadSelection(first = false) {
   const selection = state.selection;
   if (!selection) return;
+  // (until a first answer has come, every try is the first: what failed to load opens as it would have, see "a connection lost")
+  first ||= !selection.loaded;
   clearTimeout(panelTimer);
   // (the further stops of a board alongside, so that it is drawn once with all of them)
   const further = selection.type === 'station' && state.board !== null && state.extra.length ? loadBoardStops() : null;
+  // (an answer that was overtaken by a later question, as after a change of the lines chosen, is not shown)
+  const turn = (selection.turn = (selection.turn ?? 0) + 1);
   try {
-    // (an answer that was overtaken by a later question, as after a change of the lines chosen, is not shown)
-    const turn = (selection.turn = (selection.turn ?? 0) + 1);
     const res = await fetch(selectionUrl(selection, first && !selection.counted, first));
     const data = res.ok ? await res.json() : null;
     await further;
     if (state.selection !== selection || selection.turn !== turn) return; // user moved on meanwhile
     if (data) {
+      selection.loaded = true;
+      delete selection.back;
+      connected(selection);
       // (the lines of the stop as they were last, until the next answer with them: to be shown at once on the switch)
       if (selection.type === 'station' && !data.lines && selection.data?.id === data.id && selection.data.lines) data.lines = selection.data.lines;
       selection.data = data;
@@ -3159,7 +3172,7 @@ async function loadSelection(first = false) {
     }
   } catch (err) {
     console.warn('details not loaded:', err);
-    if (first && state.selection === selection) panelBody.replaceChildren(el('p', { class: 'panel-empty', text: t('panel.loadFailed') }));
+    if (state.selection === selection && selection.turn === turn) disconnected(selection);
   }
   if (state.selection === selection && !document.hidden) panelTimer = setTimeout(loadSelection, PANEL_REFRESH_MS);
 }
@@ -3302,8 +3315,75 @@ function showWayBack() {
   const from = state.selection?.from;
   const head = panelHead.querySelector('.panel-head');
   if (!from || !head || state.board !== null || state.display) return;
-  head.prepend(el('button', { type: 'button', class: 'panel-back', 'aria-label': t('panel.back', { name: from }), data: { focus: 'back' }, onclick: () => history.back() }, [icon(mdiChevronLeft), el('span', { text: from })]));
+  // (from details that did not load, whose address the page never went to: back to those they were opened from)
+  head.prepend(el('button', { type: 'button', class: 'panel-back', 'aria-label': t('panel.back', { name: from }), data: { focus: 'back' }, onclick: () => (state.selection?.loaded ? history.back() : backFromFailed()) }, [icon(mdiChevronLeft), el('span', { text: from })]));
 }
+
+// A connection lost
+//
+// Where an answer for the open details does not come (no connection: a
+// fetch that fails), what they show stays, as the page has it: its minutes
+// count on, and a departure that has left goes (GONE_S, tickTimes). Their head
+// says since when, as the first of its notes (notesList), and a screen reader
+// hears it once; the banner of the map says it no more while they are open.
+// What has not loaded yet says so instead of itself, with the way back and a
+// button to try again. The page asks again as it does anyway, every
+// PANEL_REFRESH_MS, and at once when the browser is online again.
+
+/** An answer for the open details came. */
+function connected(selection) {
+  selection.answeredAt = now();
+  if (!selection.failing) return;
+  selection.failing = false;
+  $('panel-said').textContent = '';
+}
+
+/** An answer for the open details did not come. */
+function disconnected(selection) {
+  const was = selection.failing;
+  selection.failing = true;
+  if (!selection.loaded) showLoadFailed();
+  else if (!was) showSelection();
+  if (!was) $('panel-said').textContent = selection.loaded ? lostSince() : t('panel.loadFailed');
+}
+
+/** The note that the connection is lost: since the last answer. Null while it is not. */
+function lostSince() {
+  const selection = state.selection;
+  return selection?.failing && selection.answeredAt ? t('panel.offline', { time: formatTime(selection.answeredAt) }) : null;
+}
+
+/** Details that did not load: that they will, once the connection is back, and a button to try at once. */
+function showLoadFailed() {
+  const said = el('p', { class: 'panel-empty lost' }, [el('i', { class: 'dot', 'aria-hidden': 'true' }), el('span', { text: t('panel.loadFailed') })]);
+  const again = el('button', { type: 'button', class: 'retry', data: { focus: 'retry' }, text: t('panel.retry'), onclick: () => loadSelection(true) });
+  fillPanel([el('div', { class: 'panel-head' })], said, again);
+}
+
+/** Back from details that did not load to those they were opened from, as they were: the address never left them. */
+function backFromFailed() {
+  const back = state.selection?.back;
+  // (a board, which opening them closed: opened anew from its address)
+  if (!back || back.board !== null) {
+    openAddress();
+    return;
+  }
+  const picked = pickedQuery();
+  state.selection = back.selection;
+  state.view = back.view;
+  state.lines = back.lines;
+  askDraw();
+  pickedChanged(picked);
+  shareable(true, back.selection.type === 'station');
+  showSelection();
+  loadSelection();
+}
+
+// (the connection back: what failed to load, or stopped being answered, at once rather than at its next turn)
+addEventListener('online', () => {
+  const selection = state.selection;
+  if (selection && (!selection.loaded || selection.failing)) loadSelection();
+});
 
 function badge(line, mode, ...more) {
   return toDom(badgeOf(line, mode, ...more));
@@ -3378,7 +3458,12 @@ function notesList(notes, own = [], alert = null) {
     item.querySelector('span').prepend(warningSign());
     return item;
   };
-  const first = alert ? [warning(line(alert, 'alert'))] : [];
+  // (first that the connection is lost, with the dot of the status line in the card: see "a connection lost")
+  const lostNote = lostSince();
+  const connection = lostNote ? line(lostNote, 'connection') : null;
+  connection?.classList.add('warning');
+  connection?.querySelector('span').prepend(el('i', { class: 'dot', 'aria-hidden': 'true' }));
+  const first = [...(connection ? [connection] : []), ...(alert ? [warning(line(alert, 'alert'))] : [])];
   const items = own.map((text) => line(text));
   // (the server has them in this order already; the page does not count on it)
   const urgent = notes.filter(warns);
@@ -3710,7 +3795,11 @@ function renderLine(line, first) {
   const way = Math.min(selection.way ?? 0, Math.max(0, (line.ways?.length ?? 1) - 1));
   // (and after them its timetable of the coming days that way, #289, with the hours shown of the days they were opened for)
   const timetableOf = lineTimetable(line.facts, drawn, way, selection.hours ?? new Set()) ?? [];
-  fillPanel([toDom(lineHead(line, drawn, way))], ...[...lineStops(line, drawn, way), ...timetableOf].map((node) => toDom(node)));
+  const head = toDom(lineHead(line, drawn, way));
+  // (it has none of the feed: only that the connection is lost, where it is)
+  const notes = notesList([]);
+  if (notes) head.append(notes);
+  fillPanel([head], ...[...lineStops(line, drawn, way), ...timetableOf].map((node) => toDom(node)));
   // (opened from a stop's details: that stop, chosen, in the middle of the list, once)
   const chosen = selection.fromStop && !selection.chosenShown ? panelBody.querySelector(`.line-stops a.row[data-station="${CSS.escape(selection.fromStop.id)}"]`) : null;
   if (chosen) {
@@ -3778,9 +3867,18 @@ function tomorrowAt(departures) {
   return tomorrowAtOf(departures, drawing());
 }
 
+let goneDrawn = 0; // when tickTimes() last drew the details anew for a departure that left, in s
+
 /** The minutes in the lists of departures and the clock of a board, as time goes on. */
 function tickTimes() {
   if (panel.hidden) return;
+  // (one that has left goes: the details drawn anew without it, GONE_S; at most every few seconds, should one stay)
+  const at = now();
+  if (at - goneDrawn > 5 && [...panel.querySelectorAll('.minutes[data-leaves]')].some((node) => Number(node.dataset.leaves) < at - GONE_S)) {
+    goneDrawn = at;
+    showSelection();
+    return;
+  }
   const update = (node, text) => {
     if (node.textContent !== text) node.textContent = text;
   };
@@ -4189,14 +4287,16 @@ function blockRows(block, times) {
   if (!shown.length) return gone;
   const { rows: from } = namesOf(block);
   const merged = shown.length > 1;
-  const departures = merged ? mergedDepartures(shown) : shown[0].known.departures.departures.map((dep) => ({ dep, from: null }));
+  // (not those that have left: GONE_S)
+  const departures = (merged ? mergedDepartures(shown) : shown[0].known.departures.departures.map((dep) => ({ dep, from: null }))).filter(({ dep }) => !leftAlready(dep, now()));
   // (the badges of a name the block's stops have in two kinds say their kind)
   const kinds = twoKinds(shown.map((entry) => entry.known.departures.today), departures.map(({ dep }) => dep));
   const rows = departures.map((each) => boardRow(each.dep, times, merged ? from[block.indexOf(each.from)] : null, kinds.has(each.dep.line)));
   // (where the next day begins, a line across the board says so)
   const split = tomorrowAt(departures.map(({ dep }) => dep));
   if (split >= 0) rows.splice(split, 0, el('li', { class: 'day' }, [el('span', { text: t('departures.tomorrow') })]));
-  return [...gone, rows.length ? el('ul', { class: `board-rows times-${times}` }, rows) : el('p', { class: 'panel-empty', text: t('departures.none') })];
+  // (where the connection is lost, the page does not know there are none: the note in the head says why it is empty)
+  return [...gone, rows.length ? el('ul', { class: `board-rows times-${times}` }, rows) : state.selection?.failing ? null : el('p', { class: 'panel-empty', text: t('departures.none') })].filter(Boolean);
 }
 
 /** Shows as many departures as each list of the board has room for: whole rows, those that do not fit hidden. */
@@ -4870,7 +4970,7 @@ async function poll() {
     $('status').dataset.state = 'error';
     $('status-text').textContent = t('status.noConnection');
     // The installed app also starts without a connection – but has nothing to show then.
-    if (!navigator.onLine) showBanner(t('banner.offline'));
+    if (!navigator.onLine) showBanner(t('banner.offline'), true);
   }
   if (!document.hidden) pollTimer = setTimeout(poll, delay);
 }

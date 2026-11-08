@@ -200,6 +200,14 @@ export function delayCell(delay, warnings, signed, context) {
 /** When a departure leaves, in epoch seconds: as planned, moved by the delay as it is shown. */
 export const leavesAt = (dep) => dep.planned + Math.round((dep.delay ?? 0) / 60) * 60;
 
+// How long a departure stays in a list once it has left: as long as the server
+// keeps it there (departures() in server/lib/timetable.js). Between two of its
+// answers, and where they stop coming, the page leaves it out by itself then.
+export const GONE_S = 30;
+
+/** Whether a departure has left long enough to be out of the lists, by the clock it is drawn at (context.now). */
+export const leftAlready = (dep, now) => now !== undefined && leavesAt(dep) < now - GONE_S;
+
 /**
  * How long until a departure leaves: "4 min", "now" under a minute. Further
  * off than an hour the time it leaves says more (#165): that, or nothing
@@ -241,14 +249,17 @@ export function tomorrowAt(departures, { day, now }) {
  */
 export function departureLists(board, context) {
   const { t } = context;
-  const signed = board.departures.some((dep) => dep.warnings.length > 0);
+  // (not those that have left: GONE_S)
+  const departures = board.departures.filter((dep) => !leftAlready(dep, context.now));
+  const signed = departures.some((dep) => dep.warnings.length > 0);
   // (the badges of a name the stop has in two kinds say their kind)
-  const withKinds = { ...context, twoKinds: twoKinds([board.today], board.departures) };
-  const rows = board.departures.map((dep) => h('li', {}, departureRow(dep, signed, withKinds)));
-  // (the 24 hours the text speaks of are the furthest departures() in server/lib/timetable.js looks)
-  if (!rows.length) return [h('p', { class: 'panel-empty' }, t('departures.none'))];
+  const withKinds = { ...context, twoKinds: twoKinds([board.today], departures) };
+  const rows = departures.map((dep) => h('li', {}, departureRow(dep, signed, withKinds)));
+  // (the 24 hours the text speaks of are the furthest departures() in server/lib/timetable.js looks; where the
+  // connection is lost, the page does not know there are none: the note in the head says why it is empty)
+  if (!rows.length) return context.lost ? [] : [h('p', { class: 'panel-empty' }, t('departures.none'))];
   const list = (part) => h('ul', { class: `rows departures${signed ? ' signed' : ''}` }, part);
-  const split = tomorrowAt(board.departures, context);
+  const split = tomorrowAt(departures, context);
   if (split < 0) return [list(rows)];
   return [split > 0 ? list(rows.slice(0, split)) : null, h('h2', { class: 'rows-head day-head' }, t('departures.tomorrow')), list(rows.slice(split))].filter(Boolean);
 }
@@ -319,11 +330,12 @@ export function lineLists(board, context) {
   const signed = lines.some((line) => line.ways.some((way) => way.departure?.warnings.length > 0));
   const kinds = [...new Set(lines.map((line) => kindOf(line.mode)))];
   // (each way with how often it leaves here that way now, and when last today, #289)
-  const way = (line, { to, departure, facts }) => h('li', {}, departure
+  // (one whose next departure has left, GONE_S, rests until the server says which is next: not "not in 24 h")
+  const way = (line, { to, departure, facts }) => h('li', {}, departure && !leftAlready(departure, context.now)
     ? departureRow({ ...departure, line: line.name, mode: line.mode }, signed, context, true)
     : h('div', { class: `row departure times-${times} by-line resting` },
       h('span', { class: 'name', title: to }, to),
-      h('abbr', { class: 'later', title: t('lines.laterLong') }, t('lines.later'))),
+      departure ? null : h('abbr', { class: 'later', title: t('lines.laterLong') }, t('lines.later'))),
   facts ? h('p', { class: 'line-facts' }, todayText(facts, context)) : null);
   const towns = board.towns?.towns ?? [];
   return [...kinds.flatMap((kind) => [
