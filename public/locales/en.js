@@ -192,7 +192,11 @@ export default {
   'panel.resize': 'Make the details larger or smaller',
   'panel.loading': 'Loading …',
   'panel.noData': 'There is no data on this right now.',
-  'panel.loadFailed': 'The data could not be loaded.',
+  // in place of details that did not load for want of a connection, with panel.retry below it: the page tries again by itself as well
+  'panel.loadFailed': 'No connection right now – loads once it’s back.',
+  // the first note under the name of a stop, a trip or a line while their answers do not come: since the time of the last one
+  'panel.offline': 'No connection since {time}',
+  'panel.retry': 'Try again',
   'panel.share': 'Share',
   'panel.copied': 'Address copied',
   'panel.favourite': 'Add to favourites',

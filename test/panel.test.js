@@ -123,6 +123,22 @@ test('where the next day begins among the departures, a line says so between two
   assert.deepEqual(parts.map((node) => node.children.length), [1, 1, 2]);
 });
 
+test('a departure that has left goes from the lists 30 s after it left, as the next answer of the server would take it', () => {
+  // (at 10:00: the one of 09:59:29 has left; the one of 09:59:30 is just within; one of 09:59 two minutes late leaves at 10:01)
+  const board = { name: 'Plärrer', departures: [departure(-31 / 60), departure(-1 / 2), departure(-1, { delay: 120 }), departure(3)] };
+  const trips = (out) => [...out.matchAll(/data-trip="T([-\d.e]+)_/g)].map((match) => Number(match[1]));
+  assert.deepEqual(trips(html(departureLists(board, drawing('minutes')))), [-1 / 2, -1, 3]);
+  // where all have left: no departures in the next 24 hours, as far as it knows; where the connection is lost, it does not
+  // know, and says nothing (the head says why)
+  const gone = { name: 'Plärrer', departures: [departure(-2)] };
+  assert.equal(html(departureLists(gone, drawing('minutes'))), `<p class="panel-empty">${en['departures.none']}</p>`);
+  assert.equal(html(departureLists(gone, { ...drawing('minutes'), lost: true })), '');
+  // of all lines, a way whose next departure has left rests until the server says which is next: not "not in 24 h"
+  const u1 = { name: 'U1', mode: 'subway', agency: 'VAG', at: [49.45, 11.07], path: 'line/vag/subway/u1', ways: [{ to: 'Langwasser Süd', departure: departure(-2) }] };
+  const lines = html(lineLists({ lines: [u1] }, drawing('minutes')));
+  assert.ok(lines.includes('<div class="row departure times-minutes by-line resting"><span class="name" title="Langwasser Süd">Langwasser Süd</span></div>') && !lines.includes('class="later"'), lines);
+});
+
 test('a stop whose name does not say its town has the town below its name, in the main heading (#254)', () => {
   assert.equal(toHtml(panelHead(stopHeading('Bruck/ER Rotes Kreuz', 'Erlangen'))), '<div class="panel-head"><h1><span class="stop">Bruck/ER Rotes Kreuz</span><span class="town">Erlangen</span></h1></div>');
   // a name that says its town, and one whose town is not known: the name alone
