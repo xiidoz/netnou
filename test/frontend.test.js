@@ -661,3 +661,17 @@ test('where the connection is lost, the details say since when, and what did not
   assert.match(app, /addEventListener\('online', \(\) => \{/);
   assert.match(app, /state\.note \?\? \(state\.bannerOffline && !panel\.hidden \? null : state\.banner\) \?\? ''/);
 });
+
+test('what gets the keyboard focus in the details is in sight: clear of the timetable heading, in a sheet risen from its head, never on credits under it', () => {
+  const app = withoutComments(read('app.js'));
+  // the keyboard's focus alone, and not the focus given back after an answer of the server, which leaves the list where it is
+  assert.match(app, /if \(focusGivenBack \|\| !event\.target\.matches\(':focus-visible'\)\) return;/);
+  assert.match(app, /focusGivenBack = true;\s*if \(again\) again\.focus/);
+  // clear of the heading of a line's timetable waiting at the foot
+  assert.match(app, /const bottom = pinned && !pinned\.contains\(target\) \? pinned\.getBoundingClientRect\(\)\.top : box\.bottom;/);
+  // a sheet down to its head rises to the middle height
+  assert.match(app, /panelBody\.clientHeight < event\.target\.offsetHeight\) \{\s*restSheet\(sheetHeights\(\)\[1\]\);/);
+  // the credits are out of the keyboard's way where the details lie over their middle, with the map's buttons moved
+  assert.match(app, /credits\.inert = !panel\.hidden && box\.width > 0 && panel\.contains\(document\.elementFromPoint\(/);
+  assert.match(app, /group\.style\.visibility = out \? 'hidden' : '';\s*\}\s*coverCredits\(\);/);
+});
