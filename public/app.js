@@ -2137,7 +2137,8 @@ function chooseStop(stop) {
 }
 
 searchField.addEventListener('input', runSearch);
-// (true while the page gives the field the focus back: it does not open the results of last time then, see closePanel)
+// (true while the page gives the keyboard focus back: the search field does not open the results of last time then, see
+// closePanel, nor do the details bring a row into sight that is not, see fillPanel and showFocused)
 let focusGivenBack = false;
 searchField.addEventListener('focus', () => {
   // what is in the field from last time is typed over, and found again until then
@@ -3218,9 +3219,12 @@ function fillPanel(head, ...nodes) {
     else hideSaid();
   }
   const again = keyed && [...panel.querySelectorAll('[data-focus]')].find((node) => node.dataset.focus === keyed);
+  // (given back where it was, not brought into sight: the list stays where it was scrolled to, see showFocused)
+  focusGivenBack = true;
   if (again) again.focus({ preventScroll: true });
   else if (focused >= 0) panelBody.querySelectorAll(FOCUSED_IN_BODY)[focused]?.focus({ preventScroll: true });
   else if (inHead >= 0) (panelHead.querySelectorAll('button')[inHead] ?? panel).focus({ preventScroll: true });
+  focusGivenBack = false;
 }
 
 // (what is to have the keyboard focus once the panel is filled anew, by its data-focus: see "a board of several stops")
@@ -3837,6 +3841,34 @@ function pinTimetable() {
 }
 panelBody.addEventListener('scroll', pinTimetable, { passive: true });
 new ResizeObserver(pinTimetable).observe(panelBody);
+
+/**
+ * Keeps what gets the keyboard focus in the list of the details in sight
+ * (WCAG 2.4.11), which the browser by itself does not: clear of the heading
+ * of a line's timetable that waits at the foot (pinTimetable), and where the
+ * sheet is down to its head alone, with the sheet risen to the middle height.
+ */
+function showFocused(target) {
+  if (!target.isConnected) return;
+  const box = panelBody.getBoundingClientRect();
+  const pinned = panelBody.querySelector('.timetable-head.pinned');
+  const bottom = pinned && !pinned.contains(target) ? pinned.getBoundingClientRect().top : box.bottom;
+  const at = target.getBoundingClientRect();
+  // (with a little room on the side it came from, as for the ring of the focus)
+  if (at.bottom > bottom) panelBody.scrollTop += at.bottom - bottom + 8;
+  else if (at.top < box.top) panelBody.scrollTop -= box.top - at.top + 8;
+}
+panelBody.addEventListener('focusin', (event) => {
+  // (only the keyboard's: a tap focuses what it taps, in sight anyway)
+  if (focusGivenBack || !event.target.matches(':focus-visible')) return;
+  if (narrowScreen.matches && state.board === null && panelBody.clientHeight < event.target.offsetHeight) {
+    restSheet(sheetHeights()[1]);
+    // (once it has risen: the way up is a transition of the style sheet)
+    setTimeout(() => showFocused(event.target), 240);
+  }
+  // (after the browser has scrolled it into what it takes for sight, in the same task)
+  setTimeout(() => showFocused(event.target));
+});
 panelBody.addEventListener('click', (event) => {
   const head = event.target.closest('.timetable-head');
   if (!head) return;
@@ -3992,6 +4024,21 @@ function clearMapButtons() {
     group.style.transform = moved.x || moved.y ? `translate(${moved.x}px, ${moved.y}px)` : '';
     group.style.visibility = out ? 'hidden' : '';
   }
+  coverCredits();
+}
+
+/**
+ * The credits of the map where the details lie over them, as the sheet does
+ * on a narrow screen: out of the keyboard's way as well (WCAG 2.4.11). Where
+ * they stand above the details, as over a board on a phone, they stay as
+ * they are. What lies over their middle says which.
+ */
+function coverCredits() {
+  const credits = map.getContainer().querySelector('.maplibregl-ctrl-attrib');
+  if (!credits) return;
+  const box = credits.getBoundingClientRect();
+  // (credits made inert are passed over by elementFromPoint, as by a tap: what is under them, or over them)
+  credits.inert = !panel.hidden && box.width > 0 && panel.contains(document.elementFromPoint(box.left + box.width / 2, box.top + box.height / 2));
 }
 const clearing = new ResizeObserver(clearMapButtons);
 clearing.observe(panel);
