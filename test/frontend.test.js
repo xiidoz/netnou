@@ -646,3 +646,32 @@ test('the button of the board is in the corner of the details, between the heart
   assert.ok(at('panel-favourite') > 0 && at('panel-favourite') < at('panel-board') && at('panel-board') < at('panel-share') && at('panel-share') < at('panel-close'));
   assert.match(page, /<button type="button" class="board-toggle" id="panel-board" hidden aria-pressed="false" aria-label="Enlarge" data-i18n-aria-label="panel\.enlarge" title="Enlarge" data-i18n-title="panel\.enlarge" data-icon="mdiArrowExpand"><\/button>/);
 });
+
+test('where the connection is lost, the details say since when, and what did not load keeps the way back and is tried again', () => {
+  const app = withoutComments(read('app.js'));
+  // until a first answer has come, every try is the first: what failed to load opens as it would have, with its address
+  assert.match(app, /first \|\|= !selection\.loaded;/);
+  // a fetch that fails keeps what is shown, with a note since the last answer, which a screen reader hears once
+  assert.match(app, /if \(state\.selection === selection && selection\.turn === turn\) disconnected\(selection\);/);
+  assert.match(app, /\$\('panel-said'\)\.textContent = selection\.loaded \? lostSince\(\) : t\('panel\.loadFailed'\);/);
+  assert.match(read('index.html'), /<p class="spoken" id="panel-said" role="status"><\/p>/);
+  // the way back from what did not load is not the history's: the address never went there
+  assert.match(app, /onclick: \(\) => \(state\.selection\?\.loaded \? history\.back\(\) : backFromFailed\(\)\)/);
+  // tried again at once when the browser is online again; the banner of the map does not say it over open details
+  assert.match(app, /addEventListener\('online', \(\) => \{/);
+  assert.match(app, /state\.note \?\? \(state\.bannerOffline && !panel\.hidden \? null : state\.banner\) \?\? ''/);
+});
+
+test('what gets the keyboard focus in the details is in sight: clear of the timetable heading, in a sheet risen from its head, never on credits under it', () => {
+  const app = withoutComments(read('app.js'));
+  // the keyboard's focus alone, and not the focus given back after an answer of the server, which leaves the list where it is
+  assert.match(app, /if \(focusGivenBack \|\| !event\.target\.matches\(':focus-visible'\)\) return;/);
+  assert.match(app, /focusGivenBack = true;\s*if \(again\) again\.focus/);
+  // clear of the heading of a line's timetable waiting at the foot
+  assert.match(app, /const bottom = pinned && !pinned\.contains\(target\) \? pinned\.getBoundingClientRect\(\)\.top : box\.bottom;/);
+  // a sheet down to its head rises to the middle height
+  assert.match(app, /panelBody\.clientHeight < event\.target\.offsetHeight\) \{\s*restSheet\(sheetHeights\(\)\[1\]\);/);
+  // the credits are out of the keyboard's way where the details lie over their middle, with the map's buttons moved
+  assert.match(app, /credits\.inert = !panel\.hidden && box\.width > 0 && panel\.contains\(document\.elementFromPoint\(/);
+  assert.match(app, /group\.style\.visibility = out \? 'hidden' : '';\s*\}\s*coverCredits\(\);/);
+});
