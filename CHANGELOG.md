@@ -8,6 +8,14 @@ This file is written by
 messages when a release is made. Do not edit it by hand; see
 [Releases](CONTRIBUTING.md#releases).
 
+## [0.26.1](https://github.com/xiidoz/netnou/compare/v0.26.0...v0.26.1) (2026-11-08)
+
+
+### Bug Fixes
+
+* **page:** departures that have left go by themselves, and a lost connection says so ([#330](https://github.com/xiidoz/netnou/issues/330)) ([a155d57](https://github.com/xiidoz/netnou/commit/a155d57cc1cbdde1a8caf7bd947d6f1a9d3bbee2))
+* **page:** keyboard focus in the details stays in sight, and skips the credits under them ([#332](https://github.com/xiidoz/netnou/issues/332)) ([717fe3f](https://github.com/xiidoz/netnou/commit/717fe3f78c913737d8c5727f58b4e5c2ac6ed2f9))
+
 ## [0.26.0](https://github.com/xiidoz/netnou/compare/v0.25.1...v0.26.0) (2026-11-07)
 
 
