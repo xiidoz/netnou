@@ -8,6 +8,14 @@ This file is written by
 messages when a release is made. Do not edit it by hand; see
 [Releases](CONTRIBUTING.md#releases).
 
+## [0.26.2](https://github.com/xiidoz/netnou/compare/v0.26.1...v0.26.2) (2026-11-10)
+
+
+### Bug Fixes
+
+* **page:** offline, delays go grey, then the timetable alone, and Back shows what it held ([#334](https://github.com/xiidoz/netnou/issues/334)) ([c7f4b0e](https://github.com/xiidoz/netnou/commit/c7f4b0e4410185aa8fa4ce11700db392c406c3ca))
+* **page:** the map shows the keyboard focus, Escape goes back to where it came from ([#337](https://github.com/xiidoz/netnou/issues/337)) ([eb77b5f](https://github.com/xiidoz/netnou/commit/eb77b5f0c638520ae64bacec834db8401e0bf153))
+
 ## [0.26.1](https://github.com/xiidoz/netnou/compare/v0.26.0...v0.26.1) (2026-11-08)
 
 
