@@ -25,15 +25,24 @@ let asked = null; // the question to answer next
 let busy = false;
 
 async function load(modeNames) {
+  let limit;
   try {
-    const res = await fetch('api/search');
+    // (an answer that takes longer than the page's other questions does not come: asked for again with the next question;
+    // the list itself, megabytes on a slow link, given longer once it is on its way)
+    const asking = new AbortController();
+    limit = setTimeout(() => asking.abort(), 20_000);
+    const res = await fetch('api/search', { signal: asking.signal });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    clearTimeout(limit);
+    limit = setTimeout(() => asking.abort(), 120_000);
     // (with the names of the modes as the visitor reads them: "bus 33" is a line of the buses)
     index = buildIndex(await res.json(), modeNames);
     places = null;
   } catch (err) {
     // (also while the server has no timetable yet; asked for again with the next question)
     console.warn('stops and lines not loaded:', err);
+  } finally {
+    clearTimeout(limit);
   }
 }
 

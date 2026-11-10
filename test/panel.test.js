@@ -129,10 +129,12 @@ test('a departure that has left goes from the lists 30 s after it left, as the n
   const trips = (out) => [...out.matchAll(/data-trip="T([-\d.e]+)_/g)].map((match) => Number(match[1]));
   assert.deepEqual(trips(html(departureLists(board, drawing('minutes')))), [-1 / 2, -1, 3]);
   // where all have left: no departures in the next 24 hours, as far as it knows; where the connection is lost, it does not
-  // know, and says nothing (the head says why)
+  // know: more once it is back, alone, and after the last one it holds (it holds those of its last answer alone)
   const gone = { name: 'Plärrer', departures: [departure(-2)] };
+  const whenBack = `<p class="panel-empty when-back">${en['departures.whenBack']}</p>`;
   assert.equal(html(departureLists(gone, drawing('minutes'))), `<p class="panel-empty">${en['departures.none']}</p>`);
-  assert.equal(html(departureLists(gone, { ...drawing('minutes'), lost: true })), '');
+  assert.equal(html(departureLists(gone, { ...drawing('minutes'), lost: true })), whenBack);
+  assert.ok(html(departureLists(board, { ...drawing('minutes'), lost: true })).endsWith(`</ul>${whenBack}`));
   // of all lines, a way whose next departure has left rests until the server says which is next: not "not in 24 h"
   const u1 = { name: 'U1', mode: 'subway', agency: 'VAG', at: [49.45, 11.07], path: 'line/vag/subway/u1', ways: [{ to: 'Langwasser Süd', departure: departure(-2) }] };
   const lines = html(lineLists({ lines: [u1] }, drawing('minutes')));

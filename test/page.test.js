@@ -516,10 +516,10 @@ test('the page of a stop or a line has its details in it as they are, with their
   assert.ok(page.includes(`<div id="panel-body" data-sent>${stop.body}</div>`));
   assert.ok(page.includes('<div class="site-name">Netnou</div>'));
   assert.deepEqual(page.match(/<h1\b[^>]*>[^<]*/g), ['<h1>Plärrer']);
-  // a trip has its name and where it goes, and the rest comes with the script; the page itself has the name of the instance as its heading
+  // a trip has its name and where it goes, kept as sent, and the rest comes with the script; the page itself has the name of the instance as its heading
   const trip = renderPage(html, { ...german, address: { path: 'trip/x', depth: 1, title: 'U1 nach Langwasser Süd live', description: '…', heading: 'U1', sub: 'nach Langwasser Süd', unlisted: true } });
   assert.ok(trip.includes('<div id="panel-head"><div class="panel-head"><h1>U1</h1><p class="sub">nach Langwasser Süd</p></div></div>'));
-  assert.ok(trip.includes('<div id="panel-body"><p class="panel-empty">…</p></div>'));
+  assert.ok(trip.includes('<div id="panel-body" data-sent><p class="panel-empty">…</p></div>'));
   assert.deepEqual(renderPage(html, german).match(/<h1\b[^>]*>[^<]*/g), ['<h1>Netnou']);
 });
 

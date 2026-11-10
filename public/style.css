@@ -732,6 +732,14 @@ button:focus-visible, select:focus-visible, .row:focus-visible, .panel:focus-vis
    details that did not load, with the red dot of the status line in the card (.status .dot), as dark as the text. */
 .panel-head .notes .connection .dot, .panel-empty.lost .dot { display: inline-block; width: 10px; height: 10px; margin-right: 6px; border-radius: 50%; background: var(--delay-severe); vertical-align: -0.02em; }
 .panel-empty.lost { color: var(--text); text-wrap: pretty; }
+/* Where the details say that the connection is lost, the card does not say it as well (app.js, markLost). */
+:root[data-lost] .status[data-state="error"] { display: none; }
+/* Long without an answer, the delays the details show are the last ones known: grey (app.js, staleness). */
+#panel.stale .delay { color: var(--text-muted); }
+.when-back { text-wrap: balance; }
+/* On a screen on a wall, read from a distance, as large as the rows of its board. */
+:root[data-display] .board-head .notes .connection { font-size: 1.6em; }
+:root[data-display] .board-head .notes .connection .dot { width: 0.6em; height: 0.6em; }
 /* "Nochmal versuchen" below it, as the chips of the head are, a finger high. */
 .retry { margin: 0 14px 14px; min-height: 44px; padding: 0 18px; border: 1px solid var(--border); border-radius: 999px; background: var(--bg); color: var(--text); font: inherit; font-weight: 600; cursor: pointer; }
 .retry:hover { background: var(--bg-subtle); }

@@ -209,6 +209,15 @@ export const GONE_S = 30;
 export const leftAlready = (dep, now) => now !== undefined && leavesAt(dep) < now - GONE_S;
 
 /**
+ * Where the connection is lost (context.lost), what a list of departures
+ * says after the last one the page holds, or alone where all have left: that
+ * there are more, once it is back. The page holds only those of its last
+ * answer, not the whole timetable (app.js, "a connection lost"). Quiet: the
+ * head says that the connection is lost, with its sign.
+ */
+export const whenBack = ({ t }) => h('p', { class: 'panel-empty when-back' }, t('departures.whenBack'));
+
+/**
  * How long until a departure leaves: "4 min", "now" under a minute. Further
  * off than an hour the time it leaves says more (#165): that, or nothing
  * where the row has it already.
@@ -257,11 +266,11 @@ export function departureLists(board, context) {
   const rows = departures.map((dep) => h('li', {}, departureRow(dep, signed, withKinds)));
   // (the 24 hours the text speaks of are the furthest departures() in server/lib/timetable.js looks; where the
   // connection is lost, the page does not know there are none: the note in the head says why it is empty)
-  if (!rows.length) return context.lost ? [] : [h('p', { class: 'panel-empty' }, t('departures.none'))];
+  if (!rows.length) return [context.lost ? whenBack(context) : h('p', { class: 'panel-empty' }, t('departures.none'))];
   const list = (part) => h('ul', { class: `rows departures${signed ? ' signed' : ''}` }, part);
   const split = tomorrowAt(departures, context);
-  if (split < 0) return [list(rows)];
-  return [split > 0 ? list(rows.slice(0, split)) : null, h('h2', { class: 'rows-head day-head' }, t('departures.tomorrow')), list(rows.slice(split))].filter(Boolean);
+  const lists = split < 0 ? [list(rows)] : [split > 0 ? list(rows.slice(0, split)) : null, h('h2', { class: 'rows-head day-head' }, t('departures.tomorrow')), list(rows.slice(split))].filter(Boolean);
+  return context.lost ? [...lists, whenBack(context)] : lists;
 }
 
 /**
@@ -343,6 +352,8 @@ export function lineLists(board, context) {
     h('ul', { class: `line-rows${signed ? ' signed' : ''}` }, lines.filter((line) => kindOf(line.mode) === kind).map((line) =>
       h('li', {}, lineLink(line, context), h('ul', {}, line.ways.map((one) => way(line, one)))))),
   ]),
+  // (where the connection is lost: that the next departures come once it is back)
+  context.lost ? whenBack(context) : null,
   // (the towns its lines go to, the nearest first)
   towns.length ? h('p', { class: 'lines-towns' }, towns.length === 1 && !board.towns.more ? t('facts.townsOne', { town: towns[0] })
     : board.towns.more ? t('facts.townsMore', { towns: towns.join(', '), count: board.towns.more }) : t('facts.towns', { towns: context.list(towns) })) : null,
@@ -787,7 +798,8 @@ export function delayFlag(delay, live) {
  */
 export function lineHead(line, context, way = null) {
   const { t } = context;
-  const sub = [line.agency, line.vehicles.length ? t('line.vehicles', { count: line.vehicles.length }) : ''].filter(Boolean).join(' · ');
+  // (not where the page does not know it: without a connection, see app.js "a connection lost")
+  const sub = [line.agency, line.vehicles.length && line.counted !== false ? t('line.vehicles', { count: line.vehicles.length }) : ''].filter(Boolean).join(' · ');
   const ways = line.ways ?? [];
   return panelHead([badge(line.name, line.mode), h('span', {}, t(`mode.${kindOf(line.mode)}`))], h('p', { class: 'sub' }, sub),
     // (how often it runs now the way its stops show and its last trip today, #289)

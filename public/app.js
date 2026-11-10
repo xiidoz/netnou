@@ -13,7 +13,7 @@ import { APP_NAME, READMES, chooseLanguage, dayOf, formatHour, formatList, forma
 import { FAVOURITE_NAME_ZOOM, HEART_MIDDLE, PLACES_ZOOM, RAIL_MODES, heartMark, joiningLines, mergePlaces, namePrecedence, namedAt, placeNames, stopMark, townToShow, townsAlong, withoutStyleStops } from './stops.js';
 import { favouritesFrom, isFavourite, lineFavourite, sameStop, stopFavourite, withChoice, withFavourite } from './favourites.js';
 import { choiceValue, readChoice, toggled } from './choice.js';
-import { DELAY_MAJOR_S, DELAY_MINOR_S, DELAY_SEVERE_S, MINUTES_MAX, NOTE_CHARS, badge as badgeOf, choiceChip as choiceChipOf, clockOf, delayCell as delayCellOf, delayClass, delayNode as delayNodeOf, delaySum as delaySumOf, unknownDelay as unknownDelayOf, delayFlag, delayText, departureLists, departuresSub as departuresSubOf, directionSign as directionSignOf, leavesAt, lineBadge, lineHead, lineLists, lineSaid as lineSaidOf, lineStops, lineTimetable, leftAlready, GONE_S, minutesNode as minutesNodeOf, twoKinds, vehicleSpot, VEHICLE_R, panelHead as panelHeadOf, stopHeading, stopRing, stopSaid, stopSign, stopToday, tallMark, tomorrowAt as tomorrowAtOf, untilText as untilTextOf, vehicleLabel, warningSign as warningSignOf, warns } from './panel.js';
+import { DELAY_MAJOR_S, DELAY_MINOR_S, DELAY_SEVERE_S, MINUTES_MAX, NOTE_CHARS, badge as badgeOf, choiceChip as choiceChipOf, clockOf, delayCell as delayCellOf, delayClass, delayNode as delayNodeOf, delaySum as delaySumOf, unknownDelay as unknownDelayOf, delayFlag, delayText, departureLists, departuresSub as departuresSubOf, directionSign as directionSignOf, leavesAt, lineBadge, lineHead, lineLists, lineSaid as lineSaidOf, lineStops, lineTimetable, leftAlready, GONE_S, whenBack, minutesNode as minutesNodeOf, twoKinds, vehicleSpot, VEHICLE_R, panelHead as panelHeadOf, stopHeading, stopRing, stopSaid, stopSign, stopToday, tallMark, tomorrowAt as tomorrowAtOf, untilText as untilTextOf, vehicleLabel, warningSign as warningSignOf, warns } from './panel.js';
 import { BOARD_MAX, BOARD_SHARE, BOARD_STOPS, boardBlocks, boardQuery, boardShare, displayQuery, ledBy, readBoard, readDisplay, readStops } from './display.js';
 import { mdiArrowCollapse, mdiArrowExpand, mdiCheck, mdiChevronLeft, mdiChevronRight, mdiCityVariantOutline, mdiFullscreen, mdiFullscreenExit, mdiHeart, mdiHeartOutline, mdiMinusCircleOutline, mdiPlus } from './vendor/material-design-icons/icons.js';
 import { AttributionControl, MapLibreMap, NavigationControl } from './vendor/maplibre-gl/maplibre-gl.mjs';
@@ -48,6 +48,21 @@ const RETRY_LOADING_MS = 5000; // while the server has no timetable yet
 const RETRY_NO_REALTIME_MS = 3000;
 const QUICK_RETRIES = 5; // so often in a row; the realtime feed may also be down for hours
 const PANEL_REFRESH_MS = 15_000;
+// How long an answer of the server may take: one that takes longer counts as
+// not coming, as where the connection hangs without failing (see "a
+// connection lost").
+const ANSWER_MS = 20_000;
+// How long Back may wait for the answer about an address before the details
+// of the one it left give way to a word that it loads.
+const SLOW_MS = 1_000;
+
+/** A question to the server, which gives up after ANSWER_MS. */
+const askServer = (url) => fetch(url, { signal: AbortSignal.timeout(ANSWER_MS) });
+// How long after the last answer for the open details their delays are shown
+// grey, as the last ones known, and then left out for the timetable alone, in
+// s (see "a connection lost").
+const STALE_S = 120;
+const SCHEDULE_S = 600;
 const MOVE_SETTLE_MS = 150; // wait this long after the map was moved before reloading
 const FRAME_MS = 80;
 // Between two frames the vehicles move on by the time alone. Mostly that is
@@ -182,7 +197,7 @@ function toDom(node, svg = false) {
  * whether delays come in and how the vehicles are coloured and flagged.
  */
 function drawing() {
-  return { t, time: formatTime, day: dayOf, hour: formatHour, weekday: formatWeekday, list: formatList, now: now(), times: state.times, live: realtimeState() === 'live', colorBy: state.colorBy, flags: state.flags, moving: true, favourite: favouriteStop, chosen: (stop) => stop.id === state.selection?.fromStop?.id, lost: Boolean(state.selection?.failing) };
+  return { t, time: formatTime, day: dayOf, hour: formatHour, weekday: formatWeekday, list: formatList, now: now(), times: state.times, live: realtimeState() === 'live' && staleness() < 2, colorBy: state.colorBy, flags: state.flags, moving: true, favourite: favouriteStop, chosen: (stop) => stop.id === state.selection?.fromStop?.id, lost: Boolean(state.selection?.failing) };
 }
 
 // The icons on the page's own buttons are from Material Design Icons
@@ -824,10 +839,15 @@ function choiceChip() {
 // The sheet in which they are chosen: a dialog as the one of the notes.
 const choiceDialog = $('choice');
 closesByClick(choiceDialog, $('choice-close'));
-// (the focus goes back to the chip, built anew meanwhile)
+// (the focus goes back to the chip, built anew meanwhile; not where other details have taken the place of those it was opened in, closeChoice, which have it)
 choiceDialog.addEventListener('close', () => {
-  if (!panelHead.contains(document.activeElement)) (panelHead.querySelector('.choice-open') ?? panel).focus({ preventScroll: true });
+  if (!panel.contains(document.activeElement)) (panelHead.querySelector('.choice-open') ?? panel).focus({ preventScroll: true });
 });
+
+/** Closes the sheet of the directions, where other details take the place of those it was opened in. */
+function closeChoice() {
+  if (choiceDialog.open) choiceDialog.close();
+}
 
 function openChoice() {
   renderChoice();
@@ -840,7 +860,7 @@ function renderChoice() {
   const list = stopDirections();
   const node = $('choice-list');
   if (!list) {
-    node.replaceChildren(el('p', { text: t('panel.loading') }));
+    node.replaceChildren(el('p', { text: document.documentElement.hasAttribute('data-lost') ? t('panel.loadFailed') : t('panel.loading') }));
     return;
   }
   const focused = node.contains(document.activeElement) ? document.activeElement.dataset.key : null;
@@ -1344,7 +1364,11 @@ function draw() {
 
   for (const v of state.drawList) {
     if (only ? !only.has(v.id) : !state.enabled.has(v.mode)) continue;
-    const target = positionAt(v.knots, time);
+    // (without a connection, one whose known way has ended is not where that ended: it leaves the map; the open trip's goes
+    // on by the stops the page holds, where its list puts it. See "a connection lost")
+    const beyond = !state.online && time > v.knots[v.knots.length - 3];
+    const target = beyond ? openPlace(v.id, time) : positionAt(v.knots, time);
+    if (!target) continue;
     if (v.lat === null || Math.abs(target.lat - v.lat) + Math.abs(target.lon - v.lon) > JUMP_DEG) {
       v.lat = target.lat;
       v.lon = target.lon;
@@ -1658,7 +1682,13 @@ function drawLineVehicles(paper) {
   let atChosen = false;
   for (const node of paper.parentNode.querySelectorAll('.line-vehicle')) {
     if (!lineTracks.has(node)) lineTracks.set(node, node.dataset.track ? node.dataset.track.split(',').map(Number) : [0, ...node.dataset.at.split(',').map(Number)]);
-    const { x, y, standing } = vehicleSpot(lineTracks.get(node), at);
+    // (one whose known way has ended, its trip over, is not there any more: see "a connection lost")
+    const track = lineTracks.get(node);
+    const ended = node.dataset.track !== undefined && at > track[track.length - 3];
+    if (ended && node === document.activeElement) panel.focus({ preventScroll: true });
+    node.hidden = ended;
+    if (ended) continue;
+    const { x, y, standing } = vehicleSpot(track, at);
     // (its button where it is: one that cannot be seen may well go by whole pixels)
     node.style.transform = `translate(${x.toFixed(1)}px, ${y.toFixed(1)}px)`;
     const v = { mode: node.dataset.mode, delay: node.dataset.late === undefined ? null : Number(node.dataset.late), label: node.dataset.label };
@@ -1777,11 +1807,11 @@ map.on('click', (event) => {
   if (FIXED || performance.now() - cardFoldedAt < 700) return;
   hideTooltip();
   const hit = hitTest(event.point);
-  if (hit?.vehicle) select('trip', hit.vehicle.id);
+  if (hit?.vehicle) select('trip', hit.vehicle.id, { hint: { line: hit.vehicle.line, mode: hit.vehicle.mode, to: hit.vehicle.to } });
   else if (hit?.station) {
     // (the stops of a board are open already, the one it is of and its further stops)
     if (onBoard(hit.station)) return;
-    if (hit.station.id) select('station', hit.station.id);
+    if (hit.station.id) select('station', hit.station.id, { hint: { name: hit.station.name } });
     else openFavouriteStop(hit.station);
   } else closePanel();
   // (what was tapped is not to end up under its own details)
@@ -2258,7 +2288,11 @@ function buildControls() {
 let shownRealtime = null; // the realtime state the card showed last (updateStatus)
 
 function updateStatus() {
-  if (!state.online) return;
+  // (without a connection, no numbers: its vehicles leave the map as their known ways end, see "a connection lost")
+  if (!state.online) {
+    for (const [, node] of chipCounts) node.textContent = '';
+    return;
+  }
   // The numbers refer to the whole area, not just the map section in view.
   const counts = state.counts;
   let shown = 0;
@@ -2614,6 +2648,7 @@ new MutationObserver(() => {
   if (panel.hidden) card.unfolded = false;
   showFold();
   renderBanner();
+  markLost(panel.hidden ? false : document.documentElement.hasAttribute('data-lost') || Boolean(state.selection?.failing));
 }).observe(panel, { attributes: true, attributeFilter: ['hidden'] });
 narrowScreen.addEventListener('change', showFold);
 showFold();
@@ -2743,6 +2778,14 @@ for (const surface of [$('map'), panel]) {
 }
 
 function closePanel() {
+  state.moves = (state.moves ?? 0) + 1;
+  state.addressPending = false;
+  // (the step that stood for failed details opened from the map alone: gone with them, as their own step would be)
+  if (stepHeld && !here()) {
+    stepHeld = false;
+    history.back();
+  }
+  $('panel-said').textContent = '';
   // (asked before a board that closes builds the details anew: see below)
   const keyboard = panel.contains(document.activeElement) && document.activeElement.matches(':focus-visible');
   if (state.adding) closeSearch();
@@ -2750,6 +2793,7 @@ function closePanel() {
   if (state.board !== null) setBoard(null, false);
   const picked = pickedQuery();
   state.selection = null;
+  panelBody.removeAttribute('data-sent');
   state.extra = [];
   state.lines = [];
   if (choiceDialog.open) choiceDialog.close();
@@ -2786,6 +2830,8 @@ document.addEventListener('keydown', (event) => {
     closePanel();
   } else if (state.display && !FIXED) {
     leaveDisplay();
+  } else if (!panel.hidden) {
+    closePanel();
   }
 });
 
@@ -2853,8 +2899,11 @@ function showAddress(path, title, from = null, fromStop = null) {
     servedAt = null;
   }
   if (path === here()) return;
+  // (in place of the step that stood for them while they did not load: see "a connection lost")
+  const step = stepHeld ? 'replaceState' : 'pushState';
+  stepHeld = false;
   // (the settings of the page in its address stay; a board, with its further stops, only where one is shown)
-  history.pushState(from ? { from, ...(fromStop ? { fromStop } : {}) } : null, '', new URL(`${path}${boardQuery(location.search, state.board, state.extra, state.lines)}`, document.baseURI));
+  history[step](from ? { from, ...(fromStop ? { fromStop } : {}) } : null, '', new URL(`${path}${boardQuery(location.search, state.board, state.extra, state.lines)}`, document.baseURI));
 }
 
 /**
@@ -2868,24 +2917,58 @@ function showAddress(path, title, from = null, fromStop = null) {
 async function openAddress(loaded = false) {
   const path = here();
   if (!path) return true;
-  const res = await fetch(`api/address?path=${encodeURIComponent(path)}`);
-  if (res.status === 503) return false;
+  // (what the visitor does meanwhile, as opening other details, wins over an answer that comes after it: see "a connection lost")
+  const moves = state.moves;
+  // (where the connection is known to be lost, what the page holds of the address at once, not after a question that hangs)
+  const held = heldAt(path);
+  if (held && (!state.online || state.selection?.failing)) {
+    restore(held, path, true);
+    return true;
+  }
+  if (loaded && panelBody.hasAttribute('data-sent')) sentWait(false);
+  // (an answer that takes long: the details of the address left are not shown under this one meanwhile; the page as the
+  // server sent it, which are those of this address, stays)
+  const slow = setTimeout(() => {
+    if (!loaded && here() === path && state.moves === moves && !panel.hidden && state.selection?.path !== path && !panelBody.hasAttribute('data-sent')) showLoadingOf(path);
+  }, SLOW_MS);
+  let res;
+  try {
+    res = await askServer(`api/address?path=${encodeURIComponent(path)}`);
+  } catch {
+    clearTimeout(slow);
+    // (an answer that came too late for an address the page has left meanwhile: not for the one it is at now)
+    return here() === path && state.moves === moves ? addressLost(path, loaded) : true;
+  }
+  if (here() !== path || state.moves !== moves) return true;
+  clearTimeout(slow);
+  state.addressPending = false;
+  // (at the start the page asks again by itself; else as an answer that did not come)
+  if (res.status === 503) return loaded ? false : addressLost(path, loaded);
   if (!res.ok) {
     // (a board of several stops goes on with the others: see "a board of several stops")
     if (!(await openNextStop(path))) addressGone(path);
     return true;
   }
-  const found = await res.json();
+  let found;
+  try {
+    found = await res.json();
+  } catch {
+    return here() === path && state.moves === moves ? addressLost(path, loaded) : true;
+  }
+  if (here() !== path || state.moves !== moves) return true;
   // (a stop that has moved a little, or has another name: the address it has now; that of a line or a trip without a board, which only a stop has)
   const search = found.type === 'stop' ? location.search : boardQuery(location.search, null);
   if (found.path !== path || search !== location.search) history.replaceState(history.state, '', new URL(`${found.path}${search}`, document.baseURI));
   if (found.type === 'line') {
-    selectLine(found, { counted: loaded, from: history.state?.from, fromStop: history.state?.fromStop });
+    selectLine(found, { counted: loaded, addressed: true, from: history.state?.from, fromStop: history.state?.fromStop });
     return true;
   }
   // (a trip, #178: the map is brought to it once it is there, see renderTrip, unless a display's address says where the map is)
   if (found.type === 'trip') {
-    select('trip', found.id, { counted: loaded, fit: !(loaded && state.viewAsked), from: history.state?.from, fromStop: history.state?.fromStop });
+    // (open already, and not left by Back: as it is, its question on its way)
+    if (state.selection?.type === 'trip' && state.selection.id === found.id && !state.selection.left) return true;
+    const heldTrip = visited.get(found.path)?.selection?.data;
+    select('trip', found.id, { counted: loaded, addressed: true, ...(heldTrip ? { hint: { line: heldTrip.line, mode: heldTrip.mode, to: heldTrip.to } } : {}), fit: !(loaded && state.viewAsked), from: history.state?.from, fromStop: history.state?.fromStop });
     return true;
   }
   // (the board of the stop, where the address has one: a line has none; and its further stops, read before the board is written into the address again)
@@ -2902,7 +2985,7 @@ async function openAddress(loaded = false) {
   const kept = loaded && state.viewAsked;
   if (!kept) map.easeTo({ center: [found.lon, found.lat], zoom: Math.max(map.getZoom(), SEARCH_ZOOM), offset: board === null ? stopOffset() : [0, 0], duration: 0 });
   // (landing here, not on a board: the one tip may follow, once the departures are there)
-  select('station', null, { at: found, counted: loaded, kept, stops, tip: loaded && board === null, from: history.state?.from, ...(lines ? { lines } : {}) });
+  select('station', null, { at: found, counted: loaded, addressed: true, kept, stops, tip: loaded && board === null, from: history.state?.from, ...(lines ? { lines } : {}) });
   return true;
 }
 
@@ -2913,22 +2996,25 @@ async function openAddress(loaded = false) {
  */
 async function openFavouriteStop(stop) {
   const path = stopPathOf(stop);
-  const res = await fetch(`api/address?path=${encodeURIComponent(path)}`).catch(() => null);
+  const res = await askServer(`api/address?path=${encodeURIComponent(path)}`).catch(() => null);
   if (res?.status === 404) addressGone(path);
   if (!res?.ok) return;
-  const found = await res.json();
-  if (found.type === 'stop') select('station', null, { at: found });
+  const found = await res.json().catch(() => null);
+  if (found?.type === 'stop') select('station', null, { at: found });
 }
 
 /** Says that the address names nothing now, and looks for the name in it. */
 function addressGone(path) {
   state.selection = null;
+  markLost(false);
+  $('panel-said').textContent = '';
   askDraw(); // (what was open goes from the map with the next frame)
   shareable(false);
   panel.hidden = false;
   panelHead.replaceChildren();
   const gone = path.startsWith('stop/') ? t('address.stopGone') : path.startsWith('line/') ? t('address.lineGone') : path.startsWith('trip/') ? t('address.tripGone') : t('address.gone');
   panelBody.replaceChildren(el('p', { class: 'panel-empty', text: gone }));
+  panelBody.removeAttribute('data-sent');
   const named = parseAddress(path);
   if (!named) return;
   $('controls').classList.add('searching');
@@ -2938,6 +3024,16 @@ function addressGone(path) {
 
 // Back and forward: what the address names now is opened, or what is open closed.
 addEventListener('popstate', () => {
+  stepHeld = false;
+  state.moves = (state.moves ?? 0) + 1;
+  // (an answer for the details of the address left would show them again: not waited for; see "a connection lost")
+  // (and their way back leads nowhere any more: the page is at another address, whose details come)
+  if (state.selection) {
+    state.selection.turn = (state.selection.turn ?? 0) + 1;
+    state.selection.left = true;
+    clearTimeout(panelTimer);
+  }
+  closeChoice();
   // (what the search was to add a stop to is gone)
   if (state.adding) closeSearch();
   if (here()) openAddress();
@@ -2970,7 +3066,9 @@ function shareable(yes, board = false) {
 // nothing is to be touched (style.css). A screen reader hears "Als Tafel
 // zeigen", pressed on the board.
 const boardButton = $('panel-board');
-boardButton.addEventListener('click', () => setBoard(state.board === null ? boardWas : null));
+boardButton.addEventListener('click', () => {
+  if (!state.selection?.left) setBoard(state.board === null ? boardWas : null);
+});
 
 /** Shows the button of the board where a stop is open, as the board is shown or not. */
 function showBoardButton() {
@@ -3018,7 +3116,7 @@ function showFavourite() {
 }
 
 favouriteButton.addEventListener('click', () => {
-  const open = openFavourite();
+  const open = state.selection?.left ? null : openFavourite();
   if (!open) return;
   const yes = !isFavourite(favourites, open.kind, open.item);
   favourites = withFavourite(favourites, open.kind, open.item, yes);
@@ -3032,6 +3130,7 @@ favouriteButton.addEventListener('click', () => {
 });
 
 shareButton.addEventListener('click', async () => {
+  if (state.selection?.left) return;
   // (the address alone, without the settings of this page)
   const url = new URL(here(), document.baseURI).href;
   if (navigator.share && matchMedia('(pointer: coarse)').matches) {
@@ -3061,6 +3160,12 @@ shareButton.addEventListener('click', async () => {
  *   address of a display put it
  */
 function select(type, id, more = {}) {
+  state.moves = (state.moves ?? 0) + 1;
+  // (not where they are those of the page as the server sent it, opened by its address: the sheet is theirs, and fills)
+  if (!panelBody.hasAttribute('data-sent')) closeChoice();
+  // (an address that was to load once the connection is back gives way to this; what was said of the last goes)
+  state.addressPending = false;
+  $('panel-said').textContent = '';
   // (the details it is opened from, as they are, to go back to while it has not loaded: backFromFailed)
   const back = more.from && state.selection?.data ? { selection: state.selection, view: state.view, lines: state.lines, board: state.board } : null;
   // (the further stops of a board are those of the address it was opened with, else none: see "a board of several stops")
@@ -3085,13 +3190,22 @@ function select(type, id, more = {}) {
   // (a stop and a line have their addresses once the server has said what they are: loadSelection; a trip has none)
   shareable(false);
   panel.hidden = false;
-  // (the page of an address has its details in it as the server sent it, #254: they stay until the answer comes)
-  if (!(more.counted && panelBody.hasAttribute('data-sent'))) {
-    panelHead.replaceChildren();
+  // (the page of an address has its details in it as the server sent it, #254: they stay until the answer comes, and where it
+  // does not, see disconnected)
+  const sent = Boolean(more.counted && panelBody.hasAttribute('data-sent'));
+  if (sent) {
+    state.selection.sent = true;
+    sentWait(false);
+  }
+  else {
+    // (what the row they were opened by knew of them, until they are there: see failedHead)
+    panelHead.replaceChildren(failedHead(state.selection));
+    showWayBack();
     panelBody.replaceChildren(el('p', { class: 'panel-empty', text: t('panel.loading') }));
     mainHeading();
   }
   panelBody.removeAttribute('data-sent');
+  markLost();
   loadSelection(true);
 }
 
@@ -3123,7 +3237,12 @@ async function loadSelection(first = false) {
   // (an answer that was overtaken by a later question, as after a change of the lines chosen, is not shown)
   const turn = (selection.turn = (selection.turn ?? 0) + 1);
   try {
-    const res = await fetch(selectionUrl(selection, first && !selection.counted, first));
+    // (while it is asked, a retry waits for it: one question at a time, a visit counted once)
+    const asked = askServer(selectionUrl(selection, first && !selection.counted, first));
+    selection.asking = asked;
+    const res = await asked.finally(() => {
+      if (selection.asking === asked) selection.asking = null;
+    });
     const data = res.ok ? await res.json() : null;
     await further;
     if (state.selection !== selection || selection.turn !== turn) return; // user moved on meanwhile
@@ -3134,7 +3253,14 @@ async function loadSelection(first = false) {
       // (the lines of the stop as they were last, until the next answer with them: to be shown at once on the switch)
       if (selection.type === 'station' && !data.lines && selection.data?.id === data.id && selection.data.lines) data.lines = selection.data.lines;
       selection.data = data;
-      if (data.directions) state.directions = { id: data.id, list: data.directions };
+      // (of the lines chosen when they were asked for: see renderStation)
+      selection.linesShown = choiceValue(state.lines);
+      if (data.directions) {
+        // (and the sheet to choose them in, opened before they came, with them)
+        const waited = choiceDialog.open && !stopDirections();
+        state.directions = { id: data.id, list: data.directions };
+        if (waited) renderChoice();
+      }
       if (data.route) selection.route = data.route;
       if (first && selection.type === 'station') {
         // (a favourite opens with the lines chosen for it, where the address does not ask for others: asked for again then)
@@ -3146,6 +3272,8 @@ async function loadSelection(first = false) {
         // (a board keeps the stop it shows in the middle of the map, or all of its stops in view, unless the address of a display says where the map is)
         if (state.board !== null && !selection.kept) showBoardStops(data);
         if (again) {
+          // (and in the sheet to choose them in, where it is open)
+          if (choiceDialog.open) renderChoice();
           // (in the address as well, which showAddress leaves where it is that of the stop already)
           if (!state.display) history.replaceState(history.state, '', `${location.pathname}${boardQuery(location.search, state.board, state.extra, state.lines)}`);
           loadSelection();
@@ -3166,6 +3294,8 @@ async function loadSelection(first = false) {
       }
       showSelection(first);
       draw();
+      selection.path ??= here();
+      remember(selection);
     } else if (first) {
       panelBody.replaceChildren(el('p', { class: 'panel-empty', text: t('panel.noData') }));
       // (no station where the search has one: its list is of another timetable than the server's)
@@ -3175,7 +3305,7 @@ async function loadSelection(first = false) {
     console.warn('details not loaded:', err);
     if (state.selection === selection && selection.turn === turn) disconnected(selection);
   }
-  if (state.selection === selection && !document.hidden) panelTimer = setTimeout(loadSelection, PANEL_REFRESH_MS);
+  if (state.selection === selection && selection.turn === turn && !document.hidden) panelTimer = setTimeout(loadSelection, PANEL_REFRESH_MS);
 }
 
 /**
@@ -3185,9 +3315,17 @@ async function loadSelection(first = false) {
 function showSelection(first = false) {
   const { type, data } = state.selection ?? {};
   if (!data) return;
-  if (type === 'trip') renderTrip(data, first);
-  else if (type === 'line') renderLine(data, first);
-  else renderStation(data);
+  // (long without an answer: its delays grey, as the last known, then the timetable alone; see "a connection lost")
+  const stage = staleness();
+  state.selection.stage = stage;
+  panel.classList.toggle('stale', stage === 1);
+  let shown = stage === 2 ? byTimetable(type, data) : data;
+  // (without answers a trip goes on by the page's clock: the stops it has passed, the next; a line's number of vehicles under way is not known)
+  if (state.selection.failing && type === 'trip') shown = { ...shown, now: now() };
+  if (state.selection.failing && type === 'line') shown = { ...shown, counted: false };
+  if (type === 'trip') renderTrip(shown, first);
+  else if (type === 'line') renderLine(shown, first);
+  else renderStation(shown);
 }
 // When the page gets another size, the notes in the head have other room (fitNotes).
 map.on('resize', () => showSelection());
@@ -3203,6 +3341,9 @@ const FOCUSED_IN_BODY = 'button.row, a.row, a.to-line, button.line-vehicle';
  */
 function fillPanel(head, ...nodes) {
   const focused = [...panelBody.querySelectorAll(FOCUSED_IN_BODY)].indexOf(document.activeElement);
+  // (a departure or a stop by which it is, where the list has changed since, as when one has left; else by its place)
+  const which = ['trip', 'station'].map((key) => (document.activeElement?.dataset?.[key] ? `[data-${key}="${CSS.escape(document.activeElement.dataset[key])}"]` : null)).find(Boolean);
+  const hadFocus = panel.contains(document.activeElement);
   const inHead = [...panelHead.querySelectorAll('button')].indexOf(document.activeElement);
   // (a button of a board by what it does, where its place on the board changes: data-focus)
   const keyed = focusNext ?? (panel.contains(document.activeElement) ? document.activeElement.dataset?.focus : undefined);
@@ -3210,6 +3351,7 @@ function fillPanel(head, ...nodes) {
   panelHead.replaceChildren(...head);
   showWayBack();
   panelBody.replaceChildren(...nodes);
+  panelBody.removeAttribute('data-sent');
   mainHeading();
   fitNotes();
   // (the sign a pointer is on was built anew with its row, or is gone)
@@ -3221,9 +3363,13 @@ function fillPanel(head, ...nodes) {
   const again = keyed && [...panel.querySelectorAll('[data-focus]')].find((node) => node.dataset.focus === keyed);
   // (given back where it was, not brought into sight: the list stays where it was scrolled to, see showFocused)
   focusGivenBack = true;
+  const same = which && focused >= 0 ? [...panelBody.querySelectorAll(FOCUSED_IN_BODY)].find((node) => node.matches(which)) : null;
   if (again) again.focus({ preventScroll: true });
+  else if (same) same.focus({ preventScroll: true });
   else if (focused >= 0) panelBody.querySelectorAll(FOCUSED_IN_BODY)[focused]?.focus({ preventScroll: true });
   else if (inHead >= 0) (panelHead.querySelectorAll('button')[inHead] ?? panel).focus({ preventScroll: true });
+  // (what had it is gone, with nothing in its place: the details keep it, not the page)
+  if (hadFocus && !panel.contains(document.activeElement)) panel.focus({ preventScroll: true });
   focusGivenBack = false;
 }
 
@@ -3258,8 +3404,8 @@ panel.addEventListener('click', (event) => {
   if ((toLine || station) && (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey)) return;
   if (toLine || station) event.preventDefault();
   // (what these details open has the way back to them: see "the way back")
-  if (row) select('trip', row.dataset.trip, { fit: 'unseen', from: sheetName(), fromStop: stopOpen() });
-  else if (station) select('station', station.dataset.station, { from: sheetName() });
+  if (row) select('trip', row.dataset.trip, { fit: 'unseen', from: sheetName(), fromStop: stopOpen(), hint: tripHint(row.dataset.trip) });
+  else if (station) select('station', station.dataset.station, { from: sheetName(), hint: { name: station.title } });
   else if (way) showWay(Number(way.dataset.way));
   else if (toLine) selectLine(JSON.parse(toLine.dataset.line), { from: sheetName(), fromStop: stopOpen() });
   else if (view) showView(view.dataset.view);
@@ -3320,7 +3466,11 @@ function showWayBack() {
   const head = panelHead.querySelector('.panel-head');
   if (!from || !head || state.board !== null || state.display) return;
   // (from details that did not load, whose address the page never went to: back to those they were opened from)
-  head.prepend(el('button', { type: 'button', class: 'panel-back', 'aria-label': t('panel.back', { name: from }), data: { focus: 'back' }, onclick: () => (state.selection?.loaded ? history.back() : backFromFailed()) }, [icon(mdiChevronLeft), el('span', { text: from })]));
+  head.prepend(el('button', { type: 'button', class: 'panel-back', 'aria-label': t('panel.back', { name: from }), data: { focus: 'back' }, onclick: () => {
+    if (state.selection?.left) return;
+    if (state.selection?.loaded) history.back();
+    else backFromFailed();
+  } }, [icon(mdiChevronLeft), el('span', { text: from })]));
 }
 
 // A connection lost
@@ -3333,60 +3483,389 @@ function showWayBack() {
 // What has not loaded yet says so instead of itself, with the way back and a
 // button to try again. The page asks again as it does anyway, every
 // PANEL_REFRESH_MS, and at once when the browser is online again.
+//
+// While it stays away, the delays shown are the last ones known: grey from
+// STALE_S after the last answer, and from SCHEDULE_S on left out, the details
+// by the timetable alone, as the note then says (staleness). The card does not
+// say what the head says (markLost). Back, or the way back, goes to what an
+// address showed in this visit, as the page holds it (remember, restore);
+// where it holds nothing, that address says it will load, and loads once
+// the connection is back (addressLost).
 
 /** An answer for the open details came. */
 function connected(selection) {
   selection.answeredAt = now();
+  state.heardAt = selection.answeredAt;
   if (!selection.failing) return;
   selection.failing = false;
   $('panel-said').textContent = '';
+  markLost();
 }
 
 /** An answer for the open details did not come. */
 function disconnected(selection) {
   const was = selection.failing;
   selection.failing = true;
-  if (!selection.loaded) showLoadFailed();
-  else if (!was) showSelection();
+  markLost();
+  if (choiceDialog.open && !stopDirections()) renderChoice();
+  if (!selection.loaded && selection.sent) {
+    // (the page as the server sent it, which shows them: kept, and says since when, as where no answer came at all)
+    if (!was) sentLost();
+    return;
+  }
+  if (!selection.loaded) {
+    // (one the page holds from earlier in this visit, as a trip opened again: that, as Back has it)
+    const held = selection.id === null ? null : [...visited].find(([, kept]) => kept.selection.type === selection.type && kept.selection.id === selection.id);
+    if (held) {
+      const [path, kept] = held;
+      restore({ ...kept, selection: { ...kept.selection, from: selection.from, fromStop: selection.fromStop } }, path);
+      return;
+    }
+    // (shown once: a retry that fails again leaves it as it is, its button saying that it tried)
+    if (!was) showLoadFailed();
+    // (a step of its own, which the address does not have yet, for Back to go to what was open before, the map alone too:
+    // not for details the page opened from its address, which has its step already, nor a second one)
+    if (!was && !selection.addressed && !stepHeld) {
+      history.pushState({ ...(history.state ?? {}) }, '', new URL(location.href));
+      stepHeld = true;
+    }
+  } else if (!was || selection.type === 'trip') showSelection();
   if (!was) $('panel-said').textContent = selection.loaded ? lostSince() : t('panel.loadFailed');
 }
 
-/** The note that the connection is lost: since the last answer. Null while it is not. */
-function lostSince() {
+/** How long the open details are without an answer: 0 for a while, 1 with their delays grey (STALE_S), 2 by the timetable alone (SCHEDULE_S). */
+function staleness() {
   const selection = state.selection;
-  return selection?.failing && selection.answeredAt ? t('panel.offline', { time: formatTime(selection.answeredAt) }) : null;
+  if (!selection?.failing || !selection.answeredAt) return 0;
+  const age = now() - selection.answeredAt;
+  return age >= SCHEDULE_S ? 2 : age >= STALE_S ? 1 : 0;
 }
 
-/** Details that did not load: that they will, once the connection is back, and a button to try at once. */
-function showLoadFailed() {
+/** Details as the timetable has them: without their delays, the departures in the order they are planned. */
+function byTimetable(type, data) {
+  const planned = (dep) => ({ ...dep, delay: null });
+  if (type === 'trip') return { ...data, realtime: false, stops: data.stops.map((stop) => ({ ...stop, arrDelay: null, depDelay: null })) };
+  // (a line's vehicles are those under way at the last answer, each to the end of its trip: by the timetable alone, none, nor their number)
+  if (type === 'line') return { ...data, vehicles: [], ways: data.ways?.map((way) => ({ ...way, vehicles: [] })) };
+  return {
+    ...data,
+    departures: data.departures.map(planned).sort((a, b) => a.planned - b.planned),
+    lines: data.lines?.map((line) => ({ ...line, ways: line.ways.map((way) => (way.departure ? { ...way, departure: planned(way.departure) } : way)) })),
+  };
+}
+
+/**
+ * The note that the connection is lost: since the last answer of the server,
+ * and what that means for the details: their delays not current any more,
+ * then by the timetable alone (staleness). Null while it is not.
+ */
+function lostSince() {
+  const selection = state.selection;
+  if (!selection?.failing || !selection.answeredAt) return null;
+  const time = formatTime(Math.max(selection.answeredAt, state.heardAt ?? 0));
+  const stage = staleness();
+  // (a line shows no delays to call not current: its vehicles alone, which leave as their known ways end)
+  if (stage === 1 && selection.type === 'line') return t('panel.offline', { time });
+  return stage === 2 ? t('panel.offlineSchedule', { time }) : stage === 1 ? t('panel.offlineStale', { time }) : t('panel.offline', { time });
+}
+
+/** Whether the details say that the connection is lost: the folded card does not say it as well then (style.css). */
+function markLost(lost = Boolean(state.selection?.failing)) {
+  // (where they are hidden, as on a screen on a wall without a board, the card says it: not hidden then)
+  document.documentElement.toggleAttribute('data-lost', lost && !panel.hidden && panel.getClientRects().length > 0);
+}
+
+/** That details did not load: that they will, once the connection is back, and a button to try at once. */
+function lostLoad(head, retry) {
   const said = el('p', { class: 'panel-empty lost' }, [el('i', { class: 'dot', 'aria-hidden': 'true' }), el('span', { text: t('panel.loadFailed') })]);
-  const again = el('button', { type: 'button', class: 'retry', data: { focus: 'retry' }, text: t('panel.retry'), onclick: () => loadSelection(true) });
-  fillPanel([el('div', { class: 'panel-head' })], said, again);
+  fillPanel([head], said, retryButton(retry));
+}
+
+/** The button to try again at once, which says so while it tries: without a connection that is a moment. */
+function retryButton(retry) {
+  const again = el('button', { type: 'button', class: 'retry', data: { focus: 'retry' }, text: t('panel.retry'), onclick: async () => {
+    // (one try at a time: a second would count a visit twice)
+    if (again.hasAttribute('aria-busy')) return;
+    again.style.minWidth = `${again.offsetWidth}px`;
+    again.textContent = t('panel.loading');
+    again.setAttribute('aria-busy', 'true');
+    await Promise.all([retry(), new Promise((done) => setTimeout(done, 600))]);
+    again.textContent = t('panel.retry');
+    again.removeAttribute('aria-busy');
+  } });
+  return again;
+}
+
+/** Details that did not load, under what the row they were opened by knew of them, the keyboard to its button. */
+function showLoadFailed() {
+  lostLoad(failedHead(state.selection), () => state.selection?.asking?.catch(() => {}) ?? loadSelection(true));
+  focusRetry();
+}
+
+/** Where the keyboard was in the details or nowhere: on the button to try again. */
+function focusRetry() {
+  if (document.activeElement === document.body || document.activeElement === panel) panelBody.querySelector('.retry')?.focus({ preventScroll: true });
+}
+
+/**
+ * The head of details that did not load: what the row they were opened by
+ * knew of them (hint), as their head will have it, else nothing but the way
+ * back. A trip's badge leads nowhere: its line would not load either.
+ */
+function failedHead({ type, hint, line, at }) {
+  const kind = (mode) => t(`mode.${DRAW_ORDER.includes(mode) ? mode : 'other'}`);
+  if (type === 'trip' && hint) return el('div', { class: 'panel-head' }, [el('h1', {}, [badge(hint.line, hint.mode), el('span', { text: `→ ${hint.to}` })])]);
+  if (type === 'line' && line) return el('div', { class: 'panel-head' }, [el('h1', {}, [badge(line.name, line.mode), el('span', { text: kind(line.mode) })])]);
+  const name = hint?.name ?? at?.name;
+  if (type === 'station' && name) return toDom(panelHeadOf(stopHeading(name, hint?.town ?? at?.town ?? null)));
+  return el('div', { class: 'panel-head' });
+}
+
+// (when the page as the server sent it came: the clock of the browser then, as performance.now() stops while a phone sleeps)
+const pageCame = Date.now() / 1000;
+let stepHeld = false; // whether the history has a step that stands for details that did not load, until the next address
+
+/**
+ * Where a vehicle of the open trip or line is on the map once its known way
+ * has ended without a connection: by the stops the page holds, as their list
+ * puts it (on a stop for the first and last quarter of the way to the next,
+ * else halfway, vehicleSpot in panel.js); a trip's by the timetable alone
+ * where the details are so, a line then has none. Null for any other
+ * vehicle, and once its trip is over.
+ */
+function openPlace(id, time) {
+  const selection = state.selection;
+  if (!selection?.data) return null;
+  const timetable = staleness() === 2;
+  const track = [];
+  if (selection.type === 'trip' && selection.id === id) {
+    for (const stop of selection.data.stops) {
+      if (stop.skipped || stop.lat === undefined) continue;
+      const arrives = stop.arr + (timetable ? 0 : stop.arrDelay ?? stop.depDelay ?? 0);
+      const leaves = Math.max(arrives, stop.dep + (timetable ? 0 : stop.depDelay ?? stop.arrDelay ?? 0));
+      track.push([arrives, leaves, stop.lat, stop.lon]);
+    }
+  } else if (selection.type === 'line' && !timetable) {
+    // (its track: a time and the place of a stop of its way, as lineStops in panel.js has it, a branch's beside its line)
+    for (const way of selection.data.ways ?? []) {
+      const vehicle = way.vehicles?.find((one) => one.id === id);
+      if (!vehicle?.track) continue;
+      const stopOf = (i) => {
+        if (vehicle.branch === null) return way.stops[i];
+        const branch = way.branches[vehicle.branch];
+        return i < 0 ? way.stops[branch.after] : i >= branch.stops.length ? way.stops[branch.before] : branch.stops[i];
+      };
+      for (let k = 0; k < vehicle.track.length; k += 2) {
+        const stop = stopOf(vehicle.track[k + 1]);
+        if (stop?.lat === undefined) continue;
+        const last = track.at(-1);
+        if (last && last[2] === stop.lat && last[3] === stop.lon) last[1] = vehicle.track[k];
+        else track.push([vehicle.track[k], vehicle.track[k], stop.lat, stop.lon]);
+      }
+      break;
+    }
+  }
+  for (let k = 0; k < track.length; k++) {
+    const [arrives, leaves, lat, lon] = track[k];
+    if (time <= leaves && (k === 0 || time >= arrives)) return { lat, lon, k: -1 };
+    if (k + 1 === track.length || time >= track[k + 1][0]) continue;
+    const next = track[k + 1];
+    const share = (time - leaves) / (next[0] - leaves);
+    if (share < 0.25) return { lat, lon, k: -1 };
+    if (share > 0.75) return { lat: next[2], lon: next[3], k: -1 };
+    return { lat: (lat + next[2]) / 2, lon: (lon + next[3]) / 2, k: -1 };
+  }
+  return null;
+}
+
+/** What the details of a stop, a line or a board hold of a trip their row opens: its line, kind and where it goes, for its head until it loads. */
+function tripHint(id) {
+  const data = state.selection?.data;
+  if (state.selection?.type === 'line') {
+    const vehicle = data?.ways?.flatMap((way) => way.vehicles ?? []).find((one) => one.id === id);
+    return vehicle ? { line: data.name, mode: data.mode, to: vehicle.to } : null;
+  }
+  for (const board of [data, ...[...boardStopData.values()].map((stop) => stop?.departures)]) {
+    const dep = board?.departures?.find((one) => one.trip === id);
+    if (dep) return { line: dep.line, mode: dep.mode, to: dep.to };
+    for (const line of board?.lines ?? []) {
+      const way = line.ways.find((one) => one.departure?.trip === id);
+      if (way) return { line: line.name, mode: line.mode, to: way.departure.to };
+    }
+  }
+  return null;
+}
+
+// What the addresses opened in this visit showed, as the page holds them,
+// the last VISITED of them: where the connection is lost, Back goes to them.
+const visited = new Map();
+const VISITED = 12;
+
+/** Keeps what the address of the page shows now, with the details' answer. */
+function remember(selection) {
+  // (under their own address, where they have one: an answer may come after the address bar has moved on)
+  const path = selection.path ?? here();
+  if (!path) return;
+  visited.delete(path);
+  visited.set(path, { selection, view: state.view, lines: state.lines, board: state.board, directions: state.directions });
+  if (visited.size > VISITED) visited.delete(visited.keys().next().value);
+}
+
+/**
+ * What the page holds of an address that it can show again as it was: not a
+ * board (its further stops are not held so), nor a stop whose address asks
+ * for other lines than it was asked for with.
+ */
+function heldAt(path) {
+  const held = visited.get(path);
+  if (!held || held.board !== null || readBoard(location.search) !== null) return null;
+  const asked = new URLSearchParams(location.search).get('lines') ?? '';
+  return asked === choiceValue(held.lines) ? held : null;
+}
+
+/** That the details of an address load, under what the page holds of it, where Back waits for the answer about it. */
+function showLoadingOf(path) {
+  // (the details left are not open any more: no way back of theirs, no heart, board or share for them)
+  state.selection = null;
+  closeChoice();
+  clearTimeout(panelTimer);
+  shareable(false);
+  markLost(false);
+  fillPanel([heldHead(path)], el('p', { class: 'panel-empty', text: t('panel.loading') }));
+}
+
+/** The head of what an address showed in this visit, as failedHead has it; else an empty one. */
+function heldHead(path) {
+  const held = visited.get(path)?.selection;
+  if (!held?.data) return el('div', { class: 'panel-head' });
+  return failedHead({
+    type: held.type,
+    hint: held.type === 'trip' ? { line: held.data.line, mode: held.data.mode, to: held.data.to } : { name: held.data.name, town: held.data.town },
+    line: held.type === 'line' ? { name: held.data.name, mode: held.data.mode } : null,
+  });
+}
+
+/**
+ * Shows details again as the page holds them, at their address (where Back
+ * has gone, it is there already), and asks for them anew.
+ */
+function restore(back, path = here(), lostNow = false) {
+  const { type, data } = back.selection;
+  state.moves = (state.moves ?? 0) + 1;
+  closeChoice();
+  back.selection.path = path;
+  const picked = pickedQuery();
+  // (where the connection is known to be lost, what is restored says so at once; else not, whatever it said before)
+  const lost = lostNow || !state.online || Boolean(state.selection?.failing);
+  // (the way back as the step it is restored at has it; a line's chosen stop shown again)
+  if (here() === path) {
+    back.selection.from = history.state?.from;
+    back.selection.fromStop = history.state?.fromStop;
+  }
+  delete back.selection.chosenShown;
+  // (left once by Back, see popstate: open again now)
+  delete back.selection.left;
+  state.addressPending = false;
+  // (a board, which details in its place close, as opening them does)
+  if (state.board !== null) setBoard(null, false);
+  state.extra = [];
+  // (the keyboard in the details, as when details open: see select)
+  if (panelBody.contains(document.activeElement) || panelHead.contains(document.activeElement)) panel.focus({ preventScroll: true });
+  state.selection = back.selection;
+  state.selection.failing = lost;
+  state.view = back.view;
+  state.lines = back.lines;
+  if (back.directions) state.directions = back.directions;
+  // (a stop or a line from its top, as when it opens; a trip at its next stop, below)
+  if (type !== 'trip') panelBody.scrollTop = 0;
+  panel.hidden = false;
+  showAddress(path, type === 'trip' ? tripTitle(data) : type === 'line' ? lineTitle(data) : stopTitle(data.name, data.town), back.selection.from, back.selection.fromStop);
+  // (a stop on the map, as opening it puts it: above the sheet)
+  if (type === 'station' && data.lat !== undefined) map.easeTo({ center: [data.lon, data.lat], zoom: Math.max(map.getZoom(), SEARCH_ZOOM), offset: stopOffset(), duration: 0 });
+  askDraw();
+  pickedChanged(picked);
+  shareable(true, type === 'station');
+  markLost();
+  $('panel-said').textContent = lostSince() ?? '';
+  // (a trip opens at its next stop, as it does with an answer)
+  showSelection(type === 'trip');
+  loadSelection();
 }
 
 /** Back from details that did not load to those they were opened from, as they were: the address never left them. */
 function backFromFailed() {
+  // (where they have a step of their own, or were opened from their address: Back, which goes to what was before)
+  if (stepHeld || state.selection?.addressed) {
+    history.back();
+    return;
+  }
   const back = state.selection?.back;
   // (a board, which opening them closed: opened anew from its address)
   if (!back || back.board !== null) {
     openAddress();
     return;
   }
-  const picked = pickedQuery();
-  state.selection = back.selection;
-  state.view = back.view;
-  state.lines = back.lines;
-  askDraw();
-  pickedChanged(picked);
-  shareable(true, back.selection.type === 'station');
-  showSelection();
-  loadSelection();
+  restore(back);
 }
 
-// (the connection back: what failed to load, or stopped being answered, at once rather than at its next turn)
+/**
+ * An address the page could not ask about, as on the way back without a
+ * connection: what it showed in this visit, as the page holds it, else that
+ * it will load, which it does once the connection is back. (A board is
+ * opened anew from its address: its further stops are not held so.)
+ * @returns whether the address is open
+ */
+function addressLost(path, loaded = false) {
+  const kept = heldAt(path);
+  if (kept) {
+    restore(kept, path, true);
+    return true;
+  }
+  // (to be opened once the connection is back, as the page itself would have: a visit its load counted is not counted again)
+  state.addressPending = { loaded };
+  // (the page as the server sent it, with what it says: kept until then)
+  if (loaded && panelBody.hasAttribute('data-sent')) {
+    sentWait(true);
+    return true;
+  }
+  // (shown already: a retry that fails again leaves it as it is, its button saying that it tried)
+  if (!panel.hidden && panelBody.querySelector(`.retry[data-address="${CSS.escape(path)}"]`)) return true;
+  clearTimeout(panelTimer);
+  const picked = pickedQuery();
+  if (state.board !== null) setBoard(null, false);
+  state.extra = [];
+  state.selection = null;
+  closeChoice();
+  panel.hidden = false;
+  askDraw();
+  pickedChanged(picked);
+  shareable(false);
+  markLost(true);
+  // (not yet known what it is: the page's own title)
+  showAddress(path, null);
+  lostLoad(heldHead(path), () => openAddress(loaded));
+  panelBody.querySelector('.retry').dataset.address = path;
+  $('panel-said').textContent = t('panel.loadFailed');
+  focusRetry();
+  return true;
+}
+
+/** Opens the address that was to load once the connection is back, as it was to be opened (addressLost). */
+function openPending() {
+  const { loaded } = state.addressPending;
+  state.addressPending = false;
+  openAddress(loaded);
+}
+
+// (the connection back: an address that could not be opened without it, and what failed to load, or stopped being
+// answered, at once rather than at its next turn)
 addEventListener('online', () => {
+  if (state.addressPending) {
+    openPending();
+    return;
+  }
   const selection = state.selection;
-  if (selection && (!selection.loaded || selection.failing)) loadSelection();
+  if (selection && (!selection.loaded || selection.failing) && !selection.asking) loadSelection();
 });
 
 function badge(line, mode, ...more) {
@@ -3658,7 +4137,7 @@ function renderTrip(trip, scrollToNext) {
     if (!towns[i] && tallMark(stop.modes, trip.mode)) classes.push('tall');
     const chosen = i === chosenAt;
     const said = `${stopSaid(stop.modes, trip.mode, favourite, drawn)}${isNext ? `, ${t('trip.next')}` : ''}${chosen ? `, ${t('stop.chosen')}` : ''}`;
-    const row = el('button', { type: 'button', class: classes.join(' '), onclick: () => select('station', stop.station, { from: sheetName() }) }, [
+    const row = el('button', { type: 'button', class: classes.join(' '), onclick: () => select('station', stop.station, { from: sheetName(), hint: { name: stop.name } }) }, [
       el('span', { class: 'rail' }, [toDom(stopSign(stop.modes, trip.mode, favourite)), ...(chosen ? [toDom(stopRing(stop.modes, trip.mode, favourite, `ring-${i}`))] : [])]),
       el('span', { class: 'time', text: formatTime(leavesAt({ planned, delay })) }),
       stop.skipped ? el('span') : delaySum(planned, delay),
@@ -3698,7 +4177,7 @@ function renderTrip(trip, scrollToNext) {
     [
       el('div', { class: 'panel-head' }, [
         el('h1', {}, [toLine, el('span', { text: `→ ${to}` })]),
-        el('p', { class: 'sub', text: [mode, trip.agency, othersData ? null : trip.realtime ? t('trip.realtime') : t('trip.scheduleOnly')].filter(Boolean).join(' · ') }),
+        el('p', { class: 'sub', text: [mode, trip.agency, othersData || state.selection?.failing ? null : trip.realtime ? t('trip.realtime') : t('trip.scheduleOnly')].filter(Boolean).join(' · ') }),
         notesList(trip.notes, source, trip.cancelled ? t('trip.cancelled') : null),
       ]),
     ],
@@ -3901,15 +4380,108 @@ function tomorrowAt(departures) {
 
 let goneDrawn = 0; // when tickTimes() last drew the details anew for a departure that left, in s
 
+/** The page as the server sent it, whose first questions did not get an answer: its head says so, as open details do. */
+function sentLost() {
+  const head = panelHead.querySelector('.panel-head');
+  if (!head) return;
+  const said = head.querySelector('.connection>span');
+  if (said) {
+    sentStage(said);
+    sentWait(true);
+    return;
+  }
+  let notes = head.querySelector('.notes');
+  if (!notes) {
+    notes = el('ul', { class: 'notes' });
+    head.append(notes);
+  }
+  // (since the page came, which is when the server sent it)
+  const came = pageCame + state.clockOffset;
+  const item = el('li', { class: 'warning connection' }, [el('span', { text: t('panel.offline', { time: formatTime(came) }) })]);
+  item.querySelector('span').prepend(el('i', { class: 'dot', 'aria-hidden': 'true' }));
+  notes.prepend(item);
+  markLost(true);
+  sentEnd();
+  sentWait(true);
+  if (choiceDialog.open && !stopDirections()) renderChoice();
+  $('panel-said').textContent = item.textContent;
+}
+
+/**
+ * The departures that have left go from the page as the server sent it, as
+ * it is: a list left empty with them, and the day it is headed by.
+ */
+function sentGone(at) {
+  for (const node of panel.querySelectorAll('.minutes[data-leaves]')) if (Number(node.dataset.leaves) < at - GONE_S) node.closest('li')?.remove();
+  // (the line that more come stays where the lists end, as it was put there)
+  sentEnd();
+  for (const list of panelBody.querySelectorAll('ul.rows')) {
+    if (list.children.length) continue;
+    if (list.previousElementSibling?.matches('.day-head')) list.previousElementSibling.remove();
+    list.remove();
+  }
+}
+
+/**
+ * The page of a trip as the server sent it has its name and what it is: under
+ * them, that its stops load, and where the connection is lost, that they load
+ * once it is back (quiet: the head says why). It loads by itself then, as the
+ * pages of a stop and a line as sent do: no button to try at once.
+ */
+function sentWait(lost) {
+  if (!here().startsWith('trip/')) return;
+  const was = panelBody.querySelector('.sent-wait');
+  if (was?.dataset.lost === String(lost)) return;
+  was?.remove();
+  panelBody.append(el('p', { class: 'panel-empty sent-wait', data: { lost: String(lost) }, text: lost ? t('panel.loadFailed') : t('panel.loading') }));
+}
+
+/** Where its connection is lost, the page as the server sent it ends with the line that more come once it is back, as open details do (whenBack in panel.js). */
+function sentEnd() {
+  if (!panelHead.querySelector('.connection') || panelBody.querySelector('.when-back')) return;
+  const lists = [...panelBody.querySelectorAll('ul.rows')].filter((list) => !list.parentElement.closest('ul.rows'));
+  lists.at(-1)?.after(el('p', { class: 'panel-empty when-back', text: t('departures.whenBack') }));
+}
+
+/**
+ * The stage of the page as the server sent it, as long as no answer comes
+ * (staleness): its delays grey after STALE_S, as the note then says. Its
+ * delays are not left out later: the page has them only as it was sent.
+ */
+function sentStage(said) {
+  const came = pageCame + state.clockOffset;
+  if (now() - came < STALE_S || panel.classList.contains('stale')) return;
+  panel.classList.add('stale');
+  // (of a stop alone: a line's and a trip's as sent show no delays)
+  if (!here().startsWith('stop/')) return;
+  said.lastChild.textContent = t('panel.offlineStale', { time: formatTime(came) });
+  $('panel-said').textContent = said.textContent;
+}
+
 /** The minutes in the lists of departures and the clock of a board, as time goes on. */
 function tickTimes() {
   if (panel.hidden) return;
+  // (long without an answer: its delays grey, then the timetable alone, which the note says once; see "a connection lost")
+  const stage = staleness();
+  if (state.selection?.data && !state.selection.left && stage !== (state.selection.stage ?? 0)) {
+    if (stage > 0) $('panel-said').textContent = lostSince();
+    showSelection();
+    return;
+  }
   // (one that has left goes: the details drawn anew without it, GONE_S; at most every few seconds, should one stay)
   const at = now();
   if (at - goneDrawn > 5 && [...panel.querySelectorAll('.minutes[data-leaves]')].some((node) => Number(node.dataset.leaves) < at - GONE_S)) {
     goneDrawn = at;
-    showSelection();
+    // (the page as the server sent it, with no details of its own yet: the rows that have left go from it as it is)
+    if (state.selection?.data) {
+      if (!state.selection.left) showSelection();
+    } else sentGone(at);
     return;
+  }
+  // (the page as the server sent it, long without an answer: see sentLost)
+  if (!state.selection?.data) {
+    const said = panelHead.querySelector('.connection>span');
+    if (said) sentStage(said);
   }
   const update = (node, text) => {
     if (node.textContent !== text) node.textContent = text;
@@ -3919,6 +4491,11 @@ function tickTimes() {
   if (clock) update(clock, formatTime(now()));
 }
 
+/** Whether, without a connection, other lines are chosen than those the departures held are of (linesShown, as they came). */
+function otherLinesHeld() {
+  const selection = state.selection;
+  return Boolean(selection?.failing) && selection.linesShown !== undefined && selection.linesShown !== choiceValue(state.lines);
+}
 
 function renderStation(board) {
   if (state.board !== null) {
@@ -3928,9 +4505,15 @@ function renderStation(board) {
   const scrollTop = panelBody.scrollTop;
   // (as the server writes them into the page of the stop: panel.js)
   // (its next departures, or all its lines: until they come, a word that they are on the way)
-  const waiting = state.view === 'lines' && !board.lines;
+  // (and without a connection, where other lines are chosen than those the departures held are of: not those of the others)
+  const waiting = state.view === 'lines' ? !board.lines : otherLinesHeld();
   const drawn = drawing();
-  const listed = waiting ? [el('p', { class: 'panel-empty', text: t('panel.loading') })] : (state.view === 'lines' ? lineLists : departureLists)(board, drawn).map((node) => toDom(node));
+  // (where the connection is lost, that they will come once it is back: see "a connection lost")
+  // (without a connection, that they load once it is back, and a button to try at once; quiet: the head says why)
+  const notYet = state.selection?.failing
+    ? [el('p', { class: 'panel-empty', text: t('panel.loadFailed') }), retryButton(() => state.selection?.asking?.catch(() => {}) ?? loadSelection())]
+    : [el('p', { class: 'panel-empty', text: t('panel.loading') })];
+  const listed = waiting ? notYet : (state.view === 'lines' ? lineLists : departureLists)(board, drawn).map((node) => toDom(node));
   // (what leaves it today, #289: not on a screen on a wall, which shows its departures alone)
   const today = FIXED ? null : stopToday(board.today, drawn);
   fillPanel([toDom(panelHeadOf(stopHeading(board.name, board.town), today, departuresSub(), notesList(board.notes)))], ...listed);
@@ -4046,14 +4629,28 @@ clearing.observe(panel);
 clearing.observe(map.getContainer().querySelector('.maplibregl-ctrl-bottom-right'));
 map.on('resize', clearMapButtons);
 
+let sheetAtTop = false; // whether the sheet last came to rest at the highest of its heights, up to the card
+
 /** The sheet comes to rest at a height, and what is chosen on the map stays in sight above it. */
 function restSheet(height) {
+  sheetAtTop = height !== null && height >= sheetHeights()[2] - 1;
   setSheetHeight(height);
   // (once it has got there: the way up is a transition of the style sheet)
   setTimeout(() => {
     if (state.chosenAt && state.selection) clearOfSheet(state.chosenAt.y);
   }, 220);
 }
+
+// The folded card grows by its status line, as where the delay data is out:
+// a sheet resting up to it, or under it then, moves down to stay below it,
+// its bar and buttons in reach, and up again as the card shrinks.
+new ResizeObserver(() => {
+  const card = $('controls');
+  if (!narrowScreen.matches || panel.hidden || state.board !== null || !document.documentElement.hasAttribute('data-fold')) return;
+  if (!panel.classList.contains('sized') || panel.classList.contains('dragging') || card.classList.contains('dragging')) return;
+  const high = sheetHeights()[2];
+  if (sheetAtTop || panel.offsetHeight > high + 1) setSheetHeight(high);
+}).observe($('controls'));
 
 sheetHandle.addEventListener('click', () => {
   // (on a board the bar is the grip of its edge, see "the board")
@@ -4244,7 +4841,7 @@ function renderBoard(board) {
   const head = columns > 1 ? [...clock, notesList(board.notes)] : [headings[0], sub(), ...clock, notesList(board.notes)];
   const sections = blocks.map((block, i) => el('section', { class: 'board-block' }, [
     ...(columns > 1 ? [headings[i], sub(i)] : i ? [headings[i]] : []),
-    ...blockRows(block, times),
+    ...blockRows(block, times, i === 0),
   ]));
   const credits = el('p', { class: 'board-credits' });
   credits.innerHTML = [escapeHtml(siteName), boardCredits].filter(Boolean).join(' · ');
@@ -4327,15 +4924,20 @@ function boardRow(dep, times, from = null, both = false) {
 }
 
 /** What a block of a board shows below its heading: the stops of it the timetable does not have, and its departures. */
-function blockRows(block, times) {
+function blockRows(block, times, open = false) {
   const gone = block.filter((entry) => entry.known?.gone).map((entry) => el('p', { class: 'board-gone', text: t('board.gone', { stop: nameOf(entry) }) }));
   const shown = block.filter((entry) => entry.known?.departures);
-  // (not yet there: the block waits for them)
-  if (!shown.length) return gone;
+  // (not yet there: the block waits for them, and without a connection says that they load once it is back; so the open
+  // stop's, of other lines than those chosen)
+  const notYet = [...gone, el('p', { class: 'panel-empty', text: t('panel.loadFailed') })];
+  if (open && otherLinesHeld()) return notYet;
+  if (!shown.length) return state.selection?.failing && block.some((entry) => !entry.known?.gone) ? notYet : gone;
   const { rows: from } = namesOf(block);
   const merged = shown.length > 1;
-  // (not those that have left: GONE_S)
-  const departures = (merged ? mergedDepartures(shown) : shown[0].known.departures.departures.map((dep) => ({ dep, from: null }))).filter(({ dep }) => !leftAlready(dep, now()));
+  const listed = merged ? mergedDepartures(shown) : shown[0].known.departures.departures.map((dep) => ({ dep, from: null }));
+  // (long without an answer, by the timetable alone, as the open stop's: see byTimetable; and not those that have left, GONE_S)
+  const planned = staleness() === 2 ? listed.map(({ dep, from }) => ({ dep: { ...dep, delay: null }, from })).sort((a, b) => a.dep.planned - b.dep.planned) : listed;
+  const departures = planned.filter(({ dep }) => !leftAlready(dep, now()));
   // (the badges of a name the block's stops have in two kinds say their kind)
   const kinds = twoKinds(shown.map((entry) => entry.known.departures.today), departures.map(({ dep }) => dep));
   const rows = departures.map((each) => boardRow(each.dep, times, merged ? from[block.indexOf(each.from)] : null, kinds.has(each.dep.line)));
@@ -4343,11 +4945,34 @@ function blockRows(block, times) {
   const split = tomorrowAt(departures.map(({ dep }) => dep));
   if (split >= 0) rows.splice(split, 0, el('li', { class: 'day' }, [el('span', { text: t('departures.tomorrow') })]));
   // (where the connection is lost, the page does not know there are none: the note in the head says why it is empty)
-  return [...gone, rows.length ? el('ul', { class: `board-rows times-${times}` }, rows) : state.selection?.failing ? null : el('p', { class: 'panel-empty', text: t('departures.none') })].filter(Boolean);
+  const lost = state.selection?.failing ? toDom(whenBack(drawing())) : null;
+  return [...gone, rows.length ? el('ul', { class: `board-rows times-${times}` }, rows) : lost ? null : el('p', { class: 'panel-empty', text: t('departures.none') }), lost].filter(Boolean);
 }
 
 /** Shows as many departures as each list of the board has room for: whole rows, those that do not fit hidden. */
 function fitBoard() {
+  // That more come once the connection is back (see "a connection lost"):
+  // under the rows of a block where all it holds are shown. So the rows are
+  // fitted without it, then again with it where they all fit, and once more
+  // without it where it took the room of a row.
+  const lines = [...panelBody.querySelectorAll('.board-block .when-back')];
+  const cut = (line) => [...(line.parentElement.querySelector('.board-rows')?.children ?? [])].some((row) => row.hidden);
+  const counts = () => [...panelBody.querySelectorAll('.board-rows')].map((list) => [...list.children].filter((row) => !row.hidden).length);
+  for (const line of lines) line.hidden = true;
+  fitRows();
+  const shown = lines.filter((line) => !cut(line));
+  if (!shown.length) return;
+  const without = counts();
+  for (const line of shown) line.hidden = false;
+  fitRows();
+  // (where it took the room of a row, of its block or another's: not there, but in a block with no rows left, all it has)
+  if (counts().every((count, i) => count >= without[i])) return;
+  for (const line of shown) if (line.parentElement.querySelector('.board-rows')) line.hidden = true;
+  fitRows();
+}
+
+/** Fits the rows of a board to its blocks, as they are now. */
+function fitRows() {
   const lists = [...panelBody.querySelectorAll('.board-rows')];
   // (all shown first: the blocks are shared out by how much they have, then each list is cut where its block ends)
   for (const list of lists) for (const row of list.children) row.hidden = false;
@@ -4451,7 +5076,7 @@ let renderedColumns = 1; // the columns of the board drawn last
 async function loadBoardStop(stop) {
   let known = boardStopData.get(stop.path);
   if (!known || known.lost || (known.gone && Date.now() - known.askedAt > STOP_RETRY_MS)) {
-    const res = await fetch(`api/address?path=${encodeURIComponent(`stop/${stop.path}`)}`);
+    const res = await askServer(`api/address?path=${encodeURIComponent(`stop/${stop.path}`)}`);
     // (no timetable yet: asked again with the next refresh)
     if (res.status === 503) return;
     if (!res.ok) {
@@ -4464,7 +5089,7 @@ async function loadBoardStop(stop) {
     if (!boardStopAt(stop, found.path.slice('stop/'.length), known)) return;
   }
   if (known.gone) return;
-  const res = await fetch(`api/departures?at=${known.lat.toFixed(5)},${known.lon.toFixed(5)}`);
+  const res = await askServer(`api/departures?at=${known.lat.toFixed(5)},${known.lon.toFixed(5)}`);
   // (not found at its place: a timetable since has it elsewhere, or not; asked again where it is)
   if (res.status === 404) {
     known.departures = null;
@@ -4504,7 +5129,7 @@ async function openNextStop(path) {
   const first = path.slice('stop/'.length);
   const stops = readStops(location.search, first);
   for (const stop of stops) {
-    const res = await fetch(`api/address?path=${encodeURIComponent(`stop/${stop.path}`)}`);
+    const res = await askServer(`api/address?path=${encodeURIComponent(`stop/${stop.path}`)}`);
     if (!res.ok) continue;
     const found = await res.json();
     // (the lists stay as the address has them, for when it is back)
@@ -4850,7 +5475,7 @@ function versionCredit(about) {
  */
 async function loadArea() {
   // (api/status says which version runs; the map does without it if need be)
-  const [res, about] = await Promise.all([fetch('api/area'), fetch('api/status').then((status) => (status.ok ? status.json() : null)).catch(() => null)]);
+  const [res, about] = await Promise.all([askServer('api/area'), askServer('api/status').then((status) => (status.ok ? status.json() : null)).catch(() => null)]);
   // (and that is the version the page runs, see "a new version")
   if (about && runningVersion === null) runningVersion = versionOf(about);
   if (res.status === 503) return res.json();
@@ -4938,7 +5563,7 @@ async function loadStations() {
   const box = boxAround(bounds, STATION_MARGIN);
   const seq = ++stationSeq;
   try {
-    const res = await fetch(`api/stations?bbox=${boxQuery(box)}`);
+    const res = await askServer(`api/stations?bbox=${boxQuery(box)}`);
     if (!res.ok || seq !== stationSeq) return;
     state.stations = await res.json();
     state.stationsLoaded = box;
@@ -4957,7 +5582,7 @@ async function poll() {
     // (without an area the server cannot say what it covers before it has a timetable)
     const waiting = state.areaKnown ? null : await loadArea();
     const request = { box: boxAround(map.getBounds(), VEHICLE_MARGIN), detail: detailWanted(), zoom: zoomAsked() };
-    const res = waiting ? { status: 503 } : await fetch(`api/vehicles?bbox=${boxQuery(request.box)}&detail=${request.detail}&zoom=${request.zoom}${modesQuery()}${pickedQuery()}`);
+    const res = waiting ? { status: 503 } : await askServer(`api/vehicles?bbox=${boxQuery(request.box)}&detail=${request.detail}&zoom=${request.zoom}${modesQuery()}${pickedQuery()}`);
     const data = waiting ?? await res.json();
     // The map was moved meanwhile and a newer request is under way.
     if (seq !== pollSeq) return;
@@ -4980,7 +5605,11 @@ async function poll() {
       // (once there is a timetable to look in)
       if (!state.addressOpened) {
         state.addressOpened = true;
-        openAddress(true).then((done) => {
+        // (where details at this address are open already and answer, as a row tapped before this answer opened them: not
+        // again, nor restored as without a connection, which the page did not know it had until now)
+        const open = state.selection;
+        const opened = open?.loaded && !open.failing && open.path === here();
+        (opened ? Promise.resolve(true) : openAddress(true)).then((done) => {
           if (!done) state.addressOpened = false;
           else offerLanguage();
         }).catch((err) => {
@@ -4998,7 +5627,14 @@ async function poll() {
       const list = Array.isArray(data.vehicles) ? data.vehicles : fromColumns(data);
       state.many = list.length > MANY[state.many ? 1 : 0];
       applyVehicles(list);
+      // (back after a failure, or a hang the browser does not call offline: open details asked at once, unless they are
+      // being asked or an address is to open; see "a connection lost")
+      const selection = state.selection;
+      if (!state.online && !state.addressPending && selection && (selection.failing || !selection.loaded) && !selection.asking) setTimeout(loadSelection);
       state.online = true;
+      state.heardAt = now();
+      // (the server answers again: an address that could not be opened without it, now, once: see "a connection lost")
+      if (state.addressPending) openPending();
       updateStatus();
       loadStations();
       // The first answer usually predates the server's first realtime fetch.
@@ -5013,6 +5649,10 @@ async function poll() {
     if (seq !== pollSeq) return;
     // Not only a failed request ends up here but any error in the code above.
     console.warn('poll failed:', err);
+    // (open details say it at once, as the card does, not after a question of their own that may hang: see "a connection lost")
+    if (state.online && state.selection?.loaded && !panel.hidden && !state.selection.failing && !state.selection.left) disconnected(state.selection);
+    // (the page as the server sent it, before any answer: that the connection is lost, in its head as open details say it)
+    if (!state.selection && !panel.hidden && panelBody.hasAttribute('data-sent')) sentLost();
     state.online = false;
     $('status').dataset.state = 'error';
     $('status-text').textContent = t('status.noConnection');
@@ -5147,7 +5787,7 @@ const versionOf = (about) => `${about.version} ${about.commit ?? ''}`;
 /** Asks which version the server runs. True if it is another than the page's. */
 async function checkVersion() {
   try {
-    const res = await fetch('api/status');
+    const res = await askServer('api/status');
     if (!res.ok) return newVersion;
     const version = versionOf(await res.json());
     if (runningVersion === null) runningVersion = version;
@@ -5207,6 +5847,8 @@ function init() {
   const minutes = [t('departures.now'), t('departures.minutes', { count: MINUTES_MAX }), ...hours];
   document.documentElement.style.setProperty('--minutes-chars', Math.max(...minutes.map((text) => text.length)));
   buildControls();
+  // (the page of a trip as the server sent it: that its stops load, from the start, see sentWait)
+  if (panelBody.hasAttribute('data-sent')) sentWait(false);
   // (the header card is what this visitor gets now; where the page came that way, first.js has shown it already)
   document.documentElement.dataset.controls = 'shown';
   // (and what was typed into it before this script had arrived is looked for)
