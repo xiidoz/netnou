@@ -366,12 +366,23 @@ where that is: the addresses are settings of the repository on GitHub
 
 | Setting | Kind | Meaning |
 | --- | --- | --- |
-| `DEPLOY_HOOK` | secret | an address that is called with `POST` once the image is pushed. Whatever answers there fetches the image and starts the containers that use it anew: the HTTP API of Watchtower for example, `https://…/v1/update?image=ghcr.io/xiidoz/netnou` |
-| `DEPLOY_HOOK_TOKEN` | secret | sent with that call as a bearer token, if set |
+| `DEPLOY_HOOK_EDGE` | secret | an address that is called with `POST` after every push to `main`, once the image is pushed. Whatever answers there fetches `edge` and starts the containers that use it anew, each time it is called |
+| `DEPLOY_HOOK_RELEASE` | secret | the same for the containers that follow `latest`; called after a release only |
+| `DEPLOY_HOOK_SECRET` | secret | if set, signs each call as GitHub signs its webhooks |
 | `DEPLOY_STATUS_EDGE` | variable | the address of `/api/status` of an instance that follows `edge` |
 | `DEPLOY_STATUS_RELEASE` | variable | the same of an instance that follows `latest`; looked at after a release only |
 
-After the call the job asks each instance named for its status until it
+Each call sends what was built as JSON, such as
+`{"image":"ghcr.io/xiidoz/netnou","tag":"edge","commit":"…"}`, with the tag
+`latest` after a release. With a secret it carries the header
+`X-Hub-Signature-256`: `sha256=` and the HMAC-SHA256 of the body, keyed with
+the secret, so the secret itself is never sent. The run fails when a call
+does not reach the address or is answered with an error; the log says which,
+with the HTTP status or curl's exit code, and leaves out the answer and the
+address, since it is public. Any other answer counts as received, not as
+deployed: whether an instance runs the new image is what its status tells.
+
+After the calls the job asks each instance named for its status until it
 reports the commit that was built, for ten minutes at most. A run that fails
 there has still published the image: it says that the instance does not run
 it. Write a host name with letters outside ASCII in its `xn--` form.
