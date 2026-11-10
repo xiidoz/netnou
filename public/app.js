@@ -420,6 +420,8 @@ try {
 }
 map.touchZoomRotate.disableRotation();
 map.keyboard.disableRotation();
+// (what its keys do, for a screen reader: the frame and the cross that show it has them are in style.css)
+map.getCanvas().setAttribute('aria-describedby', 'map-keys');
 
 // The area is far larger than a screen at street level, so only what is in
 // view (plus a margin, so that small pans need no reload) is requested.
@@ -825,6 +827,8 @@ function showWay(way) {
 function showView(view) {
   if (view === state.view || state.selection?.type !== 'station') return;
   state.view = view;
+  // (with its step in the history, for Back and Forward to open it so: openAddress)
+  history.replaceState({ ...(history.state ?? {}), view }, '', location.href);
   showSelection(false);
   loadSelection();
 }
@@ -2788,6 +2792,7 @@ function closePanel() {
   $('panel-said').textContent = '';
   // (asked before a board that closes builds the details anew: see below)
   const keyboard = panel.contains(document.activeElement) && document.activeElement.matches(':focus-visible');
+  focusBack = null;
   if (state.adding) closeSearch();
   // (a board closes with its details; its address stays as it was, the step back to it)
   if (state.board !== null) setBoard(null, false);
@@ -2808,6 +2813,9 @@ function closePanel() {
   // search, and not to the start of the page (#194). After a click or a tap
   // it is left where it falls: moved, it would show a ring.
   if (keyboard) {
+    // (as the card is now the details are closed, not as it was folded over them: the search where it is to be seen)
+    card.unfolded = false;
+    showFold();
     focusGivenBack = true;
     panelOpener?.focus({ preventScroll: true });
     if (document.activeElement !== panelOpener) (searchBehindLens() ? $('search-open') : searchField).focus({ preventScroll: true });
@@ -2827,7 +2835,10 @@ document.addEventListener('keydown', (event) => {
     showSettings(false);
     settingsButton.focus();
   } else if (state.selection) {
-    closePanel();
+    // (details opened from others: back to those, as their way back goes, see showWayBack; else closed)
+    const back = panelHead.querySelector('.panel-back');
+    if (back) back.click();
+    else closePanel();
   } else if (state.display && !FIXED) {
     leaveDisplay();
   } else if (!panel.hidden) {
@@ -2985,7 +2996,7 @@ async function openAddress(loaded = false) {
   const kept = loaded && state.viewAsked;
   if (!kept) map.easeTo({ center: [found.lon, found.lat], zoom: Math.max(map.getZoom(), SEARCH_ZOOM), offset: board === null ? stopOffset() : [0, 0], duration: 0 });
   // (landing here, not on a board: the one tip may follow, once the departures are there)
-  select('station', null, { at: found, counted: loaded, addressed: true, kept, stops, tip: loaded && board === null, from: history.state?.from, ...(lines ? { lines } : {}) });
+  select('station', null, { at: found, counted: loaded, addressed: true, kept, stops, tip: loaded && board === null, from: history.state?.from, view: history.state?.view, ...(lines ? { lines } : {}) });
   return true;
 }
 
@@ -3161,6 +3172,8 @@ shareButton.addEventListener('click', async () => {
  */
 function select(type, id, more = {}) {
   state.moves = (state.moves ?? 0) + 1;
+  // (opened, not gone back to by the address: see focusBack)
+  if (!more.addressed) focusBack = null;
   // (not where they are those of the page as the server sent it, opened by its address: the sheet is theirs, and fills)
   if (!panelBody.hasAttribute('data-sent')) closeChoice();
   // (an address that was to load once the connection is back gives way to this; what was said of the last goes)
@@ -3181,7 +3194,8 @@ function select(type, id, more = {}) {
   delete state.selection.stops;
   // (the lines of a stop to show: as the address asks, else as its favourite keeps them, see loadSelection)
   state.lines = type === 'station' ? (more.lines ?? []) : [];
-  state.view = 'departures';
+  // (its next departures, unless it is opened again at a step that showed all its lines: showView)
+  state.view = type === 'station' && more.view === 'lines' ? 'lines' : 'departures';
   state.selection.linesAsked = more.lines !== undefined;
   delete state.selection.lines;
   // (the ring around the chosen vehicle, or a line's vehicles alone, with the next frame: not with the server's answer)
@@ -3342,7 +3356,9 @@ const FOCUSED_IN_BODY = 'button.row, a.row, a.to-line, button.line-vehicle';
 function fillPanel(head, ...nodes) {
   const focused = [...panelBody.querySelectorAll(FOCUSED_IN_BODY)].indexOf(document.activeElement);
   // (a departure or a stop by which it is, where the list has changed since, as when one has left; else by its place)
-  const which = ['trip', 'station'].map((key) => (document.activeElement?.dataset?.[key] ? `[data-${key}="${CSS.escape(document.activeElement.dataset[key])}"]` : null)).find(Boolean);
+  // (a stop a trip calls at twice by which call it is as well: data-call)
+  const call = document.activeElement?.dataset?.call === undefined ? '' : `[data-call="${document.activeElement.dataset.call}"]`;
+  const which = ['trip', 'station'].map((key) => (document.activeElement?.dataset?.[key] ? `[data-${key}="${CSS.escape(document.activeElement.dataset[key])}"]${call}` : null)).find(Boolean);
   const hadFocus = panel.contains(document.activeElement);
   const inHead = [...panelHead.querySelectorAll('button')].indexOf(document.activeElement);
   // (a button of a board by what it does, where its place on the board changes: data-focus)
@@ -3371,10 +3387,46 @@ function fillPanel(head, ...nodes) {
   // (what had it is gone, with nothing in its place: the details keep it, not the page)
   if (hadFocus && !panel.contains(document.activeElement)) panel.focus({ preventScroll: true });
   focusGivenBack = false;
+  // (gone back by the keyboard: on what the details left were opened by, brought into sight, see showFocused; once the
+  // details gone back to are there, whether it is in them or not)
+  if (focusBack && state.selection?.data) {
+    const by = focusBack();
+    focusBack = null;
+    if (panel.contains(document.activeElement) || document.activeElement === document.body) by?.focus();
+  }
 }
 
 // (what is to have the keyboard focus once the panel is filled anew, by its data-focus: see "a board of several stops")
 let focusNext = null;
+// (what the keyboard is to land on once details gone back to are there: the row or link the details left were opened by;
+// not where it has gone elsewhere meanwhile, as into the search)
+let focusBack = null;
+document.addEventListener('focusin', (event) => {
+  // (but not the details themselves, which get it as Back goes, nor what the page gives it back to as they are drawn)
+  if (event.target !== panel && !focusGivenBack) focusBack = null;
+});
+
+/**
+ * What finds the row or link that opens these details in details they were
+ * opened from: a departure or a vehicle for a trip, a stop's row for a stop,
+ * the line's badge or link for a line (a trip's has no data-line: the line is
+ * its own).
+ */
+function openedBy(selection) {
+  if (!selection) return null;
+  if (selection.type === 'line') {
+    const { name, mode } = selection.line ?? {};
+    return () => [...panel.querySelectorAll('.to-line')].find((node) => {
+      if (!node.dataset.line) return true;
+      const line = JSON.parse(node.dataset.line);
+      return line.name === name && line.mode === mode;
+    });
+  }
+  const id = selection.type === 'trip' ? selection.id : selection.id ?? selection.data?.id;
+  if (id === null || id === undefined) return null;
+  const call = selection.call === undefined ? '' : `[data-call="${selection.call}"]`;
+  return () => panelBody.querySelector(`[data-${selection.type === 'trip' ? 'trip' : 'station'}="${CSS.escape(String(id))}"]${call}`);
+}
 
 /**
  * The main heading of the page (#254): the name of what the details are of,
@@ -3411,6 +3463,12 @@ panel.addEventListener('click', (event) => {
   else if (view) showView(view.dataset.view);
   else if (event.target.closest('.choice-open')) openChoice();
   else if (event.target.closest('.choice-clear')) applyChoice([]);
+  else if (event.target.closest('.timetable-key')) {
+    // (as the heading at the foot does, and the keyboard on it: then down into the days)
+    const heading = panelBody.querySelector('.timetable-head .to-timetable');
+    heading?.click();
+    heading?.focus({ preventScroll: true });
+  }
 });
 
 // The hours of a kind of day in the timetable of a line (#289), opened or
@@ -3466,8 +3524,10 @@ function showWayBack() {
   const head = panelHead.querySelector('.panel-head');
   if (!from || !head || state.board !== null || state.display) return;
   // (from details that did not load, whose address the page never went to: back to those they were opened from)
-  head.prepend(el('button', { type: 'button', class: 'panel-back', 'aria-label': t('panel.back', { name: from }), data: { focus: 'back' }, onclick: () => {
+  head.prepend(el('button', { type: 'button', class: 'panel-back', 'aria-label': t('panel.back', { name: from }), data: { focus: 'back' }, onclick: (event) => {
     if (state.selection?.left) return;
+    // (by the keyboard, Escape too: on what the details left were opened by, once those they go back to are there; fillPanel)
+    if (event.detail === 0 && (panel.contains(document.activeElement) || document.activeElement === document.body)) focusBack = openedBy(state.selection);
     if (state.selection?.loaded) history.back();
     else backFromFailed();
   } }, [icon(mdiChevronLeft), el('span', { text: from })]));
@@ -4137,7 +4197,7 @@ function renderTrip(trip, scrollToNext) {
     if (!towns[i] && tallMark(stop.modes, trip.mode)) classes.push('tall');
     const chosen = i === chosenAt;
     const said = `${stopSaid(stop.modes, trip.mode, favourite, drawn)}${isNext ? `, ${t('trip.next')}` : ''}${chosen ? `, ${t('stop.chosen')}` : ''}`;
-    const row = el('button', { type: 'button', class: classes.join(' '), onclick: () => select('station', stop.station, { from: sheetName(), hint: { name: stop.name } }) }, [
+    const row = el('button', { type: 'button', class: classes.join(' '), data: { station: stop.station, call: i }, onclick: () => select('station', stop.station, { from: sheetName(), hint: { name: stop.name }, call: i }) }, [
       el('span', { class: 'rail' }, [toDom(stopSign(stop.modes, trip.mode, favourite)), ...(chosen ? [toDom(stopRing(stop.modes, trip.mode, favourite, `ring-${i}`))] : [])]),
       el('span', { class: 'time', text: formatTime(leavesAt({ planned, delay })) }),
       stop.skipped ? el('span') : delaySum(planned, delay),
@@ -4347,6 +4407,17 @@ panelBody.addEventListener('focusin', (event) => {
   }
   // (after the browser has scrolled it into what it takes for sight, in the same task)
   setTimeout(() => showFocused(event.target));
+});
+// (the way to the timetable for the keyboard has its ring on the heading at the foot, style.css: that heading in sight)
+panelHead.addEventListener('focusin', (event) => {
+  const heading = event.target.matches('.timetable-key') ? panelBody.querySelector('.timetable-head') : null;
+  if (!heading || focusGivenBack || !event.target.matches(':focus-visible')) return;
+  // (on a phone whose sheet is down to its head: risen, as for a row that gets the keyboard, see below)
+  if (narrowScreen.matches && state.board === null && panelBody.clientHeight < heading.offsetHeight) {
+    restSheet(sheetHeights()[1]);
+    setTimeout(() => showFocused(heading), 240);
+  }
+  showFocused(heading);
 });
 panelBody.addEventListener('click', (event) => {
   const head = event.target.closest('.timetable-head');
@@ -4801,6 +4872,8 @@ function setBoard(share, written = true) {
     setSheetHeight(null);
     showSelection();
     const at = state.selection?.data;
+    // (all its lines, where the step it is at showed those and they are not there yet: see showView)
+    if (share === null && state.view === 'lines' && at && !at.lines) loadSelection();
     if (share !== null && state.selection?.type === 'station' && at) {
       showBoardStops(at);
       // (the further stops it had before it was made small, with their departures as they are now)

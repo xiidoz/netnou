@@ -608,7 +608,7 @@ export function lineTimetable(facts, context, way = 0, open = new Set()) {
     !towns.length ? null : towns.length <= 4 ? t('facts.through', { towns: list(towns) }) : t('facts.throughMany', { count: towns.length, from: towns[0], to: towns.at(-1) }),
   ].filter(Boolean);
   return [
-    h('h2', { class: 'timetable-head' }, h('button', { type: 'button', class: 'to-timetable' },
+    h('h2', { class: 'timetable-head' }, h('button', { type: 'button', class: 'to-timetable', 'data-focus': 'timetable-head' },
       h('span', { class: 'what' }, h('span', { class: 'title' }, t('facts.timetable')), stop ? h('span', { class: 'from' }, t('facts.timetableFrom', { stop })) : null),
       iconOf(mdiChevronUp))),
     h('section', { class: 'line-timetable' },
@@ -801,6 +801,12 @@ export function lineHead(line, context, way = null) {
   // (not where the page does not know it: without a connection, see app.js "a connection lost")
   const sub = [line.agency, line.vehicles.length && line.counted !== false ? t('line.vehicles', { count: line.vehicles.length }) : ''].filter(Boolean).join(' · ');
   const ways = line.ways ?? [];
+  // (the way to its timetable for the keyboard, before the stops: a button that cannot be seen, whose ring is drawn on the
+  // heading of the timetable, which waits at the foot of the details, and which does what that heading does; see app.js)
+  const timetable = line.facts?.ways?.[way ?? 0];
+  const toTimetable = timetable?.week?.length
+    ? h('button', { type: 'button', class: 'timetable-key spoken', 'data-focus': 'timetable', 'aria-label': [t('facts.timetable'), timetable.stop ? t('facts.timetableFrom', { stop: timetable.stop }) : null].filter(Boolean).join(' ') })
+    : null;
   return panelHead([badge(line.name, line.mode), h('span', {}, t(`mode.${kindOf(line.mode)}`))], h('p', { class: 'sub' }, sub),
     // (how often it runs now the way its stops show and its last trip today, #289)
     line.facts?.ways?.length ? h('p', { class: 'facts' }, todayText(line.facts.ways[Math.min(way ?? 0, line.facts.ways.length - 1)].today, context, line.facts.ways[Math.min(way ?? 0, line.facts.ways.length - 1)].stop)) : null,
@@ -808,7 +814,8 @@ export function lineHead(line, context, way = null) {
       ? h('p', { class: 'sub with-choice line-ways' }, h('span', {}, t('line.toward')),
         h('span', { class: 'view-switch ways', role: 'group', 'aria-label': t('line.ways') },
           ways.map((one, i) => h('button', { type: 'button', 'aria-pressed': String(i === way), 'data-way': i, title: t('line.to', { destination: one.to }) }, h('span', {}, one.to)))))
-      : null);
+      : null,
+    toTimetable);
 }
 
 /**
@@ -883,8 +890,15 @@ export function lineStops(line, context, way = 0) {
     const mids = inBranches[v.branch];
     return i < 0 ? [LINE_X, middles[after]] : i >= mids.length ? [LINE_X, middles[before]] : [BRANCH_X, mids[i]];
   };
+  // (the stop each comes to next, for its name, vehicleName: none at the end of its way, where it has come to its last stop)
+  const stopAt = (v, i) => {
+    if (v.branch === null) return one.stops[i];
+    const { after, before, stops } = one.branches[v.branch];
+    return i < 0 ? one.stops[after] : i >= stops.length ? one.stops[before] : stops[i];
+  };
+  const named = (v) => ({ ...v, next: v.next ?? (v.from === v.until ? null : stopAt(v, v.until)?.name ?? null) });
   // (and where they will be when, from their tracks, for the page to move them by itself: app.js)
-  const vehicles = one.vehicles.map((v) => {
+  const vehicles = one.vehicles.map(named).map((v) => {
     const track = (v.track ?? []).flatMap((value, k) => (k % 2 === 0 ? [value] : at(v, value).map((px) => Math.round(px * 10) / 10)));
     const [x0, y0] = at(v, v.from);
     const [x1, y1] = at(v, v.until);
@@ -919,7 +933,8 @@ export function trackAt(track, now) {
  * the middle of its disc: its parts, what it is called, and what its
  * colour goes by.
  */
-function vehicleSign(line, v, { t, live = false, colorBy = 'mode', flags = true }, arrow = true) {
+function vehicleSign(line, v, context, arrow = true) {
+  const { live = false, colorBy = 'mode', flags = true } = context;
   const label = vehicleLabel(line.name);
   const font = label.length > 3 ? 8 : label.length > 2 ? 9.5 : 11;
   // (no flag where the colour says the delay, nor where the visitor switched them off, as on the map)
@@ -927,7 +942,7 @@ function vehicleSign(line, v, { t, live = false, colorBy = 'mode', flags = true 
   const width = flag ? (flag.text === '?' ? 12 : flag.text.length * 5.4 + 6) : 0;
   const attrs = {
     'data-trip': v.id,
-    'aria-label': [line.name, t('line.to', { destination: v.to }), delayText(v.delay)].filter(Boolean).join(' '),
+    'aria-label': vehicleName(line, v, context),
     'data-mode': kindOf(line.mode),
     'data-delay': colorBy === 'delay' ? delayClass(v.delay) : null,
   };
@@ -944,6 +959,17 @@ function vehicleSign(line, v, { t, live = false, colorBy = 'mode', flags = true 
   return { attrs, parts };
 }
 
+/**
+ * What a vehicle on the stops of a line is called for a screen reader: as its
+ * trip ("Tram 10 nach Am Wegfeld"), with the stop it comes to next and its
+ * delay, so that several of a line are told apart.
+ */
+function vehicleName(line, v, context) {
+  const { t } = context;
+  const said = lineSaid(line.name, line.mode, context);
+  return [`${said.charAt(0).toUpperCase()}${said.slice(1)} ${t('line.to', { destination: v.to })}`, v.next ? `${t('trip.next')} ${v.next}` : null, delayText(v.delay)].filter(Boolean).join(', ');
+}
+
 /** A vehicle on the line of the stops (lineStops) in its place, as the page sent has it: a button drawn there, with its track in px. */
 function lineVehicle(line, v, { x, y, standing }, context, track = []) {
   const { attrs, parts } = vehicleSign(line, v, context, !standing);
@@ -957,8 +983,8 @@ function lineVehicle(line, v, { x, y, standing }, context, track = []) {
  * tap, the keyboard and a screen reader, with what the page draws it by:
  * where it is (data-at), its track in px, its kind, delay and label.
  */
-function movingVehicle(line, v, { x, y }, { t }, track = []) {
-  return h('button', { type: 'button', class: 'line-vehicle', 'data-trip': v.id, 'aria-label': [line.name, t('line.to', { destination: v.to }), delayText(v.delay)].filter(Boolean).join(' '),
+function movingVehicle(line, v, { x, y }, context, track = []) {
+  return h('button', { type: 'button', class: 'line-vehicle', 'data-trip': v.id, 'aria-label': vehicleName(line, v, context),
     'data-mode': kindOf(line.mode), 'data-late': v.delay ?? null, 'data-label': vehicleLabel(line.name),
     'data-at': `${x.toFixed(1)},${y.toFixed(1)}`, 'data-track': track.length ? track.join(',') : null });
 }

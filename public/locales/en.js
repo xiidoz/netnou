@@ -40,6 +40,8 @@ export default {
   'clock.off': 'Hide',
 
   'map.label': 'Map with the current positions of the vehicles',
+  // read with the map when it has the keyboard focus (its description): what its keys do
+  'map.keys': 'Arrow keys move the map, + and − zoom.',
   'map.zoomIn': 'Zoom in',
   'map.zoomOut': 'Zoom out',
   // the button that folds the credits in the corner of the map away, on narrow screens

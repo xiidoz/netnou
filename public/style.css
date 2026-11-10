@@ -34,12 +34,12 @@
   --delay-severe: #d32f2f;
   /* no delay reported: the vehicle coloured by delay, and its flag with the question mark */
   --delay-none: #5c6670;
-  /* The delays as text on the page's ground (#196). On the white one the colours above: dark enough for white letters,
-     they are for that ground too. The dark theme has lighter ones. */
-  --delay-early-text: var(--delay-early);
-  --delay-ok-text: var(--delay-ok);
-  --delay-major-text: var(--delay-major);
-  --delay-severe-text: var(--delay-severe);
+  /* The delays as text on the page's ground (#196), the hues of those above a little darker: 4.5:1 on the grey of a row
+     under the pointer as well (--bg-subtle), not only on white. The dark theme has lighter ones. */
+  --delay-early-text: #007892;
+  --delay-ok-text: #227d3b;
+  --delay-major-text: #ad5407;
+  --delay-severe-text: #cf2e2e;
 
   /* the edge of a stop on the map, a white pill: the same in both themes, as the vehicles keep their colours (#222) */
   --stop-edge: #1b1f24;
@@ -74,10 +74,10 @@
   --mode-regional: #6a7785;
   --veil: rgb(10 11 14 / 0.6);
   --veil-line: rgb(111 177 242 / 0.6);
-  --delay-early-text: #0095b6;
-  --delay-ok-text: #2a9d4b;
-  --delay-major-text: #e8710a;
-  --delay-severe-text: #de6262;
+  --delay-early-text: #1ca1be;
+  --delay-ok-text: #3fa75d;
+  --delay-major-text: #e8740f;
+  --delay-severe-text: #e27373;
   /* Light becomes dark and the hues stay: the map may be any style or set of tiles, and few come in a dark version. */
   --map-filter: invert(1) hue-rotate(180deg) saturate(0.45) brightness(0.92) contrast(0.92);
 }
@@ -544,6 +544,23 @@ button { font: inherit; color: inherit; }
   box-shadow: inset 0 0 0 1.5px var(--veil-line);
 }
 
+/* The map with the keyboard (WCAG 2.4.7): a frame inside its edge, as rows have theirs, and a cross at its middle, where
+   + and − zoom to; a cross, as rings on the map are the chosen stop and your stop. Over the canvas, which covers what lies
+   under it, with a halo of the ground for water and the dark map. */
+.maplibregl-canvas:focus-visible { outline: none; }
+.maplibregl-map:has(.maplibregl-canvas:focus-visible)::before,
+.maplibregl-map:has(.maplibregl-canvas:focus-visible)::after { content: ""; position: absolute; z-index: 1; pointer-events: none; }
+.maplibregl-map:has(.maplibregl-canvas:focus-visible)::before { inset: 3px; border: 3px solid var(--accent); box-shadow: 0 0 0 3px var(--bg), inset 0 0 0 3px var(--bg); }
+.maplibregl-map:has(.maplibregl-canvas:focus-visible)::after {
+  left: 50%; top: 50%; width: 30px; height: 30px; margin: -15px 0 0 -15px;
+  background: linear-gradient(var(--accent) 0 0) 50% 0 / 3px 10px no-repeat, linear-gradient(var(--accent) 0 0) 50% 100% / 3px 10px no-repeat,
+    linear-gradient(var(--accent) 0 0) 0 50% / 10px 3px no-repeat, linear-gradient(var(--accent) 0 0) 100% 50% / 10px 3px no-repeat;
+  filter: drop-shadow(0 0 1px var(--bg)) drop-shadow(0 0 1px var(--bg));
+}
+@media (forced-colors: active) {
+  .maplibregl-map:has(.maplibregl-canvas:focus-visible)::after { forced-color-adjust: none; }
+}
+
 button:focus-visible, select:focus-visible, .row:focus-visible, .panel:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
@@ -676,7 +693,7 @@ button:focus-visible, select:focus-visible, .row:focus-visible, .panel:focus-vis
 .view-switch button[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--bg); font-weight: 600; }
 .view-switch button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 /* (a focus ring in the head above everything else of the details, the buttons in their corner and what they say among it) */
-.panel-head :focus-visible, .panel-head .choice:has(.choice-open:focus-visible) { position: relative; z-index: 4; }
+.panel-head :focus-visible:not(.spoken), .panel-head .choice:has(.choice-open:focus-visible) { position: relative; z-index: 4; }
 
 /* The sign of a direction: its line as the map draws its vehicle, a disc in
    the colour of its kind with the arrowhead to where it leaves the stop,
@@ -963,6 +980,8 @@ button.line-vehicle { position: absolute; left: -18px; top: -18px; width: 36px; 
 .to-timetable { display: flex; align-items: center; justify-content: space-between; gap: 12px; width: 100%; padding: 10px 14px; border: 0; background: none; color: var(--text); font: inherit; text-align: left; cursor: pointer; }
 /* (inside its edge: the details scroll and would cut off a ring outside it at their foot) */
 .to-timetable:focus-visible { outline-offset: -2px; }
+/* the way to it for the keyboard, right after the head of a line (panel.js lineHead): its ring on the heading */
+.panel:has(.timetable-key:focus-visible) .to-timetable { outline: 2px solid var(--accent); outline-offset: -2px; }
 .to-timetable .what { display: grid; gap: 1px; }
 .to-timetable .title { font-size: 14px; font-weight: 650; }
 .to-timetable .from { color: var(--text-muted); font-size: 12.5px; font-weight: 400; }

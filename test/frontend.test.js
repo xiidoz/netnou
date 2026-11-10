@@ -490,6 +490,28 @@ test('the map starts without a style, and raster tiles do not fade in', () => {
 // animation of a shadow did so for as long as the page was open, on top of
 // the frames the map and the vehicles need. The browser animates size,
 // place and opacity by itself.
+// WCAG 1.4.3: a delay is small text, 4.5:1 against the ground of the details and against the grey of a row under the
+// pointer, in both themes (the colours of the map, under white letters, are others: #215)
+test('delays as text hold 4.5:1 on the ground and on a row under the pointer, light and dark', () => {
+  const css = read('style.css');
+  const block = (selector) => css.slice(css.indexOf(`${selector} {`), css.indexOf('\n}', css.indexOf(`${selector} {`)));
+  const tokens = (text) => Object.fromEntries([...text.matchAll(/--([\w-]+):\s*(#[0-9a-f]{6});/gi)].map((match) => [match[1], match[2]]));
+  const light = tokens(block(':root'));
+  const dark = { ...light, ...tokens(block(':root[data-theme="dark"]')) };
+  const lum = (hex) => {
+    const [r, g, b] = hex.slice(1).match(/../g).map((part) => parseInt(part, 16) / 255).map((v) => (v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4));
+    return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+  };
+  const ratio = (a, b) => (Math.max(lum(a), lum(b)) + 0.05) / (Math.min(lum(a), lum(b)) + 0.05);
+  for (const [theme, set] of [['light', light], ['dark', dark]]) {
+    for (const kind of ['early', 'ok', 'major', 'severe']) {
+      const text = set[`delay-${kind}-text`];
+      assert.ok(text, `--delay-${kind}-text in ${theme}`);
+      for (const ground of ['bg', 'bg-subtle']) assert.ok(ratio(text, set[ground]) >= 4.5, `${theme} ${kind} on --${ground}: ${ratio(text, set[ground]).toFixed(2)}`);
+    }
+  }
+});
+
 test('the style sheet animates only transform and opacity', () => {
   const css = read('style.css').replace(/\/\*[\s\S]*?\*\//g, '');
   const keyframes = [...css.matchAll(/@keyframes\s+([\w-]+)\s*\{((?:[^{}]*\{[^{}]*\})*)\s*\}/g)];
@@ -661,7 +683,7 @@ test('where the connection is lost, the details say since when, and what did not
   assert.match(read('index.html'), /<p class="spoken" id="panel-said" role="status"><\/p>/);
   // the way back from what did not load is not the history's: the address never went there
   // (not from details Back has left already, while the address it went to opens)
-  assert.match(app, /if \(state\.selection\?\.left\) return;\s*if \(state\.selection\?\.loaded\) history\.back\(\);\s*else backFromFailed\(\);/);
+  assert.match(app, /if \(state\.selection\?\.left\) return;\s*(\/\/[^\n]*\n\s*)*if \(event\.detail === 0 && \(panel\.contains\(document\.activeElement\) \|\| document\.activeElement === document\.body\)\) focusBack = openedBy\(state\.selection\);\s*if \(state\.selection\?\.loaded\) history\.back\(\);\s*else backFromFailed\(\);/);
   // tried again at once when the browser is online again; the banner of the map does not say it over open details
   assert.match(app, /addEventListener\('online', \(\) => \{/);
   assert.match(app, /state\.note \?\? \(state\.bannerOffline && !panel\.hidden \? null : state\.banner\) \?\? ''/);
