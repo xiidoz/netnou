@@ -196,6 +196,10 @@ export default {
   'panel.loadFailed': 'No connection right now – loads once it’s back.',
   // the first note under the name of a stop, a trip or a line while their answers do not come: since the time of the last one
   'panel.offline': 'No connection since {time}',
+  // panel.offline a while after the last answer, once the delays the details show are grey: the last ones known
+  'panel.offlineStale': 'No connection since {time} · delays not current',
+  // panel.offline long after the last answer, once the details leave out the delays they had (by the timetable alone)
+  'panel.offlineSchedule': 'No connection since {time} · timetable only',
   'panel.retry': 'Try again',
   'panel.share': 'Share',
   'panel.copied': 'Address copied',
@@ -310,6 +314,8 @@ export default {
   'choice.via': '{to} via {stop}',
   'choice.direction': '{line} to {to}',
   'departures.none': 'No departures in the next 24 hours.',
+  // after the last departure the page holds while the connection is lost, or alone where all have left: it holds only those of its last answer
+  'departures.whenBack': 'More departures once the connection is back.',
   'departures.cancelled': 'cancelled',
   // how long until a departure leaves: under a minute, and in whole minutes
   'departures.now': 'now',

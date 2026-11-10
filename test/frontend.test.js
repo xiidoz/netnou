@@ -100,7 +100,10 @@ test('the thread the page starts is a script of its own that is precached', () =
   assert.deepEqual(started, ['search-worker.js']);
   for (const file of started) assert.ok(shell.includes(file), `${file} is missing in SHELL of sw.js`);
   // (it fetches the list from where the page has its data)
-  assert.match(withoutComments(read('search-worker.js')), /fetch\('api\/search'\)/);
+  // (a limit until the answer begins, a longer one for the list itself)
+  const worker = withoutComments(read('search-worker.js'));
+  assert.match(worker, /limit = setTimeout\(\(\) => asking\.abort\(\), 20_000\);\s*const res = await fetch\('api\/search', \{ signal: asking\.signal \}\);/);
+  assert.match(worker, /limit = setTimeout\(\(\) => asking\.abort\(\), 120_000\);/);
 });
 
 // The page is sent in the language its browser asks for, and says so (Vary). A
@@ -276,10 +279,11 @@ test('every element app.js asks for by its id is in index.html', () => {
 // place (its button, its edge, its stops) writes it anew.
 test('what is opened or closed after a board or a vehicle on the map leaves a step back to what was open', () => {
   const app = withoutComments(read('app.js'));
-  assert.deepEqual(app.match(/setBoard\(null\b[^)]*\)/g), ['setBoard(null, false)', 'setBoard(null, false)']);
+  // (and where details the page holds, or an address it could not ask about, take its place without a connection)
+  assert.deepEqual(app.match(/setBoard\(null\b[^)]*\)/g), ['setBoard(null, false)', 'setBoard(null, false)', 'setBoard(null, false)', 'setBoard(null, false)']);
   // (the next address has a board where one is shown, not where the address before had one; and the lines chosen of a stop that is open, #164)
   // (with the name of the details it was opened from, where it was, for the way back to them)
-  assert.match(app, /history\.pushState\(from \? \{ from, \.\.\.\(fromStop \? \{ fromStop \} : \{\}\) \} : null, '', new URL\(`\$\{path\}\$\{boardQuery\(location\.search, state\.board, state\.extra, state\.lines\)\}`/);
+  assert.match(app, /history\[step\]\(from \? \{ from, \.\.\.\(fromStop \? \{ fromStop \} : \{\}\) \} : null, '', new URL\(`\$\{path\}\$\{boardQuery\(location\.search, state\.board, state\.extra, state\.lines\)\}`/);
   // (a vehicle chosen on the map goes straight to its trip, not by the map alone)
   const click = app.slice(app.indexOf("map.on('click'"));
   assert.doesNotMatch(click.slice(0, click.indexOf('});')), /showAddress/);
@@ -656,7 +660,8 @@ test('where the connection is lost, the details say since when, and what did not
   assert.match(app, /\$\('panel-said'\)\.textContent = selection\.loaded \? lostSince\(\) : t\('panel\.loadFailed'\);/);
   assert.match(read('index.html'), /<p class="spoken" id="panel-said" role="status"><\/p>/);
   // the way back from what did not load is not the history's: the address never went there
-  assert.match(app, /onclick: \(\) => \(state\.selection\?\.loaded \? history\.back\(\) : backFromFailed\(\)\)/);
+  // (not from details Back has left already, while the address it went to opens)
+  assert.match(app, /if \(state\.selection\?\.left\) return;\s*if \(state\.selection\?\.loaded\) history\.back\(\);\s*else backFromFailed\(\);/);
   // tried again at once when the browser is online again; the banner of the map does not say it over open details
   assert.match(app, /addEventListener\('online', \(\) => \{/);
   assert.match(app, /state\.note \?\? \(state\.bannerOffline && !panel\.hidden \? null : state\.banner\) \?\? ''/);
@@ -666,7 +671,7 @@ test('what gets the keyboard focus in the details is in sight: clear of the time
   const app = withoutComments(read('app.js'));
   // the keyboard's focus alone, and not the focus given back after an answer of the server, which leaves the list where it is
   assert.match(app, /if \(focusGivenBack \|\| !event\.target\.matches\(':focus-visible'\)\) return;/);
-  assert.match(app, /focusGivenBack = true;\s*if \(again\) again\.focus/);
+  assert.match(app, /focusGivenBack = true;\s*const same = which && focused >= 0[^\n]*\n\s*if \(again\) again\.focus/);
   // clear of the heading of a line's timetable waiting at the foot
   assert.match(app, /const bottom = pinned && !pinned\.contains\(target\) \? pinned\.getBoundingClientRect\(\)\.top : box\.bottom;/);
   // a sheet down to its head rises to the middle height
@@ -674,4 +679,38 @@ test('what gets the keyboard focus in the details is in sight: clear of the time
   // the credits are out of the keyboard's way where the details lie over their middle, with the map's buttons moved
   assert.match(app, /credits\.inert = !panel\.hidden && box\.width > 0 && panel\.contains\(document\.elementFromPoint\(/);
   assert.match(app, /group\.style\.visibility = out \? 'hidden' : '';\s*\}\s*coverCredits\(\);/);
+});
+
+test('long without an answer, the details show their delays grey and then go by the timetable alone; Back without a connection goes to what the page holds', () => {
+  const app = withoutComments(read('app.js'));
+  const css = read('style.css');
+  // grey from two minutes after the last answer, by the timetable alone from ten, which the note says
+  assert.match(app, /const STALE_S = 120;\s*const SCHEDULE_S = 600;/);
+  assert.match(app, /return age >= SCHEDULE_S \? 2 : age >= STALE_S \? 1 : 0;/);
+  assert.match(app, /let shown = stage === 2 \? byTimetable\(type, data\) : data;/);
+  assert.match(app, /departures: data\.departures\.map\(planned\)\.sort\(\(a, b\) => a\.planned - b\.planned\)/);
+  assert.match(app, /return stage === 2 \? t\('panel\.offlineSchedule', \{ time \}\) : stage === 1 \? t\('panel\.offlineStale', \{ time \}\) : t\('panel\.offline', \{ time \}\);/);
+  assert.match(css, /#panel\.stale \.delay \{ color: var\(--text-muted\); \}/);
+  // the folded card does not say what the head says, and a sheet up to it stays below it as it grows
+  assert.match(css, /:root\[data-lost\] \.status\[data-state="error"\] \{ display: none; \}/);
+  assert.match(app, /if \(sheetAtTop \|\| panel\.offsetHeight > high \+ 1\) setSheetHeight\(high\);\s*\}\)\.observe\(\$\('controls'\)\);/);
+  // an address the page cannot ask about: what it showed in this visit, else that it will load, once the connection is back
+  assert.match(app, /res = await askServer\(`api\/address\?path=\$\{encodeURIComponent\(path\)\}`\);\s*\} catch \{\s*clearTimeout\(slow\);\s*return here\(\) === path && state\.moves === moves \? addressLost\(path, loaded\) : true;/);
+  // (every question to the server gives up after ANSWER_MS: a hang counts as not coming)
+  assert.match(app, /const askServer = \(url\) => fetch\(url, \{ signal: AbortSignal\.timeout\(ANSWER_MS\) \}\);/);
+  assert.deepEqual(app.match(/\bfetch\(/g), ['fetch(']);
+  assert.match(app, /function openPending\(\) \{\s*const \{ loaded \} = state\.addressPending;\s*state\.addressPending = false;\s*openAddress\(loaded\);/);
+  assert.match(app, /if \(state\.addressPending\) openPending\(\);/);
+  // what did not load has the head its row knew of it
+  assert.match(app, /hint: tripHint\(row\.dataset\.trip\)/);
+  assert.match(app, /if \(type === 'trip' && hint\) return el\('div', \{ class: 'panel-head' \}, \[el\('h1', \{\}, \[badge\(hint\.line, hint\.mode\)/);
+});
+
+test('without a connection, a vehicle whose known way has ended leaves the map and a line, and by the timetable alone a line has none', () => {
+  const app = withoutComments(read('app.js'));
+  assert.match(app, /const beyond = !state\.online && time > v\.knots\[v\.knots\.length - 3\];\s*const target = beyond \? openPlace\(v\.id, time\) : positionAt\(v\.knots, time\);\s*if \(!target\) continue;/);
+  assert.match(app, /const ended = node\.dataset\.track !== undefined && at > track\[track\.length - 3\];\s*if \(ended && node === document\.activeElement\) panel\.focus\(\{ preventScroll: true \}\);\s*node\.hidden = ended;/);
+  assert.match(app, /if \(type === 'line'\) return \{ \.\.\.data, vehicles: \[\], ways: data\.ways\?\.map\(\(way\) => \(\{ \.\.\.way, vehicles: \[\] \}\)\) \};/);
+  // a board says it too, after its rows or alone
+  assert.match(app, /const lost = state\.selection\?\.failing \? toDom\(whenBack\(drawing\(\)\)\) : null;/);
 });

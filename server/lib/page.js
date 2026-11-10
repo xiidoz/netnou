@@ -335,11 +335,12 @@ export function renderPage(html, { language, main, asked, texts, siteName, areaN
   // At an address, its details are open from the start: those of a stop or
   // a line as the page shows them, at the moment the page is sent (#254),
   // which the script keeps until it has them anew (data-sent); of a trip its
-  // name and what it is. What a search engine reads is what a rider sees.
+  // name and what it is, kept so as well. What a search engine reads is what a
+  // rider sees.
   if (named || address?.gone) {
     put(/(<aside class="card panel" id="panel") hidden/, (_, start) => start);
     if (named) put(/<div id="panel-head"><\/div>/, () => `<div id="panel-head">${address.panel?.head ?? toHtml(panelHead(address.heading, h('p', { class: 'sub' }, address.sub)))}</div>`);
-    put(/<div id="panel-body"><\/div>/, () => (address.panel ? `<div id="panel-body" data-sent>${address.panel.body}</div>` : `<div id="panel-body"><p class="panel-empty">${escapeHtml(named ? address.description : address.gone)}</p></div>`));
+    put(/<div id="panel-body"><\/div>/, () => (address.panel ? `<div id="panel-body" data-sent>${address.panel.body}</div>` : named ? `<div id="panel-body" data-sent><p class="panel-empty">${escapeHtml(address.description)}</p></div>` : `<div id="panel-body"><p class="panel-empty">${escapeHtml(address.gone)}</p></div>`));
   }
 
   // For previews of a link (Open Graph, which the others read as well).
