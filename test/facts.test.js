@@ -323,7 +323,7 @@ test('the timetable after the stops of a line: two lines for each kind of day, M
   const html = lineTimetable(facts, context).map(toHtml).join('');
   const chevron = '<svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M7.41,15.41L12,10.83L16.59,15.41L18,14L12,8L6,14L7.41,15.41Z"></path></svg>';
   // the heading before the timetable, a way down to it from the foot of the details (app.js)
-  assert.equal(html, `<h2 class="timetable-head"><button type="button" class="to-timetable"><span class="what"><span class="title">Fahrplan der nächsten 7 Tage</span></span>${chevron}</button></h2>`
+  assert.equal(html, `<h2 class="timetable-head"><button type="button" class="to-timetable" data-focus="timetable-head"><span class="what"><span class="title">Fahrplan der nächsten 7 Tage</span></span>${chevron}</button></h2>`
     + '<section class="line-timetable"><ul class="timetable-days">'
     + '<li><details class="days" data-days="20261104,20261105,20261106,20261109,20261110"><summary class="days-head" data-focus="days 20261104,20261105,20261106,20261109,20261110">'
     + `<span class="when">Mo–Fr</span><span class="said"><span class="span">05:30–23:40</span><span class="often">6–20 Uhr alle 10 Min.</span></span>${chevron}</summary>`

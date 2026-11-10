@@ -251,10 +251,13 @@ test('the stops of a line in one direction, with its vehicles along them as the 
   // it by itself (its track: placed by it, at the middle of its way between its first two places); the disc of its kind
   // with the name of its line, its arrowhead down the list, and the flag of its delay in the colour of the map, a
   // question mark where none is known
-  assert.ok(out.includes(`data-trip="a" role="button" tabindex="0" aria-label="U1 to Langwasser Süd +3" data-mode="subway" data-track="${NOW - 60},30,22,${NOW + 60},30,60,${NOW + 90},30,60"><rect class="hit" x="-18" y="-18" width="36" height="36" rx="18"></rect><path d="M0.00,17.00L-6.21,9.08L6.21,9.08Z"></path><circle r="11"></circle><text y="4.0" font-size="11">U1</text><g class="flag major" transform="translate(6.050000000000001 -16)"><rect width="16.8" height="12" rx="4"></rect><text x="8.4" y="9">+3</text></g><rect class="ring" x="-19" y="-21" width="44.9" height="42" rx="10"></rect></g>`));
+  assert.ok(out.includes(`data-trip="a" role="button" tabindex="0" aria-label="U1 to Langwasser Süd, next stop Gostenhof, +3" data-mode="subway" data-track="${NOW - 60},30,22,${NOW + 60},30,60,${NOW + 90},30,60"><rect class="hit" x="-18" y="-18" width="36" height="36" rx="18"></rect><path d="M0.00,17.00L-6.21,9.08L6.21,9.08Z"></path><circle r="11"></circle><text y="4.0" font-size="11">U1</text><g class="flag major" transform="translate(6.050000000000001 -16)"><rect width="16.8" height="12" rx="4"></rect><text x="8.4" y="9">+3</text></g><rect class="ring" x="-19" y="-21" width="44.9" height="42" rx="10"></rect></g>`));
+  // a line named by a number is called by its kind as well, and each vehicle by the stop it comes to next, to tell them apart
+  const tram = html(lineStops({ ...line, name: '10', mode: 'tram', ways: [{ ...line.ways[0], vehicles: [vehicle('d', { next: 'Opernhaus', delay: 120, from: 0, until: 1, come: 0.5 })] }] }, drawing()));
+  assert.ok(tram.includes('aria-label="Tram 10 to Langwasser Süd, next stop Opernhaus, +2"'), tram);
   assert.ok(out.includes('aria-label="U1 to Messe"') && out.includes('<g class="flag none"') && out.includes('<text x="6.0" y="9">?</text>'));
   // on time to the minute: no flag; without delays coming in, no question mark
-  assert.ok(out.includes('data-trip="c" role="button" tabindex="0" aria-label="U1 to Depot ±0" data-mode="subway"><rect class="hit" x="-18" y="-18" width="36" height="36" rx="18"></rect><circle r="11"></circle><text y="4.0" font-size="11">U1</text><rect class="ring" x="-19" y="-21" width="38.0" height="42" rx="10"></rect></g>'));
+  assert.ok(out.includes('data-trip="c" role="button" tabindex="0" aria-label="U1 to Depot, next stop Depot, ±0" data-mode="subway"><rect class="hit" x="-18" y="-18" width="36" height="36" rx="18"></rect><circle r="11"></circle><text y="4.0" font-size="11">U1</text><rect class="ring" x="-19" y="-21" width="38.0" height="42" rx="10"></rect></g>'));
   assert.ok(!html(lineStops(line, drawing())).includes('<g class="flag none"'));
   // coloured by delay as the map can be, or with the flags switched off: no flags
   const byDelay = html(lineStops(line, { ...drawing(), live: true, colorBy: 'delay' }));
@@ -263,8 +266,8 @@ test('the stops of a line in one direction, with its vehicles along them as the 
   // in the page, which moves them and draws them on a canvas as the map does: each a button that cannot be seen, with
   // where it is and its track, its kind, delay and label
   const moving = html(lineStops(line, { ...drawing(), live: true, moving: true }));
-  assert.ok(moving.includes(`<div class="line-vehicles"><canvas class="line-canvas" aria-hidden="true"></canvas><button type="button" class="line-vehicle" data-trip="a" aria-label="U1 to Langwasser Süd +3" data-mode="subway" data-late="180" data-label="U1" data-at="30.0,38.0" data-track="${NOW - 60},30,22,${NOW + 60},30,60,${NOW + 90},30,60"></button>`));
-  assert.ok(moving.includes('<button type="button" class="line-vehicle" data-trip="c" aria-label="U1 to Depot ±0" data-mode="subway" data-late="20" data-label="U1" data-at="58.0,98.0"></button>') && !moving.includes('<svg class="line-vehicles"'));
+  assert.ok(moving.includes(`<div class="line-vehicles"><canvas class="line-canvas" aria-hidden="true"></canvas><button type="button" class="line-vehicle" data-trip="a" aria-label="U1 to Langwasser Süd, next stop Gostenhof, +3" data-mode="subway" data-late="180" data-label="U1" data-at="30.0,38.0" data-track="${NOW - 60},30,22,${NOW + 60},30,60,${NOW + 90},30,60"></button>`));
+  assert.ok(moving.includes('<button type="button" class="line-vehicle" data-trip="c" aria-label="U1 to Depot, next stop Depot, ±0" data-mode="subway" data-late="20" data-label="U1" data-at="58.0,98.0"></button>') && !moving.includes('<svg class="line-vehicles"'));
   // opened from a stop: where that one is, for the page to lay its ring over a vehicle there alone (on the line, on a branch)
   const from = (name) => html(lineStops(line, { ...drawing(), moving: true, chosen: (stop) => stop.name === name }));
   assert.ok(from('Gostenhof').includes('<div class="line-vehicles" data-chosen="30,60">') && from('Depot').includes('<div class="line-vehicles" data-chosen="58,98">'));

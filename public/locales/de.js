@@ -23,6 +23,7 @@ export default {
   'clock.off': 'Ausblenden',
 
   'map.label': 'Karte mit den aktuellen Positionen der Fahrzeuge',
+  'map.keys': 'Pfeiltasten verschieben die Karte, + und − zoomen.',
   'map.zoomIn': 'Hineinzoomen',
   'map.zoomOut': 'Herauszoomen',
   'map.credits': 'Quellenangaben ein- oder ausblenden',
