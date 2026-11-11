@@ -139,6 +139,9 @@ after(async () => {
   fs.rmSync(dir, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
 });
 
+/** The answer a page of an address was sent with, as data (#333, sentData in lib/page.js). */
+const sentOf = (body) => JSON.parse(/<script type="application\/json" id="sent-answer">([^<]*)<\/script>\n<\/body>/.exec(body)[1]);
+
 test('while the timetable is loading the API says so', async () => {
   const loading = await until(async () => {
     const res = await get('/api/vehicles');
@@ -680,11 +683,37 @@ test('the address of a stop or a line is a page of its own, found again by its n
   // and behind the switch all its lines, each a link to its page (#255)
   assert.ok(page.includes('<div class="view-lines" hidden><ul class="line-rows signed"><li><a class="to-line" href="line/testbetrieb/subway/u1" aria-label="Zur Linie U1" title="Zur Linie U1" data-line='));
   // (after half past eleven the next one is tomorrow's, which a heading says before it)
-  assert.match(page, /<div id="panel-body" data-sent>(<h2 class="rows-head day-head">morgen<\/h2>)?<ul class="rows departures signed"><li><button type="button" class="row departure times-both" data-trip="T1_\d{8}"><span class="badge" data-mode="[a-z]+">U1<\/span><span class="name" title="[^"]+">[^<]+<\/span><span class="details"><span class="time">\d\d:\d\d<\/span>/);
+  assert.match(page, /<div id="panel-body">(<h2 class="rows-head day-head">morgen<\/h2>)?<ul class="rows departures signed"><li><button type="button" class="row departure times-both" data-trip="T1_\d{8}"><span class="badge" data-mode="[a-z]+">U1<\/span><span class="name" title="[^"]+">[^<]+<\/span><span class="details"><span class="time">\d\d:\d\d<\/span>/);
   assert.ok(page.includes('<span class="badge" data-mode="subway">U1</span><span class="name" title="Rundkurs">Rundkurs</span>'));
   assert.ok(page.includes('<div class="site-name">Netnou</div>'));
+  // and beside them, as data, the answer they are made of, which the page takes as its first (#333): what the address names, as
+  // api/address says, and what api/departures answers for it, with what there is to choose from and all its lines; and the
+  // time zone of the instance, which its times are in
+  const area = (await get('/api/area')).json;
+  const alphaSent = sentOf(page);
+  assert.deepEqual(alphaSent.found, (await get('/api/address?path=stop/alpha')).json);
+  assert.equal(alphaSent.timeZone, area.timeZone);
+  // (and the time of the realtime data, as the map's answer has it: whether its delays are current)
+  assert.ok('realtime' in alphaSent);
+  assert.equal(alphaSent.realtime, (await get('/api/vehicles')).json.realtime);
+  const departures = (await get('/api/departures?at=49.40000,11.00000&directions=1&list=lines')).json;
+  assert.deepEqual(Object.keys(alphaSent.answer).sort(), Object.keys(departures).sort());
+  assert.deepEqual([alphaSent.answer.id, alphaSent.answer.path, alphaSent.answer.directions, alphaSent.answer.departures.map((d) => d.trip)], [departures.id, departures.path, departures.directions, departures.departures.map((d) => d.trip)]);
+  // (of the lines its address asks for, as api/departures has them)
+  const betaAll = sentOf((await request('/stop/beta')).body.toString()).answer;
+  const onlyIce = sentOf((await request('/stop/beta?lines=longdistance/ice-5')).body.toString()).answer;
+  assert.ok(betaAll.departures.some((d) => d.line === 'U1'));
+  assert.ok(onlyIce.departures.every((d) => d.line === 'ICE 5'), JSON.stringify(onlyIce.departures));
+  assert.deepEqual(onlyIce.lines.map((l) => l.path), betaAll.lines.map((l) => l.path));
+  // (and of a board the further stops its address names, as the page would ask for each; one the timetable does not have, gone)
+  const boardSent = sentOf((await request('/stop/alpha?board=&with=beta&with=nirgends')).body.toString());
+  assert.deepEqual(boardSent.further.map((stop) => [stop.path, stop.found?.path ?? null, stop.gone ?? false]), [['beta', 'stop/beta', false], ['nirgends', null, true]]);
+  assert.deepEqual(boardSent.further[0].found, (await get('/api/address?path=stop/beta')).json);
+  assert.equal(boardSent.further[0].answer.path, 'stop/beta');
+  assert.ok(Array.isArray(boardSent.further[0].answer.departures) && !('directions' in boardSent.further[0].answer));
+  assert.ok(!('further' in alphaSent));
   assert.deepEqual(page.match(/<h1\b/g), ['<h1']);
-  // (the same page while the minute is the same: asked again with its ETag, not sent again)
+  // (the same page while nothing in it has changed, to the second its answer was made, #333: asked again with its ETag, not sent again)
   const again = async () => (await request('/stop/alpha', { headers: { 'If-None-Match': (await request('/stop/alpha')).headers.etag } })).status;
   assert.ok((await again()) === 304 || (await again()) === 304);
   // the stop with two kinds of transport, in English
@@ -725,8 +754,16 @@ test('the address of a stop or a line is a page of its own, found again by its n
   assert.match(line, /<div class="panel-head"><h1><span class="badge" data-mode="subway">U1<\/span><span>U-Bahn<\/span><\/h1><p class="sub">Testbetrieb · \d Fahrzeuge unterwegs<\/p><p class="facts">Ab Alpha: heute keine Fahrt mehr<\/p><button type="button" class="timetable-key spoken" data-focus="timetable" aria-label="Fahrplan der nächsten 7 Tage ab Alpha"><\/button><\/div>/);
   // after its stops its timetable of the coming days, alike as far as the timetable goes (#289), its heading before it
   assert.match(line, /<\/div><h2 class="timetable-head"><button type="button" class="to-timetable" data-focus="timetable-head"><span class="what"><span class="title">Fahrplan der nächsten 7 Tage<\/span><span class="from">ab Alpha<\/span><\/span><svg [^>]*><path [^>]*><\/path><\/svg><\/button><\/h2><section class="line-timetable"><ul class="timetable-days">(<li><div class="days-head"><span class="when">[^<]+(<span class="today">heute<\/span>)?<\/span><span class="said"><span class="span">00:00–00:00<\/span><span class="often">1 Fahrt<\/span><\/span><\/div><\/li>)+<\/ul><div class="along"><p>3[,.]?030 Min\. von Ende zu Ende · 102 Haltestellen<\/p><\/div><\/section>/);
-  assert.ok(line.includes('<div id="panel-body" data-sent><div class="line-body"><ul class="line-stops" data-mode="subway"><li class="on-line station first"><a class="row on-line" href="stop/alpha" data-station="A" title="Alpha">'));
+  assert.ok(line.includes('<div id="panel-body"><div class="line-body"><ul class="line-stops" data-mode="subway"><li class="on-line station first"><a class="row on-line" href="stop/alpha" data-station="A" title="Alpha">'));
   assert.equal(line.match(/<g class="line-vehicle" transform="translate\(30\.0 [\d.]+\)" data-trip="T1_\d{8}" role="button" tabindex="0" aria-label="U1 nach Rundkurs[^"]*" data-mode="subway" data-track="[\d.,]+">/g).length, 2);
+  // (and its answer, as api/line has it without where it runs, which can be as large as the page)
+  const lineSent = sentOf(line);
+  assert.deepEqual(lineSent.found, (await get('/api/address?path=line/testbetrieb/subway/u1')).json);
+  const lineAnswer = (await get('/api/line?name=U1&mode=subway&agency=Testbetrieb')).json;
+  assert.deepEqual(Object.keys(lineSent.answer).sort(), Object.keys(lineAnswer).sort());
+  assert.deepEqual([lineSent.answer.path, lineSent.answer.ways, lineSent.answer.vehicles.map((v) => v.id)], [lineAnswer.path, lineAnswer.ways, lineAnswer.vehicles.map((v) => v.id)]);
+  // (a page that names nothing has none)
+  assert.ok(!(await request('/stop/kaputt')).body.toString().includes('sent-answer'));
   const otherKind = await request('/line/testbetrieb/bus/u1');
   assert.equal(otherKind.status, 404);
   assert.ok(otherKind.body.toString().includes('Diese Linie ist nicht im Fahrplan.'));
@@ -755,6 +792,11 @@ test('the address of a stop or a line is a page of its own, found again by its n
   assert.doesNotMatch(tripBody, /rel="canonical"/);
   // (its name and where it goes in its details, as their main heading; the rest comes with the script)
   assert.ok(tripBody.includes('<div id="panel-head"><div class="panel-head"><h1>U1</h1><p class="sub">nach Rundkurs</p></div></div>'));
+  // (and as data what api/trip answers, which the script shows at once, #333)
+  const tripSent = sentOf(tripBody);
+  assert.deepEqual(tripSent.found, { type: 'trip', id: `T1_${today}`, path: run });
+  const tripAnswer = (await get(`/api/trip?id=T1_${today}`)).json;
+  assert.deepEqual({ ...tripSent.answer, now: 0 }, { ...tripAnswer, now: 0 });
   // another time, or a day the timetable does not have: no trip
   for (const path of [run.replace('/0000-', '/0100-'), `trip/testbetrieb/subway/u1/2031-01-01/0000-alpha`, run.replace('/subway/', '/bus/')]) {
     assert.equal((await get(`/api/address?path=${encodeURIComponent(path)}`)).status, 404, path);

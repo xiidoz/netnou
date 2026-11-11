@@ -5,7 +5,7 @@ import path from 'node:path';
 import zlib from 'node:zlib';
 import { parseAddress } from '../public/address.js';
 import { readChoice } from '../public/choice.js';
-import { readDisplay } from '../public/display.js';
+import { readDisplay, readStops } from '../public/display.js';
 import { t } from '../public/i18n.js';
 import { nearby, placesOf } from '../public/nearby.js';
 import { kilometres } from '../public/search.js';
@@ -301,6 +301,44 @@ function addressed(asked) {
 }
 
 /**
+ * What an address names (addressed), as api/address answers it, and the page
+ * of the address has it (#333): what the page opens it by.
+ */
+function addressAnswer({ type, found, path }) {
+  if (type === 'trip') return { type, id: `${timetable.tripId(found.trip)}_${found.date}`, path };
+  if (type === 'stop') {
+    const { name, lat, lon } = timetable.stations[found];
+    return { type, name, lat, lon, path };
+  }
+  const { name, mode, agency, place } = timetable.lines[found];
+  return { type, name, mode, agency, at: place, path };
+}
+
+/**
+ * What api/departures answers for a station (and the page of its address has
+ * in it, #333), null for one the timetable does not have: its departures,
+ * of the lines chosen where some are (public/choice.js, #164); what leaves it
+ * today (#289); its address, which the page writes into its own (#288).
+ * @param directions with what there is to choose from: asked for once, as it
+ *   does not change with the minute
+ * @param lines with every line of it and its next departure each way, while
+ *   the page shows them: of all, whatever is chosen (#255)
+ */
+function departuresAnswer(stationId, now, { chosen = [], directions = false, lines = false } = {}) {
+  const board = timetable.departures(stationId, now, realtime.snapshot, { lines: chosen });
+  if (!board) return null;
+  const known = stopFacts(board.id, now);
+  return {
+    now,
+    ...board,
+    today: todayOf(known),
+    path: stopAddress(timetable.stopIndex.get(board.id)),
+    ...(directions ? { directions: timetable.directions(board.id) } : {}),
+    ...(lines ? linesOf(board.id, now, known) : {}),
+  };
+}
+
+/**
  * What the timetable says of a station beyond the minute (#289), of the
  * service day of a moment: its first and last departure, its lines, each
  * line's facts there, the towns they go to (lib/facts.js).
@@ -377,15 +415,36 @@ function serveAddress(req, res, url) {
     } else {
       const { found } = named;
       Object.assign(address, named.type === 'stop' ? addressesNow().stationWords(found, language, words) : named.type === 'line' ? addressesNow().lineWords(found, language, words) : addressesNow().tripWords(found.trip, found.date, language, words));
-      // (the departures of a stop and the vehicles of a line as its details show them now, #254)
+      // (the departures of a stop and the vehicles of a line as its details show them now, #254; and the answer they are
+      // made of, as the page would ask for it, which it takes as its first, #333)
       const at = { language, texts: words, timeZone: timeZone(), now: Math.floor(Date.now() / 1000), fixed: readDisplay(url.search, MODES)?.fixed ?? false };
+      let answer = null;
+      let further;
       if (named.type === 'stop') {
-        const board = timetable.departures(timetable.stations[found].id, at.now, realtime.snapshot);
-        const known = board && stopFacts(board.id, at.now);
-        if (board) address.panel = panelHtml('stop', { ...board, today: todayOf(known), ...linesOf(board.id, at.now, known) }, at);
+        const id = timetable.stations[found].id;
+        const all = departuresAnswer(id, at.now, { directions: true, lines: true });
+        if (all) {
+          address.panel = panelHtml('stop', all, at);
+          // (of the lines the address asks for, where it asks for some, as the page shows them)
+          const chosen = readChoice(url.searchParams.get('lines'));
+          answer = chosen.length ? { ...all, departures: timetable.departures(id, at.now, realtime.snapshot, { lines: chosen }).departures } : all;
+          // (and the further stops of a board, as the page would ask for each, so that the board comes whole)
+          further = readStops(url.search, named.path.slice('stop/'.length)).map(({ path: stop }) => {
+            const other = addressed(`stop/${stop}`);
+            if (other?.type !== 'stop') return { path: stop, gone: true };
+            return { path: stop, found: addressAnswer(other), answer: departuresAnswer(timetable.stations[other.found].id, at.now) };
+          });
+        }
       } else if (named.type === 'line') {
-        address.panel = panelHtml('line', { ...timetable.lineVehicles(found, vehicles().all, stopAddress), facts: facts(timetable).line(found, at.now) }, at);
+        const line = { ...timetable.lineVehicles(found, vehicles().all, stopAddress), facts: facts(timetable).line(found, at.now) };
+        address.panel = panelHtml('line', line, at);
+        answer = { now: at.now, ...line, path: named.path };
+      } else {
+        const trip = timetable.trip(timetable.tripId(found.trip), found.date, realtime.snapshot);
+        if (trip) answer = { now: at.now, ...trip, address: named.path };
       }
+      // (with the time of the realtime data, as api/vehicles says it: whether the delays are current, which the details show by it)
+      if (answer) address.sent = { timeZone: at.timeZone, realtime: realtime.snapshot ? realtime.status.feedTimestamp : null, found: addressAnswer(named), answer, ...(further?.length ? { further } : {}) };
     }
   }
   const body = pageBody(language, askedLanguage, address);
@@ -804,16 +863,7 @@ function handleApi(req, res, url) {
       // What the address of a stop, a line or a trip names now (#37, #178), for the page at it.
       const named = addressed(url.searchParams.get('path') ?? '');
       if (!named) return sendJson(req, res, 404, { error: 'not found' });
-      if (named.type === 'trip') {
-        const { trip, date } = named.found;
-        return sendJson(req, res, 200, { type: 'trip', id: `${timetable.tripId(trip)}_${date}`, path: named.path });
-      }
-      if (named.type === 'stop') {
-        const { name, lat, lon } = timetable.stations[named.found];
-        return sendJson(req, res, 200, { type: 'stop', name, lat, lon, path: named.path });
-      }
-      const { name, mode, agency, place } = timetable.lines[named.found];
-      return sendJson(req, res, 200, { type: 'line', name, mode, agency, at: place, path: named.path });
+      return sendJson(req, res, 200, addressAnswer(named));
     }
 
     case '/api/departures': {
@@ -821,18 +871,11 @@ function handleApi(req, res, url) {
       const at = parsePlace(url.searchParams.get('at'));
       const station = at ? searchList().stationAt(...at) : url.searchParams.get('station');
       // (only the lines and directions chosen, where some are: public/choice.js, #164)
-      const board = timetable.departures(station ?? '', now, realtime.snapshot, { lines: readChoice(url.searchParams.get('lines')) });
-      if (!board) return sendJson(req, res, 404, { error: 'station not found' });
+      const answer = departuresAnswer(station ?? '', now, { chosen: readChoice(url.searchParams.get('lines')), directions: url.searchParams.get('directions') === '1', lines: url.searchParams.get('list') === 'lines' });
+      if (!answer) return sendJson(req, res, 404, { error: 'station not found' });
       realtime.touch();
-      // (its address, which the page writes into its own, #288)
-      const path = stopAddress(timetable.stopIndex.get(board.id));
-      visitOpened(req, res, url, path, (language, words) => stopTitle(board.name, words, townToShow(board.name, board.town)));
-      // (and what there is to choose from, where the page asks for it: once, as it does not change with the minute)
-      const directions = url.searchParams.get('directions') === '1' ? { directions: timetable.directions(board.id) } : {};
-      // (what leaves it today, #289, and every line of it with its next departure each way, while the page shows them: of all, whatever is chosen, #255)
-      const known = stopFacts(board.id, now);
-      const lines = url.searchParams.get('list') === 'lines' ? linesOf(board.id, now, known) : {};
-      return sendJson(req, res, 200, { now, ...board, today: todayOf(known), path, ...directions, ...lines });
+      visitOpened(req, res, url, answer.path, (language, words) => stopTitle(answer.name, words, townToShow(answer.name, answer.town)));
+      return sendJson(req, res, 200, answer);
     }
 
     default:

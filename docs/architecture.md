@@ -791,7 +791,19 @@ otherwise a server would load a file written by older code:
   keep them. Both are drawn by one module, `panel.js`, which the page
   makes into its own elements and the server into HTML, so that what a
   search engine reads is what a rider sees; the script takes the details
-  over and keeps them live. A row says in its data what it opens, as the
+  over and keeps them live. For that the server writes, beside them, the
+  answer they are made of into the page as data
+  ([#333](https://github.com/xiidoz/netnou/issues/333)): what
+  `/api/address` says of the address and what the details' first question
+  would get, a line's without where it runs, which can be as large as the
+  page. The script takes it as its first answer, so the details are open
+  details from its start, also where no answer comes after the page, as
+  with a link opened on a train before a tunnel: their way back, Back to
+  them, their switches and their filter work, and they say that the
+  connection is lost as other details do. It costs a stop's page 2.5 to
+  12 KB more as it is sent, gzipped (about 50 KB without; Frankfurt (Main)
+  Hauptbahnhof the most), a line's 2.5 to 5 KB. A row says in its data
+  what it opens, as the
   server's page has no script: the page listens to the details for it. The
   sitemap lists every stop and line, 14,228 addresses for the default area
   in one file, and the 269,995 of all of Germany in six files under an

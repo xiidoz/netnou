@@ -419,8 +419,9 @@ test('the script takes a title and a description of the operator\'s own for the 
   const app = withoutComments(read('app.js'));
   assert.match(app, /pageTitle = area\.siteTitle\[language\] \?\? page\.title;/);
   assert.match(app, /querySelector\('meta\[name="description"\]'\)\.content = area\.siteDescription\[language\] \?\? page\.description;/);
-  // (and nowhere else does it set either: the title is that, or the one of the stop or the line whose address the page is at, #37)
-  assert.deepEqual(app.match(/document\.title = [^;]+;/g), ['document.title = title ?? pageTitle;', 'document.title = pageTitle;']);
+  // (and nowhere else does it set either: the title is that, or the one of the stop, the line or the trip whose address the page
+  // is at, #37, also where the page opened them with the answer it was sent with before it knew this, #333)
+  assert.deepEqual(app.match(/document\.title = [^;]+;/g), ['document.title = title ?? pageTitle;', 'document.title = here() && open?.data && !open.left && open.path === here() ? detailsTitle(open) : pageTitle;']);
   assert.equal(app.match(/meta\[name="description"\]/g).length, 1);
 });
 
