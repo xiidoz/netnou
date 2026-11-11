@@ -13,7 +13,7 @@ import { LANGUAGES, pageTexts, pickLanguage } from '../public/i18n.js';
 import de from '../public/locales/de.js';
 import en from '../public/locales/en.js';
 import * as shapes from '../public/vendor/material-design-icons/icons.js';
-import { inlineHashes, LANGUAGE_CODES, languageFor, ownFiles, PAGE_INLINE, PAGE_MODULES, panelHtml, pictureSize, renderManifest, renderPage, robotsTxt, securityPolicy, sitemapFiles, versionsOfFiles } from '../server/lib/page.js';
+import { inlineHashes, LANGUAGE_CODES, languageFor, ownFiles, PAGE_INLINE, PAGE_MODULES, panelHtml, pictureSize, renderManifest, renderPage, robotsTxt, securityPolicy, sentData, sitemapFiles, versionsOfFiles } from '../server/lib/page.js';
 
 const html = fs.readFileSync(new URL('../public/index.html', import.meta.url), 'utf8');
 const URL_ = 'https://karte.example.org/live/';
@@ -508,19 +508,31 @@ test('the page of a stop or a line has its details in it as they are, with their
   const line = panelHtml('line', { name: 'U1', mode: 'subway', agency: 'VAG', vehicles: [{ id: 'T1_20261023', to: 'Langwasser Süd', next: 'Opernhaus', delay: null, warnings: [] }] }, at);
   assert.equal(line.head, '<div class="panel-head"><h1><span class="badge" data-mode="subway">U1</span><span>U-Bahn</span></h1><p class="sub">VAG · 1 Fahrzeug unterwegs</p></div>');
 
-  // in the page: open, the details written in and marked as sent, the name of the instance no longer the main heading
-  const address = { path: 'stop/plaerrer@49.4480,11.0620', depth: 1, title: 'Abfahrten Plärrer live', description: 'Abfahrten an der Haltestelle Plärrer in Echtzeit.', heading: 'Plärrer', sub: 'Abfahrten', panel: stop };
+  // in the page: open, the details written in, the name of the instance no longer the main heading; and as data before the
+  // end of the page the answer they are made of, which the script takes as its first (#333)
+  const sent = { timeZone: 'Europe/Berlin', found: { type: 'stop', name: 'Plärrer', lat: 49.448, lon: 11.062, path: 'stop/plaerrer' }, answer: board };
+  const address = { path: 'stop/plaerrer@49.4480,11.0620', depth: 1, title: 'Abfahrten Plärrer live', description: 'Abfahrten an der Haltestelle Plärrer in Echtzeit.', heading: 'Plärrer', sub: 'Abfahrten', panel: stop, sent };
   const page = renderPage(html, { ...german, address });
   assert.match(page, /<aside class="card panel" id="panel" tabindex/);
   assert.ok(page.includes(`<div id="panel-head">${stop.head}</div>`));
-  assert.ok(page.includes(`<div id="panel-body" data-sent>${stop.body}</div>`));
+  assert.ok(page.includes(`<div id="panel-body">${stop.body}</div>`));
+  assert.ok(page.includes(`\n  ${sentData(sent)}\n</body>`));
   assert.ok(page.includes('<div class="site-name">Netnou</div>'));
   assert.deepEqual(page.match(/<h1\b[^>]*>[^<]*/g), ['<h1>Plärrer']);
   // a trip has its name and where it goes, kept as sent, and the rest comes with the script; the page itself has the name of the instance as its heading
   const trip = renderPage(html, { ...german, address: { path: 'trip/x', depth: 1, title: 'U1 nach Langwasser Süd live', description: '…', heading: 'U1', sub: 'nach Langwasser Süd', unlisted: true } });
   assert.ok(trip.includes('<div id="panel-head"><div class="panel-head"><h1>U1</h1><p class="sub">nach Langwasser Süd</p></div></div>'));
-  assert.ok(trip.includes('<div id="panel-body" data-sent><p class="panel-empty">…</p></div>'));
+  assert.ok(trip.includes('<div id="panel-body"><p class="panel-empty">…</p></div>'));
+  // (without an answer to send with it, none)
+  assert.ok(!trip.includes('sent-answer'));
   assert.deepEqual(renderPage(html, german).match(/<h1\b[^>]*>[^<]*/g), ['<h1>Netnou']);
+});
+
+test('the answer a page is sent with is data that no name in it can end, and that the page reads as it was (#333)', () => {
+  const sent = { timeZone: 'Europe/Berlin', found: { type: 'stop', name: 'A</script><script>alert(1)</script>', path: 'stop/a' }, answer: { notes: ['<!-- x -->', 'a & b', '\u2028'] } };
+  const data = sentData(sent);
+  assert.match(data, /^<script type="application\/json" id="sent-answer">[^<]*<\/script>$/);
+  assert.deepEqual(JSON.parse(/>([^<]*)</.exec(data)[1]), sent);
 });
 
 test('robots.txt lets everything be read and names the sitemap where there is one', () => {

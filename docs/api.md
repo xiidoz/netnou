@@ -802,8 +802,10 @@ none.
 
 ## `GET /api/address`
 
-What the address of a stop, a line or a trip names now. The page asks for
-it when it is opened at such an address ([Addresses](architecture.md#the-page)):
+What the address of a stop, a line or a trip names now. The page at such
+an address has this answer written into it, with the first answer of its
+details (#333); the page asks for it where it goes to such an address
+itself, as with Back ([Addresses](architecture.md#the-page)):
 the ids of a feed change with every timetable, so a stop is named by its
 name and its town, and by a number where stops of the name are more than
 one in a town, a line by its operator, its kind and its name, and by its

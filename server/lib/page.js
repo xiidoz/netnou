@@ -270,9 +270,11 @@ const versions = (publicUrl, main) => [...LANGUAGE_CODES.map((code) => [code, ad
  * @param address the address of a stop, a line or a trip that the page is
  *   sent for (#37, #178), null for the page itself: { path, depth } of the
  *   address, with { title, description, heading, sub, unlisted } of what it
- *   names (lib/addresses.js) and, of a stop or a line, the `panel` its details
- *   show now (panelHtml), or { gone } with the text that says it names nothing now, or neither
- *   while that is not known yet (there is no timetable)
+ *   names (lib/addresses.js), of a stop or a line the `panel` its details
+ *   show now (panelHtml), and the `sent` answer they are made of (#333:
+ *   { timeZone, found, answer }, see sentData); or { gone } with the text
+ *   that says it names nothing now, or neither while that is not known yet
+ *   (there is no timetable)
  * @param inline the style sheets and the first script, by their address in
  *   index.html (PAGE_INLINE), to be written into the page in place of the
  *   tags that name them; null leaves the tags
@@ -333,14 +335,17 @@ export function renderPage(html, { language, main, asked, texts, siteName, areaN
     put(/(<ul class="search-results" id="search-results"[^>]*>)(<\/ul>)/, (_, start, end) => `${start}${rows.map(toHtml).join('')}${end}`);
   }
   // At an address, its details are open from the start: those of a stop or
-  // a line as the page shows them, at the moment the page is sent (#254),
-  // which the script keeps until it has them anew (data-sent); of a trip its
-  // name and what it is, kept so as well. What a search engine reads is what a
-  // rider sees.
+  // a line as the page shows them, at the moment the page is sent (#254); of
+  // a trip its name and what it is. What a search engine reads is what a
+  // rider sees. And beside them, as data, the answer they are made of
+  // (#333): the script takes it as its first answer, so that they are open
+  // details from the start, also where no answer of the server comes after
+  // the page (sentData).
   if (named || address?.gone) {
     put(/(<aside class="card panel" id="panel") hidden/, (_, start) => start);
     if (named) put(/<div id="panel-head"><\/div>/, () => `<div id="panel-head">${address.panel?.head ?? toHtml(panelHead(address.heading, h('p', { class: 'sub' }, address.sub)))}</div>`);
-    put(/<div id="panel-body"><\/div>/, () => (address.panel ? `<div id="panel-body" data-sent>${address.panel.body}</div>` : named ? `<div id="panel-body" data-sent><p class="panel-empty">${escapeHtml(address.description)}</p></div>` : `<div id="panel-body"><p class="panel-empty">${escapeHtml(address.gone)}</p></div>`));
+    put(/<div id="panel-body"><\/div>/, () => `<div id="panel-body">${address.panel ? address.panel.body : `<p class="panel-empty">${escapeHtml(named ? address.description : address.gone)}</p>`}</div>`);
+    if (named && address.sent) put(/\n<\/body>/, (end) => `\n  ${sentData(address.sent)}${end}`);
   }
 
   // For previews of a link (Open Graph, which the others read as well).
@@ -448,6 +453,26 @@ export function panelHtml(kind, data, { language, texts, timeZone, now, fixed = 
       [...departureLists(data, { ...drawing, live }), fixed ? null : h('div', { class: 'view-lines', hidden: true }, lineLists(data, { ...drawing, live }))].filter(Boolean)]
     : [lineHead(data, drawing, 0), [...lineStops(data, { ...drawing, live: data.vehicles.some((v) => v.delay !== null) }, 0), ...(lineTimetable(data.facts, drawing) ?? [])]];
   return { head: toHtml(head), body: body.map(toHtml).join('') };
+}
+
+/**
+ * The first answer of the details at an address, written into its page as
+ * data (#333): what the page asks the server for once it runs, as the server
+ * answers it at the moment the page is sent. The script of the page takes it
+ * as its first answer (takeSent in app.js). A browser does not run what is in
+ * it, so the page's Content-Security-Policy need not allow it.
+ * @param sent { timeZone, realtime, found, answer, further }: the time zone of
+ *   the instance, in which the details show their times; the time of its
+ *   realtime data, as api/vehicles has it; what the address names, as
+ *   api/address answers; and what api/departures answers for it (with what
+ *   there is to choose from and all its lines), or api/line (without where it
+ *   runs, which can be as large as the page), or api/trip; and of a board the
+ *   further stops its address names, each { path, found, answer } as the page
+ *   would ask for them, or { path, gone } for one the timetable does not have
+ */
+export function sentData(sent) {
+  // (JSON without a "<" in it: nothing in a name can end the element)
+  return `<script type="application/json" id="sent-answer">${JSON.stringify(sent).replace(/</g, '\\u003c')}</script>`;
 }
 
 /**

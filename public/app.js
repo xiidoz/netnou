@@ -290,6 +290,8 @@ const state = {
   hadRealtime: false,
   saidOutage: false,
   online: false, // last poll delivered vehicles
+  polled: false, // the map's questions have had an answer or have failed: before that, a connection is not known to be lost (connectionLost)
+  sentOpened: false, // the details of the address were opened with the answer the page was sent with, the map not yet put on them (takeSent)
   areaKnown: false, // api/area has answered: the map shows the area
   addressOpened: false, // what the address of the page names has been asked for (openAddress)
   viewAsked: false, // the address of a display named the section of the map, which the stop it names then does not move (loadArea)
@@ -822,7 +824,8 @@ function showWay(way) {
   const selection = state.selection;
   if (selection?.type !== 'line' || !selection.data || selection.way === way) return;
   selection.way = way;
-  renderLine(selection.data, false);
+  // (as the details show it, also without a connection: without the number of its vehicles then, see showSelection)
+  showSelection();
 }
 
 /** Shows the next departures of the open stop, or all its lines (#255): those of the last answer at once, if it had them, and asked for anew. */
@@ -915,6 +918,7 @@ function applyChoice(keys) {
   if (state.selection?.type !== 'station' || !data) return;
   state.lines = keys;
   state.selection.linesAsked = true;
+  delete state.selection.linesWanted;
   if (state.display) writeAddress();
   else history.replaceState(history.state, '', `${location.pathname}${boardQuery(location.search, state.board, state.extra, state.lines)}`);
   if (isFavourite(favourites, 'stops', data)) {
@@ -3398,7 +3402,6 @@ function closePanel() {
   if (state.board !== null) setBoard(null, false);
   const picked = pickedQuery();
   state.selection = null;
-  panelBody.removeAttribute('data-sent');
   state.extra = [];
   state.lines = [];
   if (choiceDialog.open) choiceDialog.close();
@@ -3457,9 +3460,10 @@ document.addEventListener('keydown', (event) => {
 
 /** The address the page is at, from where the instance is: 'stop/…', 'line/…', or '' for the map alone. */
 const here = () => decodeURIComponent(location.pathname).slice(new URL(document.baseURI).pathname.length);
-// The title of the page with nothing open, and the name of the instance (loadArea).
+// The title of the page with nothing open, and the name of the instance (loadArea); until then as the server wrote it into
+// the page, for the details opened with the answer it was sent with (takeSent), also where api/area does not answer.
 let pageTitle = document.title;
-let siteName = APP_NAME;
+let siteName = document.querySelector('meta[property="og:site_name"]')?.content || APP_NAME;
 
 /** The title of the page of a stop, with its town where the name does not say it (#254), as the server gives its page (stopTitle in server/lib/addresses.js). */
 function stopTitle(name, town = null) {
@@ -3477,6 +3481,9 @@ function lineTitle({ name, mode }) {
   const words = t('address.lineTitle', { line, route: '' }).replace(/\s+/g, ' ').trim();
   return `${words.charAt(0).toUpperCase()}${words.slice(1)} – ${siteName}`;
 }
+
+/** The title of the page with these details open, from what the server said of them last. */
+const detailsTitle = ({ type, data }) => (type === 'trip' ? tripTitle(data) : type === 'line' ? lineTitle(data) : stopTitle(data.name, data.town));
 
 /** The title of the page of a trip (#178), as the server writes it (tripWords in server/lib/addresses.js). */
 function tripTitle({ line: name, mode, to }) {
@@ -3534,15 +3541,13 @@ async function openAddress(loaded = false) {
   const moves = state.moves;
   // (where the connection is known to be lost, what the page holds of the address at once, not after a question that hangs)
   const held = heldAt(path);
-  if (held && (!state.online || state.selection?.failing)) {
+  if (held && (connectionLost() || state.selection?.failing)) {
     restore(held, path, true);
     return true;
   }
-  if (loaded && panelBody.hasAttribute('data-sent')) sentWait(false);
-  // (an answer that takes long: the details of the address left are not shown under this one meanwhile; the page as the
-  // server sent it, which are those of this address, stays)
+  // (an answer that takes long: the details of the address left are not shown under this one meanwhile)
   const slow = setTimeout(() => {
-    if (!loaded && here() === path && state.moves === moves && !panel.hidden && state.selection?.path !== path && !panelBody.hasAttribute('data-sent')) showLoadingOf(path);
+    if (!loaded && here() === path && state.moves === moves && !panel.hidden && state.selection?.path !== path) showLoadingOf(path);
   }, SLOW_MS);
   let res;
   try {
@@ -3569,20 +3574,33 @@ async function openAddress(loaded = false) {
     return here() === path && state.moves === moves ? addressLost(path, loaded) : true;
   }
   if (here() !== path || state.moves !== moves) return true;
+  openFound(found, path, loaded);
+  return true;
+}
+
+/**
+ * Opens what an address names, as api/address has said (openAddress), or as
+ * the page was sent with it (takeSent).
+ * @param answer the first answer of its details, as the server wrote it into
+ *   the page (#333): taken as it is, and the map put on them once it is there
+ *   (placeSent); null to ask for it
+ */
+function openFound(found, path, loaded, answer = null) {
   // (a stop that has moved a little, or has another name: the address it has now; that of a line or a trip without a board, which only a stop has)
   const search = found.type === 'stop' ? location.search : boardQuery(location.search, null);
   if (found.path !== path || search !== location.search) history.replaceState(history.state, '', new URL(`${found.path}${search}`, document.baseURI));
+  const sent = answer ? { answer } : {};
   if (found.type === 'line') {
-    selectLine(found, { counted: loaded, addressed: true, from: history.state?.from, fromStop: history.state?.fromStop });
-    return true;
+    selectLine(found, { counted: loaded, addressed: true, from: history.state?.from, fromStop: history.state?.fromStop, ...sent });
+    return;
   }
   // (a trip, #178: the map is brought to it once it is there, see renderTrip, unless a display's address says where the map is)
   if (found.type === 'trip') {
     // (open already, and not left by Back: as it is, its question on its way)
-    if (state.selection?.type === 'trip' && state.selection.id === found.id && !state.selection.left) return true;
+    if (state.selection?.type === 'trip' && state.selection.id === found.id && !state.selection.left) return;
     const heldTrip = visited.get(found.path)?.selection?.data;
-    select('trip', found.id, { counted: loaded, addressed: true, ...(heldTrip ? { hint: { line: heldTrip.line, mode: heldTrip.mode, to: heldTrip.to } } : {}), fit: !(loaded && state.viewAsked), from: history.state?.from, fromStop: history.state?.fromStop });
-    return true;
+    select('trip', found.id, { counted: loaded, addressed: true, ...(heldTrip ? { hint: { line: heldTrip.line, mode: heldTrip.mode, to: heldTrip.to } } : {}), fit: !answer && !(loaded && state.viewAsked), from: history.state?.from, fromStop: history.state?.fromStop, ...sent });
+    return;
   }
   // (the board of the stop, where the address has one: a line has none; and its further stops, read before the board is written into the address again)
   const board = readBoard(location.search);
@@ -3596,10 +3614,80 @@ async function openAddress(loaded = false) {
   // (as from the search: on a narrow screen the details cover the lower half, so the stop goes above the middle; a board does not.
   // A display whose address names a section of the map keeps that section: it was set up so.)
   const kept = loaded && state.viewAsked;
-  if (!kept) map.easeTo({ center: [found.lon, found.lat], zoom: Math.max(map.getZoom(), SEARCH_ZOOM), offset: board === null ? stopOffset() : [0, 0], duration: 0 });
+  if (!kept && !answer) map.easeTo({ center: [found.lon, found.lat], zoom: Math.max(map.getZoom(), SEARCH_ZOOM), offset: board === null ? stopOffset() : [0, 0], duration: 0 });
   // (landing here, not on a board: the one tip may follow, once the departures are there)
-  select('station', null, { at: found, counted: loaded, addressed: true, kept, stops, tip: loaded && board === null, from: history.state?.from, view: history.state?.view, ...(lines ? { lines } : {}) });
-  return true;
+  select('station', null, { at: found, counted: loaded, addressed: true, kept, stops, tip: loaded && board === null, from: history.state?.from, view: history.state?.view, ...(lines ? { lines } : {}), ...sent });
+}
+
+/**
+ * The first answer of the details at the address the page was sent for, as
+ * the server wrote it into the page (#333, sentData in server/lib/page.js):
+ * what api/address says of the address (found), what the details' first
+ * question would get (answer), and the time zone their times are shown in.
+ * Null where the page has none.
+ */
+function readSent() {
+  const node = document.getElementById('sent-answer');
+  if (!node) return null;
+  node.remove();
+  try {
+    return JSON.parse(node.textContent);
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Opens the details of the page's address with the answer the page was sent
+ * with (#333): they are open details from the start, as any others, also
+ * where no answer of the server comes after the page, as on a train before a
+ * tunnel – their way back, Back to them, their switches, their filter, and
+ * what is shown while the connection is lost. Asked for anew at once; the
+ * visit was counted with the page (#158). The map is put on them once the
+ * server has said what it shows (placeSent).
+ */
+function takeSent() {
+  const sent = readSent();
+  if (!sent?.found || !sent.answer || sent.found.path !== here()) return;
+  // (the times as the server wrote them: before api/area, which says it too; and whether its delays are current, as the map's
+  // first answer would say, by which departures without a reported one have their question mark, see drawing)
+  if (sent.timeZone) setTimeZone(sent.timeZone);
+  if (state.realtimeAt === null && sent.realtime !== undefined) state.realtimeAt = sent.realtime;
+  // (the further stops of a board, as loadBoardStop would have them: the board comes whole, also without a connection)
+  for (const stop of sent.further ?? []) {
+    boardStopData.set(stop.path, stop.found && stop.answer ? { name: stop.found.name, lat: stop.found.lat, lon: stop.found.lon, departures: stop.answer, gone: false } : { gone: true, askedAt: Date.now() });
+  }
+  openFound(sent.found, here(), true, sent.answer);
+  // (opened: not again with the first answer of the map, which puts the map on them, see poll)
+  state.addressOpened = true;
+  state.sentOpened = true;
+}
+
+/**
+ * Puts the map, now that it is there, on the details the page was sent with
+ * (takeSent), as openAddress puts it on what it opens: a stop above the
+ * sheet, the stops of a board, a line where it runs, a trip where it is.
+ */
+function placeSent(selection) {
+  selection.unplaced = false;
+  // (a display whose address names a section of the map keeps that section: it was set up so)
+  selection.kept = state.viewAsked;
+  if (selection.type === 'station') {
+    if (selection.kept) return;
+    const { lat, lon } = selection.at;
+    map.easeTo({ center: [lon, lat], zoom: Math.max(map.getZoom(), SEARCH_ZOOM), offset: state.board === null ? stopOffset() : [0, 0], duration: 0 });
+    if (state.board === null || !selection.data) return;
+    showBoardStops(selection.data);
+    // (and its further stops, which come with the next answer: in view with it)
+    if (state.extra.some((stop) => !boardStopData.has(stop.path))) selection.fitOnAnswer = true;
+  } else if (selection.type === 'line') {
+    // (where it runs, once that has come: it is not in the page, see sentData)
+    if (selection.route) fitLine(selection.data);
+    else selection.fitOnAnswer = true;
+  } else if (!selection.kept) {
+    selection.fit = true;
+    fitTrip({ ...selection.data, now: now() });
+  }
 }
 
 /**
@@ -3640,7 +3728,6 @@ function addressGone(path) {
   panelHead.replaceChildren();
   const gone = path.startsWith('stop/') ? t('address.stopGone') : path.startsWith('line/') ? t('address.lineGone') : path.startsWith('trip/') ? t('address.tripGone') : t('address.gone');
   panelBody.replaceChildren(el('p', { class: 'panel-empty', text: gone }));
-  panelBody.removeAttribute('data-sent');
   const named = parseAddress(path);
   if (!named) return;
   $('controls').classList.add('searching');
@@ -3746,6 +3833,8 @@ favouriteButton.addEventListener('click', () => {
   if (!open) return;
   const yes = !isFavourite(favourites, open.kind, open.item);
   favourites = withFavourite(favourites, open.kind, open.item, yes);
+  // (the lines it kept, still to come where the page shows the answer it was sent with: not chosen once it is no favourite)
+  delete state.selection?.linesWanted;
   keepFavourites();
   showFavourite();
   // (one note at a time under the buttons; none where the heart goes empty, which says it)
@@ -3783,14 +3872,14 @@ shareButton.addEventListener('click', async () => {
  *   of a station of the search where it is ({ at }); and { counted: true } for
  *   what the address the page was loaded at names, whose visit the server has
  *   counted already (#158), and { kept: true } where the map stays where the
- *   address of a display put it
+ *   address of a display put it; { answer } the first answer of the details,
+ *   as the page was sent with it (takeSent)
  */
 function select(type, id, more = {}) {
   state.moves = (state.moves ?? 0) + 1;
   // (opened, not gone back to by the address: see focusBack)
   if (!more.addressed) focusBack = null;
-  // (not where they are those of the page as the server sent it, opened by its address: the sheet is theirs, and fills)
-  if (!panelBody.hasAttribute('data-sent')) closeChoice();
+  closeChoice();
   // (an address that was to load once the connection is back gives way to this; what was said of the last goes)
   state.addressPending = false;
   $('panel-said').textContent = '';
@@ -3807,6 +3896,7 @@ function select(type, id, more = {}) {
   const picked = pickedQuery();
   state.selection = { type, id, data: null, ...more, back };
   delete state.selection.stops;
+  delete state.selection.answer;
   // (the lines of a stop to show: as the address asks, else as its favourite keeps them, see loadSelection)
   state.lines = type === 'station' ? (more.lines ?? []) : [];
   // (its next departures, unless it is opened again at a step that showed all its lines: showView)
@@ -3819,22 +3909,20 @@ function select(type, id, more = {}) {
   // (a stop and a line have their addresses once the server has said what they are: loadSelection; a trip has none)
   shareable(false);
   panel.hidden = false;
-  // (the page of an address has its details in it as the server sent it, #254: they stay until the answer comes, and where it
-  // does not, see disconnected)
-  const sent = Boolean(more.counted && panelBody.hasAttribute('data-sent'));
-  if (sent) {
-    state.selection.sent = true;
-    sentWait(false);
-  }
-  else {
-    // (what the row they were opened by knew of them, until they are there: see failedHead)
-    panelHead.replaceChildren(failedHead(state.selection));
-    showWayBack();
-    panelBody.replaceChildren(el('p', { class: 'panel-empty', text: t('panel.loading') }));
-    mainHeading();
-  }
-  panelBody.removeAttribute('data-sent');
   markLost();
+  // (the page of an address, with their first answer in it, #333: shown as it came, the map on them once it is there, and
+  // asked for anew at once)
+  if (more.answer) {
+    state.selection.unplaced = true;
+    takeAnswer(state.selection, more.answer, true, more.answer.now ?? null);
+    loadSelection();
+    return;
+  }
+  // (what the row they were opened by knew of them, until they are there: see failedHead)
+  panelHead.replaceChildren(failedHead(state.selection));
+  showWayBack();
+  panelBody.replaceChildren(el('p', { class: 'panel-empty', text: t('panel.loading') }));
+  mainHeading();
   loadSelection(true);
 }
 
@@ -3844,14 +3932,14 @@ function select(type, id, more = {}) {
  *   opened: the server counts that as a visit of its address, where visits
  *   are counted (#158). A trip has no address.
  */
-function selectionUrl({ type, id, line, at, route, fromTrip }, open = false, first = false) {
+function selectionUrl({ type, id, line, at, route, fromTrip }, open = false, first = false, lines = state.lines) {
   if (type === 'trip') return `api/trip?id=${encodeURIComponent(id)}${open ? '&open=1' : ''}`;
   // (a line is its name, its mode and its operator together, and its place where lines of the name are in places
   // apart, #152; where it runs is asked for until it is known, #148)
   if (type === 'line') return `api/line?${new URLSearchParams({ name: line.name, mode: line.mode, agency: line.agency, ...(line.at ? { at: line.at.join(',') } : {}), ...(route ? {} : { route: '1' }), ...(open ? { open: '1' } : {}), ...(first && fromTrip ? { trip: fromTrip } : {}) })}`;
   // (only the lines chosen, #164; once, with the first answer, which lines and directions there are; and all
   // lines with their next departures while they are shown, #255, which a board does not)
-  const choice = `${state.lines.length ? `&lines=${choiceValue(state.lines)}` : ''}${first ? '&directions=1' : ''}${state.view === 'lines' && state.board === null ? '&list=lines' : ''}`;
+  const choice = `${lines.length ? `&lines=${choiceValue(lines)}` : ''}${first ? '&directions=1' : ''}${state.view === 'lines' && state.board === null ? '&list=lines' : ''}`;
   return `${at ? `api/departures?at=${at.lat.toFixed(5)},${at.lon.toFixed(5)}` : `api/departures?station=${encodeURIComponent(id)}`}${open ? '&open=1' : ''}${choice}`;
 }
 
@@ -3865,9 +3953,11 @@ async function loadSelection(first = false) {
   const further = selection.type === 'station' && state.board !== null && state.extra.length ? loadBoardStops() : null;
   // (an answer that was overtaken by a later question, as after a change of the lines chosen, is not shown)
   const turn = (selection.turn = (selection.turn ?? 0) + 1);
+  // (the lines a favourite keeps, where the page shows the answer it was sent with: chosen once their answer comes, see takeAnswer)
+  const wanted = selection.linesWanted ?? null;
   try {
     // (while it is asked, a retry waits for it: one question at a time, a visit counted once)
-    const asked = askServer(selectionUrl(selection, first && !selection.counted, first));
+    const asked = askServer(selectionUrl(selection, first && !selection.counted, first, wanted ?? state.lines));
     selection.asking = asked;
     const res = await asked.finally(() => {
       if (selection.asking === asked) selection.asking = null;
@@ -3876,55 +3966,19 @@ async function loadSelection(first = false) {
     await further;
     if (state.selection !== selection || selection.turn !== turn) return; // user moved on meanwhile
     if (data) {
-      selection.loaded = true;
-      delete selection.back;
-      connected(selection);
-      // (the lines of the stop as they were last, until the next answer with them: to be shown at once on the switch)
-      if (selection.type === 'station' && !data.lines && selection.data?.id === data.id && selection.data.lines) data.lines = selection.data.lines;
-      selection.data = data;
-      // (of the lines chosen when they were asked for: see renderStation)
-      selection.linesShown = choiceValue(state.lines);
-      if (data.directions) {
-        // (and the sheet to choose them in, opened before they came, with them)
-        const waited = choiceDialog.open && !stopDirections();
-        state.directions = { id: data.id, list: data.directions };
-        if (waited) renderChoice();
+      // (asked with a favourite's lines that are not wanted any more, as its heart was taken away meanwhile: asked again with
+      // those chosen, rather than shown as theirs)
+      if (wanted && selection.linesWanted !== wanted) {
+        loadSelection();
+        return;
       }
-      if (data.route) selection.route = data.route;
-      if (first && selection.type === 'station') {
-        // (a favourite opens with the lines chosen for it, where the address does not ask for others: asked for again then)
-        const kept = selection.linesAsked || state.lines.length ? null : favourites.stops.find((stop) => sameStop(stop, data));
-        const again = kept?.lines !== undefined;
-        if (again) state.lines = readChoice(choiceValue(kept.lines));
-        showAddress(data.path, stopTitle(data.name, data.town), selection.from);
-        shareable(true, true);
-        // (a board keeps the stop it shows in the middle of the map, or all of its stops in view, unless the address of a display says where the map is)
-        if (state.board !== null && !selection.kept) showBoardStops(data);
-        if (again) {
-          // (and in the sheet to choose them in, where it is open)
-          if (choiceDialog.open) renderChoice();
-          // (in the address as well, which showAddress leaves where it is that of the stop already)
-          if (!state.display) history.replaceState(history.state, '', `${location.pathname}${boardQuery(location.search, state.board, state.extra, state.lines)}`);
-          loadSelection();
-          return;
-        }
+      if (wanted) {
+        delete selection.linesWanted;
+        state.lines = wanted;
+        if (!state.display) history.replaceState(history.state, '', `${location.pathname}${boardQuery(location.search, state.board, state.extra, state.lines)}`);
+        if (choiceDialog.open) renderChoice();
       }
-      if (first && selection.type === 'line') {
-        // (from now on asked for by the place the server has for it)
-        selection.line = { ...selection.line, at: data.at };
-        // (opened from a trip, in the direction that trip goes)
-        if (data.way !== undefined) selection.way = data.way;
-        showAddress(data.path, lineTitle(data), selection.from, selection.fromStop);
-        shareable(true);
-      }
-      if (first && selection.type === 'trip') {
-        showAddress(data.address, tripTitle(data), selection.from, selection.fromStop);
-        shareable(true);
-      }
-      showSelection(first);
-      draw();
-      selection.path ??= here();
-      remember(selection);
+      if (takeAnswer(selection, data, first)) return;
     } else if (first) {
       panelBody.replaceChildren(el('p', { class: 'panel-empty', text: t('panel.noData') }));
       // (no station where the search has one: its list is of another timetable than the server's)
@@ -3935,6 +3989,81 @@ async function loadSelection(first = false) {
     if (state.selection === selection && selection.turn === turn) disconnected(selection);
   }
   if (state.selection === selection && selection.turn === turn && !document.hidden) panelTimer = setTimeout(loadSelection, PANEL_REFRESH_MS);
+}
+
+/**
+ * An answer for the open details, from the server (loadSelection) or as the
+ * page was sent with it (select with { answer }): kept, and shown.
+ * @param first whether it is their first
+ * @param sentAt for the answer the page was sent with, when the server made
+ *   it: it is as old as that, as a page the browser kept may be; null for one
+ *   that has just come
+ * @returns true where it asks for them again at once itself, as for a
+ *   favourite's lines
+ */
+function takeAnswer(selection, data, first, sentAt = null) {
+  selection.loaded = true;
+  delete selection.back;
+  connected(selection);
+  if (sentAt !== null) selection.answeredAt = state.heardAt = Math.min(selection.answeredAt, sentAt);
+  // (the lines of the stop as they were last, until the next answer with them: to be shown at once on the switch)
+  if (selection.type === 'station' && !data.lines && selection.data?.id === data.id && selection.data.lines) data.lines = selection.data.lines;
+  selection.data = data;
+  // (of the lines chosen when they were asked for: see renderStation)
+  selection.linesShown = choiceValue(state.lines);
+  if (data.directions) {
+    // (and the sheet to choose them in, opened before they came, with them)
+    const waited = choiceDialog.open && !stopDirections();
+    state.directions = { id: data.id, list: data.directions };
+    if (waited) renderChoice();
+  }
+  if (data.route) selection.route = data.route;
+  // (where a line runs, and the further stops of a board, which the page was not sent with: the map on them as they come,
+  // see placeSent)
+  if (selection.fitOnAnswer && (selection.type !== 'line' || 'route' in data)) {
+    selection.fitOnAnswer = false;
+    if (selection.type === 'line') fitLine(data);
+    else if (state.board !== null) showBoardStops(data);
+  }
+  if (first && selection.type === 'station') {
+    // (a favourite opens with the lines chosen for it, where the address does not ask for others: asked for again then)
+    const kept = selection.linesAsked || state.lines.length ? null : favourites.stops.find((stop) => sameStop(stop, data));
+    // (the answer the page was sent with, of all its lines, is shown as it came, and the favourite's lines are chosen once their
+    // answer has come: loadSelection; without a connection the page shows what it came with)
+    if (kept?.lines !== undefined && sentAt !== null) selection.linesWanted = readChoice(choiceValue(kept.lines));
+    const again = kept?.lines !== undefined && sentAt === null;
+    if (again) state.lines = readChoice(choiceValue(kept.lines));
+    showAddress(data.path, stopTitle(data.name, data.town), selection.from);
+    shareable(true, true);
+    // (a board keeps the stop it shows in the middle of the map, or all of its stops in view, unless the address of a display
+    // says where the map is; once the map is there: placeSent)
+    if (state.board !== null && !selection.kept && !selection.unplaced) showBoardStops(data);
+    if (again) {
+      // (and in the sheet to choose them in, where it is open)
+      if (choiceDialog.open) renderChoice();
+      // (in the address as well, which showAddress leaves where it is that of the stop already)
+      if (!state.display) history.replaceState(history.state, '', `${location.pathname}${boardQuery(location.search, state.board, state.extra, state.lines)}`);
+      loadSelection();
+      return true;
+    }
+  }
+  if (first && selection.type === 'line') {
+    // (from now on asked for by the place the server has for it)
+    selection.line = { ...selection.line, at: data.at };
+    // (opened from a trip, in the direction that trip goes)
+    if (data.way !== undefined) selection.way = data.way;
+    showAddress(data.path, lineTitle(data), selection.from, selection.fromStop);
+    shareable(true);
+  }
+  if (first && selection.type === 'trip') {
+    showAddress(data.address, tripTitle(data), selection.from, selection.fromStop);
+    shareable(true);
+  }
+  showSelection(first);
+  draw();
+  selection.path ??= here();
+  remember(selection);
+  return false;
 }
 
 /**
@@ -3953,7 +4082,8 @@ function showSelection(first = false) {
   if (state.selection.failing && type === 'trip') shown = { ...shown, now: now() };
   if (state.selection.failing && type === 'line') shown = { ...shown, counted: false };
   if (type === 'trip') renderTrip(shown, first);
-  else if (type === 'line') renderLine(shown, first);
+  // (a line the page was sent with is put on the map once the map is there: placeSent)
+  else if (type === 'line') renderLine(shown, first && !state.selection.unplaced);
   else renderStation(shown);
 }
 // When the page gets another size, the notes in the head have other room (fitNotes).
@@ -3982,7 +4112,6 @@ function fillPanel(head, ...nodes) {
   panelHead.replaceChildren(...head);
   showWayBack();
   panelBody.replaceChildren(...nodes);
-  panelBody.removeAttribute('data-sent');
   mainHeading();
   fitNotes();
   // (the sign a pointer is on was built anew with its row, or is gone)
@@ -4167,6 +4296,13 @@ function showWayBack() {
 // where it holds nothing, that address says it will load, and loads once
 // the connection is back (addressLost).
 
+/**
+ * Whether the connection is known to be lost: the map's last question got no
+ * answer. Not before its first has had one either way: the page may have come
+ * with what it shows (takeSent) and knows nothing yet.
+ */
+const connectionLost = () => !state.online && state.polled;
+
 /** An answer for the open details came. */
 function connected(selection) {
   selection.answeredAt = now();
@@ -4183,11 +4319,6 @@ function disconnected(selection) {
   selection.failing = true;
   markLost();
   if (choiceDialog.open && !stopDirections()) renderChoice();
-  if (!selection.loaded && selection.sent) {
-    // (the page as the server sent it, which shows them: kept, and says since when, as where no answer came at all)
-    if (!was) sentLost();
-    return;
-  }
   if (!selection.loaded) {
     // (one the page holds from earlier in this visit, as a trip opened again: that, as Back has it)
     const held = selection.id === null ? null : [...visited].find(([, kept]) => kept.selection.type === selection.type && kept.selection.id === selection.id);
@@ -4296,8 +4427,6 @@ function failedHead({ type, hint, line, at }) {
   return el('div', { class: 'panel-head' });
 }
 
-// (when the page as the server sent it came: the clock of the browser then, as performance.now() stops while a phone sleeps)
-const pageCame = Date.now() / 1000;
 let stepHeld = false; // whether the history has a step that stands for details that did not load, until the next address
 
 /**
@@ -4431,15 +4560,16 @@ function restore(back, path = here(), lostNow = false) {
   back.selection.path = path;
   const picked = pickedQuery();
   // (where the connection is known to be lost, what is restored says so at once; else not, whatever it said before)
-  const lost = lostNow || !state.online || Boolean(state.selection?.failing);
+  const lost = lostNow || connectionLost() || Boolean(state.selection?.failing);
   // (the way back as the step it is restored at has it; a line's chosen stop shown again)
   if (here() === path) {
     back.selection.from = history.state?.from;
     back.selection.fromStop = history.state?.fromStop;
   }
   delete back.selection.chosenShown;
-  // (left once by Back, see popstate: open again now)
+  // (left once by Back, see popstate: open again now; and the map is not brought to what comes with the next answer, see placeSent)
   delete back.selection.left;
+  delete back.selection.fitOnAnswer;
   state.addressPending = false;
   // (a board, which details in its place close, as opening them does)
   if (state.board !== null) setBoard(null, false);
@@ -4454,7 +4584,7 @@ function restore(back, path = here(), lostNow = false) {
   // (a stop or a line from its top, as when it opens; a trip at its next stop, below)
   if (type !== 'trip') panelBody.scrollTop = 0;
   panel.hidden = false;
-  showAddress(path, type === 'trip' ? tripTitle(data) : type === 'line' ? lineTitle(data) : stopTitle(data.name, data.town), back.selection.from, back.selection.fromStop);
+  showAddress(path, detailsTitle(back.selection), back.selection.from, back.selection.fromStop);
   // (a stop on the map, as opening it puts it: above the sheet)
   if (type === 'station' && data.lat !== undefined) map.easeTo({ center: [data.lon, data.lat], zoom: Math.max(map.getZoom(), SEARCH_ZOOM), offset: stopOffset(), duration: 0 });
   askDraw();
@@ -4498,11 +4628,6 @@ function addressLost(path, loaded = false) {
   }
   // (to be opened once the connection is back, as the page itself would have: a visit its load counted is not counted again)
   state.addressPending = { loaded };
-  // (the page as the server sent it, with what it says: kept until then)
-  if (loaded && panelBody.hasAttribute('data-sent')) {
-    sentWait(true);
-    return true;
-  }
   // (shown already: a retry that fails again leaves it as it is, its button saying that it tried)
   if (!panel.hidden && panelBody.querySelector(`.retry[data-address="${CSS.escape(path)}"]`)) return true;
   clearTimeout(panelTimer);
@@ -4863,16 +4988,22 @@ function renderTrip(trip, scrollToNext) {
   // its head, the way back and its buttons, out above its top)
   if (scrollToNext) showRows(chosenRow, nextRow);
   else panelBody.scrollTop = scrollTop;
+  if (scrollToNext) fitTrip(trip);
+}
 
-  // Once, when the trip is opened at its address (#178): the map on where it
-  // is, between the stop it left last and the next one; where it is not
-  // under way, on all of its run. Opened from a departure or from a vehicle
-  // of a line ("unseen"), only to bring a vehicle under way into view, where
-  // it is not in view already (#226).
+/**
+ * Once, when the trip is opened at its address (#178): the map on where it
+ * is, between the stop it left last and the next one; where it is not under
+ * way, on all of its run. Opened from a departure or from a vehicle of a line
+ * ("unseen"), only to bring a vehicle under way into view, where it is not in
+ * view already (#226).
+ */
+function fitTrip(trip) {
   const selection = state.selection;
-  if (!scrollToNext || !selection?.fit) return;
+  if (!selection?.fit) return;
   const unseen = selection.fit === 'unseen';
   selection.fit = false;
+  const lastIndex = trip.stops.length - 1;
   const next = trip.stops.findIndex((stop, i) => (i === lastIndex ? stop.arr + (stop.arrDelay ?? 0) : stop.dep + (stop.depDelay ?? stop.arrDelay ?? 0)) >= trip.now);
   if (unseen && next <= 0) return;
   const points = next > 0 ? [trip.stops[next - 1], trip.stops[next]].flatMap((stop) => [stop.lat, stop.lon]) : trip.path;
@@ -4983,11 +5114,17 @@ function renderLine(line, first) {
     nextFrame();
   }
 
-  // Once, when the line is chosen: where it runs into view, between the
-  // cards, as far as it is in the area (#148); without that, its vehicles.
-  const bounds = selection.route?.bounds;
-  if (first && bounds) map.fitBounds([[bounds[1], bounds[0]], [bounds[3], bounds[2]]], { padding: clearOfCards(), maxZoom: LINE_ZOOM });
-  else if (first && line.vehicles.length) {
+  if (first) fitLine(line);
+}
+
+/**
+ * Once, when the line is chosen: where it runs into view, between the cards,
+ * as far as it is in the area (#148); without that, its vehicles.
+ */
+function fitLine(line) {
+  const bounds = state.selection?.route?.bounds;
+  if (bounds) map.fitBounds([[bounds[1], bounds[0]], [bounds[3], bounds[2]]], { padding: clearOfCards(), maxZoom: LINE_ZOOM });
+  else if (line.vehicles.length) {
     const lats = line.vehicles.map((v) => v.lat);
     const lons = line.vehicles.map((v) => v.lon);
     map.fitBounds([[Math.min(...lons), Math.min(...lats)], [Math.max(...lons), Math.max(...lats)]], { padding: clearOfCards(), maxZoom: LINE_ZOOM });
@@ -5107,84 +5244,6 @@ function tomorrowAt(departures) {
 
 let goneDrawn = 0; // when tickTimes() last drew the details anew for a departure that left, in s
 
-/** The page as the server sent it, whose first questions did not get an answer: its head says so, as open details do. */
-function sentLost() {
-  const head = panelHead.querySelector('.panel-head');
-  if (!head) return;
-  const said = head.querySelector('.connection>span');
-  if (said) {
-    sentStage(said);
-    sentWait(true);
-    return;
-  }
-  let notes = head.querySelector('.notes');
-  if (!notes) {
-    notes = el('ul', { class: 'notes' });
-    head.append(notes);
-  }
-  // (since the page came, which is when the server sent it)
-  const came = pageCame + state.clockOffset;
-  const item = el('li', { class: 'warning connection' }, [el('span', { text: t('panel.offline', { time: formatTime(came) }) })]);
-  item.querySelector('span').prepend(el('i', { class: 'dot', 'aria-hidden': 'true' }));
-  notes.prepend(item);
-  markLost(true);
-  sentEnd();
-  sentWait(true);
-  if (choiceDialog.open && !stopDirections()) renderChoice();
-  $('panel-said').textContent = item.textContent;
-}
-
-/**
- * The departures that have left go from the page as the server sent it, as
- * it is: a list left empty with them, and the day it is headed by.
- */
-function sentGone(at) {
-  for (const node of panel.querySelectorAll('.minutes[data-leaves]')) if (Number(node.dataset.leaves) < at - GONE_S) node.closest('li')?.remove();
-  // (the line that more come stays where the lists end, as it was put there)
-  sentEnd();
-  for (const list of panelBody.querySelectorAll('ul.rows')) {
-    if (list.children.length) continue;
-    if (list.previousElementSibling?.matches('.day-head')) list.previousElementSibling.remove();
-    list.remove();
-  }
-}
-
-/**
- * The page of a trip as the server sent it has its name and what it is: under
- * them, that its stops load, and where the connection is lost, that they load
- * once it is back (quiet: the head says why). It loads by itself then, as the
- * pages of a stop and a line as sent do: no button to try at once.
- */
-function sentWait(lost) {
-  if (!here().startsWith('trip/')) return;
-  const was = panelBody.querySelector('.sent-wait');
-  if (was?.dataset.lost === String(lost)) return;
-  was?.remove();
-  panelBody.append(el('p', { class: 'panel-empty sent-wait', data: { lost: String(lost) }, text: lost ? t('panel.loadFailed') : t('panel.loading') }));
-}
-
-/** Where its connection is lost, the page as the server sent it ends with the line that more come once it is back, as open details do (whenBack in panel.js). */
-function sentEnd() {
-  if (!panelHead.querySelector('.connection') || panelBody.querySelector('.when-back')) return;
-  const lists = [...panelBody.querySelectorAll('ul.rows')].filter((list) => !list.parentElement.closest('ul.rows'));
-  lists.at(-1)?.after(el('p', { class: 'panel-empty when-back', text: t('departures.whenBack') }));
-}
-
-/**
- * The stage of the page as the server sent it, as long as no answer comes
- * (staleness): its delays grey after STALE_S, as the note then says. Its
- * delays are not left out later: the page has them only as it was sent.
- */
-function sentStage(said) {
-  const came = pageCame + state.clockOffset;
-  if (now() - came < STALE_S || panel.classList.contains('stale')) return;
-  panel.classList.add('stale');
-  // (of a stop alone: a line's and a trip's as sent show no delays)
-  if (!here().startsWith('stop/')) return;
-  said.lastChild.textContent = t('panel.offlineStale', { time: formatTime(came) });
-  $('panel-said').textContent = said.textContent;
-}
-
 /** The minutes in the lists of departures and the clock of a board, as time goes on. */
 function tickTimes() {
   if (panel.hidden) return;
@@ -5197,18 +5256,10 @@ function tickTimes() {
   }
   // (one that has left goes: the details drawn anew without it, GONE_S; at most every few seconds, should one stay)
   const at = now();
-  if (at - goneDrawn > 5 && [...panel.querySelectorAll('.minutes[data-leaves]')].some((node) => Number(node.dataset.leaves) < at - GONE_S)) {
+  if (at - goneDrawn > 5 && state.selection?.data && !state.selection.left && [...panel.querySelectorAll('.minutes[data-leaves]')].some((node) => Number(node.dataset.leaves) < at - GONE_S)) {
     goneDrawn = at;
-    // (the page as the server sent it, with no details of its own yet: the rows that have left go from it as it is)
-    if (state.selection?.data) {
-      if (!state.selection.left) showSelection();
-    } else sentGone(at);
+    showSelection();
     return;
-  }
-  // (the page as the server sent it, long without an answer: see sentLost)
-  if (!state.selection?.data) {
-    const said = panelHead.querySelector('.connection>span');
-    if (said) sentStage(said);
   }
   const update = (node, text) => {
     if (node.textContent !== text) node.textContent = text;
@@ -6223,9 +6274,12 @@ async function loadArea() {
   pageTitle = area.siteTitle[language] ?? page.title;
   siteName = area.siteName;
   // (at the address of a stop or a line, the page keeps the title and the description of what it names, unless they are in
-  // another language than the one chosen here: then the page's own, and the title of what is open once it is there, see showAddress)
+  // another language than the one chosen here: then the page's own, and the title of what is open once it is there, see
+  // showAddress; of the details opened with the answer the page was sent with, which it titled before it knew the name of
+  // the instance, now, see takeSent)
   if (!here() || sentInAnother()) {
-    document.title = pageTitle;
+    const open = state.selection;
+    document.title = here() && open?.data && !open.left && open.path === here() ? detailsTitle(open) : pageTitle;
     document.querySelector('meta[name="description"]').content = area.siteDescription[language] ?? page.description;
   }
 
@@ -6319,12 +6373,15 @@ async function poll() {
       // The server has no timetable yet. Its own message is English and meant
       // for operators; visitors get a text chosen by the state and step.
       state.online = false;
+      state.polled = true;
       showBanner(loadingText(data));
       $('status').dataset.state = data.state === 'error' ? 'error' : 'schedule';
       $('status-text').textContent = data.state === 'error' ? t('status.noTimetable') : t('status.loading');
       delay = RETRY_LOADING_MS;
     } else if (res.ok) {
       showBanner(null);
+      // (open details that showed their delays as current, or not, before this answer, by the clock as it was: anew where that has changed)
+      const wasLive = realtimeState() === 'live';
       const offset = data.now - Date.now() / 1000;
       // The server clock arrives with up to ~1 s of jitter; follow it slowly so vehicles do not twitch.
       state.clockOffset = state.vehicles.size ? state.clockOffset * 0.8 + offset * 0.2 : offset;
@@ -6332,6 +6389,14 @@ async function poll() {
       // (the first answer, or the first one again after the server or the connection was away)
       if (!state.online) startAsking();
       // (once there is a timetable to look in)
+      // (the details of its address, which the page opened with the answer it was sent with: the map on them now that it is
+      // there, where they are still open; what was opened from them meanwhile stays as it is, see takeSent)
+      if (state.sentOpened) {
+        state.sentOpened = false;
+        const open = state.selection;
+        if (open?.unplaced && !open.left && open.path === here()) placeSent(open);
+        offerLanguage();
+      }
       if (!state.addressOpened) {
         state.addressOpened = true;
         // (where details at this address are open already and answer, as a row tapped before this answer opened them: not
@@ -6349,6 +6414,7 @@ async function poll() {
       // (the server has fetched the feed: from now on, without current data, there is an outage to say)
       if (data.realtime !== null) state.hadRealtime = true;
       state.saidOutage = realtimeState() === 'outage';
+      if (wasLive !== (realtimeState() === 'live') && state.selection?.data && !state.selection.left && !panel.hidden) showSelection();
       state.counts = data.counts;
       state.kinds = data.kinds ?? null;
       state.loaded = request;
@@ -6363,6 +6429,7 @@ async function poll() {
       const selection = state.selection;
       if (!state.online && !state.addressPending && selection && (selection.failing || !selection.loaded) && !selection.asking) setTimeout(loadSelection);
       state.online = true;
+      state.polled = true;
       state.heardAt = now();
       // (the server answers again: an address that could not be opened without it, now, once: see "a connection lost")
       if (state.addressPending) openPending();
@@ -6382,9 +6449,8 @@ async function poll() {
     console.warn('poll failed:', err);
     // (open details say it at once, as the card does, not after a question of their own that may hang: see "a connection lost")
     if (state.online && state.selection?.loaded && !panel.hidden && !state.selection.failing && !state.selection.left) disconnected(state.selection);
-    // (the page as the server sent it, before any answer: that the connection is lost, in its head as open details say it)
-    if (!state.selection && !panel.hidden && panelBody.hasAttribute('data-sent')) sentLost();
     state.online = false;
+    state.polled = true;
     $('status').dataset.state = 'error';
     $('status-text').textContent = t('status.noConnection');
     // The installed app also starts without a connection – but has nothing to show then.
@@ -6578,8 +6644,8 @@ function init() {
   const minutes = [t('departures.now'), t('departures.minutes', { count: MINUTES_MAX }), ...hours];
   document.documentElement.style.setProperty('--minutes-chars', Math.max(...minutes.map((text) => text.length)));
   buildControls();
-  // (the page of a trip as the server sent it: that its stops load, from the start, see sentWait)
-  if (panelBody.hasAttribute('data-sent')) sentWait(false);
+  // (the details of the page's address, with the answer the page was sent with)
+  takeSent();
   // (the header card is what this visitor gets now; where the page came that way, first.js has shown it already)
   document.documentElement.dataset.controls = 'shown';
   // (and what was typed into it before this script had arrived is looked for)
