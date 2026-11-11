@@ -689,18 +689,142 @@ test('where the connection is lost, the details say since when, and what did not
   assert.match(app, /state\.note \?\? \(state\.bannerOffline && !panel\.hidden \? null : state\.banner\) \?\? ''/);
 });
 
-test('what gets the keyboard focus in the details is in sight: clear of the timetable heading, in a sheet risen from its head, never on credits under it', () => {
+test('what gets the keyboard focus in the details is in sight: clear of the timetable heading, which waits at the foot only where there is room, in a sheet risen as far as it needs, never on credits under it', () => {
   const app = withoutComments(read('app.js'));
   // the keyboard's focus alone, and not the focus given back after an answer of the server, which leaves the list where it is
   assert.match(app, /if \(focusGivenBack \|\| !event\.target\.matches\(':focus-visible'\)\) return;/);
   assert.match(app, /focusGivenBack = true;\s*const same = which && focused >= 0[^\n]*\n\s*if \(again\) again\.focus/);
   // clear of the heading of a line's timetable waiting at the foot
   assert.match(app, /const bottom = pinned && !pinned\.contains\(target\) \? pinned\.getBoundingClientRect\(\)\.top : box\.bottom;/);
-  // a sheet down to its head rises to the middle height
-  assert.match(app, /panelBody\.clientHeight < event\.target\.offsetHeight\) \{\s*restSheet\(sheetHeights\(\)\[1\]\);/);
+  // a sheet too low for it rises to the lowest of its heights that leaves the room, for a row and for the timetable's key
+  assert.match(app, /const lacks = target\.offsetHeight \+ 16 - \(bottom - box\.top\);/);
+  // (the heading as it is after the browser scrolled the list for the focus, not as the last scroll left it)
+  assert.match(app, /if \(!narrowScreen\.matches \|\| state\.board !== null\) return null;\s*pinTimetable\(\);/);
+  assert.match(app, /return higher\.find\(\(height\) => height - now >= lacks\) \?\? higher\.at\(-1\) \?\? null;/);
+  assert.equal(app.match(/const height = sheetFor\((event\.target|heading)\);\s*if \(height !== null\) \{\s*restSheet\(height\);/g)?.length, 2);
+  // a line's timetable heading waits at the foot only where a stop and its ring fit beside it, else it comes after them
+  assert.match(app, /const loose = !panel\.classList\.contains\('dragging'\) && panelBody\.clientHeight - head\.offsetHeight < Math\.max\(row\?\.offsetHeight \?\? 0, 36\) \+ 16;/);
+  assert.match(app, /head\.classList\.toggle\('pinned', !loose && /);
+  assert.match(read('style.css'), /\.timetable-head\.loose \{ position: static; \}/);
   // the credits are out of the keyboard's way where the details lie over their middle, with the map's buttons moved
   assert.match(app, /credits\.inert = !panel\.hidden && box\.width > 0 && panel\.contains\(document\.elementFromPoint\(/);
   assert.match(app, /group\.style\.visibility = out \? 'hidden' : '';\s*\}\s*coverCredits\(\);/);
+});
+
+test('a dialog that says something opens on its text, which the keys scroll and which is a stop of its own while it is long', () => {
+  const app = withoutComments(read('app.js'));
+  const html = read('index.html');
+  for (const id of ['about', 'notes']) assert.match(html, new RegExp(`<div class="dialog-body" role="document" aria-labelledby="${id}-title" tabindex="-1">`));
+  // the one of the directions to choose is its choices, and opens on its button
+  assert.match(html, /<button[^>]*id="choice-close"[^>]*><\/button>\s*<div class="dialog-body">/);
+  assert.match(app, /\$\('about-open'\)\.addEventListener\('click', \(\) => openOnText\(aboutDialog\)\);/);
+  assert.match(app, /openOnText\(notesDialog\);/);
+  assert.match(app, /const scrollStop = \(text\) => \{ text\.tabIndex = text\.scrollHeight > text\.clientHeight \+ 1 \? 0 : -1; \};/);
+  assert.match(app, /dialog\.showModal\(\);\s*text\.scrollTop = 0;\s*scrollStop\(text\);\s*text\.focus\(\{ preventScroll: true \}\);/);
+  assert.match(app, /for \(const id of \['about', 'notes'\]\) textStops\.observe\(\$\(id\)\.querySelector\('\.dialog-body'\)\);/);
+  // its ring a frame inside the dialog's edge, over the button in its corner
+  assert.match(read('style.css'), /\.dialog:has\(> \.dialog-body:focus-visible\)::after \{ content: ""; position: absolute; inset: 0; z-index: 3; border: 2px solid var\(--accent\);/);
+});
+
+test('the map with the keyboard has its crosshair in the middle of its free part, and Enter opens what lies under it', () => {
+  const app = withoutComments(read('app.js'));
+  // where the card and the details leave the map free, a sheet that leaves too little of it coming down
+  // (as the keyboard comes onto the map, not as the card or a sheet changes later, which may be the visitor's own doing)
+  assert.match(app, /if \(arrived\) roomForCross\(\);\s*const was = cross\.placed \? cross\.point : null;[\s\S]*?cross\.view = \{ \.\.\.viewSize \};\s*clearMapButtons\(\);\s*const room = crossRoom\(\);\s*cross\.free = room\.padding;\s*cross\.covered = room\.covered;/);
+  assert.match(app, /placeCross\(true\);/);
+  // (one test for the room: a sheet down to the highest height at which the map fits; never against a hand)
+  assert.match(app, /const fitting = heights\.filter\(\(height\) => freeMap\(height\)\.fits\);/);
+  assert.match(app, /if \(panel\.classList\.contains\('dragging'\) \|\| \$\('controls'\)\.classList\.contains\('dragging'\)\) return;/);
+  // (on a wide screen too low for the map beside the card or below it, the strip below the card, clear of the details and the
+  // map's buttons; the card is left as the visitor has it)
+  assert.match(app, /const padding = \{ top: Math\.max\(card\.bottom, bubble\?\.bottom \?\? 0\) \+ margin, bottom: viewSize\.y - bottom \+ margin, left: margin, right: viewSize\.x - right \+ margin \};/);
+  // (the arrows go from mark to mark where one lies ahead within a step, in the way of the key; else the map's own step)
+  assert.match(app, /if \(along < 6 \|\| along > STEP_PX \|\| across > 0\.58 \* along\) continue;/);
+  // (a key held down, and the dots of a far view, travel as without the crosshair)
+  assert.match(app, /if \(event\.repeat \|\| map\.getZoom\(\) < LABEL_ZOOM\) \{\s*cross\.step = null;\s*return false;\s*\}/);
+  // (what a step goes for is the aim at once, held while it comes)
+  assert.match(app, /function aimStep\(hit\) \{\s*cross\.aim = hit;\s*cross\.hushed = null;\s*cross\.step = \{ key: hitKey\(hit\), until: performance\.now\(\) \+ 400 \};/);
+  // (of several on one spot, the one a tap opens first; a further press goes to the others before moving on)
+  assert.match(app, /const order = \(hit\) => \(hit\.above \? 0 : hit\.vehicle \? 1 : 2\);/);
+  assert.match(app, /const stacked = state\.hits\.filter\(\(hit\) => onSpot\(at, hit\) && !cross\.seen\.has\(hitKey\(hit\)\)\)/);
+  // (held while it comes, until its glide ends; the free map from where a sheet comes to rest; what was just aimed at moves
+  // with the crosshair where that moves after all)
+  assert.match(app, /else map\.once\('moveend', \(\) => \{\s*if \(cross\.step !== step\) return;\s*cross\.step = null;\s*if \(performance\.now\(\) >= step\.sayAt\) sayAim\(\);/);
+  assert.match(app, /const sized = panel\.classList\.contains\('sized'\) && parseFloat\(panel\.style\.height\);/);
+  // (back under the crosshair, a vehicle is held as after a step; a stale aim is not said)
+  assert.match(app, /cross\.aim = mark;\s*cross\.holdR = mark\.vehicle \? CROSS_PX \/ 2 \+ mark\.r : 0;/);
+  // (a stop whose name the map writes has a tooltip where a tap there would open something else)
+  assert.match(app, /const unseen = aim\?\.named && hitKey\(hitTest\(cross\.point\)\) !== hitKey\(aim\);/);
+  assert.match(app, /if \(keysOnMap\(\) && \(key === undefined \|\| hitKey\(cross\.aim\) === key\)\) line\.textContent = text;/);
+  // (Escape with nothing open puts the tooltip away until the aim changes, and only that where one showed before the key;
+  // the tooltip as wide as the free map lets it be)
+  assert.match(app, /addEventListener\('keydown', \(event\) => \{\s*const shown = !tooltip\.hidden;/);
+  assert.match(app, /if \(event\.key === 'Escape' && !state\.selection && keysOnMap\(\)\) \{\s*if \(shown\) event\.stopPropagation\(\);\s*cross\.hushed = hitKey\(cross\.aim\) \?\? '';/);
+  // (on any change of the map's size, what lies under the crosshair stays there, aimed at or not)
+  assert.match(app, /if \(grown\.x \|\| grown\.y \|\| \(\(cross\.aim \|\| cross\.settle\) && performance\.now\(\) < cross\.keepUntil\)\) map\.panBy\(\[-dx, -dy\], \{ duration: 0 \}\);/);
+  // (and not placed by the card or the sheet before MapLibre has taken a change of the map's size, which places it then)
+  assert.match(app, /const crossResized = new ResizeObserver\(\(\) => \{\s*const box = map\.getContainer\(\);\s*if \(keysOnMap\(\) && box\.clientWidth === viewSize\.x && box\.clientHeight === viewSize\.y\) placeCross\(\);\s*\}\);/);
+  assert.match(app, /tooltip\.style\.maxWidth = `\$\{Math\.max\(0, Math\.min\(320, right - left\)\)\}px`;/);
+  // (said soon after a step's glide)
+  assert.match(app, /const STEP_SAID_MS = 450;/);
+  assert.match(app, /if \(zoomKey\(event\) \|\| stepKey\(event\)\) return;/);
+  // (the settings close as the keyboard comes onto the map)
+  assert.match(app, /if \(!settings\.hidden\) showSettings\(false\);\s*\}\s*placeCross\(true\);/);
+  // (a notice of the last Enter goes as the map moves or the crosshair comes onto something)
+  assert.match(app, /if \(hit\) cross\.notice = null;/);
+  // (a stop comes back on the place of the mark that was aimed at)
+  assert.match(app, /const markAt = hit\.station \? map\.unproject\(\[hit\.x, hit\.y\]\) : null;\s*const opening = openHit\(hit\);/);
+  assert.match(app, /\{ station: hit\.station, at: markAt \}/);
+  // (back under it, what it opened is its aim again, held and said)
+  assert.match(app, /clearTimeout\(cross\.timer\);\s*cross\.timer = setTimeout\(sayAim, STEP_SAID_MS\);\s*if \(Math\.hypot\(mark\.x - at\.x, mark\.y - at\.y\) > 1\) return;/);
+  assert.match(app, /opening\.then\(\(opened\) => \{\s*if \(opened !== true\) cross\.opened = null;/);
+  assert.doesNotMatch(app, /forCross/);
+  // (on a phone an unfolded card folds first, as a tap on the map folds it)
+  assert.match(app, /if \(card\.unfolded\) \{\s*card\.unfolded = false;\s*showFold\(\);\s*if \(freeMap\(\)\.fits\) return;\s*\}/);
+  // (and where there is no free map at all, no tooltip over the details)
+  assert.match(app, /const text = cross\.covered \? null : /);
+  assert.match(app, /function clearOfCards\(\) \{\s*return freeMap\(\)\.padding;\s*\}/);
+  assert.match(read('style.css'), /left: var\(--cross-x, 50%\); top: var\(--cross-y, 50%\); width: 48px; height: 48px; margin: -24px 0 0 -24px;/);
+  // + and − zoom around it, and the map's own keys, which zoom around the middle of all of it, do not hear them
+  assert.match(app, /event\.preventDefault\(\);\s*event\.stopPropagation\(\);/);
+  assert.match(app, /const wanted = map\.getZoom\(\) \+ by \* \(event\.shiftKey \? 2 : 1\);/);
+  assert.match(app, /map\.easeTo\(\{ zoom, around: map\.unproject\(\[cross\.point\.x, cross\.point\.y\]\), duration: 300, easing: \(t\) => t \* \(2 - t\)/);
+  // (the first key after a click places and aims it before it acts)
+  assert.match(app, /if \(keysOnMap\(\) && !cross\.placed && event\.key !== 'Tab'\) \{\s*placeCross\(!\['Shift', 'Control', 'Alt', 'Meta', 'Escape'\]\.includes\(event\.key\)\);\s*aimCross\(\);\s*if \(event\.key === 'Enter'\) \{\s*event\.preventDefault\(\);\s*return;\s*\}\s*\}\s*if \(zoomKey\(event\) \|\| stepKey\(event\)\) return;/);
+  // the camera's middle is the map's own, as without the keyboard: the page's own moves of the map are not shifted
+  assert.doesNotMatch(app, /padding \}\);|setPadding/);
+  // what it aims at is what a tap there opens, held while it is inside, shown as for a mouse, and said in a line's words
+  assert.match(app, /const hit = held \|\| hitTest\(at\);/);
+  assert.match(app, /if \(keysOnMap\(\)\) \{\s*if \(!cross\.placed\) placeCross\(\);/);
+  // (not between a change of the map's size and its placing anew; what is on it moved by half the change)
+  assert.match(app, /const dx = was \? cross\.point\.x - was\.x - grown\.x \/ 2 : 0;/);
+  assert.match(app, /return vehicleName\(\{ name: v\.line, mode: v\.mode \}, \{ to: v\.to, delay: fresh \? v\.delay : null \}, drawing\(\)\);/);
+  assert.match(read('index.html'), /<p class="spoken" id="map-said" role="status"><\/p>/);
+  // the last input used has the tooltip: a mouse moving over the map, until a key
+  assert.match(app, /map\.getCanvas\(\)\.addEventListener\('keydown', \(event\) => \{\s*const shown = !tooltip\.hidden;\s*cross\.mouse = false;/);
+  // Enter opens it as a tap does, the keyboard going into its details; on nothing it says so and nothing changes
+  assert.match(app, /if \(hit\) openHit\(hit\);\s*else closePanel\(\);/);
+  assert.match(app, /if \(event\.key !== 'Enter' \|\| event\.repeat/);
+  // (a stop of a board is open already: the keyboard onto the board)
+  assert.match(app, /const opening = openHit\(hit\);\s*if \(!opening\) \{\s*panel\.focus\(\{ preventScroll: true \}\);\s*return;\s*\}\s*cross\.opened = /);
+  // (a favourite opened by its address: into its details once they are there, if the keyboard waited)
+  assert.match(app, /if \(opened === null \|\| !keysOnMap\(\)\) return;\s*if \(opened\) intoDetails\(\);/);
+  assert.match(app, /const moves = state\.moves;\s*const res = await askServer\(`api\/address\?path=\$\{encodeURIComponent\(path\)\}`\)\.catch\(\(\) => null\);\s*if \(state\.moves !== moves\) return null;/);
+  // (back under the crosshair by its mark, nearest of its places, with the next frame)
+  assert.match(app, /cross\.settle = \{ key: opened\.key, until: performance\.now\(\) \+ 1000 \};/);
+  // (what Enter opened, opened again by its address, is known by its name and place)
+  assert.match(app, /return Boolean\(at\?\.name && Number\.isFinite\(at\.lat\) && Number\.isFinite\(at\.lon\) && sameStop\(opened\.station, at\)\);/);
+  assert.match(app, /noticeOnMap\(t\('map\.nothing'\)\);\s*return;/);
+  // (a favourite whose address does not answer says so beside it as well)
+  assert.match(app, /cross\.opened = null;\s*noticeOnMap\(t\('status\.noConnection'\)\);/);
+  // (Enter as the first key after a click shows the crosshair, and opens nothing not yet in sight)
+  assert.match(app, /if \(event\.key === 'Enter'\) \{\s*event\.preventDefault\(\);\s*return;\s*\}/);
+  // the details give the keyboard back to the map, also where they took the place of others, and what it opened lies under
+  // the crosshair again only as those very details close
+  assert.match(app, /panelOpener = map\.getCanvas\(\);/);
+  assert.match(app, /if \(!openedByCross\(state\.selection\)\) cross\.opened = null;/);
+  assert.match(app, /if \(!opened \|\| !keysOnMap\(\) \|\| !panel\.hidden\) return;/);
+  assert.match(app, /cross\.opened = null;\s*setSheetHeight\(null\);/);
 });
 
 test('long without an answer, the details show their delays grey and then go by the timetable alone; Back without a connection goes to what the page holds', () => {

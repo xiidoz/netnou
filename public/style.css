@@ -544,15 +544,16 @@ button { font: inherit; color: inherit; }
   box-shadow: inset 0 0 0 1.5px var(--veil-line);
 }
 
-/* The map with the keyboard (WCAG 2.4.7): a frame inside its edge, as rows have theirs, and a cross at its middle, where
-   + and − zoom to; a cross, as rings on the map are the chosen stop and your stop. Over the canvas, which covers what lies
-   under it, with a halo of the ground for water and the dark map. */
+/* The map with the keyboard (WCAG 2.4.7): a frame inside its edge, as rows have theirs, and a crosshair in the middle of
+   the map that the card and the details leave free (app.js, "the crosshair"), where + and − zoom to and Enter opens what
+   lies in its open middle, as wide as a finger's tap takes (28 px); a crosshair, as rings on the map are the chosen stop and
+   your stop. Over the canvas, which covers what lies under it, with a halo of the ground for water and the dark map. */
 .maplibregl-canvas:focus-visible { outline: none; }
 .maplibregl-map:has(.maplibregl-canvas:focus-visible)::before,
 .maplibregl-map:has(.maplibregl-canvas:focus-visible)::after { content: ""; position: absolute; z-index: 1; pointer-events: none; }
 .maplibregl-map:has(.maplibregl-canvas:focus-visible)::before { inset: 3px; border: 3px solid var(--accent); box-shadow: 0 0 0 3px var(--bg), inset 0 0 0 3px var(--bg); }
 .maplibregl-map:has(.maplibregl-canvas:focus-visible)::after {
-  left: 50%; top: 50%; width: 30px; height: 30px; margin: -15px 0 0 -15px;
+  left: var(--cross-x, 50%); top: var(--cross-y, 50%); width: 48px; height: 48px; margin: -24px 0 0 -24px;
   background: linear-gradient(var(--accent) 0 0) 50% 0 / 3px 10px no-repeat, linear-gradient(var(--accent) 0 0) 50% 100% / 3px 10px no-repeat,
     linear-gradient(var(--accent) 0 0) 0 50% / 10px 3px no-repeat, linear-gradient(var(--accent) 0 0) 100% 50% / 10px 3px no-repeat;
   filter: drop-shadow(0 0 1px var(--bg)) drop-shadow(0 0 1px var(--bg));
@@ -977,6 +978,8 @@ button.line-vehicle { position: absolute; left: -18px; top: -18px; width: 36px; 
    the timetable it rests above the days. */
 .timetable-head { position: sticky; bottom: 0; z-index: 3; margin: 4px 0 0; font: inherit; border-top: 1px solid var(--border); background: var(--bg); }
 .timetable-head.pinned { box-shadow: 0 -6px 12px -8px rgb(0 0 0 / 0.25); }
+/* (where the details are too low for it and a stop beside it with its ring, after the stops: app.js) */
+.timetable-head.loose { position: static; }
 .to-timetable { display: flex; align-items: center; justify-content: space-between; gap: 12px; width: 100%; padding: 10px 14px; border: 0; background: none; color: var(--text); font: inherit; text-align: left; cursor: pointer; }
 /* (inside its edge: the details scroll and would cut off a ring outside it at their foot) */
 .to-timetable:focus-visible { outline-offset: -2px; }
@@ -1251,6 +1254,10 @@ li:last-child > .row.stop .rail::before { bottom: 50%; }
 .dialog[open] { display: flex; flex-direction: column; }
 .dialog::backdrop { background: rgb(0 0 0 / 0.4); }
 .dialog-body { overflow-y: auto; overscroll-behavior: contain; padding: 16px 18px 18px; }
+/* Its text with the keyboard (openOnText in app.js): a frame inside the dialog's edge, as the map has one, over the
+   button in its corner. */
+.dialog-body:focus-visible { outline: none; }
+.dialog:has(> .dialog-body:focus-visible)::after { content: ""; position: absolute; inset: 0; z-index: 3; border: 2px solid var(--accent); border-radius: inherit; pointer-events: none; }
 .dialog h2 { margin: 0 36px 2px 0; font-size: 16px; font-weight: 650; }
 .dialog h3 { margin: 14px 0 3px; font-size: 14px; font-weight: 650; }
 .dialog p { margin: 0; line-height: 1.45; }

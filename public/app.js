@@ -13,7 +13,7 @@ import { APP_NAME, READMES, chooseLanguage, dayOf, formatHour, formatList, forma
 import { FAVOURITE_NAME_ZOOM, HEART_MIDDLE, PLACES_ZOOM, RAIL_MODES, heartMark, joiningLines, mergePlaces, namePrecedence, namedAt, placeNames, stopMark, townToShow, townsAlong, withoutStyleStops } from './stops.js';
 import { favouritesFrom, isFavourite, lineFavourite, sameStop, stopFavourite, withChoice, withFavourite } from './favourites.js';
 import { choiceValue, readChoice, toggled } from './choice.js';
-import { DELAY_MAJOR_S, DELAY_MINOR_S, DELAY_SEVERE_S, MINUTES_MAX, NOTE_CHARS, badge as badgeOf, choiceChip as choiceChipOf, clockOf, delayCell as delayCellOf, delayClass, delayNode as delayNodeOf, delaySum as delaySumOf, unknownDelay as unknownDelayOf, delayFlag, delayText, departureLists, departuresSub as departuresSubOf, directionSign as directionSignOf, leavesAt, lineBadge, lineHead, lineLists, lineSaid as lineSaidOf, lineStops, lineTimetable, leftAlready, GONE_S, whenBack, minutesNode as minutesNodeOf, twoKinds, vehicleSpot, VEHICLE_R, panelHead as panelHeadOf, stopHeading, stopRing, stopSaid, stopSign, stopToday, tallMark, tomorrowAt as tomorrowAtOf, untilText as untilTextOf, vehicleLabel, warningSign as warningSignOf, warns } from './panel.js';
+import { DELAY_MAJOR_S, DELAY_MINOR_S, DELAY_SEVERE_S, MINUTES_MAX, NOTE_CHARS, badge as badgeOf, choiceChip as choiceChipOf, clockOf, delayCell as delayCellOf, delayClass, delayNode as delayNodeOf, delaySum as delaySumOf, unknownDelay as unknownDelayOf, delayFlag, delayText, departureLists, departuresSub as departuresSubOf, directionSign as directionSignOf, leavesAt, lineBadge, lineHead, lineLists, lineSaid as lineSaidOf, lineStops, lineTimetable, leftAlready, GONE_S, whenBack, minutesNode as minutesNodeOf, twoKinds, vehicleSpot, VEHICLE_R, panelHead as panelHeadOf, stopHeading, stopRing, stopSaid, stopSign, stopToday, tallMark, tomorrowAt as tomorrowAtOf, untilText as untilTextOf, vehicleLabel, vehicleName, warningSign as warningSignOf, warns } from './panel.js';
 import { BOARD_MAX, BOARD_SHARE, BOARD_STOPS, boardBlocks, boardQuery, boardShare, displayQuery, ledBy, readBoard, readDisplay, readStops } from './display.js';
 import { mdiArrowCollapse, mdiArrowExpand, mdiCheck, mdiChevronLeft, mdiChevronRight, mdiCityVariantOutline, mdiFullscreen, mdiFullscreenExit, mdiHeart, mdiHeartOutline, mdiMinusCircleOutline, mdiPlus } from './vendor/material-design-icons/icons.js';
 import { AttributionControl, MapLibreMap, NavigationControl } from './vendor/maplibre-gl/maplibre-gl.mjs';
@@ -1635,6 +1635,13 @@ function draw() {
   state.hits = hits;
   state.covers = covers;
   state.chosenAt = chosen;
+  // (what the crosshair aims at, among what this frame has drawn: see "the crosshair"; placed first where the keyboard came by a
+  // click and Escape; not between a change of the map's size and its placing anew, when what is on it has moved and it not yet)
+  if (keysOnMap()) {
+    if (!cross.placed) placeCross();
+    const box = map.getContainer();
+    if (cross.view.x === viewSize.x && cross.view.y === viewSize.y && box.clientWidth === viewSize.x && box.clientHeight === viewSize.y) aimCross();
+  } else if (cross.aim) dropAim();
   nextFrame();
 }
 
@@ -1798,6 +1805,8 @@ map.on('mousemove', (event) => {
   tooltip.hidden = !hit || !hovering.matches || Boolean(hit.named);
   if (tooltip.hidden) return;
   tooltip.textContent = hit.vehicle ? vehicleSummary(hit.vehicle) : hit.station.name;
+  // (as wide as style.css has it: the crosshair's may have been narrower)
+  tooltip.style.maxWidth = '';
   tooltip.style.transform = `translate(${event.point.x + 14}px, ${event.point.y + 14}px)`;
 });
 // It goes when the pointer leaves the map, when the map moves away under it,
@@ -1811,16 +1820,579 @@ map.on('click', (event) => {
   if (FIXED || performance.now() - cardFoldedAt < 700) return;
   hideTooltip();
   const hit = hitTest(event.point);
-  if (hit?.vehicle) select('trip', hit.vehicle.id, { hint: { line: hit.vehicle.line, mode: hit.vehicle.mode, to: hit.vehicle.to } });
-  else if (hit?.station) {
-    // (the stops of a board are open already, the one it is of and its further stops)
-    if (onBoard(hit.station)) return;
-    if (hit.station.id) select('station', hit.station.id, { hint: { name: hit.station.name } });
-    else openFavouriteStop(hit.station);
-  } else closePanel();
-  // (what was tapped is not to end up under its own details)
-  if (hit) clearOfSheet(hit.y);
+  if (hit) openHit(hit);
+  else closePanel();
 });
+
+/** Opens what a tap or Enter at the crosshair hits (hitTest): the trip of a vehicle, the departures of a stop. */
+function openHit(hit) {
+  if (hit.vehicle) select('trip', hit.vehicle.id, { hint: { line: hit.vehicle.line, mode: hit.vehicle.mode, to: hit.vehicle.to } });
+  else {
+    // (the stops of a board are open already, the one it is of and its further stops)
+    if (onBoard(hit.station)) return false;
+    if (!hit.station.id) {
+      // (a favourite whose stop is not loaded: by its address, which takes a moment)
+      clearOfSheet(hit.y);
+      return openFavouriteStop(hit.station);
+    }
+    select('station', hit.station.id, { hint: { name: hit.station.name } });
+  }
+  // (what was tapped is not to end up under its own details)
+  clearOfSheet(hit.y);
+  return true;
+}
+
+// ---------- the crosshair ----------
+
+// The map with the keyboard shows a crosshair (style.css), in the middle of
+// the map that the card and the details leave free, as a line is fitted
+// into view there (clearOfCards); a sheet that leaves too little of it
+// comes down for it. The arrow keys move the map under it, and + and − zoom
+// around it (zoomKey: the map's own keys zoom around the middle of all of
+// it). What lies in its open middle is what a tap there opens (hitTest),
+// shown as for a mouse resting there: the tooltip beside it, a dot drawn as
+// zoomed in. Once named, it stays the aim while it is inside, so that what
+// passes by does not take its place; and it is said for a screen reader once
+// it has rested there for a moment with the map still, a vehicle in the
+// words of a line's vehicles. Enter opens it, and the keyboard goes into its
+// details; when they close, the keyboard comes back to the map, and what it
+// opened lies under the crosshair again.
+const cross = {
+  point: { x: 0, y: 0 }, // where it is on the map, in px
+  free: { top: 0, bottom: 0, left: 0, right: 0 }, // how far the free map is from the edges of the map (clearOfCards)
+  covered: false, // whether that is no free map at all, the window too small for one (freeMap): no tooltip over the details then
+  edges: { top: 0, bottom: 0, left: 0, right: 0 }, // where the free map ends, in px of the map: the tooltip stays inside them
+  placed: false, // whether it is placed for the keyboard on the map now (placeCross), until that leaves (dropAim)
+  settle: null, // what Enter opened, back under it: its mark brought onto it with the next frame (aimCross), { key, until }
+  step: null, // what a step of the arrow keys goes for: the aim while it comes (stepKey), { key, until }
+  holdR: 0, // how far from the crosshair what a step aimed at stays the aim: a moving one while it still touches the crosshair
+  seen: new Set(), // what the arrows have aimed at on the spot under the crosshair, of several drawn there (stepKey)
+  keepUntil: 0, // until when what was just aimed at, by a step or coming back, moves with the crosshair (placeCross)
+  hushed: null, // what Escape put the tooltip away for, until the aim changes: its key, or '' for no aim
+  view: { x: 0, y: 0 }, // the size of the map it was placed for: when that changes, MapLibre keeps its middle (placeCross)
+  aim: null, // the hit it aims at, while the map has the keyboard
+  said: null, // the key of what was said of it last (hitKey)
+  timer: null, // until it is said
+  opened: null, // what Enter opened, to have it under the crosshair as its details close: { vehicle: id } or { station }
+  notice: null, // what shows beside it for a moment after an Enter, in place of the aim: { text, until } (performance.now)
+  mouse: false, // a mouse moving over the map has the tooltip and the zoomed-in dot, until a key is pressed
+};
+
+/** Whether the keyboard is on the map: its frame and crosshair show then (style.css). */
+const keysOnMap = () => !FIXED && document.activeElement === map.getCanvas() && map.getCanvas().matches(':focus-visible');
+
+/** What a hit is, the same from frame to frame. */
+const hitKey = (hit) => (!hit ? null : hit.vehicle ? `vehicle ${hit.vehicle.id}` : `stop ${hit.station.id ?? `${hit.station.name} ${hit.station.lat} ${hit.station.lon}`}`);
+
+/**
+ * The crosshair where the keyboard on the map has it, or gone with it; with
+ * room made for it as the keyboard comes onto the map (arrived), and not as
+ * the card or a sheet changes later, which may be the visitor's own doing.
+ */
+function placeCross(arrived = false) {
+  if (!keysOnMap()) {
+    dropAim();
+    return;
+  }
+  if (arrived) roomForCross();
+  const was = cross.placed ? cross.point : null;
+  // (where the map has changed its size since, MapLibre kept its middle: what is on it moved by half the change)
+  const grown = was ? { x: viewSize.x - cross.view.x, y: viewSize.y - cross.view.y } : { x: 0, y: 0 };
+  cross.view = { ...viewSize };
+  // (the map's buttons where the details now leave them: as details close, they still stand beside them until their own
+  // observer moves them back, after this one)
+  clearMapButtons();
+  const room = crossRoom();
+  cross.free = room.padding;
+  cross.covered = room.covered;
+  cross.edges = room.edges ?? edgesOf(room.padding);
+  cross.point = {
+    x: cross.free.left + (viewSize.x - cross.free.left - cross.free.right) / 2,
+    y: cross.free.top + (viewSize.y - cross.free.top - cross.free.bottom) / 2,
+  };
+  map.getContainer().style.setProperty('--cross-x', `${Math.round(cross.point.x)}px`);
+  map.getContainer().style.setProperty('--cross-y', `${Math.round(cross.point.y)}px`);
+  const dx = was ? cross.point.x - was.x - grown.x / 2 : 0;
+  const dy = was ? cross.point.y - was.y - grown.y / 2 : 0;
+  if (Math.hypot(dx, dy) > 1) {
+    cross.step = null;
+    // (what lies under it stays there as the map changes its size, aimed at or not; and what was just aimed at, as the
+    // card or a sheet moves the crosshair)
+    if (grown.x || grown.y || ((cross.aim || cross.settle) && performance.now() < cross.keepUntil)) map.panBy([-dx, -dy], { duration: 0 });
+    // (else what lies under it now, with the hits of the last frame: the map has not moved)
+    else {
+      cross.placed = true;
+      aimCross();
+    }
+  }
+  cross.placed = true;
+  askDraw();
+}
+
+/**
+ * Room for the crosshair on a phone, where the card and a sheet leave the map
+ * none that fits it (freeMap): an unfolded card folds, as a tap on the map
+ * folds it, and where that is not enough the sheet comes down to the highest
+ * of its heights that leaves the room, else its lowest, as one rises for what
+ * in its list gets the keyboard (sheetFor). Never while a hand moves the card
+ * or the sheet. (On a wide screen the crosshair finds its room itself:
+ * crossRoom.)
+ */
+function roomForCross() {
+  if (!narrowScreen.matches || panel.hidden || state.board !== null || freeMap().fits) return;
+  if (panel.classList.contains('dragging') || $('controls').classList.contains('dragging')) return;
+  if (card.unfolded) {
+    card.unfolded = false;
+    showFold();
+    if (freeMap().fits) return;
+  }
+  const heights = sheetHeights();
+  const fitting = heights.filter((height) => freeMap(height).fits);
+  restSheet(fitting.length ? Math.max(...fitting) : heights[0]);
+}
+
+/**
+ * Where the crosshair goes: the map the card and the details leave free
+ * (freeMap); else, on a wide screen too low for that, the strip below the
+ * card, beside the details, clear of the map's buttons and above the map's
+ * credits, with small margins; covered where even that is too small for it,
+ * though it is put there all the same (no tooltip then, and it is said).
+ */
+function crossRoom() {
+  const free = freeMap();
+  // (the settings, open over the map, count with the card: the crosshair below them)
+  const bubble = $('settings').hidden ? null : $('settings').getBoundingClientRect();
+  if (narrowScreen.matches) {
+    const top = Math.max(free.padding.top, bubble ? bubble.bottom + 24 : 0);
+    const covered = !free.fits || viewSize.y - top - free.padding.bottom < CROSS_PX;
+    return { padding: { ...free.padding, top }, covered };
+  }
+  if (free.fits && (!bubble || bubble.right < viewSize.x - free.padding.right - (viewSize.x - free.padding.left - free.padding.right) / 2 - CROSS_PX)) return { padding: free.padding, covered: false };
+  const margin = 8;
+  const card = $('controls').getBoundingClientRect();
+  const over = !panel.hidden && state.board === null;
+  const buttons = [...map.getContainer().querySelectorAll('.maplibregl-ctrl-bottom-right > .maplibregl-ctrl-group')]
+    .map((group) => group.getBoundingClientRect()).filter((box) => box.width > 0);
+  const right = Math.min(over ? panel.getBoundingClientRect().left : viewSize.x, ...buttons.map((box) => box.left));
+  const credits = map.getContainer().querySelector('.maplibregl-ctrl-attrib')?.getBoundingClientRect();
+  const bottom = credits && credits.width > 0 && credits.left < right ? credits.top : viewSize.y;
+  const padding = { top: Math.max(card.bottom, bubble?.bottom ?? 0) + margin, bottom: viewSize.y - bottom + margin, left: margin, right: viewSize.x - right + margin };
+  const width = viewSize.x - padding.left - padding.right;
+  const height = viewSize.y - padding.top - padding.bottom;
+  if (width >= CROSS_PX && height >= CROSS_PX) return { padding, covered: false, edges: { top: padding.top - margin, bottom, left: 0, right } };
+  return { padding: width > 0 && height > 0 ? padding : free.padding, covered: true };
+}
+// (how big the crosshair is, style.css)
+const CROSS_PX = 48;
+
+/**
+ * Where the free map ends for the tooltip beside the crosshair: the margins
+ * that keep a line clear of the cards (clearOfCards) taken back to a few px,
+ * and short of the map's credits and buttons where they reach into it.
+ */
+function edgesOf(padding) {
+  const back = (narrowScreen.matches ? 24 : 40) - 8;
+  const edges = { top: padding.top - back, bottom: viewSize.y - padding.bottom + back, left: padding.left - back, right: viewSize.x - padding.right + back };
+  const credits = map.getContainer().querySelector('.maplibregl-ctrl-attrib')?.getBoundingClientRect();
+  if (credits?.width && credits.left < edges.right && credits.right > edges.left) edges.bottom = Math.min(edges.bottom, credits.top - 4);
+  for (const group of map.getContainer().querySelectorAll('.maplibregl-ctrl-bottom-right > .maplibregl-ctrl-group')) {
+    const box = group.getBoundingClientRect();
+    if (box.width && box.top < edges.bottom && box.bottom > edges.top) edges.right = Math.min(edges.right, box.left - 4);
+  }
+  return edges;
+}
+
+/** No aim, and nothing said of it: the keyboard has left the map. */
+function dropAim() {
+  cross.placed = false;
+  cross.step = null;
+  cross.holdR = 0;
+  cross.hushed = null;
+  cross.seen.clear();
+  if (!cross.aim && !cross.notice && !$('map-said').textContent) return;
+  cross.aim = null;
+  cross.said = null;
+  cross.notice = null;
+  clearTimeout(cross.timer);
+  $('map-said').textContent = '';
+  if (!cross.mouse) {
+    hideTooltip();
+    peekAt(null);
+  }
+}
+
+/** What the crosshair aims at, once a frame has its hits (draw): what it named while that is inside, else what is there now. */
+function aimCross() {
+  const at = cross.point;
+  // (what Enter opened, back from its details: its mark, nearest of its places, onto the crosshair, once)
+  if (cross.settle) {
+    const { settle } = cross;
+    const mark = performance.now() < settle.until && state.hits.filter((hit) => hitKey(hit) === settle.key)
+      .sort((a, b) => Math.hypot(a.x - at.x, a.y - at.y) - Math.hypot(b.x - at.x, b.y - at.y))[0];
+    cross.settle = null;
+    if (mark && Math.hypot(mark.x - at.x, mark.y - at.y) < 120) {
+      // (it is the aim again, held while it is inside the crosshair as after a step, and said as soon: not a vehicle within
+      // reach that a tap there would take first)
+      cross.aim = mark;
+      cross.holdR = mark.vehicle ? CROSS_PX / 2 + mark.r : 0;
+      if (Math.hypot(mark.x - at.x, mark.y - at.y) > 1) map.panBy([mark.x - at.x, mark.y - at.y], { duration: 0 });
+      clearTimeout(cross.timer);
+      cross.timer = setTimeout(sayAim, STEP_SAID_MS);
+      if (Math.hypot(mark.x - at.x, mark.y - at.y) > 1) return;
+    }
+  }
+  const key = hitKey(cross.aim);
+  // (the nearest mark of what it aims at: held while it is inside, while a step brings it there, or as wide as that step said)
+  const mine = key && state.hits.filter((hit) => hitKey(hit) === key)
+    .sort((a, b) => Math.hypot(a.x - at.x, a.y - at.y) - Math.hypot(b.x - at.x, b.y - at.y))[0];
+  const coming = cross.step?.key === key && performance.now() < cross.step.until;
+  const held = mine && (coming || Math.hypot(mine.x - at.x, mine.y - at.y) <= Math.max(mine.r, cross.holdR)) ? mine : null;
+  const hit = held || hitTest(at);
+  if (hitKey(hit) !== key) {
+    cross.step = null;
+    cross.holdR = 0;
+    cross.seen.clear();
+    clearTimeout(cross.timer);
+    // (a notice of the last Enter is not true of what it has come onto; a tooltip put away is back for what is new)
+    if (hit) cross.notice = null;
+    cross.hushed = null;
+    if (!hit) cross.said = null;
+    else if (!map.isMoving()) cross.timer = setTimeout(sayAim, AIM_SAID_MS);
+  }
+  cross.aim = hit;
+  showAim();
+}
+
+// (how long the crosshair rests on something before it is said)
+const AIM_SAID_MS = 1000;
+
+/** The aim beside the crosshair, as a mouse resting there has it: the tooltip and the dot drawn as zoomed in. */
+function showAim() {
+  if (cross.mouse) return;
+  const { aim } = cross;
+  peekAt(aim?.vehicle && map.getZoom() < LABEL_ZOOM ? aim.vehicle.id : null);
+  const notice = cross.notice && performance.now() < cross.notice.until ? cross.notice.text : null;
+  // (put away by Escape, until the aim changes)
+  if (cross.hushed !== null && cross.hushed === (hitKey(aim) ?? '')) {
+    hideTooltip();
+    return;
+  }
+  // (not while the map moves under it, not a stop whose name the map writes already where a tap there opens it anyway, and
+  // not over the details where the window leaves no free map: said all the same)
+  const unseen = aim?.named && hitKey(hitTest(cross.point)) !== hitKey(aim);
+  const text = cross.covered ? null : notice ?? (!aim || map.isMoving() || (aim.named && !unseen) ? null : aim.vehicle ? vehicleSummary(aim.vehicle) : aim.station.name);
+  if (!text) {
+    hideTooltip();
+    return;
+  }
+  if (tooltip.hidden || tooltip.textContent !== text) {
+    tooltip.textContent = text;
+    tooltip.hidden = false;
+  }
+  // (beside the end of its right arm, or of its left one where the free map ends too soon on the right, or below or above
+  // it where neither side has the room, as on a phone; inside the free map's own edges)
+  const at = cross.point;
+  const { top, bottom, left, right } = cross.edges;
+  tooltip.style.maxWidth = `${Math.max(0, Math.min(320, right - left))}px`;
+  const width = tooltip.offsetWidth;
+  const height = tooltip.offsetHeight;
+  const gap = 28; // (past the end of an arm, 24 px from its middle)
+  const below = at.y + gap + height <= bottom;
+  const above = at.y - gap - height >= top;
+  let x;
+  let y;
+  if (at.x + gap + width <= right) [x, y] = [at.x + gap, at.y - height / 2];
+  else if (at.x - gap - width >= left) [x, y] = [at.x - gap - width, at.y - height / 2];
+  else if (below || above) [x, y] = [Math.min(Math.max(at.x - width / 2, left), right - width), below ? at.y + gap : at.y - gap - height];
+  // (none where neither beside it nor below or above it is free map, or where it would leave the screen: said all the same)
+  if (x === undefined || x < 0 || y < 0 || y + height > viewSize.y) {
+    hideTooltip();
+    return;
+  }
+  tooltip.style.transform = `translate(${Math.round(x)}px, ${Math.round(y)}px)`;
+}
+
+/** Says what the crosshair aims at, once, where it still does and the map is still. */
+function sayAim() {
+  const { aim } = cross;
+  if (!keysOnMap() || !aim || map.isMoving() || hitKey(aim) === cross.said) return;
+  cross.said = hitKey(aim);
+  sayOnMap(aimName(aim), cross.said);
+}
+
+/** A notice beside the crosshair for a moment (two seconds), said as well. */
+function noticeOnMap(text) {
+  cross.notice = { text, until: performance.now() + 2000 };
+  cross.hushed = null;
+  sayOnMap(text);
+  showAim();
+  setTimeout(() => {
+    if (cross.notice && performance.now() >= cross.notice.until) {
+      cross.notice = null;
+      showAim();
+    }
+  }, 2000);
+}
+
+/** A line about the map for a screen reader: emptied first, so that the same line again is said again; of an aim, only while it still is. */
+function sayOnMap(text, key) {
+  const line = $('map-said');
+  line.textContent = '';
+  setTimeout(() => {
+    if (keysOnMap() && (key === undefined || hitKey(cross.aim) === key)) line.textContent = text;
+  });
+}
+
+/** What the crosshair aims at, in words: a stop, or a vehicle as a line's vehicles are named (panel.js). */
+function aimName(hit) {
+  if (hit.station) return t('map.aimStop', { name: hit.station.name });
+  const v = hit.vehicle;
+  // (its delay only while the page has it as it is: not once the connection has been lost for a while, see "a connection lost")
+  const fresh = realtimeState() === 'live' && staleness() === 0;
+  return vehicleName({ name: v.line, mode: v.mode }, { to: v.to, delay: fresh ? v.delay : null }, drawing());
+}
+
+/** Whether these details are the ones Enter on the map opened (cross.opened): a stop also by its place, as favourites are. */
+function openedByCross(selection) {
+  const { opened } = cross;
+  if (!opened || !selection) return false;
+  if (opened.vehicle) return selection.type === 'trip' && selection.id === opened.vehicle;
+  if (selection.type !== 'station') return false;
+  if (opened.station.id && selection.id === opened.station.id) return true;
+  // (opened again by its address, as the way back does, or as a favourite without its stop loaded: by its name and place)
+  const at = selection.data ?? selection.at;
+  return Boolean(at?.name && Number.isFinite(at.lat) && Number.isFinite(at.lon) && sameStop(opened.station, at));
+}
+
+/**
+ * + and − zoom around the crosshair, as the map's own keys zoom around the
+ * middle of all of it (MapLibre listens on the canvas's container, after the
+ * canvas, and does not hear them then): by one level, by two with Shift.
+ */
+function zoomKey(event) {
+  const by = { 61: 1, 107: 1, 171: 1, 187: 1, 189: -1, 109: -1, 173: -1 }[event.keyCode];
+  if (!by || event.altKey || event.ctrlKey || event.metaKey || !keysOnMap()) return false;
+  event.preventDefault();
+  event.stopPropagation();
+  cross.step = null;
+  // (as MapLibre's own keys go: from the zoom it is at, as far as the map's snap allows, easing out)
+  const snap = map.getZoomSnap?.() ?? 0;
+  const wanted = map.getZoom() + by * (event.shiftKey ? 2 : 1);
+  const zoom = snap ? Math.round(wanted / snap) * snap : wanted;
+  map.easeTo({ zoom, around: map.unproject([cross.point.x, cross.point.y]), duration: 300, easing: (t) => t * (2 - t), easeId: 'keyboardHandler' }, { originalEvent: event });
+  return true;
+}
+
+map.getCanvas().addEventListener('focus', () => {
+  // (come by the keyboard, the input used last: the tooltip is the crosshair's, where a mouse rests on the map)
+  if (keysOnMap()) {
+    cross.mouse = false;
+    // (the settings, open over the map, close as the keyboard comes onto it, as they do at a touch beside them)
+    if (!settings.hidden) showSettings(false);
+  }
+  placeCross(true);
+  // (back from the details Enter opened, as they closed: with what it opened under the crosshair again, where it still is)
+  const { opened } = cross;
+  cross.opened = null;
+  if (!opened || !keysOnMap() || !panel.hidden) return;
+  const where = opened.vehicle ? state.vehicles.get(opened.vehicle) : { lat: opened.at.lat, lon: opened.at.lng };
+  if (!Number.isFinite(where?.lat) || !Number.isFinite(where?.lon)) return;
+  map.easeTo({ center: [where.lon, where.lat], offset: [cross.point.x - viewSize.x / 2, cross.point.y - viewSize.y / 2], duration: 0 });
+  // (where its mark is drawn beside its place, as a stop of several places or a vehicle beside others: that, with the next frame)
+  cross.settle = { key: opened.key, until: performance.now() + 1000 };
+  cross.keepUntil = performance.now() + 600;
+});
+map.getCanvas().addEventListener('blur', () => placeCross());
+map.getCanvas().addEventListener('keydown', (event) => {
+  // (a tooltip showing before this key, not one this key brings: Escape)
+  const shown = !tooltip.hidden;
+  // (the input used last has the tooltip: a key, after the mouse)
+  cross.mouse = false;
+  // (a click's focus becomes the keyboard's with its first key: the crosshair is placed then, and aims, before the key acts)
+  if (keysOnMap() && !cross.placed && event.key !== 'Tab') {
+    // (room made only for a key that acts on the map: not for Shift alone, as before a drag, nor for Escape)
+    placeCross(!['Shift', 'Control', 'Alt', 'Meta', 'Escape'].includes(event.key));
+    aimCross();
+    // (Enter then shows the crosshair and what it aims at: what was not in sight is not opened; the next Enter opens it)
+    if (event.key === 'Enter') {
+      event.preventDefault();
+      return;
+    }
+  }
+  if (zoomKey(event) || stepKey(event)) return;
+  // (Escape with nothing open puts the tooltip away, until the crosshair aims at something else, WCAG 1.4.13; what is open
+  // Escape closes, see "the way back")
+  if (event.key === 'Escape' && !state.selection && keysOnMap()) {
+    // (what is on top first: a tooltip showing goes, and not the display mode as well, which the next Escape leaves)
+    if (shown) event.stopPropagation();
+    cross.hushed = hitKey(cross.aim) ?? '';
+    cross.notice = null;
+    hideTooltip();
+    return;
+  }
+  if (event.key !== 'Enter' || event.repeat || event.altKey || event.ctrlKey || event.metaKey || event.shiftKey || !keysOnMap()) return;
+  event.preventDefault();
+  const hit = cross.aim;
+  if (!hit) {
+    // (nothing changes: what is open stays open; it says so, beside the crosshair for a moment and for a screen reader)
+    noticeOnMap(t('map.nothing'));
+    return;
+  }
+  // (the place of the mark aimed at, before what opens moves the map: at once where motion is reduced, clearOfSheet)
+  const markAt = hit.station ? map.unproject([hit.x, hit.y]) : null;
+  const opening = openHit(hit);
+  if (!opening) {
+    // (a stop of the board is open already: the keyboard goes onto the board, its details)
+    panel.focus({ preventScroll: true });
+    return;
+  }
+  cross.opened = { ...(hit.vehicle ? { vehicle: hit.vehicle.id } : { station: hit.station, at: markAt }), key: hitKey(hit) };
+  // (into the details, as from the search; they give it back to the map when they close, also where they took the place
+  // of others: closePanel. A favourite without its stop loaded opens by its address: once it has, if the keyboard waited.)
+  const intoDetails = () => {
+    if (panel.hidden) return;
+    panelOpener = map.getCanvas();
+    if (!panel.contains(document.activeElement)) panel.focus({ preventScroll: true });
+  };
+  if (opening instanceof Promise) {
+    opening.then((opened) => {
+      if (opened !== true) cross.opened = null;
+      // (null: the visitor has gone elsewhere meanwhile)
+      if (opened === null || !keysOnMap()) return;
+      if (opened) intoDetails();
+      else {
+        cross.opened = null;
+        noticeOnMap(t('status.noConnection'));
+      }
+    });
+  } else intoDetails();
+});
+// (a mouse moving over the map has the tooltip, until a key is pressed or it has left)
+map.getCanvasContainer().addEventListener('pointermove', (event) => {
+  if (event.pointerType === 'mouse') cross.mouse = true;
+});
+map.getCanvasContainer().addEventListener('pointerleave', (event) => {
+  if (event.pointerType !== 'mouse') return;
+  cross.mouse = false;
+  askDraw();
+});
+map.on('movestart', () => {
+  // (not the saying of what a step goes for, as its own glide begins: STEP_SAID_MS)
+  if (!cross.step) clearTimeout(cross.timer);
+  cross.notice = null;
+});
+map.on('moveend', () => {
+  if (!keysOnMap()) return;
+  // (the tooltip beside it again at once, not with the next quiet frame)
+  askDraw();
+  if (!cross.step && cross.aim && hitKey(cross.aim) !== cross.said) cross.timer = setTimeout(sayAim, AIM_SAID_MS);
+});
+
+// (a step of the map's own arrow keys, MapLibre's: as far ahead as the crosshair looks for the next mark, stepKey)
+const STEP_PX = 100;
+
+/**
+ * The arrow keys with the crosshair go from mark to mark, a press at a time:
+ * where one lies ahead of it within a step of the map's own keys, in the way
+ * of the key (a twelfth of a turn either side), the map brings the nearest
+ * straight ahead under it, and it is the aim at once, held while it comes
+ * and a little longer for a moving one, and said once it rests. Where none
+ * does, a key held down, and below the zoom of the labels, where marks are
+ * dots too many to go between, the map's own keys move it by their step. So
+ * every mark can be aimed at, and the map travels as without the crosshair
+ * (what a bubble covers only by the bubble, as for a tap: hitTest).
+ */
+function stepKey(event) {
+  const way = { ArrowRight: [1, 0], ArrowLeft: [-1, 0], ArrowDown: [0, 1], ArrowUp: [0, -1] }[event.key];
+  if (!way || event.altKey || event.ctrlKey || event.metaKey || event.shiftKey || !keysOnMap()) return false;
+  // (the map's own step: what a step went for is no longer coming)
+  if (event.repeat || map.getZoom() < LABEL_ZOOM) {
+    cross.step = null;
+    return false;
+  }
+  const at = cross.point;
+  const aimed = hitKey(cross.aim);
+  // (from where a step still under way is going: a quick second press goes on to the next one)
+  const from = cross.step?.key === aimed && performance.now() < cross.step.until && cross.aim ? cross.aim : at;
+  const covered = (hit) => !hit.top && state.covers.some(([x, y, w, h]) => hit.x >= x && hit.x <= x + w && hit.y >= y && hit.y <= y + h);
+  // (several drawn on the spot under the crosshair, as a train standing on its stop: the next of them, in the order a tap
+  // there takes them, before moving on)
+  const order = (hit) => (hit.above ? 0 : hit.vehicle ? 1 : 2);
+  const onSpot = (spot, hit) => !covered(hit) && Math.hypot(hit.x - spot.x, hit.y - spot.y) < 6;
+  if (aimed) {
+    cross.seen.add(aimed);
+    const stacked = state.hits.filter((hit) => onSpot(at, hit) && !cross.seen.has(hitKey(hit))).sort((a, b) => order(a) - order(b))[0];
+    if (stacked) {
+      event.preventDefault();
+      event.stopPropagation();
+      aimStep(stacked);
+      // (it is on the spot already: nothing is coming)
+      cross.step = null;
+      return true;
+    }
+  }
+  let next = null;
+  let best = Infinity;
+  for (const hit of state.hits) {
+    if (covered(hit) || (aimed && hitKey(hit) === aimed)) continue;
+    const along = (hit.x - from.x) * way[0] + (hit.y - from.y) * way[1];
+    const across = Math.abs((hit.x - from.x) * way[1] - (hit.y - from.y) * way[0]);
+    if (along < 6 || along > STEP_PX || across > 0.58 * along) continue;
+    const score = along + 2 * across;
+    if (score < best) {
+      next = hit;
+      best = score;
+    }
+  }
+  if (!next) {
+    cross.step = null;
+    return false;
+  }
+  event.preventDefault();
+  event.stopPropagation();
+  // (of several drawn on that spot, the one a tap there opens first: hitTest)
+  const target = state.hits.filter((hit) => onSpot(next, hit)).sort((a, b) => order(a) - order(b))[0] ?? next;
+  cross.seen.clear();
+  aimStep(target);
+  map.panBy([next.x - at.x, next.y - at.y], { duration: 150 }, { originalEvent: event });
+  // (held while it comes: until its glide has ended, at once where motion is reduced)
+  const step = cross.step;
+  if (!map.isMoving()) cross.step = null;
+  // (and said then, where its saying was due while it still glided: on slow frames)
+  else map.once('moveend', () => {
+    if (cross.step !== step) return;
+    cross.step = null;
+    if (performance.now() >= step.sayAt) sayAim();
+  });
+  return true;
+}
+
+// (how soon what a step of the arrows went for is said: once its glide has ended, and a quick run of presses says only the
+// last; what comes under the crosshair by itself is said after it has rested there, AIM_SAID_MS)
+const STEP_SAID_MS = 450;
+
+/** What a step of the arrows goes for is the aim at once: held while it comes, and while it is inside the crosshair. */
+function aimStep(hit) {
+  cross.aim = hit;
+  cross.hushed = null;
+  cross.step = { key: hitKey(hit), until: performance.now() + 400 };
+  cross.holdR = hit.vehicle ? CROSS_PX / 2 + hit.r : 0;
+  cross.notice = null;
+  clearTimeout(cross.timer);
+  cross.timer = setTimeout(sayAim, STEP_SAID_MS);
+  cross.step.sayAt = performance.now() + STEP_SAID_MS;
+  cross.keepUntil = performance.now() + 600;
+  showAim();
+}
+// (as the card and the details change their size, the free map does: the card folds, a sheet rises, a note comes; not
+// where the map has changed its size with them and MapLibre is still to follow, which places it then with the change)
+const crossResized = new ResizeObserver(() => {
+  const box = map.getContainer();
+  if (keysOnMap() && box.clientWidth === viewSize.x && box.clientHeight === viewSize.y) placeCross();
+});
+crossResized.observe($('controls'));
+crossResized.observe($('panel'));
+map.on('resize', () => { if (keysOnMap()) placeCross(); });
 
 // ---------- the visitor's own position ----------
 
@@ -2493,7 +3065,24 @@ document.addEventListener('keydown', (event) => {
 // it is open, closes it on Escape and gives the focus back to the button it
 // was opened with.
 const aboutDialog = $('about');
-$('about-open').addEventListener('click', () => aboutDialog.showModal());
+$('about-open').addEventListener('click', () => openOnText(aboutDialog));
+
+// A dialog that says something (how it works, the notes) opens on its text,
+// from its start: the keys that page through a text scroll it, Space too,
+// and a screen reader reads it from its title. Where it is longer than the
+// dialog, the text is a stop of the keyboard of its own (WCAG 2.1.1), with
+// its ring as a frame inside the dialog's edge (style.css). The one of the
+// directions to choose (#choice) is its choices, and opens on its button.
+const scrollStop = (text) => { text.tabIndex = text.scrollHeight > text.clientHeight + 1 ? 0 : -1; };
+function openOnText(dialog) {
+  const text = dialog.querySelector('.dialog-body');
+  dialog.showModal();
+  text.scrollTop = 0;
+  scrollStop(text);
+  text.focus({ preventScroll: true });
+}
+const textStops = new ResizeObserver((entries) => { for (const entry of entries) scrollStop(entry.target); });
+for (const id of ['about', 'notes']) textStops.observe($(id).querySelector('.dialog-body'));
 closesByClick(aboutDialog, $('about-close'));
 // (what the map can do: with a mouse, what is tapped on a phone is clicked)
 if (!matchMedia('(pointer: coarse)').matches) {
@@ -2783,6 +3372,8 @@ for (const surface of [$('map'), panel]) {
 
 function closePanel() {
   state.moves = (state.moves ?? 0) + 1;
+  // (what Enter on the map opened goes under the crosshair again only as those very details close: see "the crosshair")
+  if (!openedByCross(state.selection)) cross.opened = null;
   state.addressPending = false;
   // (the step that stood for failed details opened from the map alone: gone with them, as their own step would be)
   if (stepHeld && !here()) {
@@ -2822,6 +3413,8 @@ function closePanel() {
     focusGivenBack = false;
   }
   panelOpener = null;
+  // (what Enter on the map opened: under the crosshair again as the keyboard came back, see "the crosshair", or not at all)
+  cross.opened = null;
   // (opened again, the sheet is as high as it is by itself)
   setSheetHeight(null);
   draw();
@@ -3005,13 +3598,26 @@ async function openAddress(loaded = false) {
  * (#245), by its address: that finds it also where a new timetable has moved
  * it a little, as the address of the page does.
  */
+/**
+ * Opens a favourite whose stop is not loaded, by its address: true where it
+ * did (or said it is gone), false where the address did not answer, null
+ * where the visitor has gone elsewhere meanwhile, as openAddress does.
+ */
 async function openFavouriteStop(stop) {
   const path = stopPathOf(stop);
+  const moves = state.moves;
   const res = await askServer(`api/address?path=${encodeURIComponent(path)}`).catch(() => null);
-  if (res?.status === 404) addressGone(path);
-  if (!res?.ok) return;
+  if (state.moves !== moves) return null;
+  if (res?.status === 404) {
+    addressGone(path);
+    return true;
+  }
+  if (!res?.ok) return false;
   const found = await res.json().catch(() => null);
-  if (found?.type === 'stop') select('station', null, { at: found });
+  if (state.moves !== moves) return null;
+  if (found?.type !== 'stop') return false;
+  select('station', null, { at: found });
+  return true;
 }
 
 /** Says that the address names nothing now, and looks for the name in it. */
@@ -4103,8 +4709,7 @@ function showNotes(notes, heading, from) {
     return el('div', { class: 'note-full' }, parts);
   }));
   notesFrom = [...panelHead.querySelectorAll('button')].indexOf(from);
-  notesDialog.showModal();
-  $('notes-text').parentNode.scrollTop = 0;
+  openOnText(notesDialog);
 }
 
 /**
@@ -4288,6 +4893,15 @@ function inSight(points) {
 
 /** What of each edge of the map is to stay free, so that the cards do not cover what is shown in between. */
 function clearOfCards() {
+  return freeMap().padding;
+}
+
+/**
+ * The padding of clearOfCards, and whether the map it leaves is free of the
+ * cards (fits) or it had to give up on that; with a height, for a sheet as
+ * high as that (roomForCross).
+ */
+function freeMap(sheetHeight) {
   // (on a phone between the card and the sheet there is room for little more than a vehicle's label as margin)
   const margin = narrowScreen.matches ? 24 : 40;
   const card = $('controls').getBoundingClientRect();
@@ -4298,18 +4912,20 @@ function clearOfCards() {
   // clearOfSheet.
   // (a board is beside the map, not on it)
   const over = !panel.hidden && state.board === null;
-  const sheetTop = !over ? viewSize.y : panel.classList.contains('sized') ? details.top : Math.min(details.top, viewSize.y * (1 - SHEET_MIDDLE));
+  // (a sheet given a height is on its way there, gliding: where it comes to rest)
+  const sized = panel.classList.contains('sized') && parseFloat(panel.style.height);
+  const sheetTop = !over ? viewSize.y : sheetHeight !== undefined ? viewSize.y - sheetHeight : sized ? viewSize.y - sized : Math.min(details.top, viewSize.y * (1 - SHEET_MIDDLE));
   const right = !over ? margin : viewSize.x - details.left + margin;
   const fits = (room) => room.left + room.right < 0.8 * viewSize.x && room.top + room.bottom < 0.8 * viewSize.y;
   const padding = narrowScreen.matches
     ? { top: card.bottom + margin, bottom: viewSize.y - sheetTop + margin, left: margin, right: margin }
     : { top: margin, bottom: margin, left: card.right + margin, right };
-  if (fits(padding)) return padding;
+  if (fits(padding)) return { padding, fits: true };
   // (a map too narrow beside the card, such as beside a board: below the card then)
   const below = { top: card.bottom + margin, bottom: margin, left: margin, right };
-  if (!narrowScreen.matches && fits(below)) return below;
+  if (!narrowScreen.matches && fits(below)) return { padding: below, fits: true };
   // (in a window too small for that, better covered in part than not shown)
-  return { top: margin, bottom: margin, left: margin, right: margin };
+  return { padding: { top: margin, bottom: margin, left: margin, right: margin }, fits: false };
 }
 
 /**
@@ -4372,11 +4988,19 @@ function renderLine(line, first) {
 // The heading of a line's timetable waits at the foot of the details while
 // its stops scroll above it (style.css). Pinned there it is the way down:
 // marked so, it shows its arrow, and a tap goes to the timetable, where it
-// rests above the days.
+// rests above the days. Where the details are too low for it and one of the
+// stops beside it with its ring, as at a large zoom or on a phone held
+// sideways, it does not wait there: it comes after the stops as any heading,
+// and the stops have the room (loose; WCAG 2.4.11, a row with the keyboard is
+// not to be under it). A small phone held upright keeps it at the foot.
 function pinTimetable() {
   const head = panelBody.querySelector('.timetable-head');
   if (!head) return;
-  head.classList.toggle('pinned', head.nextElementSibling.getBoundingClientRect().top >= panelBody.getBoundingClientRect().bottom - 1);
+  const row = panelBody.querySelector('.line-stops .row');
+  // (at the foot while a hand moves the sheet, as without it; where the sheet comes to rest, the details are measured anew)
+  const loose = !panel.classList.contains('dragging') && panelBody.clientHeight - head.offsetHeight < Math.max(row?.offsetHeight ?? 0, 36) + 16;
+  head.classList.toggle('loose', loose);
+  head.classList.toggle('pinned', !loose && head.nextElementSibling.getBoundingClientRect().top >= panelBody.getBoundingClientRect().bottom - 1);
 }
 panelBody.addEventListener('scroll', pinTimetable, { passive: true });
 new ResizeObserver(pinTimetable).observe(panelBody);
@@ -4397,11 +5021,33 @@ function showFocused(target) {
   if (at.bottom > bottom) panelBody.scrollTop += at.bottom - bottom + 8;
   else if (at.top < box.top) panelBody.scrollTop -= box.top - at.top + 8;
 }
+/**
+ * How high a sheet rises for what in its list gets the keyboard, where the
+ * list is too low for it and its ring: clear of the heading of a line's
+ * timetable pinned at its foot, at the lowest of its heights that leaves the
+ * room, else at the highest; null where there is room already, or no higher
+ * height, or the details are no sheet (a wide screen, a board).
+ */
+function sheetFor(target) {
+  if (!narrowScreen.matches || state.board !== null) return null;
+  // (the heading as it is now that the browser has scrolled the list for the focus: at the foot or above the days)
+  pinTimetable();
+  const box = panelBody.getBoundingClientRect();
+  const pinned = panelBody.querySelector('.timetable-head.pinned');
+  const bottom = pinned && !pinned.contains(target) ? pinned.getBoundingClientRect().top : box.bottom;
+  // (with the room showFocused leaves around it, for its ring)
+  const lacks = target.offsetHeight + 16 - (bottom - box.top);
+  if (lacks <= 0) return null;
+  const now = panel.offsetHeight;
+  const higher = sheetHeights().filter((height) => height > now + 1);
+  return higher.find((height) => height - now >= lacks) ?? higher.at(-1) ?? null;
+}
 panelBody.addEventListener('focusin', (event) => {
   // (only the keyboard's: a tap focuses what it taps, in sight anyway)
   if (focusGivenBack || !event.target.matches(':focus-visible')) return;
-  if (narrowScreen.matches && state.board === null && panelBody.clientHeight < event.target.offsetHeight) {
-    restSheet(sheetHeights()[1]);
+  const height = sheetFor(event.target);
+  if (height !== null) {
+    restSheet(height);
     // (once it has risen: the way up is a transition of the style sheet)
     setTimeout(() => showFocused(event.target), 240);
   }
@@ -4412,9 +5058,10 @@ panelBody.addEventListener('focusin', (event) => {
 panelHead.addEventListener('focusin', (event) => {
   const heading = event.target.matches('.timetable-key') ? panelBody.querySelector('.timetable-head') : null;
   if (!heading || focusGivenBack || !event.target.matches(':focus-visible')) return;
-  // (on a phone whose sheet is down to its head: risen, as for a row that gets the keyboard, see below)
-  if (narrowScreen.matches && state.board === null && panelBody.clientHeight < heading.offsetHeight) {
-    restSheet(sheetHeights()[1]);
+  // (on a phone whose sheet is too low for it: risen, as for a row that gets the keyboard, see above)
+  const height = sheetFor(heading);
+  if (height !== null) {
+    restSheet(height);
     setTimeout(() => showFocused(heading), 240);
   }
   showFocused(heading);
