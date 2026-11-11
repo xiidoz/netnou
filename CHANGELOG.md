@@ -8,6 +8,15 @@ This file is written by
 messages when a release is made. Do not edit it by hand; see
 [Releases](CONTRIBUTING.md#releases).
 
+## [0.26.3](https://github.com/xiidoz/netnou/compare/v0.26.2...v0.26.3) (2026-11-11)
+
+
+### Bug Fixes
+
+* **page:** a stop, line or trip opened from a link works offline from its start ([#341](https://github.com/xiidoz/netnou/issues/341)) ([624e853](https://github.com/xiidoz/netnou/commit/624e853521bf0d4d4b9dbf049ecdbba33b3db227)), closes [#333](https://github.com/xiidoz/netnou/issues/333)
+* **page:** say "no delay data" at once when the realtime feed the server has is old ([#340](https://github.com/xiidoz/netnou/issues/340)) ([28cc330](https://github.com/xiidoz/netnou/commit/28cc3303fb47d55234eadacffe7f0408e4bdb33e))
+* **page:** the map's crosshair opens what it aims at; a line and the help work at 200 % ([#338](https://github.com/xiidoz/netnou/issues/338)) ([b721cc8](https://github.com/xiidoz/netnou/commit/b721cc858c6113fd8f1137615b3892dacac29c6a))
+
 ## [0.26.2](https://github.com/xiidoz/netnou/compare/v0.26.1...v0.26.2) (2026-11-10)
 
 
