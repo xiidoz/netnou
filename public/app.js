@@ -284,9 +284,11 @@ const state = {
   realtimeAt: null,
   scheduleOnly: 0, // answers without realtime data in a row
   // For telling an outage from a start, see realtimeState(): since when (browser clock, ms)
-  // the page has been asking, and whether it has had current realtime data since then.
+  // the page has been asking, and whether the server has had realtime data since then, current or not; and
+  // whether the last answer left the page saying that there are no delay data.
   askingSince: Date.now(),
-  wasLive: false,
+  hadRealtime: false,
+  saidOutage: false,
   online: false, // last poll delivered vehicles
   areaKnown: false, // api/area has answered: the map shows the area
   addressOpened: false, // what the address of the page names has been asked for (openAddress)
@@ -2898,19 +2900,26 @@ function realtimeAge() {
  * Where the page stands with realtime data: 'live' with current data. Without,
  * 'waiting' while it may still come – the server fetches the feed only while
  * somebody looks, so the first answers after opening the page or coming back
- * to it are without – and 'outage' once it has been there and is gone, or has
- * not come in REALTIME_GRACE_MS.
+ * to it are without – and 'outage' once the server has had it and it is gone
+ * or old, or it has not come in REALTIME_GRACE_MS. Data that is old when it
+ * comes means that its provider has stopped renewing the feed: there is
+ * nothing to wait for then. Once said, an outage stays until current data
+ * come, also over a pause (startAsking).
  */
 function realtimeState() {
   const age = realtimeAge();
   if (age !== null && age < LIVE_MAX_AGE_S) return 'live';
-  return state.wasLive || Date.now() - state.askingSince > REALTIME_GRACE_MS ? 'outage' : 'waiting';
+  return state.hadRealtime || Date.now() - state.askingSince > REALTIME_GRACE_MS ? 'outage' : 'waiting';
 }
 
 /** The page begins to ask for vehicles, or does so again after a pause: realtime data may take a while. */
 function startAsking() {
+  // (that there are no delay data, where the last answer said so, stays until current data come rather than turning
+  // into "loading" and back; by the last answer, not by the clock, which goes on while the page is hidden)
+  if (state.saidOutage) return;
   state.askingSince = Date.now();
-  state.wasLive = false;
+  // (what the last answer before the pause said does not count: until the next one, the page waits)
+  state.hadRealtime = false;
 }
 
 function renderBanner() {
@@ -6337,7 +6346,9 @@ async function poll() {
           state.addressOpened = false;
         });
       }
-      if (realtimeState() === 'live') state.wasLive = true;
+      // (the server has fetched the feed: from now on, without current data, there is an outage to say)
+      if (data.realtime !== null) state.hadRealtime = true;
+      state.saidOutage = realtimeState() === 'outage';
       state.counts = data.counts;
       state.kinds = data.kinds ?? null;
       state.loaded = request;
