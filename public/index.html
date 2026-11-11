@@ -187,7 +187,9 @@
 
   <div id="map" role="application" aria-label="Map with the current positions of the vehicles" data-i18n-aria-label="map.label"></div>
   <!-- What the keys do on the map, for a screen reader: its description (app.js). -->
-  <p id="map-keys" hidden data-i18n="map.keys">Arrow keys move the map, + and − zoom.</p>
+  <p id="map-keys" hidden data-i18n="map.keys">Arrow keys move the map, + and − zoom, Enter opens what is under the crosshair.</p>
+  <!-- What is under its crosshair, said when it has rested there for a moment (app.js, "the crosshair"). -->
+  <p class="spoken" id="map-said" role="status"></p>
 
   <!-- How the page comes by what it shows, for whoever asks. A dialog over the
        page: in the middle of a wide screen, a sheet from the bottom on a
@@ -196,7 +198,7 @@
   <dialog class="dialog" id="about" aria-labelledby="about-title">
     <div class="handle" id="about-handle"></div>
     <button type="button" class="close" id="about-close" aria-label="Close" data-i18n-aria-label="panel.close" title="Close" data-i18n-title="panel.close" data-icon="mdiClose"></button>
-    <div class="dialog-body">
+    <div class="dialog-body" role="document" aria-labelledby="about-title" tabindex="-1">
       <h2 id="about-title" data-i18n="about.title">How it works</h2>
       <h3 data-i18n="about.positions">Positions</h3>
       <p data-i18n="about.positionsText">No vehicle reports its position to this map. Each one is drawn where the timetable says it should be right now, moved by the delay reported for it. So a vehicle can be somewhat ahead of or behind its marker. Vehicles without a reported delay carry a question mark and run by the timetable here. Their departures show a question mark instead of the delay.</p>
@@ -236,7 +238,7 @@
   <dialog class="dialog" id="notes" aria-labelledby="notes-title">
     <div class="handle" id="notes-handle"></div>
     <button type="button" class="close" id="notes-close" aria-label="Close" data-i18n-aria-label="panel.close" title="Close" data-i18n-title="panel.close" data-icon="mdiClose"></button>
-    <div class="dialog-body">
+    <div class="dialog-body" role="document" aria-labelledby="notes-title" tabindex="-1">
       <h2 id="notes-title"></h2>
       <div id="notes-text"></div>
     </div>
