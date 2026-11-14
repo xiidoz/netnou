@@ -8,6 +8,13 @@ This file is written by
 messages when a release is made. Do not edit it by hand; see
 [Releases](CONTRIBUTING.md#releases).
 
+## [0.27.1](https://github.com/xiidoz/netnou/compare/v0.27.0...v0.27.1) (2026-11-14)
+
+
+### Bug Fixes
+
+* **page:** on a phone the sheet's grip takes every tap, and all of its top edge drags it ([#348](https://github.com/xiidoz/netnou/issues/348)) ([01ba44e](https://github.com/xiidoz/netnou/commit/01ba44e28c9c4719563431f23c483812f02247cd))
+
 ## [0.27.0](https://github.com/xiidoz/netnou/compare/v0.26.3...v0.27.0) (2026-11-14)
 
 
