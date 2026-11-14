@@ -8,6 +8,13 @@ This file is written by
 messages when a release is made. Do not edit it by hand; see
 [Releases](CONTRIBUTING.md#releases).
 
+## [0.26.4](https://github.com/xiidoz/netnou/compare/v0.26.3...v0.26.4) (2026-11-14)
+
+
+### Bug Fixes
+
+* **page:** the filter names a whole line chosen by the address, and unticks its directions ([#343](https://github.com/xiidoz/netnou/issues/343)) ([efcbda4](https://github.com/xiidoz/netnou/commit/efcbda4d8e56aea043e11a142d723ca2ca5d2eee))
+
 ## [0.26.3](https://github.com/xiidoz/netnou/compare/v0.26.2...v0.26.3) (2026-11-11)
 
 
