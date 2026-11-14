@@ -617,10 +617,12 @@ button:focus-visible, select:focus-visible, .row:focus-visible, .panel:focus-vis
 .heart { right: 96px; }
 .panel.boardable .heart { right: 140px; }
 .heart.on { color: var(--delay-severe); }
-/* (what says that the address was copied, where there is nothing to share it with: under the button, for a moment) */
+/* (what says that the address was copied, where there is nothing to share it with: under the button, for a moment; a
+   finger goes through it to what it lies on, the buttons above and the switches below) */
 .copied {
   position: absolute;
   z-index: 3;
+  pointer-events: none;
   top: 46px;
   right: 52px;
   margin: 0;
@@ -1168,6 +1170,7 @@ li:last-child > .row.stop .rail::before { bottom: 50%; }
   border-radius: 10px;
   box-shadow: var(--shadow);
   text-align: center;
+  text-wrap: balance;
 }
 
 /* The offer of the browser's language (#287), in the look of the tip: its
@@ -1459,28 +1462,35 @@ li:last-child > .row.stop .rail::before { bottom: 50%; }
     border-radius: 2px;
     background: var(--border);
   }
-  /* (a finger on these moves the sheet, not the page under it) */
-  .handle, #panel-head, #about-title, #notes-title { touch-action: none; }
+  /* (a finger on these moves the sheet, not the page under it: the bar, the head and the buttons in its corner, and the
+     headings of the dialogs) */
+  .handle, #panel-head, .panel > .heart, .panel > .board-toggle, .panel > .share, .panel > .close,
+  #about-title, #notes-title, #choice-title { touch-action: none; }
+  /* (while it moves, its stroke darkens wherever the finger took it, as when it is held; a dialog's as well) */
+  .panel.dragging .handle::before, .dialog.dragging .handle::before { background: var(--text-muted); }
   /* The button to close is in sight on the sheets, as on a board and on a
      wide screen; they are also dragged down, or the map beside them is
-     tapped. Beside it the share button and the heart. */
-  .panel .close { top: 14px; right: 12px; }
+     tapped. Beside it the share button and the heart. They sit below the
+     bar, not in it: all of the bar is the stroke's, also where a button is
+     under the stroke, as the heart of a stop is on a narrow phone. */
+  .panel .close { top: 22px; right: 12px; }
   /* (so what is at their top has the whole width) */
   .panel .panel-head { padding-right: 14px; }
   .panel .panel-head h1, .panel .panel-head h2 { padding-right: 36px; }
-  .panel .share { top: 14px; right: 56px; }
-  .panel .copied { top: 52px; right: 56px; }
+  .panel .share { top: 22px; right: 56px; }
+  .panel .copied { top: 60px; right: 56px; }
   .panel.shareable .panel-head h1, .panel.shareable .panel-head h2 { padding-right: 80px; }
   /* (the heart before the share button) */
-  .panel .heart { top: 14px; right: 100px; }
+  .panel .heart { top: 22px; right: 100px; }
   /* (for a stop, the button of its board between them) */
-  .panel .board-toggle { top: 14px; right: 100px; }
+  .panel .board-toggle { top: 22px; right: 100px; }
   .panel.boardable .heart { right: 144px; }
-  .panel .copied.favourited { top: 52px; right: 12px; }
+  .panel .copied.favourited { top: 60px; right: 12px; }
   .panel.favourable .panel-head h1, .panel.favourable .panel-head h2 { padding-right: 124px; }
   .panel.boardable .panel-head h1, .panel.boardable .panel-head h2 { padding-right: 168px; }
-  /* (for a finger, see "room for a finger": the buttons from the bar of the sheet down, the chips under them, side by side, from there to the departures) */
-  .panel .close::after, .panel .share::after, .panel .board-toggle::after, .panel .heart::after { inset: -12px -6px 0; }
+  /* (for a finger, see "room for a finger": the buttons from the foot of the bar down, the chips under them, side by side, from there to the departures; on a board, whose bar is a tab over the map, from the edge of the screen) */
+  :root:not([data-board]) .panel :is(.close, .share, .board-toggle, .heart)::after { inset: 0 -6px -12px; }
+  :root[data-board] .panel :is(.close, .share, .board-toggle, .heart)::after { inset: -12px -6px 0; }
   .panel-head .view-switch button::after, .panel-head .choice-open::after, .panel-head .choice-clear::after { left: 0; right: 0; top: calc(50% - 20px); height: 44px; }
   /* (and where they take two lines, as with directions chosen, the second as far below the first as these areas need) */
   .panel-head .sub.with-choice { row-gap: 20px; }
@@ -1492,7 +1502,8 @@ li:last-child > .row.stop .rail::before { bottom: 50%; }
      few lines (fitNotes). */
   .panel-head .notes span { display: block; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
   .dialog h2 { margin-right: 0; }
-  .panel .panel-head { padding-top: 2px; }
+  /* (the name level with the buttons beside it, below the bar) */
+  .panel .panel-head { padding-top: 10px; }
   /* "How it works" is a sheet from the bottom too, over the details if they
      are open. Its bar and its heading drag it down to close it. */
   .dialog {

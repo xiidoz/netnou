@@ -2979,28 +2979,43 @@ function loadingText({ state: phase, step }) {
 const tip = $('tip');
 const TIP_MS = 9000;
 let tipTimer = null;
+let tipWaiting = false; // offered before the map had its buttons, and given once they are there
 
 function offerTip() {
   if (ASKED || state.display || state.board !== null || state.adding || state.banner || state.note || OFFERING) return;
   if (aboutDialog.open || notesDialog.open || choiceDialog.open || settingsButton.getAttribute('aria-expanded') === 'true') return;
   if (loadSetting('tipped', false) === true) return;
-  saveSetting('tipped', true);
+  // (not before the map has its buttons: it goes beside them, see placeBubble; a page sent with its stop is drawn before)
+  tipWaiting = !map.getContainer().querySelector('.maplibregl-ctrl-bottom-right > .maplibregl-ctrl-group');
+  if (tipWaiting) return;
   tip.textContent = matchMedia('(pointer: coarse)').matches ? t('tip.departure') : t('tip.departureMouse');
   tip.hidden = false;
   placeBubble(tip);
+  // (where the sheet has risen so high that it leaves no room for it, not now: on another landing at a stop)
+  if (tip.style.visibility === 'hidden') {
+    tip.hidden = true;
+    return;
+  }
+  saveSetting('tipped', true);
   tipTimer = setTimeout(hideTip, TIP_MS);
 }
 
 /**
  * Puts a bubble (the tip, the offer of a language) where it is seen: on a
  * phone above the details, which may still be gliding up (as in
- * clearOfCards), else at the foot of the map, in the middle of what the
+ * clearOfCards), beside the map's buttons there, and out of sight while the
+ * details leave no map for it, as the buttons are (clearMapButtons); else
+ * at the foot of the map, in the middle of what the
  * details leave of it. Without details as style.css has it, but above the
  * credits where they are open: on a phone they take three lines.
  */
 function placeBubble(bubble) {
   bubble.style.bottom = '';
   bubble.style.left = '';
+  bubble.style.maxWidth = '';
+  bubble.style.visibility = '';
+  // (on a phone beside the map's buttons, which stand at the foot of the map or above the details)
+  if (narrowScreen.matches && state.board === null) besideMapButtons(bubble);
   if (panel.hidden || state.board !== null) {
     const credits = map.getContainer().querySelector('.maplibregl-ctrl-attrib')?.getBoundingClientRect();
     if (credits?.height && viewSize.y - credits.top + 10 > parseFloat(getComputedStyle(bubble).bottom)) bubble.style.bottom = `${viewSize.y - credits.top + 10}px`;
@@ -3010,16 +3025,34 @@ function placeBubble(bubble) {
   if (narrowScreen.matches) {
     const sheetTop = panel.classList.contains('sized') ? details.top : Math.min(details.top, viewSize.y * (1 - SHEET_MIDDLE));
     bubble.style.bottom = `${viewSize.y - sheetTop + 10}px`;
+    // (and hidden, as those buttons, while the sheet leaves no map for it below the card: until it comes down again)
+    if (sheetTop - bubble.offsetHeight - 10 < $('controls').getBoundingClientRect().bottom + 10) bubble.style.visibility = 'hidden';
   } else {
     bubble.style.left = `${details.left / 2}px`;
   }
+}
+
+/**
+ * On a phone, a bubble beside the map's buttons in their corner: in the
+ * middle of the room they leave, so that none of them is covered while it is
+ * up. Buttons hidden for want of room leave theirs (clearMapButtons).
+ */
+function besideMapButtons(bubble) {
+  const buttons = [...map.getContainer().querySelectorAll('.maplibregl-ctrl-bottom-right > .maplibregl-ctrl-group')]
+    .filter((group) => group.style.visibility !== 'hidden')
+    .map((group) => group.getBoundingClientRect()).filter((box) => box.width > 0);
+  if (!buttons.length) return;
+  const right = Math.min(...buttons.map((box) => box.left)) - 10;
+  bubble.style.left = `${(16 + right) / 2}px`;
+  bubble.style.maxWidth = `${right - 16}px`;
 }
 
 function hideTip() {
   clearTimeout(tipTimer);
   tip.hidden = true;
 }
-for (const type of ['click', 'keydown']) document.addEventListener(type, () => tip.hidden || hideTip(), true);
+// (the next touch, click or key: also a finger that drags the sheet or the map, which ends in no click)
+for (const type of ['pointerdown', 'keydown']) document.addEventListener(type, () => tip.hidden || hideTip(), true);
 addEventListener('resize', () => tip.hidden || hideTip());
 
 // ---------- the offer of a language ----------
@@ -3067,8 +3100,8 @@ $('offer-close').addEventListener('click', hideOffer);
 document.addEventListener('click', (event) => offer.hidden || offer.contains(event.target) || hideOffer(), true);
 document.addEventListener('keydown', (event) => {
   if (offer.hidden || event.key !== 'Escape') return;
-  // (the bubble is on top: Escape is for it, not for what is under it)
-  event.stopPropagation();
+  // (the bubble is on top: Escape is for it, not for what is under it; where the sheet has it out of sight, for that as well)
+  if (offer.style.visibility !== 'hidden') event.stopPropagation();
   hideOffer();
 }, true);
 
@@ -5485,7 +5518,8 @@ sheetHandle.addEventListener('click', () => {
     drag = { id: event.pointerId, y: event.clientY, height: panel.offsetHeight, moved: false, last: [[event.timeStamp, event.clientY]] };
     // From here on all of it comes to this part, wherever the pointer goes: a
     // finger does that by itself, a mouse does not. Not from a button in the
-    // head, though: a click on it would then be one on the head.
+    // head or the corner, though, until it moves: a click on it would then be
+    // one on the head.
     if (event.currentTarget === sheetHandle || !event.target.closest('button')) event.currentTarget.setPointerCapture(drag.id);
   };
   const move = (event) => {
@@ -5528,7 +5562,9 @@ sheetHandle.addEventListener('click', () => {
     if (rest === undefined) closePanel();
     else restSheet(rest);
   };
-  for (const part of [sheetHandle, panelHead]) {
+  // (and the buttons in its corner, as those in the head: all of the top edge moves the sheet, a button presses only
+  // where the finger does not move)
+  for (const part of [sheetHandle, panelHead, ...panel.querySelectorAll(':scope > .heart, :scope > .board-toggle, :scope > .share, :scope > .close')]) {
     part.addEventListener('pointerdown', begin);
     part.addEventListener('pointermove', move);
     part.addEventListener('pointerup', end);
@@ -6365,6 +6401,8 @@ async function loadArea() {
   if (document.fullscreenEnabled) map.addControl(fullscreenControl, 'bottom-right');
   // (details may be open already, from the address)
   clearMapButtons();
+  // (and the one tip, where it waited for these buttons: still about the departures of a stop)
+  if (tipWaiting && state.selection?.type === 'station' && !panel.hidden) offerTip();
   state.outline = area.outline;
   state.bbox = area.bbox;
   askDraw();
@@ -6682,13 +6720,15 @@ function init() {
   const minutes = [t('departures.now'), t('departures.minutes', { count: MINUTES_MAX }), ...hours];
   document.documentElement.style.setProperty('--minutes-chars', Math.max(...minutes.map((text) => text.length)));
   buildControls();
+  // (the map measured before anything is put on it: the details of the page's address below are placed by its size, as
+  // the one tip above their sheet)
+  resizeCanvas();
   // (the details of the page's address, with the answer the page was sent with)
   takeSent();
   // (the header card is what this visitor gets now; where the page came that way, first.js has shown it already)
   document.documentElement.dataset.controls = 'shown';
   // (and what was typed into it before this script had arrived is looked for)
   if (searchField.value) runSearch();
-  resizeCanvas();
   nextFrame();
   setInterval(updateStatus, 1000);
   setInterval(tickTimes, 1000);
