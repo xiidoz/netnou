@@ -8,6 +8,19 @@ This file is written by
 messages when a release is made. Do not edit it by hand; see
 [Releases](CONTRIBUTING.md#releases).
 
+## [0.27.0](https://github.com/xiidoz/netnou/compare/v0.26.3...v0.27.0) (2026-11-14)
+
+
+### Features
+
+* **timetable:** a line's timetable lists every hour as at the stop, today's at the hour it is ([#347](https://github.com/xiidoz/netnou/issues/347)) ([a654d26](https://github.com/xiidoz/netnou/commit/a654d26f8ff9777e5b518869443a37208c167957)), closes [#316](https://github.com/xiidoz/netnou/issues/316)
+
+
+### Bug Fixes
+
+* **page:** the filter names a whole line chosen by the address, and unticks its directions ([#343](https://github.com/xiidoz/netnou/issues/343)) ([efcbda4](https://github.com/xiidoz/netnou/commit/efcbda4d8e56aea043e11a142d723ca2ca5d2eee))
+* **timetable:** a last trip written as 0:36 ends the hours of its day, not begins them ([#346](https://github.com/xiidoz/netnou/issues/346)) ([57aea42](https://github.com/xiidoz/netnou/commit/57aea420d888fcc677ea7de99fbc4c4e6b05e334)), closes [#345](https://github.com/xiidoz/netnou/issues/345)
+
 ## [0.26.3](https://github.com/xiidoz/netnou/compare/v0.26.2...v0.26.3) (2026-11-11)
 
 
