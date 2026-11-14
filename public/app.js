@@ -12,7 +12,7 @@ import { parseAddress, stopPathAt, wordsOf } from './address.js';
 import { APP_NAME, READMES, chooseLanguage, dayOf, formatHour, formatList, formatNumber, formatTime, formatWeekday, languagePicker, languageToOffer, loadLanguage, pageTexts, sentInAnother, setTimeZone, t, textsOf, translatePage } from './i18n.js';
 import { FAVOURITE_NAME_ZOOM, HEART_MIDDLE, PLACES_ZOOM, RAIL_MODES, heartMark, joiningLines, mergePlaces, namePrecedence, namedAt, placeNames, stopMark, townToShow, townsAlong, withoutStyleStops } from './stops.js';
 import { favouritesFrom, isFavourite, lineFavourite, sameStop, stopFavourite, withChoice, withFavourite } from './favourites.js';
-import { choiceValue, readChoice, toggled } from './choice.js';
+import { choiceValue, chosenWays, readChoice, toggled } from './choice.js';
 import { DELAY_MAJOR_S, DELAY_MINOR_S, DELAY_SEVERE_S, MINUTES_MAX, NOTE_CHARS, badge as badgeOf, choiceChip as choiceChipOf, clockOf, delayCell as delayCellOf, delayClass, delayNode as delayNodeOf, delaySum as delaySumOf, unknownDelay as unknownDelayOf, delayFlag, delayText, departureLists, departuresSub as departuresSubOf, directionSign as directionSignOf, leavesAt, lineBadge, lineHead, lineLists, lineSaid as lineSaidOf, lineStops, lineTimetable, leftAlready, GONE_S, whenBack, minutesNode as minutesNodeOf, twoKinds, vehicleSpot, VEHICLE_R, panelHead as panelHeadOf, stopHeading, stopRing, stopSaid, stopSign, stopToday, tallMark, tomorrowAt as tomorrowAtOf, untilText as untilTextOf, vehicleLabel, vehicleName, warningSign as warningSignOf, warns } from './panel.js';
 import { BOARD_MAX, BOARD_SHARE, BOARD_STOPS, boardBlocks, boardQuery, boardShare, displayQuery, ledBy, readBoard, readDisplay, readStops } from './display.js';
 import { mdiArrowCollapse, mdiArrowExpand, mdiCheck, mdiChevronLeft, mdiChevronRight, mdiCityVariantOutline, mdiFullscreen, mdiFullscreenExit, mdiHeart, mdiHeartOutline, mdiMinusCircleOutline, mdiPlus } from './vendor/material-design-icons/icons.js';
@@ -841,8 +841,8 @@ function showView(view) {
 /** The chip: every line, or "only" and the directions chosen (panel.js); a tap on it opens the sheet, its cross shows all again (see the details' clicks). */
 function choiceChip() {
   const list = stopDirections() ?? [];
-  const chosen = state.lines.map((key) => list.find((direction) => direction.key === key)).filter(Boolean);
-  return choiceChipOf(chosen.map((direction) => ({ ...direction, name: directionName(direction, list) })), drawing());
+  // (a line chosen whole as its directions, as the sheet ticks them)
+  return choiceChipOf(chosenWays(state.lines, list).map((direction) => ({ ...direction, name: directionName(direction, list) })), drawing());
 }
 
 // The sheet in which they are chosen: a dialog as the one of the notes.
@@ -886,10 +886,11 @@ function renderChoice() {
     if (last && last.mode === direction.mode && last.line === direction.line) last.directions.push(direction);
     else lines.push({ mode: direction.mode, line: direction.line, directions: [direction] });
   }
+  const chosen = new Set(chosenWays(state.lines, list));
+  const keys = list.map(({ key }) => key);
   const line = ({ directions }) => el('li', {}, directions.map((direction) => {
     const name = directionName(direction, list);
-    const on = state.lines.includes(direction.key) || state.lines.includes(direction.key.split('~')[0]);
-    const button = chip(direction.key, on, [directionSign(direction), el('span', { class: 'name', text: name })], () => applyChoice(toggled(state.lines, direction.key)));
+    const button = chip(direction.key, chosen.has(direction), [directionSign(direction), el('span', { class: 'name', text: name })], () => applyChoice(toggled(state.lines, direction.key, keys)));
     button.dataset.mode = direction.mode;
     button.setAttribute('aria-label', t('choice.direction', { line: lineSaid(direction.line, direction.mode), to: name }));
     return button;

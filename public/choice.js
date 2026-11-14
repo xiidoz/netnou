@@ -11,7 +11,9 @@
 //   subway/u1~nuernberg-weisser-turm   the U1 towards Nürnberg Weißer Turm
 //   tram/4                             tram 4 both ways
 // In the address of a stop and of its board, and to api/departures, they go
-// as lines=<key>,<key>…; an empty choice is every line.
+// as lines=<key>,<key>…; an empty choice is every line. The page's sheet
+// chooses directions; a whole line comes from an address written so, and
+// the sheet and its chip show it as its directions (chosenWays).
 
 import { slug } from './address.js';
 
@@ -51,13 +53,37 @@ export function inChoice(keys, departure) {
   return keys.includes(line) || keys.includes(choiceKey(departure));
 }
 
+/** The key of the whole line a key is of: itself for a whole line. */
+const lineOf = (key) => key.split('~')[0];
+
 /**
- * The choice after a tap on a direction: while every line is shown, only
- * that one; else it in or out. With none left, every line is shown again.
+ * The directions of a stop that a choice stands for, of those it has
+ * (`list`, each with its `key`): each one chosen, and for a line chosen
+ * whole, as an address may name one (#342), each of its directions there.
+ * In the order they are chosen, each once.
  */
-export function toggled(keys, key) {
+export function chosenWays(keys, list) {
+  const found = new Set();
+  for (const key of keys) for (const direction of list) if (direction.key === key || lineOf(direction.key) === key) found.add(direction);
+  return [...found];
+}
+
+/**
+ * The choice after a tap on a direction (`key`, one of the stop's
+ * directions, whose keys are `all`): while every line is shown, only that
+ * one; else it in or out. A line chosen whole is each of its directions
+ * (chosenWays): one taken out of it leaves the others, by their own keys, in
+ * its place. With none left, every line is shown again.
+ */
+export function toggled(keys, key, all = []) {
   if (!keys.length) return [key];
-  return keys.includes(key) ? keys.filter((other) => other !== key) : [...keys, key];
+  const line = lineOf(key);
+  if (!keys.includes(key) && !keys.includes(line)) return [...keys, key];
+  return keys.flatMap((other) => {
+    if (other === key) return [];
+    if (other !== line) return [other];
+    return all.filter((one) => one !== key && lineOf(one) === line && !keys.includes(one));
+  });
 }
 
 /**
