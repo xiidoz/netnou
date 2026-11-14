@@ -859,14 +859,15 @@ button:focus-visible, select:focus-visible, .row:focus-visible, .panel:focus-vis
 .view-switch.ways button > span { display: block; overflow: hidden; text-overflow: ellipsis; }
 .line-body { position: relative; }
 .line-stops { list-style: none; margin: 0; padding: 6px 0; --rail: var(--mode-other); }
-.line-stops[data-mode="subway"] { --rail: var(--mode-subway); }
-.line-stops[data-mode="tram"] { --rail: var(--mode-tram); }
-.line-stops[data-mode="bus"] { --rail: var(--mode-bus); }
-.line-stops[data-mode="suburban"] { --rail: var(--mode-suburban); }
-.line-stops[data-mode="regional"] { --rail: var(--mode-regional); }
-.line-stops[data-mode="longdistance"] { --rail: var(--mode-longdistance); }
-.line-stops[data-mode="ferry"] { --rail: var(--mode-ferry); }
-.line-stops[data-mode="cable"] { --rail: var(--mode-cable); }
+.line-timetable { --rail: var(--mode-other); }
+.line-stops[data-mode="subway"], .line-timetable[data-mode="subway"] { --rail: var(--mode-subway); }
+.line-stops[data-mode="tram"], .line-timetable[data-mode="tram"] { --rail: var(--mode-tram); }
+.line-stops[data-mode="bus"], .line-timetable[data-mode="bus"] { --rail: var(--mode-bus); }
+.line-stops[data-mode="suburban"], .line-timetable[data-mode="suburban"] { --rail: var(--mode-suburban); }
+.line-stops[data-mode="regional"], .line-timetable[data-mode="regional"] { --rail: var(--mode-regional); }
+.line-stops[data-mode="longdistance"], .line-timetable[data-mode="longdistance"] { --rail: var(--mode-longdistance); }
+.line-stops[data-mode="ferry"], .line-timetable[data-mode="ferry"] { --rail: var(--mode-ferry); }
+.line-stops[data-mode="cable"], .line-timetable[data-mode="cable"] { --rail: var(--mode-cable); }
 .line-stops ul { list-style: none; margin: 0; padding: 0; }
 .row.on-line { grid-template-columns: 44px minmax(0, 1fr); height: 32px; padding-block: 0; color: inherit; text-decoration: none; }
 .row.on-line.in-town, .row.on-line.tall { height: 44px; }
@@ -996,6 +997,7 @@ button.line-vehicle { position: absolute; left: -18px; top: -18px; width: 36px; 
 .timetable-days .when { font-size: 14px; font-weight: 650; }
 /* (the kind of day today is: a word below its name) */
 .timetable-days .when .today { display: block; color: var(--text-muted); font-size: 12px; font-weight: 400; }
+.timetable-days .when .part { white-space: nowrap; }
 .timetable-days .said > span { display: block; }
 .timetable-days .span { font-size: 14px; font-variant-numeric: tabular-nums; }
 .timetable-days .often { margin-top: 2px; color: var(--text-muted); font-size: 13px; }
@@ -1007,10 +1009,17 @@ summary.days-head .icon { align-self: center; width: 20px; height: 20px; color: 
 @media (hover: hover) {
   summary.days-head:hover { background: var(--bg-subtle); }
 }
-/* (the hours of a kind of day: a column of hours and one of how often, along a quiet line on their left, under its two lines) */
-.timetable-days .runs { list-style: none; margin: 2px 0 6px 68px; padding: 0 0 0 8px; border-left: 2px solid var(--border); display: grid; grid-template-columns: max-content minmax(0, 1fr); column-gap: 14px; row-gap: 2px; color: var(--text-muted); font-size: 13px; }
-.timetable-days .runs > li { display: grid; grid-column: 1 / -1; grid-template-columns: subgrid; }
-.timetable-days .runs .hours { font-variant-numeric: tabular-nums; }
+/* (an open kind of day keeps its head on top while its hours pass: which day it is, and the way to close it, in sight) */
+/* (its rule as wide as the content, though the head reaches 8px further each side for its hover) */
+.timetable-days .days[open] > summary.days-head { position: sticky; top: 0; z-index: 2; border-radius: 0; background: linear-gradient(var(--border), var(--border)) 8px 100% / calc(100% - 16px) 1px no-repeat, var(--bg); }
+/* (its hours as the timetable at a stop has them, #316: the hour, then the minutes, two digits each, a busy hour on two
+   lines split evenly; the hour it is now marked in the line's colour, as the rail of its stops) */
+.timetable-days .hour-lines { list-style: none; margin: 2px 0 8px; padding: 0; display: grid; grid-template-columns: minmax(2.4em, max-content) minmax(0, 1fr); column-gap: 14px; font-size: 13px; line-height: 18px; }
+.timetable-days .hour-lines > li { display: grid; grid-column: 1 / -1; grid-template-columns: subgrid; padding: 2px 4px; border-left: 3px solid transparent; border-radius: 0 4px 4px 0; }
+.timetable-days .hour-lines .hh { text-align: right; font-weight: 650; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.timetable-days .hour-lines .mm { min-width: 0; font-variant-numeric: tabular-nums; word-spacing: 0.3em; text-wrap: balance; }
+.timetable-days .hour-lines .mm.none { color: var(--text-muted); }
+.timetable-days .hour-lines > li.now { border-left-color: var(--rail); background: var(--bg-subtle); }
 .line-timetable .along { margin-top: 6px; padding-top: 12px; border-top: 1px solid var(--border); color: var(--text-muted); font-size: 13px; }
 .line-timetable .along p { margin: 0; }
 .line-timetable .along p + p { margin-top: 2px; }

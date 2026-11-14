@@ -4227,7 +4227,44 @@ panel.addEventListener('toggle', (event) => {
   selection.hours ??= new Set();
   if (days.open) selection.hours.add(days.dataset.days);
   else selection.hours.delete(days.dataset.days);
+  if (days.open && days === openedByHand) showDay(days);
+  if (days === openedByHand) openedByHand = null;
 }, true);
+
+// A kind of day opened by hand, by a tap or the keyboard on its head (which
+// clicks it), not by the details drawn anew: its hours come into view (#316).
+let openedByHand = null;
+panel.addEventListener('click', (event) => {
+  const head = event.target.closest?.('summary.days-head');
+  openedByHand = head && !head.parentElement.open ? head.parentElement : null;
+}, true);
+
+/**
+ * Brings the hours of a kind of day just opened into view, under its head,
+ * which stays on top while they pass (style.css): today's at the hour before
+ * the one it is now, so that it is the second line; another at its first hour,
+ * where its head has gone out of sight, as when the kind of day above it
+ * closed. Nothing moves where they are in sight already: the hour it is now
+ * and the two after it, or the head.
+ */
+function showDay(days) {
+  // (its hours are laid out by now: the toggle comes after the browser opened it)
+  if (!days.isConnected) return;
+  const box = panelBody.getBoundingClientRect();
+  const head = days.querySelector('summary');
+  const now = days.querySelector('.hour-lines > .now');
+  let by;
+  if (now) {
+    const last = now.nextElementSibling?.nextElementSibling ?? now.nextElementSibling ?? now;
+    if (now.getBoundingClientRect().top >= box.top + head.offsetHeight && last.getBoundingClientRect().bottom <= box.bottom) return;
+    by = (now.previousElementSibling ?? now).getBoundingClientRect().top - box.top - head.offsetHeight;
+  } else {
+    const at = head.getBoundingClientRect();
+    if (at.top >= box.top && at.bottom <= box.bottom) return;
+    by = at.top - box.top;
+  }
+  panelBody.scrollTo({ top: panelBody.scrollTop + by, behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
+}
 
 const platformText = (platform) => (platform ? t('stop.platform', { platform }) : '');
 
@@ -5094,7 +5131,7 @@ function renderLine(line, first) {
   // (its stops in one direction, which it shows until another is chosen, with its vehicles along them: #256)
   const way = Math.min(selection.way ?? 0, Math.max(0, (line.ways?.length ?? 1) - 1));
   // (and after them its timetable of the coming days that way, #289, with the hours shown of the days they were opened for)
-  const timetableOf = lineTimetable(line.facts, drawn, way, selection.hours ?? new Set()) ?? [];
+  const timetableOf = lineTimetable(line.facts, drawn, way, selection.hours ?? new Set(), line.mode) ?? [];
   const head = toDom(lineHead(line, drawn, way));
   // (it has none of the feed: only that the connection is lost, where it is)
   const notes = notesList([]);

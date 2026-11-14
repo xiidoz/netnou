@@ -579,10 +579,12 @@ minute (#289), as its page says it below its operator and after its stops.
 | `ways[].stop` | string or null | the stop all figures of the way are of: the one most of its trips of the coming 7 days leave from. A first or last trip is when it leaves there |
 | `ways[].today` | object or null | of the service day `date`: the first and last trip and how often it runs hour by hour; `null` where it does not run that way that day |
 | `ways[].week` | array | the 7 days from `date` on, by their kind as a timetable has them (Monday to Friday, Saturday, Sunday), apart where the first or last trip differs |
-| `week[].dates` | array of strings | those days, `yyyymmdd` |
+| `week[].dates` | array of strings | those days, `yyyymmdd`; days of a kind are apart also where their departures differ |
 | `week[].first`, `last` | time or null | the first and last trip, at the time of day it has on each of the days, written for the first of them; `null` where it does not run that way on them |
 | `week[].often` | run or null | the longest stretch of hours of which `every` or `atMost` holds on all of the days, where that is at least 3 hours and half of those it runs through; else `null` |
-| `week[].trips` | `[few, many]` or null | how many trips it makes on the fewest and on the most of the days |
+| `week[].trips` | `[few, many]` or null | how many trips it makes on the fewest and on the most of the days; two that leave in the same minute are one |
+| `week[].start` | time | the start of the service day of the first of the days (its midnight) |
+| `week[].departures` | array of integers | every departure on each of the days (#316), as the timetable at a stop lists them: minutes from `start`, read as `first` and `last` are (1476 is 0:36 after its midnight); two in the same minute once |
 | `today.runs`, `week[].runs` | array of runs | its hours from the first it runs in to the last, those that say the same as one; empty where it does not run. A day is read as `first` and `last` read it: a trip before the first, as 0:36, leaves after midnight, at the end |
 | `minutes` | integer | how long its busiest way takes from end to end: the middle of its trips that do |
 | `stops` | integer | the stations of that way |

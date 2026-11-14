@@ -549,18 +549,42 @@ export function daysText(dates, { weekday }) {
   return parts.join(', ');
 }
 
-/** Whether a stretch of hours (a run of hourly() in facts.js) is the one a group of days says already. */
-const sameRun = (run, often) => run.from === often.from && run.to === often.to && run.every === often.every && run.atMost === often.atMost && String(run.perHour) === String(often.perHour);
+/**
+ * The hours of a kind of day as the timetable at a stop has them (#316):
+ * every hour from that of its first departure to that of its last a line,
+ * the hour and the minutes of its departures ("8  01 21 41"); where it is the
+ * kind of day today is, the hour `now` is in marked.
+ * @param group a kind of day of facts.ways[].week (`departures` in minutes from `start`, the start of the first of its days)
+ * @returns [{ from, times, minutes, now }]: the hour and its departures as epoch seconds, and their minutes of the hour
+ */
+export function hourLines(group, now, today) {
+  const { departures, start: base } = group;
+  if (!departures?.length || base === undefined) return [];
+  const lines = [];
+  for (let hour = Math.floor(departures[0] / 60); hour <= Math.floor(departures.at(-1) / 60); hour++) {
+    const from = base + hour * 3600;
+    const its = departures.filter((minute) => minute >= hour * 60 && minute < hour * 60 + 60);
+    // (minutes of the day's own clock: of an epoch they would be off by half an hour where the zone is)
+    lines.push({ from, times: its.map((minute) => base + minute * 60), minutes: its.map((minute) => minute % 60), now: today && now >= from && now < from + 3600 });
+  }
+  return lines;
+}
+
+/** The hour of a line of hours as the timetable at a stop writes it: "8", "0"; with the half of the day where the clock has one, "8 AM". */
+function hourLabel(epoch, context) {
+  const [digits, rest] = hourParts(epoch, context);
+  return /[ap]\.?\s?m\b/i.test(rest) ? `${digits}${rest}` : digits;
+}
 
 /**
  * The timetable of a line after its stops (#289), the way it goes that its
  * stops show: of the coming days, by their kind as a timetable has them
  * (Mo–Fr, Sa, So, apart where the first or last trip differs), two lines
  * each: its first and last trip, and the longest stretch of hours one set of
- * words holds for, else how many trips it makes. How often it runs hour by
- * hour is folded away below each, opened and closed by its own head (a
- * disclosure, which works without the script); folded, the hours are in the
- * page all the same. Then how long it takes from end to end, its stops, its
+ * words holds for, else how many trips it makes. Below each, folded away, its
+ * hours as the timetable at a stop has them (hourLines); one kind of day open
+ * at a time, opened and closed by its own head (a disclosure, which works
+ * without the script); folded, the hours are in the page all the same. Then how long it takes from end to end, its stops, its
  * towns. Its heading stands before it, not in it: below a long list of
  * stops it waits at the foot of the details while they scroll, as the way
  * down to it (style.css, app.js).
@@ -568,17 +592,16 @@ const sameRun = (run, often) => run.from === often.from && run.to === often.to &
  * @param context { t, time, hour, weekday, list }
  * @param way which of its ways (facts.ways)
  * @param open the kinds of day whose hours are shown, by their dates joined with commas
+ * @param mode the line's kind of transport, whose colour marks the hour it is
  * @returns [its heading, the timetable], or null
  */
-export function lineTimetable(facts, context, way = 0, open = new Set()) {
-  const { t, time, list } = context;
+export function lineTimetable(facts, context, way = 0, open = new Set(), mode = null) {
+  const { t, time, list, now } = context;
   const week = facts?.ways?.[way]?.week;
   if (!week?.length) return null;
   const { stop } = facts.ways[way];
   const order = (group) => Math.min(...group.dates.map((date) => (new Date(Date.UTC(+date.slice(0, 4), +date.slice(4, 6) - 1, +date.slice(6, 8))).getUTCDay() + 6) % 7));
   const groups = [...week].sort((a, b) => order(a) - order(b));
-  // (the hours of a group, where they say more than its second line)
-  const hours = (group) => (group.runs.length > 1 || (group.runs.length === 1 && !(group.often && sameRun(group.runs[0], group.often))) ? group.runs : []);
   const often = (group) => {
     if (group.often) return t('facts.during', { hours: hoursText(group.often.from, group.often.to, context), often: oftenText(group.often, context) });
     if (!group.trips) return null;
@@ -588,19 +611,27 @@ export function lineTimetable(facts, context, way = 0, open = new Set()) {
   // (the head of a kind of day: its name, and beside it its two lines; a summary holds no blocks, so spans)
   // (the kind of day today is, marked so: the rider need not work out that Wednesday is "Mo–Fr")
   const head = (group, folds) => [
-    h('span', { class: 'when' }, daysText(group.dates, context), group.dates.includes(facts.date) ? h('span', { class: 'today' }, t('facts.todayMark')) : null),
+    // (each part of the days on one line: "Mo, Di–" never breaks before "Do")
+    h('span', { class: 'when' }, daysText(group.dates, context).split(', ').map((part, k) => [k ? ', ' : null, h('span', { class: 'part' }, part)]), group.dates.includes(facts.date) ? h('span', { class: 'today' }, t('facts.todayMark')) : null),
     h('span', { class: 'said' },
       h('span', { class: 'span' }, group.first === null ? t('facts.noTrips') : `${time(group.first)}–${time(group.last)}`),
       group.first === null ? null : h('span', { class: 'often' }, often(group))),
     folds ? iconOf(mdiChevronUp) : null,
   ];
   const days = groups.map((group) => {
-    const shown = hours(group);
-    if (!shown.length) return h('li', {}, h('div', { class: 'days-head' }, head(group, false)));
+    // (a day of one or two departures has them in its head, first and last: nothing more to open)
+    const lines = group.departures?.length > 2 ? hourLines(group, now, group.dates.includes(facts.date)) : [];
+    if (!lines.length) return h('li', {}, h('div', { class: 'days-head' }, head(group, false)));
     const key = group.dates.join(',');
-    return h('li', {}, h('details', { class: 'days', open: open.has(key), 'data-days': key },
+    // (one kind of day open at a time: opening another closes it, as the browser does for details of one name)
+    return h('li', {}, h('details', { class: 'days', name: 'timetable-days', open: open.has(key), 'data-days': key },
       h('summary', { class: 'days-head', 'data-focus': `days ${key}` }, head(group, true)),
-      h('ul', { class: 'runs' }, shown.map((run) => h('li', {}, h('span', { class: 'hours' }, hoursText(run.from, run.to, context)), ' ', h('span', {}, oftenText(run, context)))))));
+      // (the minutes for the eye, two digits each; read out, the times in full, or that none leaves)
+      h('ul', { class: 'hour-lines' }, lines.map((line) => h('li', line.now ? { class: 'now', 'aria-current': 'time' } : {},
+        h('span', { class: 'hh', 'aria-hidden': 'true' }, hourLabel(line.from, context)), ' ',
+        h('span', { class: `mm${line.times.length ? '' : ' none'}`, 'aria-hidden': 'true' }, line.times.length ? line.minutes.map((minute) => String(minute).padStart(2, '0')).join(' ') : '–'),
+        // (read out once: the times, which say their hour; or the hour and that none leaves, midnight as "0 Uhr" as shown)
+        h('span', { class: 'spoken' }, line.times.length ? list(line.times.map(time)) : `${hourParts(line.from, context).join('')}: ${t('facts.none')}`))))));
   });
   const towns = facts.towns ?? [];
   const along = [
@@ -611,7 +642,7 @@ export function lineTimetable(facts, context, way = 0, open = new Set()) {
     h('h2', { class: 'timetable-head' }, h('button', { type: 'button', class: 'to-timetable', 'data-focus': 'timetable-head' },
       h('span', { class: 'what' }, h('span', { class: 'title' }, t('facts.timetable')), stop ? h('span', { class: 'from' }, t('facts.timetableFrom', { stop })) : null),
       iconOf(mdiChevronUp))),
-    h('section', { class: 'line-timetable' },
+    h('section', { class: 'line-timetable', 'data-mode': mode },
       h('ul', { class: 'timetable-days' }, days),
       along.length ? h('div', { class: 'along' }, along.map((said) => h('p', {}, said))) : null),
   ];

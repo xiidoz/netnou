@@ -454,7 +454,18 @@ export class Facts {
         const key = `${Math.max(0, weekday(on) - 4)} ${its?.first} ${its?.last}`;
         (groups.get(key) ?? groups.set(key, { dates: [], span: its }).get(key)).dates.push(on);
       }
-      const week = [...groups.values()].map((group) => this.daysSaid(group.dates, group.span, group.dates.map(at)));
+      // (days of a kind apart wherever their departures differ, so that each departure the details list leaves on
+      // every day it is listed for, #316; two in the same minute are one, as in the hours: a train in two parts)
+      const split = [...groups.values()].flatMap((group) => {
+        if (!group.span) return [group];
+        const alike = new Map();
+        for (const on of group.dates) {
+          const key = [...new Set(inDay(at(on), group.span).map((s) => Math.floor(s / 60)))].sort((a, b) => a - b).join(',');
+          (alike.get(key) ?? alike.set(key, { dates: [], span: group.span }).get(key)).dates.push(on);
+        }
+        return [...alike.values()];
+      });
+      const week = split.map((group) => this.daysSaid(group.dates, group.span, group.dates.map(at)));
       return { stop: station >= 0 ? tt.stops.name[station] : null, today, week };
     })));
     const { minutes, stops, towns } = this.alongOf(index);
@@ -469,12 +480,14 @@ export class Facts {
    * many trips it makes, the fewest and the most; and how often it runs hour
    * by hour (hourly).
    * @returns { dates, first, last, often: { from, to, …often } | null,
-   *   trips: [few, many] | null, runs }: times in epoch seconds of the first
-   *   of the days, which say their time of day; first and last null where it
-   *   does not run
+   *   trips: [few, many] | null, runs, start, departures }: times in epoch seconds
+   *   of the first of the days, which say their time of day; first and last
+   *   null where it does not run; `departures` every one of them, the same on
+   *   each of the days, in minutes from `start`, the start of the first (as
+   *   inDay reads them: 1476 is 0:36 after its midnight)
    */
   daysSaid(dates, span, lists) {
-    if (!span) return { dates, first: null, last: null, often: null, trips: null, runs: [] };
+    if (!span) return { dates, first: null, last: null, often: null, trips: null, runs: [], start: serviceDayStart(dates[0]), departures: [] };
     const series = lists.map((list) => inDay(list, span).map((s) => Math.floor(s / 60))).filter((list) => list.length);
     const { hours, runs } = hourly(series);
     const stretch = stretchOf(hours);
@@ -484,8 +497,12 @@ export class Facts {
       first: base + span.first,
       last: base + span.last,
       often: stretch && runsAt([stretch], base)[0],
-      trips: series.length ? [Math.min(...series.map((list) => list.length)), Math.max(...series.map((list) => list.length))] : null,
+      // (two in the same minute are one, as in the hours and their times: a train in two parts)
+      trips: series.length ? [Math.min(...series.map((list) => new Set(list).size)), Math.max(...series.map((list) => new Set(list).size))] : null,
       runs: runsAt(runs, base),
+      // (every departure, the same on each of the days: as the printed timetable lists them, #316; from the start of the first)
+      start: base,
+      departures: series[0] ? [...new Set(series[0])].sort((a, b) => a - b) : [],
     };
   }
 

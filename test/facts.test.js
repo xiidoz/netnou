@@ -10,7 +10,7 @@ import { after, before, test } from 'node:test';
 import { t as translate } from '../public/i18n.js';
 import de from '../public/locales/de.js';
 import en from '../public/locales/en.js';
-import { daysText, hoursText, hourText, lineLists, lineTimetable, oftenText, stopToday, todayText as todayTextOf, toHtml } from '../public/panel.js';
+import { daysText, hourLines, hoursText, hourText, lineLists, lineTimetable, oftenText, stopToday, todayText as todayTextOf, toHtml } from '../public/panel.js';
 import { Addresses } from '../server/lib/addresses.js';
 import { Area } from '../server/lib/area.js';
 import { readDataset, writeDataset } from '../server/lib/dataset.js';
@@ -236,6 +236,10 @@ test('a line, each way it goes: how often it runs today hour by hour, the coming
     [['20261107'], '07:00', '23:00', 20, [51, 51]],
     [['20261108'], '07:00', '23:00', 20, [51, 51]],
   ]);
+  // every departure of each kind of day, in minutes of its day, as the timetable at a stop lists them (#316)
+  const working = [330, ...every(10, '06:00', '20:00'), ...every(20, '20:00', '23:41')];
+  assert.deepEqual(up.week[0].departures, working);
+  assert.deepEqual(up.week[1].departures, every(20, '07:00', '23:41'));
   // (the other way from 8 o'clock at the weekend: its first trip leaves at 7:02)
   assert.equal(clockOf(down.week[1].often.from), '08:00');
   assert.deepEqual([line.minutes, line.stops], [9, 4]);
@@ -343,10 +347,11 @@ test('a stop says below its name how many lines leave it today, from when to whe
 
 test('the timetable after the stops of a line: two lines for each kind of day, Monday first, its hours folded below its own head; from end to end, its towns', () => {
   const run = (date, from, to, often) => ({ from: at(date, from), to: at(date, to), ...often });
+  const m = (hhmm) => +hhmm.slice(0, 2) * 60 + +hhmm.slice(3);
   const week = [
-    { dates: ['20261108'], first: at('20261108', '08:10'), last: at('20261108', '21:50'), often: null, trips: [14, 14], runs: [] },
-    { dates: ['20261104', '20261105', '20261106', '20261109', '20261110'], first: at('20261104', '05:30'), last: at('20261104', '23:40'), often: run('20261104', '06:00', '20:00', { every: 10 }), trips: [94, 94], runs: [run('20261104', '06:00', '20:00', { every: 10 }), run('20261104', '20:00', '24:00', { every: 20 })] },
-    { dates: ['20261107'], first: null, last: null, often: null, trips: null, runs: [] },
+    { dates: ['20261108'], first: at('20261108', '08:10'), last: at('20261108', '21:50'), often: null, trips: [14, 14], runs: [], departures: [] },
+    { dates: ['20261104', '20261105', '20261106', '20261109', '20261110'], first: at('20261104', '05:30'), last: at('20261104', '24:20'), often: run('20261104', '06:00', '20:00', { every: 10 }), trips: [6, 6], runs: [], start: serviceDayStart('20261104'), departures: [m('05:30'), m('06:00'), m('06:10'), m('06:20'), m('08:05'), m('24:20')] },
+    { dates: ['20261107'], first: null, last: null, often: null, trips: null, runs: [], departures: [] },
   ];
   const facts = { ways: [{ week }, { week: week.slice(0, 1) }], minutes: 37, stops: 27, towns: ['Nürnberg', 'Fürth'] };
   const context = drawing('de', de, at('20261104', '13:37'));
@@ -355,23 +360,49 @@ test('the timetable after the stops of a line: two lines for each kind of day, M
   // the heading before the timetable, a way down to it from the foot of the details (app.js)
   assert.equal(html, `<h2 class="timetable-head"><button type="button" class="to-timetable" data-focus="timetable-head"><span class="what"><span class="title">Fahrplan der nächsten 7 Tage</span></span>${chevron}</button></h2>`
     + '<section class="line-timetable"><ul class="timetable-days">'
-    + '<li><details class="days" data-days="20261104,20261105,20261106,20261109,20261110"><summary class="days-head" data-focus="days 20261104,20261105,20261106,20261109,20261110">'
-    + `<span class="when">Mo–Fr</span><span class="said"><span class="span">05:30–23:40</span><span class="often">6–20 Uhr alle 10 Min.</span></span>${chevron}</summary>`
-    + '<ul class="runs"><li><span class="hours">6–20 Uhr</span> <span>alle 10 Min.</span></li><li><span class="hours">20–24 Uhr</span> <span>alle 20 Min.</span></li></ul></details></li>'
-    + '<li><div class="days-head"><span class="when">Sa</span><span class="said"><span class="span">keine Fahrten</span></span></div></li>'
-    + '<li><div class="days-head"><span class="when">So</span><span class="said"><span class="span">08:10–21:50</span><span class="often">14 Fahrten</span></span></div></li>'
+    + '<li><details class="days" name="timetable-days" data-days="20261104,20261105,20261106,20261109,20261110"><summary class="days-head" data-focus="days 20261104,20261105,20261106,20261109,20261110">'
+    + `<span class="when"><span class="part">Mo–Fr</span></span><span class="said"><span class="span">05:30–00:20</span><span class="often">6–20 Uhr alle 10 Min.</span></span>${chevron}</summary>`
+    // (every hour from the first trip's to the last's a line: the hour, the minutes for the eye, the times read out)
+    + '<ul class="hour-lines"><li><span class="hh" aria-hidden="true">5</span> <span class="mm" aria-hidden="true">30</span><span class="spoken">05:30</span></li>'
+    + '<li><span class="hh" aria-hidden="true">6</span> <span class="mm" aria-hidden="true">00 10 20</span><span class="spoken">06:00, 06:10 und 06:20</span></li>'
+    + '<li><span class="hh" aria-hidden="true">7</span> <span class="mm none" aria-hidden="true">–</span><span class="spoken">7 Uhr: keine Fahrt</span></li>'
+    + '<li><span class="hh" aria-hidden="true">8</span> <span class="mm" aria-hidden="true">05</span><span class="spoken">08:05</span></li>'
+    + [9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23].map((hour) => `<li><span class="hh" aria-hidden="true">${hour}</span> <span class="mm none" aria-hidden="true">–</span><span class="spoken">${hour} Uhr: keine Fahrt</span></li>`).join('')
+    + '<li><span class="hh" aria-hidden="true">0</span> <span class="mm" aria-hidden="true">20</span><span class="spoken">00:20</span></li></ul></details></li>'
+    + '<li><div class="days-head"><span class="when"><span class="part">Sa</span></span><span class="said"><span class="span">keine Fahrten</span></span></div></li>'
+    + '<li><div class="days-head"><span class="when"><span class="part">So</span></span><span class="said"><span class="span">08:10–21:50</span><span class="often">14 Fahrten</span></span></div></li>'
     + '</ul><div class="along"><p>37 Min. von Ende zu Ende · 27 Haltestellen</p><p>Durch Nürnberg und Fürth</p></div></section>');
+  // (with the line's kind, whose colour marks the hour it is now)
+  assert.ok(lineTimetable(facts, context, 0, new Set(), 'bus').map(toHtml).join('').includes('<section class="line-timetable" data-mode="bus">'));
   // the stop its figures are of, in the heading; the kind of day today is, marked
   const named = lineTimetable({ ...facts, date: '20261104', ways: [{ week, stop: 'Nürnberg Plärrer' }] }, context).map(toHtml).join('');
   assert.ok(named.includes('<span class="title">Fahrplan der nächsten 7 Tage</span><span class="from">ab Nürnberg Plärrer</span>'), named);
-  assert.ok(named.includes('<span class="when">Mo–Fr<span class="today">heute</span></span>'), named);
+  assert.ok(named.includes('<span class="when"><span class="part">Mo–Fr</span><span class="today">heute</span></span>'), named);
   assert.equal(named.match(/class="today"/g).length, 1);
   // a kind of day opened (by its dates) is drawn open; the other way has its own
-  assert.ok(lineTimetable(facts, context, 0, new Set(['20261104,20261105,20261106,20261109,20261110'])).map(toHtml).join('').includes('<details class="days" open data-days='));
-  assert.ok(lineTimetable(facts, context, 1).map(toHtml).join('').includes('<span class="when">So</span>') && !lineTimetable(facts, context, 1).map(toHtml).join('').includes('Mo–Fr'));
-  // a kind of day whose hours say no more than its second line has nothing to open
-  const one = { ways: [{ week: [{ ...week[1], runs: [week[1].often] }] }] };
-  assert.ok(!lineTimetable(one, context).map(toHtml).join('').includes('<details'));
+  assert.ok(lineTimetable(facts, context, 0, new Set(['20261104,20261105,20261106,20261109,20261110'])).map(toHtml).join('').includes('<details class="days" name="timetable-days" open data-days='));
+  assert.ok(lineTimetable(facts, context, 1).map(toHtml).join('').includes('<span class="part">So</span>') && !lineTimetable(facts, context, 1).map(toHtml).join('').includes('Mo–Fr'));
+  // today's kind of day marks the hour it is now (at 13:37 none leaves; still marked); another day marks none
+  const today = lineTimetable({ ...facts, date: '20261104' }, context, 0, new Set()).map(toHtml).join('');
+  assert.ok(today.includes('<li class="now" aria-current="time"><span class="hh" aria-hidden="true">13</span>'), today);
+  assert.equal(lineTimetable(facts, context).map(toHtml).join('').match(/aria-current/g), null);
+  // after midnight, while the day's last trip is still to come, its hour of 0
+  assert.ok(lineTimetable({ ...facts, date: '20261104' }, drawing('de', de, at('20261104', '24:05')), 0, new Set()).map(toHtml).join('').includes('<li class="now" aria-current="time"><span class="hh" aria-hidden="true">0</span>'));
+  // where the clock writes AM or PM, the hour says which
+  const twelve = lineTimetable(facts, drawing('en-US', en, at('20261104', '13:37'))).map(toHtml).join('');
+  assert.ok(twelve.includes('<li><span class="hh" aria-hidden="true">5 AM</span> <span class="mm" aria-hidden="true">30</span><span class="spoken">5:30 AM</span></li>'), twelve);
+  assert.ok(twelve.includes('<span class="hh" aria-hidden="true">12 AM</span>'), twelve);
+  // the hours of a kind of day alone, from the start of its day: also where its first trip is written past midnight, as
+  // a night tram's 25:05, which is 1:05 of the day after
+  const lines = hourLines({ start: serviceDayStart('20261104'), departures: [m('05:30'), m('06:10')] }, at('20261104', '06:12'), true);
+  assert.deepEqual(lines.map(({ from, minutes, now }) => [clockOf(from), minutes, now]), [['05:00', [30], false], ['06:00', [10], true]]);
+  // (an hour of midnight without a trip read out as shown, "0 Uhr", not "24 Uhr")
+  const late = lineTimetable({ ways: [{ week: [{ dates: ['20261108'], first: at('20261108', '22:25'), last: at('20261108', '25:03'), often: null, trips: [3, 3], runs: [], start: serviceDayStart('20261108'), departures: [m('22:25'), m('22:40'), m('25:03')] }] }] }, context, 0, new Set()).map(toHtml).join('');
+  assert.ok(late.includes('<span class="spoken">0 Uhr: keine Fahrt</span>'), late);
+  const night = hourLines({ start: serviceDayStart('20261106'), departures: [m('25:05'), m('26:05')] }, at('20261107', '01:30'), true);
+  assert.deepEqual(night.map(({ from, minutes, now }) => [new Date(from * 1000).toISOString(), minutes, now]), [['2026-11-07T00:00:00.000Z', [5], true], ['2026-11-07T01:00:00.000Z', [5], false]]);
+  // a kind of day without departures has nothing to open
+  assert.ok(!lineTimetable({ ways: [{ week: [week[0]] }] }, context).map(toHtml).join('').includes('<details'));
   // days apart, and a stretch of three or more: "Mo, Mi–Fr"
   assert.equal(daysText(['20261106', '20261104', '20261105', '20261109'], drawing('de', de, 0)), 'Mo, Mi–Fr');
   // many towns: how many, from the first to the last
