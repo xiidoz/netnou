@@ -234,6 +234,19 @@ export function spanOf(times) {
 }
 
 /**
+ * The times of a service day as spanOf reads them, in seconds: one written
+ * before the first trip leaves after midnight, 24 hours later, as where the
+ * feed writes 24:36 for 0:36. The hours of a day then go from its first trip
+ * to its last, as the first and last trip say, and a 0:36 is no first trip of
+ * the morning in them. A time written past midnight (25:05) stays as it is.
+ * @param span the span of these times (spanOf), or of the days they are read with
+ */
+export function inDay(times, span = spanOf(times)) {
+  if (!span) return [];
+  return times.map((time) => (time < span.first ? time + 86400 : time));
+}
+
+/**
  * The towns along a way, from that of its first station to that of its last
  * (the towns of its stations in order, null where one is not known): each
  * once, where it first comes, but the town of the last station at the end,
@@ -257,18 +270,25 @@ const rangeOf = (spans) => (spans.length ? { first: Math.min(...spans.map((s) =>
 /**
  * The ways of a line (Facts.line), each number of departures an hour said
  * one way in all that its details say of both (oneWord): of today, and of
- * each kind of day its longest stretch and its hours.
+ * each kind of day its longest stretch and its hours. A stretch that is said
+ * as a count then is as long as the hours around it that say the same: an
+ * hourly train from 6 to 16 that runs on once an hour, a minute early or late,
+ * until 23 is "6–23 einmal pro Stunde" in its head as in its hours, not
+ * "6–16".
  */
-function wordedAlike(ways) {
+export function wordedAlike(ways) {
   const lists = ways.flatMap(({ today, week }) => [today?.runs ?? [], ...week.flatMap((days) => [days.often ? [days.often] : [], days.runs])]);
   const said = oneWord(lists).values();
   const next = () => said.next().value;
+  const sameCount = (a, b) => a.perHour && b.perHour && a.perHour[0] === b.perHour[0] && a.perHour[1] === b.perHour[1];
   return ways.map((way) => {
     const runs = next();
     const today = way.today && { ...way.today, runs };
     const week = way.week.map((days) => {
       const often = next()[0] ?? null;
-      return { ...days, often, runs: next() };
+      const hours = next();
+      const around = often && hours.find((run) => sameCount(run, often) && run.from <= often.from && run.to >= often.to);
+      return { ...days, often: around ? { ...often, from: around.from, to: around.to } : often, runs: hours };
     });
     return { ...way, today, week };
   });
@@ -336,14 +356,15 @@ export class Facts {
 
   /**
    * The departures of a counted way (waysOf) on a date, in minutes of its
-   * service day: at the station most of its trips of that day leave from
-   * (of as busy ones the first along the way), where it runs as it does
-   * along most of its way, also while a part of it is closed.
+   * service day as its first and last trip read it (inDay): at the station
+   * most of its trips of that day leave from (of as busy ones the first along
+   * the way), where it runs as it does along most of its way, also while a
+   * part of it is closed.
    */
   wayMinutes(way, date) {
     const tt = this.tt;
     const trips = way.trips.filter((t) => tt.runsOn(t, date));
-    const leaving = new Map(); // station → [minutes]
+    const leaving = new Map(); // station → [seconds]
     for (const t of trips) {
       const stops = tt.stopsOf(t);
       const seen = new Set();
@@ -351,11 +372,11 @@ export class Facts {
         const station = tt.stationOf[stops[p]];
         if (seen.has(station)) continue;
         seen.add(station);
-        (leaving.get(station) ?? leaving.set(station, []).get(station)).push(Math.floor(tt.schedDep(t, p) / 60));
+        (leaving.get(station) ?? leaving.set(station, []).get(station)).push(tt.schedDep(t, p));
       }
     }
     const order = (station) => way.order.get(station) ?? Infinity;
-    return [...leaving].sort((a, b) => b[1].length - a[1].length || order(a[0]) - order(b[0]))[0]?.[1] ?? [];
+    return inDay([...leaving].sort((a, b) => b[1].length - a[1].length || order(a[0]) - order(b[0]))[0]?.[1] ?? []).map((s) => Math.floor(s / 60));
   }
 
   /** What leaves of a counted way (waysOf) on a date: by station, the seconds of the service day each of its trips leaves it (the first time, not at its end). */
@@ -425,7 +446,7 @@ export class Facts {
       const base = serviceDayStart(date);
       const times = tt.dateIndex.has(date) ? at(date) : [];
       const span = spanOf(times);
-      const today = span ? { date, first: base + span.first, last: base + span.last, runs: runsAt(hourly([times.map((s) => Math.floor(s / 60))]).runs, base) } : null;
+      const today = span ? { date, first: base + span.first, last: base + span.last, runs: runsAt(hourly([inDay(times, span).map((s) => Math.floor(s / 60))]).runs, base) } : null;
       const groups = new Map();
       for (const on of days) {
         const its = spanOf(at(on));
@@ -454,7 +475,7 @@ export class Facts {
    */
   daysSaid(dates, span, lists) {
     if (!span) return { dates, first: null, last: null, often: null, trips: null, runs: [] };
-    const series = lists.map((list) => list.map((s) => Math.floor(s / 60))).filter((list) => list.length);
+    const series = lists.map((list) => inDay(list, span).map((s) => Math.floor(s / 60))).filter((list) => list.length);
     const { hours, runs } = hourly(series);
     const stretch = stretchOf(hours);
     const base = serviceDayStart(dates[0]);
@@ -541,7 +562,7 @@ export class Facts {
       const said = new Map();
       for (const [to, leaves] of ways) {
         const { first, last } = spanOf(leaves);
-        said.set(to, { first: base + first, last: base + last, runs: runsAt(hourly([leaves.map((s) => Math.floor(s / 60))]).runs, base) });
+        said.set(to, { first: base + first, last: base + last, runs: runsAt(hourly([inDay(leaves).map((s) => Math.floor(s / 60))]).runs, base) });
       }
       shown.set(line, said);
     }

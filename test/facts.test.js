@@ -14,7 +14,7 @@ import { daysText, hoursText, hourText, lineLists, lineTimetable, oftenText, sto
 import { Addresses } from '../server/lib/addresses.js';
 import { Area } from '../server/lib/area.js';
 import { readDataset, writeDataset } from '../server/lib/dataset.js';
-import { facts, hourly, oneWord, spanOf, stretchOf, townsOfWay } from '../server/lib/facts.js';
+import { facts, hourly, inDay, oneWord, spanOf, stretchOf, townsOfWay, wordedAlike } from '../server/lib/facts.js';
 import { buildDataset } from '../server/lib/importer.js';
 import { addDays, serviceDayStart, setTimeZone } from '../server/lib/time.js';
 import { Timetable } from '../server/lib/timetable.js';
@@ -105,6 +105,17 @@ test('what is read together says once an hour one way, the count, where one list
   assert.deepEqual(oneWord(kept), kept);
 });
 
+test('a kind of day whose longest stretch is said as a count after all names it as long as its hours that say the same', () => {
+  // a train on the hour from 6 to 16, then a minute early or late until 23: "6–23 einmal pro Stunde", head and hours
+  const day = { dates: ['20261121'], often: { from: 6, to: 16, every: 60 }, runs: [{ from: 6, to: 23, perHour: [1, 1] }, { from: 23, to: 24, none: true }] };
+  const [way] = wordedAlike([{ today: null, week: [day] }]);
+  assert.deepEqual(way.week[0].often, { from: 6, to: 23, perHour: [1, 1] });
+  assert.deepEqual(way.week[0].runs, day.runs);
+  // a stretch on its beat keeps its own hours
+  const beat = { dates: ['20261121'], often: { from: 6, to: 16, every: 30 }, runs: [{ from: 6, to: 16, every: 30 }, { from: 16, to: 23, perHour: [1, 2] }] };
+  assert.deepEqual(wordedAlike([{ today: null, week: [beat] }])[0].week[0].often, beat.often);
+});
+
 test('a description names the longest stretch that one set of words holds for, where that is half the hours there are', () => {
   const day = [...every(10, '06:00', '20:00'), ...every(20, '20:00', '23:41')];
   assert.deepEqual(stretchOf(hourly([day]).hours), { from: 6, to: 20, often: { every: 10 } });
@@ -131,6 +142,25 @@ test('the first and last of a day go around the longest pause, so that a line pa
   assert.deepEqual(spanOf([...day, 24 * 3600 + 41 * 60]), { first: 4 * 3600, last: 24 * 3600 + 41 * 60 });
   assert.deepEqual(spanOf([41 * 60, ...day]), { first: 4 * 3600, last: 24 * 3600 + 41 * 60 });
   assert.equal(spanOf([]), null);
+});
+
+test('the hours of a day read it as its first and last trip do: a trip written as 0:36 is after the last of the evening, not before the first', () => {
+  const day = every(60, '04:41', '22:42').map((m) => m * 60);
+  // however the feed writes it, 0:36 is 24 hours on, and so is a day of its kind read with it
+  assert.deepEqual(inDay([36 * 60, ...day]), [24 * 3600 + 36 * 60, ...day]);
+  assert.deepEqual(inDay([24 * 3600 + 36 * 60, ...day]), [24 * 3600 + 36 * 60, ...day]);
+  assert.deepEqual(inDay([36 * 60], spanOf([36 * 60, ...day])), [24 * 3600 + 36 * 60]);
+  assert.deepEqual(inDay([]), []);
+  // a night tram written past midnight on the day before keeps its times, on the day they are of
+  assert.deepEqual(inDay([25 * 3600 + 5 * 60, 26 * 3600 + 5 * 60]), [25 * 3600 + 5 * 60, 26 * 3600 + 5 * 60]);
+  // a kind of day: its hours from 5 (its first trip at 4:41) to midnight, with none after 22:41, not "1–4 none" and
+  // nothing after 22 o'clock
+  const date = '20261102';
+  const lists = [[36 * 60, ...day], [36 * 60, ...day]];
+  const said = facts(timetable).daysSaid([date, addDays(date, 1)], spanOf(lists[0]), lists);
+  const hour = (h) => serviceDayStart(date) + h * 3600;
+  assert.deepEqual([said.first, said.last], [hour(4) + 41 * 60, hour(24) + 36 * 60]);
+  assert.deepEqual(said.runs.map(({ from, to, ...often }) => [from, to, often]), [[hour(5), hour(23), { every: 60 }], [hour(23), hour(24), { none: true }]]);
 });
 
 // A tram that runs every 10 minutes from 6 to 20 o'clock on working days, then
