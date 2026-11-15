@@ -42,6 +42,11 @@ export default {
   'map.label': 'Map with the current positions of the vehicles',
   // read with the map when it has the keyboard focus (its description): what its keys do
   'map.keys': 'Arrow keys move the map, + and − zoom, Enter opens what is under the crosshair.',
+  'map.skip': 'To the map',
+  'map.keysMove': 'move map',
+  'map.keysZoom': 'zoom',
+  'map.keyEnter': 'Enter',
+  'map.keysOpen': 'open',
   // said for a screen reader when the crosshair has rested on a stop for a moment (a vehicle is named as on its line)
   'map.aimStop': 'Stop {name}',
   // said, and shown beside the crosshair for a moment, when Enter finds nothing under it

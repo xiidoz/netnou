@@ -1912,6 +1912,7 @@ const hitKey = (hit) => (!hit ? null : hit.vehicle ? `vehicle ${hit.vehicle.id}`
  */
 function placeCross(arrived = false) {
   if (!keysOnMap()) {
+    showMapKeys(false);
     dropAim();
     return;
   }
@@ -1923,7 +1924,14 @@ function placeCross(arrived = false) {
   // (the map's buttons where the details now leave them: as details close, they still stand beside them until their own
   // observer moves them back, after this one)
   clearMapButtons();
-  const room = crossRoom();
+  showMapKeys(true);
+  let room = crossRoom();
+  // (where the crosshair lacks room of its own, as in a short window, the keys give way to it, which leaves it more: the
+  // crosshair is what the keyboard on the map needs)
+  if (room.covered && keysTop() !== null) {
+    mapKeys.classList.add('gave-way');
+    room = crossRoom();
+  }
   cross.free = room.padding;
   cross.covered = room.covered;
   cross.edges = room.edges ?? edgesOf(room.padding);
@@ -1983,12 +1991,29 @@ function crossRoom() {
   const free = freeMap();
   // (the settings, open over the map, count with the card: the crosshair below them)
   const bubble = $('settings').hidden ? null : $('settings').getBoundingClientRect();
+  // (and the keys of the map at its foot: the crosshair above them)
+  const keys = keysTop();
+  const aboveKeys = (padding) => (keys === null ? padding : { ...padding, bottom: Math.max(padding.bottom, viewSize.y - keys + 8) });
   if (narrowScreen.matches) {
-    const top = Math.max(free.padding.top, bubble ? bubble.bottom + 24 : 0);
-    const covered = !free.fits || viewSize.y - top - free.padding.bottom < CROSS_PX;
-    return { padding: { ...free.padding, top }, covered };
+    let padding = aboveKeys({ ...free.padding, top: Math.max(free.padding.top, bubble ? bubble.bottom + 24 : 0) });
+    // (above the map's credits, which take lines of their own on a phone)
+    const credits = map.getContainer().querySelector('.maplibregl-ctrl-attrib')?.getBoundingClientRect();
+    if (credits?.height) padding.bottom = Math.max(padding.bottom, viewSize.y - credits.top + 8);
+    // (and clear of the banner, which stands in the middle of a narrow screen: on whichever side of it leaves more of the
+    // free map, below it where the details are closed, above it where it stands on a sheet)
+    const banner = $('banner').hidden ? null : $('banner').getBoundingClientRect();
+    if (banner && banner.bottom > padding.top && banner.top < viewSize.y - padding.bottom) {
+      const below = { ...padding, top: banner.bottom + 24 };
+      const above = { ...padding, bottom: viewSize.y - banner.top + 24 };
+      padding = viewSize.y - below.top - below.bottom >= viewSize.y - above.top - above.bottom ? below : above;
+    }
+    const covered = !free.fits || viewSize.y - padding.top - padding.bottom < CROSS_PX;
+    return { padding, covered };
   }
-  if (free.fits && (!bubble || bubble.right < viewSize.x - free.padding.right - (viewSize.x - free.padding.left - free.padding.right) / 2 - CROSS_PX)) return { padding: free.padding, covered: false };
+  if (free.fits && (!bubble || bubble.right < viewSize.x - free.padding.right - (viewSize.x - free.padding.left - free.padding.right) / 2 - CROSS_PX)) {
+    const padding = aboveKeys(free.padding);
+    if (viewSize.y - padding.top - padding.bottom >= CROSS_PX) return { padding, covered: false };
+  }
   const margin = 8;
   const card = $('controls').getBoundingClientRect();
   const over = !panel.hidden && state.board === null;
@@ -1996,7 +2021,7 @@ function crossRoom() {
     .map((group) => group.getBoundingClientRect()).filter((box) => box.width > 0);
   const right = Math.min(over ? panel.getBoundingClientRect().left : viewSize.x, ...buttons.map((box) => box.left));
   const credits = map.getContainer().querySelector('.maplibregl-ctrl-attrib')?.getBoundingClientRect();
-  const bottom = credits && credits.width > 0 && credits.left < right ? credits.top : viewSize.y;
+  const bottom = Math.min(credits && credits.width > 0 && credits.left < right ? credits.top : viewSize.y, keys ?? Infinity);
   const padding = { top: Math.max(card.bottom, bubble?.bottom ?? 0) + margin, bottom: viewSize.y - bottom + margin, left: margin, right: viewSize.x - right + margin };
   const width = viewSize.x - padding.left - padding.right;
   const height = viewSize.y - padding.top - padding.bottom;
@@ -2016,11 +2041,75 @@ function edgesOf(padding) {
   const edges = { top: padding.top - back, bottom: viewSize.y - padding.bottom + back, left: padding.left - back, right: viewSize.x - padding.right + back };
   const credits = map.getContainer().querySelector('.maplibregl-ctrl-attrib')?.getBoundingClientRect();
   if (credits?.width && credits.left < edges.right && credits.right > edges.left) edges.bottom = Math.min(edges.bottom, credits.top - 4);
+  const keys = keysTop();
+  if (keys !== null) edges.bottom = Math.min(edges.bottom, keys - 4);
+  // (on a narrow screen on the side of the banner in its middle that the crosshair is on: crossRoom)
+  if (narrowScreen.matches && !$('banner').hidden) {
+    const banner = $('banner').getBoundingClientRect();
+    if (padding.top >= banner.bottom) edges.top = Math.max(edges.top, banner.bottom + 4);
+    else edges.bottom = Math.min(edges.bottom, banner.top - 4);
+  }
   for (const group of map.getContainer().querySelectorAll('.maplibregl-ctrl-bottom-right > .maplibregl-ctrl-group')) {
     const box = group.getBoundingClientRect();
     if (box.width && box.top < edges.bottom && box.bottom > edges.top) edges.right = Math.min(edges.right, box.left - 4);
   }
   return edges;
+}
+
+// The keys of the map in sight while it has the keyboard: at its foot as
+// the page's other notes (placeBubble), which give way to it meanwhile
+// (style.css), and below the crosshair, whose free map ends above them
+// (crossRoom). A screen reader hears them as the map's description
+// (map-keys), not twice.
+const mapKeys = el('p', { class: 'tip map-keys', 'aria-hidden': 'true' });
+mapKeys.hidden = true;
+document.body.append(mapKeys);
+
+/** The keys of the map shown and placed while the keyboard is on it (placeCross), or hidden. */
+function showMapKeys(shown) {
+  if (!shown) {
+    mapKeys.hidden = true;
+    return;
+  }
+  if (!mapKeys.firstChild) {
+    const caps = (keys, props = {}) => keys.map((key) => el('kbd', { ...props, text: key }));
+    // (a line breaks after the arrows only: zooming and opening go together)
+    mapKeys.append(
+      el('span', { class: 'keys' }, [...caps(['←'], { class: 'arrow side' }), ...caps(['↑', '↓'], { class: 'arrow' }), ...caps(['→'], { class: 'arrow side' }), el('span', { text: t('map.keysMove') })]),
+      el('span', { class: 'rest' }, [
+        el('span', { class: 'keys' }, [...caps(['+', '−']), el('span', { text: t('map.keysZoom') })]),
+        el('span', { class: 'keys' }, [...caps([t('map.keyEnter')]), el('span', { text: t('map.keysOpen') })]),
+      ]),
+    );
+  }
+  mapKeys.hidden = false;
+  mapKeys.classList.remove('gave-way');
+  if (state.board === null) placeBubble(mapKeys, { settled: true });
+  else {
+    // (beside a board, at the foot of the map it leaves, above its credits, in the middle beside its buttons: placeBubble
+    // measures from the foot of the window)
+    mapKeys.style.left = '';
+    mapKeys.style.maxWidth = '';
+    mapKeys.style.visibility = '';
+    const box = map.getContainer().getBoundingClientRect();
+    const credits = map.getContainer().querySelector('.maplibregl-ctrl-attrib')?.getBoundingClientRect();
+    mapKeys.style.bottom = `${document.documentElement.clientHeight - (credits?.height ? Math.min(box.bottom, credits.top) : box.bottom) + 10}px`;
+    besideMapButtons(mapKeys);
+  }
+  const meets = (one, other) => one.top < other.bottom && one.bottom > other.top && one.left < other.right && one.right > other.left;
+  // (above the banner where that stands at the foot of the map as well: what it says the visitor has to know)
+  if (!$('banner').hidden) {
+    const banner = $('banner').getBoundingClientRect();
+    if (meets(banner, mapKeys.getBoundingClientRect())) mapKeys.style.bottom = `${document.documentElement.clientHeight - banner.top + 8}px`;
+  }
+  // (and where the card leaves them no room, in a short window, they give way, as to the crosshair: not half under it)
+  if (meets($('controls').getBoundingClientRect(), mapKeys.getBoundingClientRect())) mapKeys.classList.add('gave-way');
+}
+
+/** Where the keys of the map begin, in px of the map, while they are seen; else null. */
+function keysTop() {
+  if (mapKeys.hidden || mapKeys.classList.contains('gave-way') || mapKeys.style.visibility === 'hidden') return null;
+  return mapKeys.getBoundingClientRect().top - map.getContainer().getBoundingClientRect().top;
 }
 
 /** No aim, and nothing said of it: the keyboard has left the map. */
@@ -2224,6 +2313,12 @@ map.getCanvas().addEventListener('focus', () => {
   cross.keepUntil = performance.now() + 600;
 });
 map.getCanvas().addEventListener('blur', () => placeCross());
+// (the way to the map for the keyboard, the first stop of the Tab key: the keyboard onto it, its crosshair placed by its
+// focus as by a Tab)
+$('skip-map').addEventListener('click', (event) => {
+  event.preventDefault();
+  map.getCanvas().focus();
+});
 map.getCanvas().addEventListener('keydown', (event) => {
   // (a tooltip showing before this key, not one this key brings: Escape)
   const shown = !tooltip.hidden;
@@ -2413,6 +2508,8 @@ const crossResized = new ResizeObserver(() => {
 });
 crossResized.observe($('controls'));
 crossResized.observe($('panel'));
+// (and as the banner comes and goes, which the keys of the map stand above)
+crossResized.observe($('banner'));
 map.on('resize', () => { if (keysOnMap()) placeCross(); });
 
 // ---------- the visitor's own position ----------

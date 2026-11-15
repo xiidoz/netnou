@@ -1189,8 +1189,12 @@ otherwise a server would load a file written by older code:
   roughly Chrome and Edge 94, Firefox 114, Safari 16.4 and newer.
 - **Accessibility.** Filters, the settings, the search, the dialogs, the detail
   panel and its lists are ordinary controls and work with the keyboard; the
-  search is the way to a station without a pointer. On the canvas, vehicles
-  and stations can be selected with a pointer only.
+  search is the way to a station without a pointer. The map takes the
+  keyboard too: a crosshair in its free middle, the arrow keys move it from
+  mark to mark, + and − zoom there, Enter opens what lies under it; while it
+  has the keyboard, these keys show at its foot. It comes last in the order
+  of the page, after the details and the card; "Zur Karte", the first stop
+  of the Tab key and seen only then, leads there at once.
   On a narrow screen the filters are one row that scrolls sideways; arrows at
   its ends show that it goes on and move it. On a wide screen they wrap onto
   as many rows as they need. The arrows are left out of the tab order and

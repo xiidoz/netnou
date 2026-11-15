@@ -564,6 +564,31 @@ button { font: inherit; color: inherit; }
   .maplibregl-map:has(.maplibregl-canvas:focus-visible)::after { forced-color-adjust: none; }
 }
 
+/* The way to the map for the keyboard (WCAG 2.4.1), the first stop of the Tab key: out of sight until it has the focus,
+   then in the corner of the card, in the look of the crosshair's tooltip; app.js puts the keyboard on the map. Not where
+   the map takes no keyboard: under a board alone, on a screen on a wall. Out of sight above the top edge, safe area
+   and shadow included. */
+.skip {
+  position: absolute;
+  z-index: 2000;
+  top: calc(var(--gap) + var(--safe-top));
+  left: calc(var(--gap) + var(--safe-left));
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  box-sizing: border-box;
+  padding: 10px 16px;
+  border-radius: 10px;
+  background: var(--text);
+  color: var(--bg);
+  font-weight: 600;
+  text-decoration: none;
+  box-shadow: var(--shadow);
+}
+.skip:not(:focus) { transform: translateY(calc(-100% - var(--gap) - var(--safe-top) - 24px)); }
+.skip:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+:root[data-board="alone"] .skip, :root[data-display="fixed"] .skip { display: none; }
+
 button:focus-visible, select:focus-visible, .row:focus-visible, .panel:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
@@ -1176,6 +1201,20 @@ li:last-child > .row.stop .rail::before { bottom: 50%; }
    placed as the tip, but quiet, in the card's colours, as it says what the
    head of the details says already; a finger goes through it to the map. */
 .tip.map-note { z-index: 999; border: 1px solid var(--border); background: var(--bg); color: var(--text); pointer-events: none; }
+
+/* The keys of the map, while it has the keyboard (app.js, "the crosshair"): placed as the tip, in the quiet look of the
+   line on the map, each key in a cap as on the keyboard; the page's other notes give way to it meanwhile, one at a time. */
+.tip.map-keys { z-index: 999; display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 6px 16px; padding: 6px 12px; border: 1px solid var(--border); background: var(--bg); color: var(--text); font-size: 13px; pointer-events: none; }
+.map-keys .keys { display: inline-flex; align-items: center; gap: 2px; white-space: nowrap; }
+.map-keys .rest { display: inline-flex; gap: 16px; white-space: nowrap; }
+.map-keys .keys > span { margin-left: 4px; }
+.map-keys kbd { display: inline-grid; place-items: center; min-width: 22px; height: 22px; padding: 0 5px; box-sizing: border-box; border: 1px solid var(--border); border-bottom-width: 2px; border-radius: 5px; background: var(--bg-subtle); color: var(--text); font-family: inherit; font-size: 12px; font-weight: 600; line-height: 1; }
+/* (the arrows a little larger, ← and → raised to the middle of their caps, as their glyphs sit low) */
+.map-keys kbd.arrow { padding: 0 3px 1px; font-size: 15px; }
+.map-keys kbd.side { padding-bottom: 4px; }
+/* (where it would leave the crosshair no room, it gives way, and the other notes show) */
+.map-keys.gave-way { visibility: hidden; }
+body:has(> .map-keys:not([hidden], .gave-way)) :is(#tip, #offer, #map-note) { visibility: hidden; }
 
 /* The offer of the browser's language (#287), in the look of the tip: its
    line beside an ✕, below them the switch, filled, and the end of the offer,
