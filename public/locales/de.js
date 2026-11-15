@@ -24,6 +24,11 @@ export default {
 
   'map.label': 'Karte mit den aktuellen Positionen der Fahrzeuge',
   'map.keys': 'Pfeiltasten verschieben die Karte, + und − zoomen, Enter öffnet, was unter dem Fadenkreuz ist.',
+  'map.skip': 'Zur Karte',
+  'map.keysMove': 'Karte bewegen',
+  'map.keysZoom': 'zoomen',
+  'map.keyEnter': 'Enter',
+  'map.keysOpen': 'öffnen',
   'map.aimStop': 'Haltestelle {name}',
   'map.nothing': 'Hier ist nichts zum Öffnen.',
   'map.zoomIn': 'Hineinzoomen',

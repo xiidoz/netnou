@@ -27,13 +27,17 @@
        Content-Security-Policy of the server forbids them. -->
 
   <!-- In the order of the page, which is that of the keyboard and of a
-       screen reader: where the page offers the browser's language, that
-       first; the details where they are open, what is being looked at, with
+       screen reader: the way to the map for the keyboard first; where the
+       page offers the browser's language, that; the details where they are open, what is being looked at, with
        its name as the main heading of the page; then the card; then the map
        with its buttons and its sources. On the screen the
        cards lie over the map whatever the order (z-index in style.css). In
        the details the way back and the name come before the buttons in their
        corner. -->
+  <!-- The way to the map for the keyboard (WCAG 2.4.1), which comes last: the
+       first stop of the Tab key, seen only while it has the focus; it puts
+       the keyboard on the map ("the crosshair" in app.js). -->
+  <a class="skip" id="skip-map" href="#map" data-i18n="map.skip">To the map</a>
   <!-- The offer of the browser's language where the address asks for another
        one ("the offer of a language" in app.js): in the language it offers,
        so its texts come from there and not from data-i18n. -->

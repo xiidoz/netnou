@@ -738,11 +738,40 @@ test('a dialog that says something opens on its text, which the keys scroll and 
   assert.match(read('style.css'), /\.dialog:has\(> \.dialog-body:focus-visible\)::after \{ content: ""; position: absolute; inset: 0; z-index: 3; border: 2px solid var\(--accent\);/);
 });
 
+test('the keyboard reaches the map from its first stop, and the map shows its keys while it has the keyboard', () => {
+  const html = read('index.html').replace(/<!--[\s\S]*?-->/g, '');
+  const app = withoutComments(read('app.js'));
+  const css = read('style.css');
+  // (the way to the map is the first stop of the Tab key, before the offer of a language and the details, which come first
+  // of the rest since #290; seen only while it has the focus, and not where there is no map to go to)
+  assert.match(html, /<body>\s*<a class="skip" id="skip-map" href="#map" data-i18n="map\.skip">/);
+  assert.match(app, /\$\('skip-map'\)\.addEventListener\('click', \(event\) => \{\s*event\.preventDefault\(\);\s*map\.getCanvas\(\)\.focus\(\);/);
+  assert.match(css, /\.skip:not\(:focus\) \{ transform: translateY\(calc\(-100% - var\(--gap\) - var\(--safe-top\) - 24px\)\); \}/);
+  assert.match(css, /:root\[data-board="alone"\] \.skip, :root\[data-display="fixed"\] \.skip \{ display: none; \}/);
+  // (the keys show and go with the crosshair, hidden from a screen reader, which has them as the map's description; the free
+  // map of the crosshair and its tooltip end above them; the other notes give way meanwhile)
+  assert.match(app, /if \(!keysOnMap\(\)\) \{\s*showMapKeys\(false\);\s*dropAim\(\);/);
+  assert.match(app, /const mapKeys = el\('p', \{ class: 'tip map-keys', 'aria-hidden': 'true' \}\);/);
+  assert.match(app, /const aboveKeys = \(padding\) => \(keys === null \? padding : \{ \.\.\.padding, bottom: Math\.max\(padding\.bottom, viewSize\.y - keys \+ 8\) \}\);/);
+  assert.match(app, /if \(keys !== null\) edges\.bottom = Math\.min\(edges\.bottom, keys - 4\);/);
+  // (in a short window, where they would leave the crosshair no room, they give way to it)
+  assert.match(app, /if \(room\.covered && keysTop\(\) !== null\) \{\s*mapKeys\.classList\.add\('gave-way'\);/);
+  assert.match(css, /body:has\(> \.map-keys:not\(\[hidden\], \.gave-way\)\) :is\(#tip, #offer, #map-note\) \{ visibility: hidden; \}/);
+  // (above the banner where both stand at the foot of the map; placed anew as it comes and goes)
+  assert.match(app, /if \(meets\(banner, mapKeys\.getBoundingClientRect\(\)\)\) mapKeys\.style\.bottom = /);
+  assert.match(app, /crossResized\.observe\(\$\('banner'\)\);/);
+  // (on a narrow screen, where the banner stands in the middle, the crosshair and its tooltip on the side of it with more room)
+  assert.match(app, /padding = viewSize\.y - below\.top - below\.bottom >= viewSize\.y - above\.top - above\.bottom \? below : above;/);
+  assert.match(app, /if \(padding\.top >= banner\.bottom\) edges\.top = Math\.max\(edges\.top, banner\.bottom \+ 4\);\s*else edges\.bottom = Math\.min\(edges\.bottom, banner\.top - 4\);/);
+  // (not half under the card in a short window: they give way there too)
+  assert.match(app, /if \(meets\(\$\('controls'\)\.getBoundingClientRect\(\), mapKeys\.getBoundingClientRect\(\)\)\) mapKeys\.classList\.add\('gave-way'\);/);
+});
+
 test('the map with the keyboard has its crosshair in the middle of its free part, and Enter opens what lies under it', () => {
   const app = withoutComments(read('app.js'));
   // where the card and the details leave the map free, a sheet that leaves too little of it coming down
   // (as the keyboard comes onto the map, not as the card or a sheet changes later, which may be the visitor's own doing)
-  assert.match(app, /if \(arrived\) roomForCross\(\);\s*const was = cross\.placed \? cross\.point : null;[\s\S]*?cross\.view = \{ \.\.\.viewSize \};\s*clearMapButtons\(\);\s*const room = crossRoom\(\);\s*cross\.free = room\.padding;\s*cross\.covered = room\.covered;/);
+  assert.match(app, /if \(arrived\) roomForCross\(\);\s*const was = cross\.placed \? cross\.point : null;[\s\S]*?cross\.view = \{ \.\.\.viewSize \};\s*clearMapButtons\(\);\s*showMapKeys\(true\);\s*let room = crossRoom\(\);[\s\S]*?\s*cross\.free = room\.padding;\s*cross\.covered = room\.covered;/);
   assert.match(app, /placeCross\(true\);/);
   // (one test for the room: a sheet down to the highest height at which the map fits; never against a hand)
   assert.match(app, /const fitting = heights\.filter\(\(height\) => freeMap\(height\)\.fits\);/);
