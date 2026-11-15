@@ -186,10 +186,12 @@ button { font: inherit; color: inherit; }
    details have one at their head, and part of the card. A tap or a pull
    folds the card to its title row and unfolds it (app.js); on a phone it
    folds by itself while details are open. The eye is there only to leave display mode.
-   For a finger it reaches from 8 px below the line above it (the link "How
-   it works" ends there) to 40 px below that: the row in the card, and under
-   the pill a tab of 160 px over the map. The card is as high as without it,
-   and the pill where it would be. */
+   For a finger it reaches from 2 px above its row to 40 px below that: the
+   row in the card, and under the pill a tab of 160 px over the map. On a
+   touch screen the link "How it works" above it takes the room down to it,
+   and on its row the side of the pill nearer the link (see "room for a
+   finger"); the pill's own column is the grip's. The card is as high as
+   without it, and the pill where it would be. */
 .card-grip { position: relative; display: block; width: calc(100% + 28px); height: 11px; margin: 1px -14px -12px; padding: 0; border: 0; border-radius: 0 0 12px 12px; background: none; color: var(--text-muted); cursor: pointer; touch-action: none; }
 .card-grip::before { content: ""; position: absolute; left: calc(50% - 18px); top: -2px; width: 36px; height: 4px; border-radius: 2px; background: var(--border); }
 /* (as far as there is map below the card: not onto the details, whose bar may be right there, app.js sets --reach) */
@@ -303,11 +305,11 @@ button { font: inherit; color: inherit; }
 /* the two buttons that open and shut the search where it is not always there, see the small screens below */
 .search-open, .search-close { display: none; }
 
-/* what is found, hanging below the field over the rest of the card and the map */
+/* what is found, hanging below the field over the rest of the card and the map (over the room for a finger of what it covers) */
 .search-drop {
   display: none;
   position: absolute;
-  z-index: 1;
+  z-index: 2;
   top: calc(100% + 5px);
   left: 0;
   right: 0;
@@ -1310,6 +1312,8 @@ li:last-child > .row.stop .rail::before { bottom: 50%; }
 .offer-close::after, .offer-switch::after, .offer-never::after { content: ""; position: absolute; }
 /* (the round buttons of the title row: the gear and the lens; above them the edge of the screen, below them the field of the search or the line that positions are calculated) */
 .settings-open::after, .search-open::after { inset: -11px -7px -3px; }
+/* (over the room the search field takes for a finger, which begins 2 px above the field: see below) */
+.settings-open, .search-open { z-index: 2; }
 .search-open { margin-right: 6px; }
 .search-close::after { inset: -5px; }
 /* (the buttons in the corner of the details and the sheets, 44 px apart) */
@@ -1340,6 +1344,45 @@ li:last-child > .row.stop .rail::before { bottom: 50%; }
 }
 /* (the button that shows the sources of the map, in the corner of the screen) */
 .maplibregl-ctrl-attrib-button::after { inset: -10px; }
+/* (the field of the search, as high as a chip: the room around it for a finger is a label of it that cannot be seen, from
+   the foot of the title row to the top of the status line below, which is no button; above it the field itself) */
+.search-reach { position: absolute; z-index: 1; left: 0; right: 0; top: -2px; bottom: -12px; }
+.search input, .search-close { position: relative; z-index: 2; }
+/* (and the lens in the field over the field, which a finger goes through) */
+.search-sign { z-index: 3; }
+/* (the list of the languages: a border that cannot be seen around what is drawn of it, which stays as it was, from the
+   name above it, which opens it as well, to the gap before the next setting; its ring around what is drawn) */
+.language { margin: -8px; padding: 6px 7px; border: 8px solid transparent; border-radius: 16px; background-clip: padding-box; box-shadow: inset 0 0 0 1px var(--border); }
+.language:focus-visible { outline-offset: -6px; }
+/* (at the foot of a board: the button for another stop over the gaps above and below it, and the two its question has, 6 px apart) */
+.board-add, .board-add-menu button { position: relative; }
+.board-add::after, .board-add-menu button::after { content: ""; position: absolute; inset: -5px 0; }
+.board-add-menu button::after { inset: -3px 0; }
+/* On a touch screen, where a finger needs more room than a mouse: rows
+   that touch, which no room around them can give it, as high as a finger
+   (the stops of a line and of a trip; panel.js places the vehicles between
+   them by the same height), the vehicles on them as large, and over them,
+   as on the map; the way to "how it works" in its own column from the
+   chips' room down to the grip, 11 px more above it for that, and on the
+   grip's row beside its pill, past the operator's links, whose own boxes
+   keep theirs (app.js sets where, gripReach). */
+@media (pointer: coarse) {
+  .row.on-line { height: 44px; }
+  .line-stops .branch::before, .line-stops .branch::after { height: 46px; }
+  .line-stops .leaves > .branch::before { top: -22px; }
+  .line-stops .joins > .branch::after { bottom: -22px; }
+  button.line-vehicle { left: -22px; top: -22px; width: 44px; height: 44px; }
+  .row.stop { min-height: 44px; }
+  #about-line { margin-top: 11px; }
+  #about-open { position: relative; }
+  #about-open::before, #about-open::after { content: ""; position: absolute; z-index: 1; }
+  #about-open::after { left: var(--wide-left, -6px); right: var(--wide-right, -6px); top: calc(-11.5px - var(--up, 0px)); bottom: calc(-1 * var(--foot, 6px)); }
+  /* (on the grip's row, beside its pill: app.js sets where) */
+  #about-open::before { left: var(--row-left, 0px); top: calc(100% + var(--foot, 6px)); width: var(--row-width, 0px); height: var(--row-height, 0px); }
+  /* (the vehicles of a line as the server drew them, by rows as a mouse has them, until the page draws its own) */
+  svg.line-vehicles { visibility: hidden; }
+  .links a { position: relative; z-index: 1; }
+}
 
 /* ---------- small screens: controls on top, details as bottom sheet ---------- */
 
@@ -1607,10 +1650,14 @@ li:last-child > .row.stop .rail::before { bottom: 50%; }
 }
 :root[data-board="alone"] .handle { left: 0; }
 @media (orientation: portrait) {
-  :root[data-board] .handle { top: -16px; left: calc(50% - 32px); width: 64px; height: 32px; cursor: ns-resize; }
-  :root[data-board] .handle::before { top: 9px; left: 10px; width: 44px; height: 14px; }
-  :root[data-board] .handle::after { top: 14px; left: 22px; width: 20px; height: 4px; border-width: 1px 0; }
+  /* (for a finger 44 px high, half over the map and half over the board, its pill on the edge between them; at the top of a
+     board alone it reaches down over the name of the stop, which is no button, its pill where it was) */
+  :root[data-board] .handle { top: -22px; left: calc(50% - 32px); width: 64px; height: 44px; cursor: ns-resize; }
+  :root[data-board] .handle::before { top: 15px; left: 10px; width: 44px; height: 14px; }
+  :root[data-board] .handle::after { top: 20px; left: 22px; width: 20px; height: 4px; border-width: 1px 0; }
   :root[data-board="alone"] .handle { top: 0; }
+  :root[data-board="alone"] .handle::before { top: 9px; }
+  :root[data-board="alone"] .handle::after { top: 14px; }
   /* (and the name of the stop below its pill, which it would cross where the name takes one line) */
   :root[data-board="alone"]:not([data-display="fixed"]) .panel .panel-head.board-head { padding-top: max(0.6em, 28px); }
 }

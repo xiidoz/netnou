@@ -767,7 +767,8 @@ export function vehicleSpot(track, now) {
 }
 
 // The rows of the stops of a line (#256), in px, as style.css has them: a
-// station, and one with a line below its name; and the padding above them.
+// station, and one with a line below its name, as high as every row is on a
+// touch screen (context.touch: "room for a finger"); and the padding above them.
 export const STOP_ROW = 32;
 export const NOTED_ROW = 44;
 const STOPS_TOP = 6;
@@ -863,7 +864,7 @@ export function lineStops(line, context, way = 0) {
     // (the stop the line was opened from, chosen: its ring, which a screen reader hears of)
     const chosen = context.chosen?.(stop) ?? false;
     const said = `${stopSaid(stop.modes, line.mode, favourite, context)}${chosen ? `, ${t('stop.chosen')}` : ''}`;
-    const height = below || tall ? NOTED_ROW : STOP_ROW;
+    const height = below || tall || context.touch ? NOTED_ROW : STOP_ROW;
     const middle = y + height / 2;
     y += height;
     const name = below ? h('span', { class: 'name' }, h('span', { class: 'stop' }, stop.name), h('span', { class: 'town' }, below)) : h('span', { class: 'name' }, stop.name);
