@@ -8,6 +8,15 @@ This file is written by
 messages when a release is made. Do not edit it by hand; see
 [Releases](CONTRIBUTING.md#releases).
 
+## [0.27.2](https://github.com/xiidoz/netnou/compare/v0.27.1...v0.27.2) (2026-11-15)
+
+
+### Bug Fixes
+
+* **page:** offline, the map says vehicles load once it is back; a trip keeps its row's time ([#353](https://github.com/xiidoz/netnou/issues/353)) ([7bd0da4](https://github.com/xiidoz/netnou/commit/7bd0da492b3952d1a923bf319f23ea31ff3f1083))
+* **page:** on a touch screen every control takes a finger over 44 px ([#351](https://github.com/xiidoz/netnou/issues/351)) ([d4b2b25](https://github.com/xiidoz/netnou/commit/d4b2b258ce0d3b19cba0c04d0fab66a7acc69aad))
+* **page:** the filter names each line by its badge, and a phone board shows whole destinations ([#350](https://github.com/xiidoz/netnou/issues/350)) ([fca0f0a](https://github.com/xiidoz/netnou/commit/fca0f0a760b6585ad8da3507aa0a90ee6469be90))
+
 ## [0.27.1](https://github.com/xiidoz/netnou/compare/v0.27.0...v0.27.1) (2026-11-14)
 
 
