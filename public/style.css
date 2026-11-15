@@ -751,6 +751,10 @@ button:focus-visible, select:focus-visible, .row:focus-visible, .panel:focus-vis
 :root[data-lost] .status[data-state="error"] { display: none; }
 /* Long without an answer, the delays the details show are the last ones known: grey (app.js, staleness). */
 #panel.stale .delay { color: var(--text-muted); }
+/* (what the row a trip was opened by said of it, below the head of the trip that did not load, its delay grey as the
+   list's would be by then: heldRow in app.js) */
+.held-row { padding: 4px 0 0 14px; border-bottom: 1px solid var(--border); }
+.held-row .stale .delay { color: var(--text-muted); }
 .when-back { text-wrap: balance; }
 /* On a screen on a wall, read from a distance, as large as the rows of its board. */
 :root[data-display] .board-head .notes .connection { font-size: 1.6em; }
@@ -1167,6 +1171,11 @@ li:last-child > .row.stop .rail::before { bottom: 50%; }
   text-align: center;
   text-wrap: balance;
 }
+
+/* That the vehicles load once the connection is back (mapNote in app.js):
+   placed as the tip, but quiet, in the card's colours, as it says what the
+   head of the details says already; a finger goes through it to the map. */
+.tip.map-note { z-index: 999; border: 1px solid var(--border); background: var(--bg); color: var(--text); pointer-events: none; }
 
 /* The offer of the browser's language (#287), in the look of the tip: its
    line beside an ✕, below them the switch, filled, and the end of the offer,
