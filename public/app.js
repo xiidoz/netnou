@@ -190,14 +190,18 @@ function toDom(node, svg = false) {
   return out;
 }
 
+// (a screen that is touched: a finger needs more room than a mouse, style.css "room for a finger")
+const touchScreen = matchMedia('(pointer: coarse)');
+
 /**
  * What panel.js needs to draw: the texts, times of day and dates where the
  * area is, whole hours, days of the week and lists (#289), the clock, how
  * departure times show, and for the vehicles of a line as on the map,
- * whether delays come in and how the vehicles are coloured and flagged.
+ * whether delays come in and how the vehicles are coloured and flagged, and
+ * whether the screen is touched, for how high the rows of a line are.
  */
 function drawing() {
-  return { t, time: formatTime, day: dayOf, hour: formatHour, weekday: formatWeekday, list: formatList, now: now(), times: state.times, live: realtimeState() === 'live' && staleness() < 2, colorBy: state.colorBy, flags: state.flags, moving: true, favourite: favouriteStop, chosen: (stop) => stop.id === state.selection?.fromStop?.id, lost: Boolean(state.selection?.failing) };
+  return { t, time: formatTime, day: dayOf, hour: formatHour, weekday: formatWeekday, list: formatList, now: now(), times: state.times, touch: touchScreen.matches, live: realtimeState() === 'live' && staleness() < 2, colorBy: state.colorBy, flags: state.flags, moving: true, favourite: favouriteStop, chosen: (stop) => stop.id === state.selection?.fromStop?.id, lost: Boolean(state.selection?.failing) };
 }
 
 // The icons on the page's own buttons are from Material Design Icons
@@ -3308,9 +3312,54 @@ const folded = () => document.documentElement.dataset.fold !== undefined;
 // just below the card, and its own bar is then where the strip would be.
 const GRIP_REACH_PX = 29; // (as high as the strip is in style.css)
 function gripReach() {
-  const room = sheetOpen() ? panel.getBoundingClientRect().top - grip.getBoundingClientRect().bottom - 4 : Infinity;
+  // (what is where, first: then what follows from it)
+  const gripBox = grip.getClientRects().length ? grip.getBoundingClientRect() : null;
+  const room = sheetOpen() ? panel.getBoundingClientRect().top - (gripBox?.bottom ?? 0) - 4 : Infinity;
+  const about = $('about-open');
+  const box = about.getBoundingClientRect();
+  const line = $('about-line').getBoundingClientRect();
+  const card = controls.getBoundingClientRect();
+  const links = $('links').hidden ? null : $('links').getBoundingClientRect();
   grip.style.setProperty('--reach', `${Math.max(0, Math.min(GRIP_REACH_PX, Math.floor(room)))}px`);
+  // The way to "how it works" takes a finger in its own column (style.css,
+  // "room for a finger"): from the chips' room above its line down to the
+  // grip, past the operator's links where it has not 44 px above them (their
+  // own boxes keep theirs), and on the grip's row beside its pill, which is
+  // the grip's: as far as the foot of the card on the side with more room.
+  const top = line.top - ABOUT_ABOVE_PX;
+  let floor = gripBox ? gripBox.top - 2 : card.bottom;
+  if (links && links.top - 2 - top >= 44) floor = Math.min(floor, links.top - 2);
+  about.style.setProperty('--up', `${Math.max(0, Math.round(box.top - line.top))}px`);
+  about.style.setProperty('--foot', `${Math.max(0, Math.floor(floor - box.bottom))}px`);
+  // (where the pill's column cuts through the link's, the side with more room reaches 44 px past the pill, so that
+  // there is a finger's width there all the way down: over the line's plain text, the empty card, or between the
+  // operator's links)
+  let row = null;
+  let wide = [box.left - 6, box.right + 6];
+  if (gripBox && floor === gripBox.top - 2 && card.bottom > floor) {
+    const middle = gripBox.left + gripBox.width / 2;
+    const [left, right] = wide;
+    const [pillLeft, pillRight] = [middle - 22, middle + 22];
+    if (pillLeft - left > right - pillRight) {
+      const from = Math.min(left, Math.max(card.left + 8, pillLeft - 44));
+      row = [from, Math.min(right, pillLeft)];
+      wide = [from, right];
+    } else {
+      const to = Math.max(right, Math.min(card.right - 8, pillRight + 44));
+      row = [Math.max(left, pillRight), to];
+      wide = [left, to];
+    }
+  }
+  about.style.setProperty('--wide-left', `${Math.round(wide[0] - box.left)}px`);
+  about.style.setProperty('--wide-right', `${Math.round(box.right - wide[1])}px`);
+  about.style.setProperty('--row-left', `${row ? Math.round(row[0] - box.left) : 0}px`);
+  about.style.setProperty('--row-width', `${row ? Math.max(0, Math.round(row[1] - row[0])) : 0}px`);
+  about.style.setProperty('--row-height', `${row ? Math.max(0, Math.floor(card.bottom - floor)) : 0}px`);
 }
+// (how far above its line the way to "how it works" takes a finger: the room style.css leaves above that line)
+const ABOUT_ABOVE_PX = 11.5;
+// (where the pointer changes, as on a laptop that is also touched: the rows of a line or a trip as high as it needs)
+touchScreen.addEventListener('change', () => ['line', 'trip'].includes(state.selection?.type) && state.selection.data && showSelection());
 const reaching = new ResizeObserver(gripReach);
 reaching.observe(panel);
 reaching.observe(controls);
