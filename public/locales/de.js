@@ -169,6 +169,7 @@ export default {
   'board.mergeTitle': 'Mit {stop} zusammen zeigen',
   'board.remove': '{stop} von der Tafel nehmen',
   'board.from': 'ab {stop}',
+  'board.lines': 'Linien',
   'board.gone': '{stop} ist nicht im Fahrplan.',
 
   'trip.realtime': 'mit Verspätungsdaten',
