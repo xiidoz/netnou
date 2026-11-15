@@ -678,8 +678,10 @@ button:focus-visible, select:focus-visible, .row:focus-visible, .panel:focus-vis
 .choice .icon { width: 1.1em; height: 1.1em; }
 /* "Tafel": a chip as "Filter" is, which makes the details of a stop its board, with the sign the board has for going back */
 /* (on the board: pressed, as a switch that is on, and its sign points back) */
-/* (as large as in the sheet, the chip no higher for it) */
-.choice-open .direction-sign { width: 2.4em; height: 2.4em; margin: -0.6em -0.15em -0.6em -0.2em; }
+/* (the badge of the one line chosen, as the departures and the sheet have it, growing with the chip as a board's type does;
+   "only" before it kept whole, the direction's name cut where the chip is narrow) */
+.choice-open .badge { flex: none; min-width: 2.3em; margin-block: -0.12em; padding: 0.077em 0.54em; border-radius: 0.46em; font-size: 1.04em; }
+.choice-open > .only { flex: none; }
 /* (the focus ring around the whole pill, as the badge of a trip has it: the button is only its larger part) */
 .choice-open:focus-visible { outline: none; }
 .choice:has(.choice-open:focus-visible) { outline: 2px solid var(--accent); outline-offset: 2px; }
@@ -698,30 +700,21 @@ button:focus-visible, select:focus-visible, .row:focus-visible, .panel:focus-vis
 /* (a focus ring in the head above everything else of the details, the buttons in their corner and what they say among it) */
 .panel-head :focus-visible:not(.spoken), .panel-head .choice:has(.choice-open:focus-visible) { position: relative; z-index: 4; }
 
-/* The sign of a direction: its line as the map draws its vehicle, a disc in
-   the colour of its kind with the arrowhead to where it leaves the stop,
-   with white edges in both themes; grey where it is left out. */
-.direction-sign { flex: none; width: 30px; height: 30px; overflow: visible; --sign: var(--mode-other); }
-.direction-sign[data-mode="subway"] { --sign: var(--mode-subway); }
-.direction-sign[data-mode="tram"] { --sign: var(--mode-tram); }
-.direction-sign[data-mode="bus"] { --sign: var(--mode-bus); }
-.direction-sign[data-mode="suburban"] { --sign: var(--mode-suburban); }
-.direction-sign[data-mode="regional"] { --sign: var(--mode-regional); }
-.direction-sign[data-mode="longdistance"] { --sign: var(--mode-longdistance); }
-.direction-sign[data-mode="ferry"] { --sign: var(--mode-ferry); }
-.direction-sign[data-mode="cable"] { --sign: var(--mode-cable); }
-.direction-sign path, .direction-sign circle { fill: var(--sign); stroke: #fff; stroke-width: 1.5; stroke-linejoin: round; }
-.direction-sign text { fill: var(--letters); font: 700 9px system-ui, sans-serif; }
-
-/* the sheet: every line a row of its directions */
-.choice-list { margin-top: 12px; }
+/* the sheet: every line a row, its badge as the departures have it and beside it its directions; the badges of all
+   lines in one column, under all the kinds (subgrid), so that the directions begin one below the other */
+.choice-list { margin-top: 12px; display: grid; grid-template-columns: auto minmax(0, 1fr); column-gap: 12px; }
+.choice-list > * { grid-column: 1 / -1; }
+.choice-list > .chip { justify-self: start; }
 /* (as far apart, one below the other, as a finger needs: see "room for a finger") */
-.choice-lines { list-style: none; margin: 10px 0 0; padding: 0; display: grid; gap: 15px; }
+.choice-lines { list-style: none; margin: 10px 0 0; padding: 0; display: grid; grid-template-columns: subgrid; row-gap: 15px; }
 /* The kinds of the lines, where there are several (renderChoice in app.js), as in "Alle Linien". */
 .choice-list .rows-head { padding: 22px 0 0; }
-.choice-lines li { display: flex; flex-wrap: wrap; gap: 15px 6px; }
+.choice-lines li { display: grid; grid-template-columns: subgrid; grid-column: 1 / -1; align-items: start; }
+/* (the badge level with the middle of the first row of its directions) */
+.choice-line { display: flex; align-items: center; min-height: 30px; }
+.choice-line > .badge { flex: auto; }
+.choice-ways { display: flex; flex-wrap: wrap; gap: 15px 6px; min-width: 0; }
 .choice-list .chip { white-space: normal; text-align: left; }
-.choice-list .chip .direction-sign { margin: -5px -2px -5px -4px; }
 /* What is chosen has a check mark and the colour of what is chosen on the page; the rest is plain, as a tap
    chooses (renderChoice in app.js): not crossed out as a kind switched off in the legend, which hides it. */
 .choice-list .chip[aria-pressed="false"] { color: var(--text); background: var(--bg); }
@@ -1618,6 +1611,8 @@ li:last-child > .row.stop .rail::before { bottom: 50%; }
   :root[data-board] .handle::before { top: 9px; left: 10px; width: 44px; height: 14px; }
   :root[data-board] .handle::after { top: 14px; left: 22px; width: 20px; height: 4px; border-width: 1px 0; }
   :root[data-board="alone"] .handle { top: 0; }
+  /* (and the name of the stop below its pill, which it would cross where the name takes one line) */
+  :root[data-board="alone"]:not([data-display="fixed"]) .panel .panel-head.board-head { padding-top: max(0.6em, 28px); }
 }
 
 /* (no heart on a board: it is in the details of the stop) */
@@ -1635,11 +1630,14 @@ li:last-child > .row.stop .rail::before { bottom: 50%; }
 
 /* The type of a board grows with it: a share of its height, or of its width
    where that is less, from a little more than the details have to that of a
-   sign at a station. With all of the screen it is half as large again. */
+   sign at a station. With all of the screen it is half as large again, as
+   far as its width leaves a destination some 15 letters: in portrait the
+   width sets it (a phone, a tablet, a screen on a wall turned upright),
+   elsewhere the height. */
 :root[data-board] #panel-head,
 :root[data-board] #panel-body { font-size: clamp(16px, min(3.4cqh, 4.6cqw), 48px); }
 :root[data-board="alone"] #panel-head,
-:root[data-board="alone"] #panel-body { font-size: calc(1.5 * clamp(16px, min(3.4cqh, 4.6cqw), 48px)); }
+:root[data-board="alone"] #panel-body { font-size: min(calc(1.5 * clamp(16px, min(3.4cqh, 4.6cqw), 48px)), max(16px, 5.4cqw)); }
 :root[data-board] #panel-body { display: flex; flex-direction: column; padding: 0 0.9em; overflow: hidden; }
 
 /* At its top the name of the stop, and the clock under the buttons; on a
@@ -1686,6 +1684,8 @@ li:last-child > .row.stop .rail::before { bottom: 50%; }
 .board-rows > li.day::after { content: ""; flex: 1; border-top: 1px solid var(--border); }
 .board-rows .badge { min-width: 2.6em; padding: 0.12em 0.4em; border-radius: 0.3em; font-size: 0.8em; }
 .board-rows .name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* (one line on a wide board: the places a narrow one may break a name at are none here) */
+.board-rows .name wbr { display: none; }
 .board-rows .platform { color: var(--text-muted); font-size: 0.7em; white-space: nowrap; }
 .board-rows .cancelled .name { text-decoration: line-through; color: var(--text-muted); }
 /* (the parts of the time are cells of the row; the delay hugs the minutes where it is before them) */
@@ -1698,6 +1698,12 @@ li:last-child > .row.stop .rail::before { bottom: 50%; }
 .board-rows .sign { display: inline-block; width: 0.96em; height: 0.96em; margin-left: 0.2em; vertical-align: -0.12em; color: var(--delay-major-text); }
 .board-rows .gone { grid-column: 4 / -1; justify-self: end; color: var(--delay-severe-text); font-size: 0.85em; font-weight: 700; }
 @container (max-width: 520px) {
+  /* (a destination takes a second line where it needs one, between words, and a row's parts are level with its
+     middle: the badge with the middle of its destination, as in the list of the details) */
+  .board-rows > li { align-items: center; }
+  .board-rows .name { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; white-space: normal; overflow-wrap: break-word; hyphens: auto; line-height: 1.08; }
+  .board-rows .name wbr { display: inline; }
+  .board-rows .name .bracket { hyphens: manual; white-space: nowrap; }
   .board-rows.times-both { grid-template-columns: auto minmax(0, 1fr) auto auto; }
   .board-rows.times-both .when { display: grid; grid-template-columns: auto auto; justify-content: end; justify-items: end; line-height: 1.15; }
   .board-rows.times-both .minutes, .board-rows.times-both .gone { grid-column: 1 / -1; }

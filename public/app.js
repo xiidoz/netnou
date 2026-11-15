@@ -13,7 +13,7 @@ import { APP_NAME, READMES, chooseLanguage, dayOf, formatHour, formatList, forma
 import { FAVOURITE_NAME_ZOOM, HEART_MIDDLE, PLACES_ZOOM, RAIL_MODES, heartMark, joiningLines, mergePlaces, namePrecedence, namedAt, placeNames, stopMark, townToShow, townsAlong, withoutStyleStops } from './stops.js';
 import { favouritesFrom, isFavourite, lineFavourite, sameStop, stopFavourite, withChoice, withFavourite } from './favourites.js';
 import { choiceValue, chosenWays, readChoice, toggled } from './choice.js';
-import { DELAY_MAJOR_S, DELAY_MINOR_S, DELAY_SEVERE_S, MINUTES_MAX, NOTE_CHARS, badge as badgeOf, choiceChip as choiceChipOf, clockOf, delayCell as delayCellOf, delayClass, delayNode as delayNodeOf, delaySum as delaySumOf, unknownDelay as unknownDelayOf, delayFlag, delayText, departureLists, departuresSub as departuresSubOf, directionSign as directionSignOf, leavesAt, lineBadge, lineHead, lineLists, lineSaid as lineSaidOf, lineStops, lineTimetable, leftAlready, GONE_S, whenBack, minutesNode as minutesNodeOf, twoKinds, vehicleSpot, VEHICLE_R, panelHead as panelHeadOf, stopHeading, stopRing, stopSaid, stopSign, stopToday, tallMark, tomorrowAt as tomorrowAtOf, untilText as untilTextOf, vehicleLabel, vehicleName, warningSign as warningSignOf, warns } from './panel.js';
+import { DELAY_MAJOR_S, DELAY_MINOR_S, DELAY_SEVERE_S, MINUTES_MAX, NOTE_CHARS, badge as badgeOf, choiceChip as choiceChipOf, clockOf, delayCell as delayCellOf, delayClass, delayNode as delayNodeOf, delaySum as delaySumOf, unknownDelay as unknownDelayOf, delayFlag, delayText, departureLists, departuresSub as departuresSubOf, leavesAt, lineBadge, lineHead, lineLists, lineSaid as lineSaidOf, lineStops, lineTimetable, leftAlready, GONE_S, whenBack, minutesNode as minutesNodeOf, twoKinds, vehicleSpot, VEHICLE_R, panelHead as panelHeadOf, stopHeading, stopRing, stopSaid, stopSign, stopToday, tallMark, tomorrowAt as tomorrowAtOf, untilText as untilTextOf, vehicleLabel, vehicleName, warningSign as warningSignOf, warns } from './panel.js';
 import { BOARD_MAX, BOARD_SHARE, BOARD_STOPS, boardBlocks, boardQuery, boardShare, displayQuery, ledBy, readBoard, readDisplay, readStops } from './display.js';
 import { mdiArrowCollapse, mdiArrowExpand, mdiCheck, mdiChevronLeft, mdiChevronRight, mdiCityVariantOutline, mdiFullscreen, mdiFullscreenExit, mdiHeart, mdiHeartOutline, mdiMinusCircleOutline, mdiPlus } from './vendor/material-design-icons/icons.js';
 import { AttributionControl, MapLibreMap, NavigationControl } from './vendor/maplibre-gl/maplibre-gl.mjs';
@@ -788,15 +788,13 @@ function cutHeartRing(kinds, big, dpr) {
 // ---------- the lines of a stop to show (#164) ----------
 
 // Beside "Departures" a chip says which lines a stop's departures are of: all,
-// or only those chosen. It opens a sheet to choose them in, the directions of
-// each line as chips; its cross shows every line again. A direction is a line
-// with where it goes next (choice.js), and its sign is the line as the map
-// draws its vehicle, the arrowhead turned to where it leaves the stop.
+// or only those chosen. It opens a sheet to choose them in, each line by its
+// badge as the departures have it, its directions as chips beside it; its
+// cross shows every line again. A direction is a line with where it goes next
+// (choice.js).
 
-/** The sign of a direction (panel.js), for the chip and the sheet. */
-function directionSign(direction) {
-  return toDom(directionSignOf(direction));
-}
+/** The names of the lines whose badges say their kind at the open stop (twoKinds, panel.js), as its departures have them. */
+const kindsSaid = (list) => twoKinds([state.selection?.data?.today], list);
 
 /** The directions of the open stop there is to choose from, if they are known: as api/departures lists them. */
 const stopDirections = () => (state.directions && state.directions.id === state.selection?.data?.id ? state.directions.list : null);
@@ -841,8 +839,9 @@ function showView(view) {
 /** The chip: every line, or "only" and the directions chosen (panel.js); a tap on it opens the sheet, its cross shows all again (see the details' clicks). */
 function choiceChip() {
   const list = stopDirections() ?? [];
+  const both = kindsSaid(list);
   // (a line chosen whole as its directions, as the sheet ticks them)
-  return choiceChipOf(chosenWays(state.lines, list).map((direction) => ({ ...direction, name: directionName(direction, list) })), drawing());
+  return choiceChipOf(chosenWays(state.lines, list).map((direction) => ({ ...direction, name: directionName(direction, list), both: both.has(direction.line) })), drawing());
 }
 
 // The sheet in which they are chosen: a dialog as the one of the notes.
@@ -888,13 +887,19 @@ function renderChoice() {
   }
   const chosen = new Set(chosenWays(state.lines, list));
   const keys = list.map(({ key }) => key);
-  const line = ({ directions }) => el('li', {}, directions.map((direction) => {
-    const name = directionName(direction, list);
-    const button = chip(direction.key, chosen.has(direction), [directionSign(direction), el('span', { class: 'name', text: name })], () => applyChoice(toggled(state.lines, direction.key, keys)));
-    button.dataset.mode = direction.mode;
-    button.setAttribute('aria-label', t('choice.direction', { line: lineSaid(direction.line, direction.mode), to: name }));
-    return button;
-  }));
+  const both = kindsSaid(list);
+  // (a line: its badge, as the departures have it, and beside it its directions; the badge is no button, the chips say
+  // their line to a screen reader)
+  const line = ({ mode, line: name, directions }) => el('li', {}, [
+    el('span', { class: 'choice-line', 'aria-hidden': 'true' }, [toDom(lineBadge(name, mode, drawing(), both.has(name)))]),
+    el('span', { class: 'choice-ways' }, directions.map((direction) => {
+      const to = directionName(direction, list);
+      const button = chip(direction.key, chosen.has(direction), [el('span', { class: 'name', text: to })], () => applyChoice(toggled(state.lines, direction.key, keys)));
+      button.dataset.mode = direction.mode;
+      button.setAttribute('aria-label', t('choice.direction', { line: lineSaid(direction.line, direction.mode), to }));
+      return button;
+    })),
+  ]);
   // (under their kinds where there are several, as "Alle Linien" has them: a tram 4 and a bus 4 are not told apart by colour alone)
   const kindOf = (mode) => (DRAW_ORDER.includes(mode) ? mode : 'other');
   const kinds = [...new Set(lines.map(({ mode }) => kindOf(mode)))];
@@ -5766,8 +5771,15 @@ function boardRow(dep, times, from = null, both = false) {
     : times === 'time' ? [at(), late]
       : times === 'minutes' ? [late, minutesNode(dep, 'time')]
         : [at(!far), late, minutesNode(dep, 'time')];
+  // (on a narrow board a name may break where a bracket meets a word, as the railways write "Neustadt(Aisch)Bahnhof":
+  // hyphenation finds no place there, and the second line would otherwise cut a word anywhere; what is in brackets is
+  // not hyphenated, so that it moves to the next line whole; style.css)
+  const parts = dep.to.split(/(\([^()]*\))/).filter(Boolean);
   const name = from === null
-    ? el('span', { class: 'name', text: dep.to })
+    ? el('span', { class: 'name' }, parts.flatMap((part, i) => [
+      ...(i && !/\s$/.test(parts[i - 1]) && !/^\s/.test(part) ? [document.createElement('wbr')] : []),
+      /^\(.*\)$/.test(part) ? el('span', { class: 'bracket', text: part }) : part,
+    ]))
     : el('span', { class: 'name from' }, [el('span', { class: 'to', text: dep.to }), el('span', { class: 'stop', text: t('board.from', { stop: from }) })]);
   return el('li', { class: dep.cancelled ? 'cancelled' : '' }, [
     toDom(lineBadge(dep.line, dep.mode, drawing(), both)),
