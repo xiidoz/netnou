@@ -141,6 +141,7 @@ export default {
   'about.useBoardText': 'Abfahrten als große Tafel, zum Beispiel für ein Display an der Wand, mit bis zu vier Haltestellen.',
   'tip.departure': 'Abfahrt antippen: die\u00a0Karte zeigt ihr\u00a0Fahrzeug',
   'tip.departureMouse': 'Abfahrt anklicken: die\u00a0Karte zeigt ihr\u00a0Fahrzeug',
+  'map.vehiclesLoad': 'Fahrzeuge werden geladen, sobald die Verbindung wieder da ist.',
   'offer.text': 'Diese Seite gibt es auch auf Deutsch.',
   'offer.switch': 'Zu Deutsch wechseln',
   'offer.never': 'Nicht mehr fragen',

@@ -13,7 +13,7 @@ import { APP_NAME, READMES, chooseLanguage, dayOf, formatHour, formatList, forma
 import { FAVOURITE_NAME_ZOOM, HEART_MIDDLE, PLACES_ZOOM, RAIL_MODES, heartMark, joiningLines, mergePlaces, namePrecedence, namedAt, placeNames, stopMark, townToShow, townsAlong, withoutStyleStops } from './stops.js';
 import { favouritesFrom, isFavourite, lineFavourite, sameStop, stopFavourite, withChoice, withFavourite } from './favourites.js';
 import { choiceValue, chosenWays, readChoice, toggled } from './choice.js';
-import { DELAY_MAJOR_S, DELAY_MINOR_S, DELAY_SEVERE_S, MINUTES_MAX, NOTE_CHARS, badge as badgeOf, choiceChip as choiceChipOf, clockOf, delayCell as delayCellOf, delayClass, delayNode as delayNodeOf, delaySum as delaySumOf, unknownDelay as unknownDelayOf, delayFlag, delayText, departureLists, departuresSub as departuresSubOf, leavesAt, lineBadge, lineHead, lineLists, lineSaid as lineSaidOf, lineStops, lineTimetable, leftAlready, GONE_S, whenBack, minutesNode as minutesNodeOf, twoKinds, vehicleSpot, VEHICLE_R, panelHead as panelHeadOf, stopHeading, stopRing, stopSaid, stopSign, stopToday, tallMark, tomorrowAt as tomorrowAtOf, untilText as untilTextOf, vehicleLabel, vehicleName, warningSign as warningSignOf, warns } from './panel.js';
+import { DELAY_MAJOR_S, DELAY_MINOR_S, DELAY_SEVERE_S, MINUTES_MAX, NOTE_CHARS, badge as badgeOf, choiceChip as choiceChipOf, clockOf, delayCell as delayCellOf, delayClass, delayNode as delayNodeOf, delaySum as delaySumOf, unknownDelay as unknownDelayOf, delayFlag, delayText, departureLists, departureRow as departureRowOf, departuresSub as departuresSubOf, leavesAt, lineBadge, lineHead, lineLists, lineSaid as lineSaidOf, lineStops, lineTimetable, leftAlready, GONE_S, whenBack, minutesNode as minutesNodeOf, twoKinds, vehicleSpot, VEHICLE_R, panelHead as panelHeadOf, stopHeading, stopRing, stopSaid, stopSign, stopToday, tallMark, tomorrowAt as tomorrowAtOf, untilText as untilTextOf, vehicleLabel, vehicleName, warningSign as warningSignOf, warns } from './panel.js';
 import { BOARD_MAX, BOARD_SHARE, BOARD_STOPS, boardBlocks, boardQuery, boardShare, displayQuery, ledBy, readBoard, readDisplay, readStops } from './display.js';
 import { mdiArrowCollapse, mdiArrowExpand, mdiCheck, mdiChevronLeft, mdiChevronRight, mdiCityVariantOutline, mdiFullscreen, mdiFullscreenExit, mdiHeart, mdiHeartOutline, mdiMinusCircleOutline, mdiPlus } from './vendor/material-design-icons/icons.js';
 import { AttributionControl, MapLibreMap, NavigationControl } from './vendor/maplibre-gl/maplibre-gl.mjs';
@@ -1382,6 +1382,7 @@ function draw() {
     return Math.atan2(by - ay, bx - ax);
   };
 
+  const left = { all: 0, open: 0 };
   for (const v of state.drawList) {
     if (only ? !only.has(v.id) : !state.enabled.has(v.mode)) continue;
     // (without a connection, one whose known way has ended is not where that ended: it leaves the map; the open trip's goes
@@ -1389,6 +1390,9 @@ function draw() {
     const beyond = !state.online && time > v.knots[v.knots.length - 3];
     const target = beyond ? openPlace(v.id, time) : positionAt(v.knots, time);
     if (!target) continue;
+    // (how many are still on it, and how many of them are the open trip's own, mapNote)
+    left.all++;
+    if (beyond || isChosen(v)) left.open++;
     if (v.lat === null || Math.abs(target.lat - v.lat) + Math.abs(target.lon - v.lon) > JUMP_DEG) {
       v.lat = target.lat;
       v.lon = target.lon;
@@ -1423,6 +1427,7 @@ function draw() {
     }
     named.push({ v, x, y, a: headingAt(v, target) });
   }
+  mapNote(left, selection);
   quietMs = Math.max(soonest, Math.min(Math.max(soonest, QUIET_MAX_MS), fastest > 0 ? (1000 * still) / fastest : Infinity));
   if (chosen?.dot) {
     drawRing(chosen.x, chosen.y, r, 0, vehicleColor(chosen.dot));
@@ -3010,15 +3015,17 @@ function offerTip() {
 }
 
 /**
- * Puts a bubble (the tip, the offer of a language) where it is seen: on a
+ * Puts a bubble (the tip, the offer of a language, the line on the map) where it is seen: on a
  * phone above the details, which may still be gliding up (as in
  * clearOfCards), beside the map's buttons there, and out of sight while the
  * details leave no map for it, as the buttons are (clearMapButtons); else
  * at the foot of the map, in the middle of what the
  * details leave of it. Without details as style.css has it, but above the
  * credits where they are open: on a phone they take three lines.
+ * @param settled whether the details have come to rest: then right above
+ *   them however high they are, as for the line on the map (mapNote)
  */
-function placeBubble(bubble) {
+function placeBubble(bubble, { settled = false } = {}) {
   bubble.style.bottom = '';
   bubble.style.left = '';
   bubble.style.maxWidth = '';
@@ -3032,28 +3039,58 @@ function placeBubble(bubble) {
   }
   const details = panel.getBoundingClientRect();
   if (narrowScreen.matches) {
-    const sheetTop = panel.classList.contains('sized') ? details.top : Math.min(details.top, viewSize.y * (1 - SHEET_MIDDLE));
+    const sheetTop = settled || panel.classList.contains('sized') ? details.top : Math.min(details.top, viewSize.y * (1 - SHEET_MIDDLE));
     bubble.style.bottom = `${viewSize.y - sheetTop + 10}px`;
     // (and hidden, as those buttons, while the sheet leaves no map for it below the card: until it comes down again)
     if (sheetTop - bubble.offsetHeight - 10 < $('controls').getBoundingClientRect().bottom + 10) bubble.style.visibility = 'hidden';
   } else {
-    bubble.style.left = `${details.left / 2}px`;
+    // (in the middle of the map the details leave, beside its buttons there)
+    besideMapButtons(bubble, details.left);
   }
 }
 
 /**
- * On a phone, a bubble beside the map's buttons in their corner: in the
- * middle of the room they leave, so that none of them is covered while it is
- * up. Buttons hidden for want of room leave theirs (clearMapButtons).
+ * A bubble beside the map's buttons in their corner: in the middle of the
+ * room they leave, so that none of them is covered while it is up; on a wide
+ * screen also left of the details (`edge`). Buttons hidden for want of room
+ * leave theirs (clearMapButtons).
  */
-function besideMapButtons(bubble) {
+function besideMapButtons(bubble, edge = Infinity) {
   const buttons = [...map.getContainer().querySelectorAll('.maplibregl-ctrl-bottom-right > .maplibregl-ctrl-group')]
     .filter((group) => group.style.visibility !== 'hidden')
     .map((group) => group.getBoundingClientRect()).filter((box) => box.width > 0);
-  if (!buttons.length) return;
-  const right = Math.min(...buttons.map((box) => box.left)) - 10;
+  if (!buttons.length && edge === Infinity) return;
+  const right = Math.min(edge, ...buttons.map((box) => box.left)) - 10;
   bubble.style.left = `${(16 + right) / 2}px`;
   bubble.style.maxWidth = `${right - 16}px`;
+}
+
+// The map without a connection: its vehicles leave it as their known ways
+// end (draw). Where the details are open, which hold the banner back and
+// say since when in their head, a quiet line on the map says that they
+// load once it is back, once none is left there but the open trip's own.
+// One bubble at a time: not while the tip or the offer of a language is up.
+const mapNoteNode = $('map-note');
+let mapNoteText = null;
+let mapNoteWatched = false;
+
+/** Shows the line on the map, or hides it: after each frame, with how many vehicles are still on it (draw). */
+function mapNote(left, selection) {
+  // (only where the head of the details says since when the connection is lost: not while the page waits for its first
+  // answers, nor once an answer has come back)
+  const lost = connectionLost() && Boolean(selection?.failing) && !panel.hidden && state.board === null && !state.display && tip.hidden && offer.hidden;
+  const text = lost && (left.all === 0 || (selection?.type === 'trip' && left.all === left.open)) ? t('map.vehiclesLoad') : null;
+  if (text === mapNoteText) return;
+  mapNoteText = text;
+  mapNoteNode.hidden = text === null;
+  if (text === null) return;
+  mapNoteNode.textContent = text;
+  placeBubble(mapNoteNode, { settled: true });
+  // (it moves with the sheet, and with the window)
+  if (mapNoteWatched) return;
+  mapNoteWatched = true;
+  new ResizeObserver(() => mapNoteNode.hidden || placeBubble(mapNoteNode, { settled: true })).observe(panel);
+  addEventListener('resize', () => mapNoteNode.hidden || placeBubble(mapNoteNode, { settled: true }));
 }
 
 function hideTip() {
@@ -4506,10 +4543,10 @@ function markLost(lost = Boolean(state.selection?.failing)) {
   document.documentElement.toggleAttribute('data-lost', lost && !panel.hidden && panel.getClientRects().length > 0);
 }
 
-/** That details did not load: that they will, once the connection is back, and a button to try at once. */
-function lostLoad(head, retry) {
+/** That details did not load: that they will, once the connection is back, and a button to try at once; below the head what is kept of them (heldRow). */
+function lostLoad(head, retry, kept = null) {
   const said = el('p', { class: 'panel-empty lost' }, [el('i', { class: 'dot', 'aria-hidden': 'true' }), el('span', { text: t('panel.loadFailed') })]);
-  fillPanel([head], said, retryButton(retry));
+  fillPanel([head], ...(kept ? [kept] : []), said, retryButton(retry));
 }
 
 /** The button to try again at once, which says so while it tries: without a connection that is a moment. */
@@ -4529,7 +4566,7 @@ function retryButton(retry) {
 
 /** Details that did not load, under what the row they were opened by knew of them, the keyboard to its button. */
 function showLoadFailed() {
-  lostLoad(failedHead(state.selection), () => state.selection?.asking?.catch(() => {}) ?? loadSelection(true));
+  lostLoad(failedHead(state.selection), () => state.selection?.asking?.catch(() => {}) ?? loadSelection(true), heldRow(state.selection));
   focusRetry();
 }
 
@@ -4607,22 +4644,52 @@ function openPlace(id, time) {
   return null;
 }
 
-/** What the details of a stop, a line or a board hold of a trip their row opens: its line, kind and where it goes, for its head until it loads. */
+/**
+ * What the details of a stop, a line or a board hold of a trip their row
+ * opens: its line, kind and where it goes, for its head until it loads; and
+ * from a stop the departure itself, from which stop and when that was last
+ * heard of, which stay below the head where it does not load (heldRow).
+ */
 function tripHint(id) {
-  const data = state.selection?.data;
-  if (state.selection?.type === 'line') {
+  const selection = state.selection;
+  const data = selection?.data;
+  if (selection?.type === 'line') {
     const vehicle = data?.ways?.flatMap((way) => way.vehicles ?? []).find((one) => one.id === id);
     return vehicle ? { line: data.name, mode: data.mode, to: vehicle.to } : null;
   }
-  for (const board of [data, ...[...boardStopData.values()].map((stop) => stop?.departures)]) {
+  const held = (dep, from, byLine = false) => ({ line: dep.line, mode: dep.mode, to: dep.to, dep, from, byLine, answeredAt: selection?.answeredAt ?? null });
+  for (const [board, from] of [[data, data?.name], ...[...boardStopData.values()].map((stop) => [stop?.departures, stop?.name])]) {
     const dep = board?.departures?.find((one) => one.trip === id);
-    if (dep) return { line: dep.line, mode: dep.mode, to: dep.to };
+    if (dep) return held(dep, from);
     for (const line of board?.lines ?? []) {
       const way = line.ways.find((one) => one.departure?.trip === id);
-      if (way) return { line: line.name, mode: line.mode, to: way.departure.to };
+      if (way) return held({ ...way.departure, line: line.name, mode: line.mode }, from, true);
     }
   }
   return null;
+}
+
+/**
+ * What the row a trip was opened by said of its departure, kept below the
+ * head of the trip where it did not load: from which stop, when, its delay
+ * and the minutes, as the list has them, which go on counting (tickTimes).
+ * By the list's rules for a connection lost: its delay grey after a while,
+ * then left out; gone once it has left (GONE_S). Null where there is none.
+ */
+function heldRow(selection) {
+  const hint = selection?.type === 'trip' && !selection.loaded ? selection.hint : null;
+  if (!hint?.dep || !hint.from) return null;
+  const at = now();
+  const age = hint.answeredAt ? at - hint.answeredAt : 0;
+  const stage = age >= SCHEDULE_S ? 2 : age >= STALE_S ? 1 : 0;
+  const dep = { ...hint.dep, ...(stage === 2 ? { delay: null } : {}), to: t('board.from', { stop: hint.from }) };
+  if (leftAlready(dep, at)) return null;
+  // (by the timetable alone, without the question mark of a delay not reported, as the list then; one of another day
+  // says so only where its row did, in "Alle Linien")
+  const context = drawing();
+  const row = toDom(departureRowOf(dep, false, { ...context, live: context.live && stage < 2 }, Boolean(hint.byLine), true));
+  row.classList.toggle('stale', stage === 1);
+  return el('div', { class: 'held-row', data: { stage: String(stage) } }, [row]);
 }
 
 // What the addresses opened in this visit showed, as the page holds them,
@@ -5385,6 +5452,13 @@ function tickTimes() {
     goneDrawn = at;
     showSelection();
     return;
+  }
+  // (the row kept below a trip that did not load: its delay grey, then left out, and gone once it has left; see heldRow)
+  const held = panel.querySelector('.held-row');
+  if (held) {
+    const fresh = heldRow(state.selection);
+    if (!fresh) held.remove();
+    else if (fresh.dataset.stage !== held.dataset.stage) held.replaceWith(fresh);
   }
   const update = (node, text) => {
     if (node.textContent !== text) node.textContent = text;

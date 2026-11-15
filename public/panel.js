@@ -287,8 +287,11 @@ export function departureLists(board, context) {
  * @param byLine whether it is the next departure of a way in the list of a
  *   stop's lines (lineLists): without the badge, which its line has, and
  *   one of another day says so where the minutes stand
+ * @param resting whether it is no button: what the row a trip was opened by
+ *   said of it, under the head of the trip where it did not load (app.js),
+ *   without the badge the head has
  */
-function departureRow(dep, signed, context, byLine = false) {
+export function departureRow(dep, signed, context, byLine = false, resting = false) {
   const { t, time, day, now, times, live } = context;
   const later = byLine && day(dep.planned) > day(now);
   const unknown = live && !dep.cancelled && (dep.delay === null || dep.delay === undefined);
@@ -297,8 +300,9 @@ function departureRow(dep, signed, context, byLine = false) {
   const when = later ? h('span', { class: 'day' }, t('departures.tomorrow'))
     : times === 'time' ? leaves()
       : minutesNode(dep, times === 'minutes' ? 'time' : 'none', context);
-  return h('button', { type: 'button', class: `row departure times-${times}${byLine ? ' by-line' : ''}${dep.cancelled ? ' cancelled' : ''}`, 'data-trip': dep.trip },
-    byLine ? null : lineBadge(dep.line, dep.mode, context, context.twoKinds?.has(dep.line)),
+  const classes = `row departure times-${times}${byLine || resting ? ' by-line' : ''}${dep.cancelled ? ' cancelled' : ''}`;
+  return h(resting ? 'div' : 'button', resting ? { class: `${classes} resting` } : { type: 'button', class: classes, 'data-trip': dep.trip },
+    byLine || resting ? null : lineBadge(dep.line, dep.mode, context, context.twoKinds?.has(dep.line)),
     h('span', { class: 'name', title: dep.to }, dep.to),
     h('span', { class: 'details' },
       times === 'both' || later ? leaves() : null,
