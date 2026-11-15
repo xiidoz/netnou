@@ -1591,8 +1591,8 @@ li:last-child > .row.stop .rail::before { bottom: 50%; }
   box-shadow: none;
   overflow: visible;
   transition: none;
-  /* (its type grows with it, see below) */
-  container-type: size;
+  /* (its type grows with it, see below; "board" for the narrow row: a board of several stops has columns by that name) */
+  container: board / size;
 }
 :root[data-board="alone"] .panel { left: 0; width: auto; padding-left: var(--safe-left); border-left: 0; }
 /* (beside the board the header card is as wide as the map leaves room for) */
@@ -1715,6 +1715,20 @@ li:last-child > .row.stop .rail::before { bottom: 50%; }
 .board-clock { grid-area: clock; margin: 0; font-size: 1.3em; font-weight: 700; font-variant-numeric: tabular-nums; line-height: 1.15; }
 .board-head .notes { grid-area: notes; margin: 0.4em 0 0; font-size: max(12.5px, 0.55em); }
 :root[data-display="fixed"] .panel .panel-head.board-head { grid-template-areas: "title clock" "sub sub" "notes notes"; }
+/* (on a wall nothing below the name where the board shows every line: the name and the clock in one line, wallLines) */
+:root[data-display="fixed"] .panel .panel-head.board-head:not(:has(> .sub)) { grid-template-areas: "title clock" "notes notes"; }
+:root[data-display="fixed"] .panel .panel-head.board-head:not(:has(> .sub)):not(:has(> .notes)) { grid-template-areas: "title clock"; }
+/* (where it shows chosen lines: "Linien" and their badges, a line of text that wraps where it must, between lines and
+   between the words of a place, never between a badge and its arrow) */
+/* (between them a space, wider than a word's: a line that wraps leaves it at its end, where a margin could begin the next) */
+.board-lines { line-height: 1.7; word-spacing: 0.25em; }
+.board-lines > * { word-spacing: normal; }
+.board-lines .board-line { white-space: nowrap; }
+/* (the arrow close to its badge and its place: its glyph has room of its own, and an entry keeps together against the space between entries) */
+.board-lines .board-line > :not(.badge, .spoken) { margin-left: 0.1em; white-space: normal; }
+/* (its own line height, so that badges on two lines of it keep apart) */
+.board-lines .badge { font-size: 1em; line-height: 1.25; }
+.board-lines .arrow { margin-right: 0.1em; }
 :root[data-display="fixed"] .panel.boardable .board-head h2 { padding-right: 0; }
 
 /* The departures: one grid for all rows, so that the parts of a row begin
@@ -1751,26 +1765,71 @@ li:last-child > .row.stop .rail::before { bottom: 50%; }
 .board-rows .minutes, .board-rows .times-time .at { font-size: 1.05em; font-weight: 700; }
 .board-rows .times-both .at { color: var(--text-muted); font-size: 0.8em; }
 .board-rows .delay { font-size: 0.75em; }
+/* (one with no delay reported: on a wide board its question mark alone where the delays stand, its time in its
+   column; on a narrow one beside its time, below) */
+.board-rows .delay[data-delay="none"] .planned > span { visibility: hidden; }
+.board-rows .delay[data-delay="none"] .unknown-sign { display: none; }
 .board-rows .sign { display: inline-block; width: 0.96em; height: 0.96em; margin-left: 0.2em; vertical-align: -0.12em; color: var(--delay-major-text); }
 .board-rows .gone { grid-column: 4 / -1; justify-self: end; color: var(--delay-severe-text); font-size: 0.85em; font-weight: 700; }
-@container (max-width: 520px) {
+/* A narrow board, and one whose rows are fewer than 21 of their type wide
+   (#352): the time and the delay below the minutes, a destination on two
+   lines where it needs them. A board's type grows with its height until
+   its width caps it; so capped, a board alone is 16.7 of its type wide
+   whatever its screen, standing upright or 4:5, and one beside the map on
+   40 % of the screen 19.9: in one line a destination kept 3 to 7 letters
+   there. Half of a 16:10 screen is 21.7, and keeps its row. The same rules
+   twice (test/frontend.test.js keeps them so): a column of a board of
+   several stops (container "board") is as wide as 22 of its type, and is
+   narrow by its width alone. */
+@container board (max-width: 520px) {
   /* (a destination takes a second line where it needs one, between words, and a row's parts are level with its
      middle: the badge with the middle of its destination, as in the list of the details) */
   .board-rows > li { align-items: center; }
   .board-rows .name { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; white-space: normal; overflow-wrap: break-word; hyphens: auto; line-height: 1.08; }
   .board-rows .name wbr { display: inline; }
   .board-rows .name .bracket { hyphens: manual; white-space: nowrap; }
-  .board-rows.times-both { grid-template-columns: auto minmax(0, 1fr) auto auto; }
-  .board-rows.times-both .when { display: grid; grid-template-columns: auto auto; justify-content: end; justify-items: end; line-height: 1.15; }
-  .board-rows.times-both .minutes, .board-rows.times-both .gone { grid-column: 1 / -1; }
+  /* (the parts of the time one above the other at the end of the row, flush right: with both the minutes and below
+     them the time with its delay; with the time alone the time and below it the delay, as a sum, "13:35+2") */
+  .board-rows.times-both, .board-rows.times-time { grid-template-columns: auto minmax(0, 1fr) auto auto; }
+  .board-rows.times-both .when, .board-rows.times-time .when { display: grid; grid-template-columns: minmax(0, 1fr) auto; justify-items: end; line-height: 1.15; }
+  .board-rows.times-both .minutes, .board-rows.times-time .at, .board-rows .when > .gone { grid-column: 1 / -1; }
   .board-rows.times-both .at,
   .board-rows.times-both .when > .delay,
-  .board-rows.times-both .when > .late { grid-row: 2; font-size: max(11.5px, 0.7em); }
+  .board-rows.times-both .when > .late,
+  .board-rows.times-time .when > .delay,
+  .board-rows.times-time .when > .late { grid-row: 2; font-size: max(11.5px, 0.7em); }
   .board-rows.times-both .when > :not(:empty, .at) { margin-left: 0.35em; }
   /* (under the minutes, which say when it leaves, a late one has the sum alone,
      "13:36+1": with the time it leaves before it the column would take the
      destinations' room) */
   .board-rows.times-both li:has(.planned > span) .at { display: none; }
+  /* (one with no delay reported as one late: its time with the question mark, "13:40+?", in line with the others; the
+     mark as wide as a digit) */
+  .board-rows .delay[data-delay="none"] .planned > span { visibility: visible; }
+  .board-rows .delay[data-delay="none"] .unknown-sign { display: inline; }
+  .board-rows .delay[data-delay="none"] .unknown-sign + span { display: inline-block; min-width: 1ch; text-align: center; }
+}
+@container rows (max-width: 21em) {
+  /* (as above) */
+  /* (a destination takes a second line where it needs one, between words, and a row's parts are level with its
+     middle: the badge with the middle of its destination, as in the list of the details) */
+  .board-rows > li { align-items: center; }
+  .board-rows .name { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; white-space: normal; overflow-wrap: break-word; hyphens: auto; line-height: 1.08; }
+  .board-rows .name wbr { display: inline; }
+  .board-rows .name .bracket { hyphens: manual; white-space: nowrap; }
+  .board-rows.times-both, .board-rows.times-time { grid-template-columns: auto minmax(0, 1fr) auto auto; }
+  .board-rows.times-both .when, .board-rows.times-time .when { display: grid; grid-template-columns: minmax(0, 1fr) auto; justify-items: end; line-height: 1.15; }
+  .board-rows.times-both .minutes, .board-rows.times-time .at, .board-rows .when > .gone { grid-column: 1 / -1; }
+  .board-rows.times-both .at,
+  .board-rows.times-both .when > .delay,
+  .board-rows.times-both .when > .late,
+  .board-rows.times-time .when > .delay,
+  .board-rows.times-time .when > .late { grid-row: 2; font-size: max(11.5px, 0.7em); }
+  .board-rows.times-both .when > :not(:empty, .at) { margin-left: 0.35em; }
+  .board-rows.times-both li:has(.planned > span) .at { display: none; }
+  .board-rows .delay[data-delay="none"] .planned > span { visibility: visible; }
+  .board-rows .delay[data-delay="none"] .unknown-sign { display: inline; }
+  .board-rows .delay[data-delay="none"] .unknown-sign + span { display: inline-block; min-width: 1ch; text-align: center; }
 }
 
 /* A board of several stops (#163): its blocks one under the other, each
@@ -1781,6 +1840,8 @@ li:last-child > .row.stop .rail::before { bottom: 50%; }
    rules above. In one column the first block's heading is the head of the
    board; in columns each block has its own, and the head keeps the clock. */
 .board-blocks { flex: 1; min-height: 0; display: flex; flex-direction: column; overflow: hidden; }
+/* (how wide the rows are in their type: the narrow row, above) */
+.board-blocks:not(.columns) { container: rows / inline-size; }
 .board-block { flex: none; box-sizing: border-box; min-height: 0; display: flex; flex-direction: column; }
 .board-block:only-child { flex: 1 1 0; }
 .board-block + .board-block { margin-top: 0.35em; padding-top: 0.3em; border-top: 1px solid var(--border); }
@@ -1792,7 +1853,7 @@ li:last-child > .row.stop .rail::before { bottom: 50%; }
   column-gap: 1.2em;
   font-size: min(1em, calc((100cqw - 0.6em - 1.2em * var(--columns)) / var(--columns) / 22));
 }
-.board-blocks.columns .board-block { container-type: inline-size; }
+.board-blocks.columns .board-block { container: board / inline-size; }
 .board-blocks.columns .board-block + .board-block { margin-top: 0; padding-top: 0; border-top: 0; }
 .board-block > .board-heading { flex: none; margin: 0.15em 0 0; font-size: 1.15em; }
 .board-blocks.columns .board-block > .board-heading { font-size: 1.3em; }

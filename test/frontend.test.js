@@ -54,6 +54,17 @@ function firstScript({ lang = 'en', search = '', stored = {}, browser = [], dark
   return root.dataset;
 }
 
+test("a board's narrow row has the same rules by the board's width and by its width in its type (style.css)", () => {
+  const css = read('style.css');
+  const rules = (query) => {
+    const start = css.indexOf(`@container ${query} {`);
+    assert.ok(start >= 0, query);
+    const end = css.indexOf('\n}\n', start);
+    return css.slice(css.indexOf('{', start) + 1, end).replace(/\/\*[\s\S]*?\*\//g, '').split('\n').map((line) => line.trim()).filter(Boolean);
+  };
+  assert.deepEqual(rules('rows (max-width: 21em)'), rules('board (max-width: 520px)'));
+});
+
 // The page changes the address in the bar when a stop or a line is opened
 // (#37): its own files and data are found from where the instance is all the
 // same, which first.js makes the base of the page, as a whole address.

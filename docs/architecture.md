@@ -865,7 +865,11 @@ otherwise a server would load a file written by older code:
   and of its board, and a favourite stop keeps it and opens with it; a
   further stop of a board shows all its lines. A screen on a wall
   (`display=fixed`) has no chip: it shows its stop as it was set up, at a
-  platform the departures from that platform.
+  platform the departures from that platform. Below the name it says
+  nothing where it shows every line, and where a choice was kept for it,
+  which lines it shows: "Linien" and their badges, of a line some of its
+  directions with an arrow and where they go, as nobody passing it can open
+  the filter ([#352](https://github.com/xiidoz/netnou/issues/352)).
 - **All lines of a stop** ([#255](https://github.com/xiidoz/netnou/issues/255)).
   A switch below the name shows either the next departures, by when they
   leave, or all lines of the stop, by kind and name, each beside its ways
@@ -927,7 +931,12 @@ otherwise a server would load a file written by older code:
   quarter of the screen to three quarters, and from there to all of it, where
   the map is gone and the board names the timetable data at its foot. Its
   type grows with it (container query units), and it shows as many rows as
-  it has room for, whole ones; a row is not a button. The board is part of
+  it has room for, whole ones; a row is not a button. Where a board is less
+  than 21 of its type wide, as on a phone, alone on a screen standing
+  upright or on 40 % of a wide one, a row puts the time and the delay below
+  the minutes and a destination may take two lines; one with no delay
+  reported has "13:40+?" there, in line with "13:39+1"
+  ([#352](https://github.com/xiidoz/netnou/issues/352)). The board is part of
   the address of the stop (`board=<share>`), also with the controls, so that
   the address opens it again and `display=fixed` puts it on a wall. How
   departure times show is one setting for every list of them: the time of

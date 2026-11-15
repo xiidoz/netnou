@@ -5816,13 +5816,14 @@ function renderBoard(board) {
   const columns = boardColumns(blocks.length);
   renderedColumns = columns;
   const headings = blocks.map((block, i) => blockHeading(block, i, i ? 'h3' : 'h2', controls, entries.length));
-  // (the lines chosen are those of the open stop, whose block is the first)
-  const sub = (i = 0) => (i ? el('p', { class: 'sub', text: t('departures.title') }) : departuresSub(true));
+  // (the lines chosen are those of the open stop, whose block is the first; on a wall, where nobody opens a filter,
+  // nothing below the name, or the lines it shows where a filter was kept for it: wallLines)
+  const sub = (i = 0) => (FIXED ? (i ? null : wallLines(blocks[0])) : i ? el('p', { class: 'sub', text: t('departures.title') }) : departuresSub(true));
   const clock = state.clock ? [el('p', { class: 'board-clock', text: formatTime(now()) })] : [];
   // (the notes of the open stop in the head in either case: over the first column in columns)
-  const head = columns > 1 ? [...clock, notesList(board.notes)] : [headings[0], sub(), ...clock, notesList(board.notes)];
+  const head = (columns > 1 ? [...clock, notesList(board.notes)] : [headings[0], sub(), ...clock, notesList(board.notes)]).filter(Boolean);
   const sections = blocks.map((block, i) => el('section', { class: 'board-block' }, [
-    ...(columns > 1 ? [headings[i], sub(i)] : i ? [headings[i]] : []),
+    ...(columns > 1 ? [headings[i], sub(i)].filter(Boolean) : i ? [headings[i]] : []),
     ...blockRows(block, times, i === 0),
   ]));
   const credits = el('p', { class: 'board-credits' });
@@ -5837,6 +5838,46 @@ function renderBoard(board) {
     credits,
   );
   fitBoard();
+}
+
+/**
+ * What a board on a wall says below the stop's name where a filter was kept
+ * for it ("Als Wandbildschirm" keeps it in the address): "Linien" and the
+ * badges of the lines it shows, a line of which it shows only some
+ * directions with them, as nobody passing it can open the filter; where
+ * further stops share its list, from which stop, as the filter is the open
+ * stop's. Null where it shows every line, or before the directions are known.
+ */
+function wallLines(block) {
+  const list = stopDirections();
+  const chosen = list && state.lines.length ? chosenWays(state.lines, list) : [];
+  if (!chosen.length) return null;
+  const both = kindsSaid(list);
+  const lines = [];
+  for (const way of chosen) {
+    const line = lines.find((one) => one.mode === way.mode && one.line === way.line);
+    if (line) line.ways.push(way);
+    else lines.push({ mode: way.mode, line: way.line, ways: [way] });
+  }
+  // (of a line some directions: where they go, a place once where all its directions there are shown; heard as the filter's
+  // chip says it, "Tram 4 nach Gibitzenhof", not the arrow)
+  const placesOf = (ways) => [...new Set(ways.map((way) => (list.filter((other) => other.mode === way.mode && other.line === way.line && other.to === way.to).every((other) => ways.includes(other)) ? way.to : directionName(way, list))))].join(', ');
+  // (from which stop where further stops share its list, first, as it is said of all its lines: "Linien ab Plärrer", in
+  // the rows' words)
+  return el('p', { class: 'sub board-lines' }, [
+    el('span', { text: block.length > 1 ? `${t('board.lines')} ${t('board.from', { stop: namesOf(block).rows[0] })}` : t('board.lines') }),
+    ...lines.flatMap(({ mode, line, ways }, i) => {
+      const some = ways.length < list.filter((way) => way.mode === mode && way.line === line).length;
+      const said = some ? t('choice.direction', { line: lineSaid(line, mode), to: placesOf(ways) }) : lineSaid(line, mode);
+      const badge = toDom(lineBadge(line, mode, drawing(), both.has(line)));
+      badge.setAttribute('aria-hidden', 'true');
+      return [' ', el('span', { class: 'board-line' }, [
+        badge,
+        ...(some ? [el('span', { 'aria-hidden': 'true' }, [el('span', { class: 'arrow', text: '→' }), placesOf(ways)])] : []),
+        el('span', { class: 'spoken', text: `${said}${i < lines.length - 1 ? ',' : ''}` }),
+      ])];
+    }),
+  ]);
 }
 
 // Whether the question of "Weitere Haltestelle" is open: the board is drawn anew with every answer of the server.
@@ -5885,10 +5926,19 @@ function boardRow(dep, times, from = null, both = false) {
   const delay = Math.round((dep.delay ?? 0) / 60) === 0 ? null : dep.delay;
   const unknown = realtimeState() === 'live' && !dep.cancelled && (dep.delay === null || dep.delay === undefined);
   // (with the time it leaves, as a sum with the planned time; before the minutes, alone)
-  const shown = unknown ? toDom(unknownDelayOf(drawing(), times !== 'minutes')) : times === 'minutes' ? delayNode(delay) : delaySum(dep.planned, delay);
-  const late = delayCell(shown, dep.warnings, dep.warnings.length > 0);
-  // (further off than an hour, the time of day stands where the minutes do, and with both not twice)
+  // (with both times, on a narrow board where the time of day stands in the sum below the minutes, beside its time as
+  // a sum would be, "13:40+?"; style.css hides the time and the sign on a wide one, where the time has its column)
+  const unknownBoth = () => el('span', { class: 'delay', data: { delay: 'none' } }, [
+    el('span', { class: 'planned' }, [el('span', { 'aria-hidden': 'true', text: clockOf(formatTime(dep.planned)) }), el('span', { class: 'spoken', text: `${t('departures.planned', { time: formatTime(dep.planned) })} ` })]),
+    el('span', { class: 'unknown-sign', 'aria-hidden': 'true', text: '+' }),
+    el('span', { 'aria-hidden': 'true', text: '?' }),
+    el('span', { class: 'spoken', text: t('departures.noDelay') }),
+  ]);
+  // (further off than an hour, the time of day stands where the minutes do, and with both not twice: there the question
+  // mark alone)
   const far = minutesUntil(leavesAt(dep)) > MINUTES_MAX;
+  const shown = unknown ? (times === 'both' && !far ? unknownBoth() : toDom(unknownDelayOf(drawing(), times !== 'minutes'))) : times === 'minutes' ? delayNode(delay) : delaySum(dep.planned, delay);
+  const late = delayCell(shown, dep.warnings, dep.warnings.length > 0);
   const at = (shown = true) => el('span', { class: 'at', text: shown ? formatTime(leavesAt(dep)) : '' });
   const when = dep.cancelled ? [el('span', { class: 'gone', text: t('departures.cancelled') })]
     : times === 'time' ? [at(), late]
@@ -5971,10 +6021,21 @@ function fitRows() {
   const cuts = lists.map((list) => {
     const room = Math.min(list.getBoundingClientRect().bottom, end) + 0.5;
     const rows = [...list.children];
-    return { rows, over: rows.findIndex((row) => row.getBoundingClientRect().bottom > room) };
+    return { rows, room, over: rows.findIndex((row) => row.getBoundingClientRect().bottom > room) };
   });
-  for (const { rows, over } of cuts) {
-    if (over >= 0) for (const row of rows.slice(over)) row.hidden = true;
+  for (const { rows, over, room } of cuts) {
+    if (over >= 0) {
+      for (const row of rows.slice(over)) row.hidden = true;
+      // (the rows left can take less room than they did: a later one no longer widens a column of times, and a name
+      // then needs a line less; so those that fit now come back, one at a time)
+      for (const row of rows.slice(over)) {
+        row.hidden = false;
+        if (row.getBoundingClientRect().bottom > room) {
+          row.hidden = true;
+          break;
+        }
+      }
+    }
     // (the line of the next day goes with the row it stands over)
     const shown = rows.filter((row) => !row.hidden);
     if (shown.at(-1)?.classList.contains('day')) shown.at(-1).hidden = true;

@@ -225,6 +225,7 @@ export default {
   'board.remove': 'Take {stop} off the board',
   // under each departure of a list of several stops: the stop it leaves from
   'board.from': 'from {stop}',
+  'board.lines': 'Lines',
   // in place of a stop of the board the timetable does not have
   'board.gone': '{stop} is not in the timetable.',
 
