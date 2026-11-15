@@ -6,7 +6,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { t as translate } from '../public/i18n.js';
 import en from '../public/locales/en.js';
-import { badge, stopRing, stopSaid, stopSign, tallMark, vehicleSpot, choiceChip, clockOf, delayClass, delayFlag, delayText, departureLists, departuresSub, directionSign, h, lineHead, lineLists, lineStops, panelHead, stopHeading, toHtml, trackAt, vehicleLabel } from '../public/panel.js';
+import { badge, stopRing, stopSaid, stopSign, tallMark, vehicleSpot, choiceChip, clockOf, delayClass, delayFlag, delayText, departureLists, departuresSub, h, lineHead, lineLists, lineStops, panelHead, stopHeading, toHtml, trackAt, vehicleLabel } from '../public/panel.js';
 
 const NOW = Date.parse('2026-10-23T10:00:00Z') / 1000;
 // (times of day and dates in UTC, so that the test reads the same anywhere)
@@ -163,17 +163,18 @@ test('the head of the details has the name as the main heading, the switch betwe
   // a board has no switch, and a screen on a wall not even the chip
   assert.equal(toHtml(departuresSub(null, all, context)), `<p class="sub with-choice"><span>Departures</span>${toHtml(all)}</p>`);
   assert.equal(toHtml(departuresSub(null, null, context)), '<p class="sub">Departures</p>');
-  // one direction: its sign and its name, and the cross that shows all again
+  // one direction: the badge of its line as the departures have it, its name, and the cross that shows all again
   const one = toHtml(choiceChip([{ line: 'U1', mode: 'subway', heading: 61, name: 'Langwasser Süd' }], context));
   assert.match(one, /^<span class="choice chosen"><button [^>]*aria-label="Only U1 Langwasser Süd"/);
-  assert.ok(one.includes('<svg class="direction-sign" viewBox="-17 -17 34 34" aria-hidden="true" data-mode="subway"><path d="M0,-16L5.65,-8.25L-5.65,-8.25Z" transform="rotate(61)"></path><circle r="10"></circle><text y="3.2" text-anchor="middle">U1</text></svg><span>Langwasser Süd</span></button><button type="button" class="choice-clear" aria-label="Show all directions"'));
-  // several: how many, without signs, whose arrowheads alone would tell their ways apart; a screen reader hears each
+  assert.ok(one.includes('<span class="only">Only</span><span class="badge" data-mode="subway">U1</span><span>Langwasser Süd</span></button><button type="button" class="choice-clear" aria-label="Show all directions"'));
+  // (with its kind where its stop has the name in two, as the departures say it)
+  const tram = toHtml(choiceChip([{ line: '4', mode: 'tram', heading: null, name: 'Gibitzenhof', both: true }], context));
+  assert.ok(tram.includes('<span class="badge" data-mode="tram"><span aria-hidden="true">Tram 4</span><span class="spoken">tram 4</span></span>'), tram);
+  // several: how many; the departures below name them, and a screen reader hears each
   const five = toHtml(choiceChip(['1', '2', '3', '4', '5'].map((line) => ({ line, mode: 'bus', heading: null, name: 'X' })), context));
-  assert.equal(five.match(/class="direction-sign"/g), null);
+  assert.equal(five.match(/class="badge"/g), null);
   assert.ok(five.includes('<span>Only 5 directions</span>'));
   assert.match(five, /aria-label="Only bus 1 X, bus 2 X, bus 3 X, bus 4 X, bus 5 X"/);
-  // a long name of a line narrower, as on the map
-  assert.ok(toHtml(directionSign({ line: 'N10A', mode: 'bus' })).includes('<text y="3.2" text-anchor="middle" textLength="17" lengthAdjust="spacingAndGlyphs">N10A</text>'));
 });
 
 test('all lines of a stop: the badge of each leading to it, beside its ways with their next departures, under their kinds (#255)', () => {

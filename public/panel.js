@@ -361,37 +361,21 @@ export function lineLists(board, context) {
 }
 
 /**
- * The sign of a direction: a disc in the colour of its kind with the name of
- * its line, and the arrowhead pointing where it leaves the stop, as drawDisc
- * and drawArrow in app.js draw a vehicle, with their white edges. None for a
- * whole line.
- */
-export function directionSign({ line, mode, heading = null }) {
-  // (a long name narrower, as on the map)
-  const narrow = line.length > 3 ? { textLength: 17, lengthAdjust: 'spacingAndGlyphs' } : {};
-  return h('svg', { class: 'direction-sign', viewBox: '-17 -17 34 34', 'aria-hidden': 'true', 'data-mode': kindOf(mode) },
-    // (the arrowhead as drawArrow has it: from the edge of the disc at ±0.6 rad to 6 beyond)
-    heading !== null ? h('path', { d: 'M0,-16L5.65,-8.25L-5.65,-8.25Z', transform: `rotate(${heading})` }) : null,
-    h('circle', { r: 10 }),
-    h('text', { y: 3.2, 'text-anchor': 'middle', ...narrow }, line),
-  );
-}
-
-/**
  * The chip beside the switch of a stop that says which lines its next
  * departures are of and opens the sheet to choose them (#164): "Filter"
  * while it shows every line (#255: "All lines" is the list beside it), or
- * "only" and the one direction chosen, its sign and its name, or how many
- * where they are several: which way each of them goes would be no more than
- * the arrowhead of its sign there, and the departures below name it. With a
- * cross that shows all again.
- * @param chosen the directions chosen, each with its `name` (directionName in app.js)
+ * "only" and the one direction chosen, the badge of its line as the
+ * departures have it and the name of the direction, or how many where they
+ * are several: the departures below name them. With a cross that shows all
+ * again.
+ * @param chosen the directions chosen, each with its `name` (directionName in app.js), and `both` where its badge
+ *   says its kind (lineBadge)
  */
 export function choiceChip(chosen, context) {
   const { t } = context;
   const parts = !chosen.length
     ? [h('span', {}, t('choice.filter'))]
-    : chosen.length === 1 ? [h('span', {}, t('choice.only')), directionSign(chosen[0]), h('span', {}, chosen[0].name)]
+    : chosen.length === 1 ? [h('span', { class: 'only' }, t('choice.only')), lineBadge(chosen[0].line, chosen[0].mode, context, chosen[0].both), h('span', {}, chosen[0].name)]
       : [h('span', {}, t('choice.several', { count: chosen.length }))];
   // (a line named by a number said with its kind, as a tram 4 and a bus 4 may go to the same place)
   const label = chosen.length ? `${t('choice.only')} ${chosen.map((direction) => `${lineSaid(direction.line, direction.mode, context)} ${direction.name}`).join(', ')}` : t('choice.filter');
