@@ -8,6 +8,14 @@ This file is written by
 messages when a release is made. Do not edit it by hand; see
 [Releases](CONTRIBUTING.md#releases).
 
+## [0.27.3](https://github.com/xiidoz/netnou/compare/v0.27.2...v0.27.3) (2026-11-15)
+
+
+### Bug Fixes
+
+* **page:** an upright wall board shows whole destinations, and says which lines it shows ([#355](https://github.com/xiidoz/netnou/issues/355)) ([5e0fcc5](https://github.com/xiidoz/netnou/commit/5e0fcc541618426938f6198e5188490a29855b33)), closes [#352](https://github.com/xiidoz/netnou/issues/352)
+* **page:** the map shows its keys while it has the keyboard, and a first Tab leads there ([#357](https://github.com/xiidoz/netnou/issues/357)) ([86d3231](https://github.com/xiidoz/netnou/commit/86d3231a1fd80cf6299117278ebaad845331cffd))
+
 ## [0.27.2](https://github.com/xiidoz/netnou/compare/v0.27.1...v0.27.2) (2026-11-15)
 
 
