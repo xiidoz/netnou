@@ -96,6 +96,18 @@ export default {
   'badge.kind.cable': 'Bahn',
   'badge.kind.other': 'Linie',
 
+  // a bus the timetable data gives as a tram or a U-Bahn, shown as a bus from the tracks at its stops (#358): the
+  // name of the (i) behind its kind, and the first line of what it opens
+  'kind.listed.tram': 'Laut Fahrplandaten eine Tram',
+  'kind.listed.subway': 'Laut Fahrplandaten eine U-Bahn',
+  'kind.listed.both': 'Laut Fahrplandaten eine Tram oder U-Bahn',
+  'kind.listedPartly.tram': 'Laut Fahrplandaten teils eine Tram',
+  'kind.listedPartly.subway': 'Laut Fahrplandaten teils eine U-Bahn',
+  'kind.listedPartly.both': 'Laut Fahrplandaten teils eine Tram oder U-Bahn',
+  'kind.why': 'Warum Bus?',
+  'kind.because': 'Manche Busse stehen in den Fahrplandaten als Tram oder U-Bahn. Wo weniger als 6 von 10 ihrer Haltestellen an Gleisen liegen, zeigt die Karte sie als Bus.',
+  'kind.partly': 'Bei dieser Linie gilt das für einen Teil ihrer Fahrten.',
+
 
   'display.wall': 'Als Wandbildschirm',
   'controls.fold': 'Bedienung ein- oder ausklappen',

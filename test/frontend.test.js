@@ -18,7 +18,7 @@ const read = (file) => fs.readFileSync(new URL(file, publicDir), 'utf8');
 
 // Keys that are put together while the page runs, by what they start with. The
 // rest of each is checked where it comes from (mode.<id>: see the mode ids below).
-const DYNAMIC_KEYS = ['mode.', 'address.kind.', 'badge.kind.'];
+const DYNAMIC_KEYS = ['mode.', 'address.kind.', 'badge.kind.', 'kind.listed.', 'kind.listedPartly.'];
 
 // A comment or a string literal. Good enough for the code as it is written
 // here: no regular expression in it contains a quote or two slashes, and no

@@ -64,8 +64,31 @@ const lineOf = (key) => key.split('~')[0];
  */
 export function chosenWays(keys, list) {
   const found = new Set();
-  for (const key of keys) for (const direction of list) if (direction.key === key || lineOf(direction.key) === key) found.add(direction);
+  for (const key of keys) for (const direction of list) if (keysOf(direction).some((one) => one === key || lineOf(one) === key)) found.add(direction);
   return [...found];
+}
+
+/**
+ * The keys a direction is known by: its own, and that of the kind the
+ * timetable data gives its line where that is another (#358), which a choice
+ * kept before may have (`also`).
+ */
+const keysOf = (direction) => [direction.key, ...(direction.also ?? [])];
+
+/**
+ * A choice with its keys of the kind the timetable data gives a line, where
+ * the page shows another (#358), as the keys of the stop's directions
+ * (`list`): "tram/65~x" kept before is "bus/65~x". The others as they are.
+ */
+export function shownKeys(keys, list) {
+  const shown = keys.map((key) => {
+    for (const direction of list) {
+      if (direction.also?.includes(key)) return direction.key;
+      if (direction.also?.some((one) => lineOf(one) === key)) return lineOf(direction.key);
+    }
+    return key;
+  });
+  return [...new Set(shown)];
 }
 
 /**

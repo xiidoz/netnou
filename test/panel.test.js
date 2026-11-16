@@ -215,6 +215,17 @@ test('the head of a line: its name and kind, its operator and vehicles, and the 
   assert.ok(toHtml(lineHead({ ...line, vehicles: [] }, drawing())).includes('<p class="sub">VAG</p>'));
 });
 
+test('the head of a bus the timetable gives as a tram has an (i) behind its kind, named with that, sent hidden (#358)', () => {
+  const line = { name: '65', mode: 'bus', agency: 'VAG', vehicles: [], listed: { modes: ['tram'], partly: false } };
+  const info = (said) => `<button type="button" class="kind-info" hidden aria-haspopup="dialog" aria-label="${said}" title="${said}"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true">`;
+  const head = toHtml(lineHead(line, drawing()));
+  assert.ok(head.startsWith(`<div class="panel-head"><h1><span class="badge" data-mode="bus">65</span><span>${en['mode.bus']}</span>${info(en['kind.listed.tram'])}`), head);
+  assert.ok(toHtml(lineHead({ ...line, listed: { modes: ['tram'], partly: true } }, drawing())).includes(info(en['kind.listedPartly.tram'])));
+  assert.ok(toHtml(lineHead({ ...line, listed: { modes: ['subway'], partly: false } }, drawing())).includes(info(en['kind.listed.subway'])));
+  assert.ok(toHtml(lineHead({ ...line, listed: { modes: ['subway', 'tram'], partly: true } }, drawing())).includes(info(en['kind.listedPartly.both'])));
+  assert.ok(!toHtml(lineHead({ ...line, listed: undefined }, drawing())).includes('kind-info'));
+});
+
 test('the stops of a line in one direction, with its vehicles along them as the map draws them (#256)', () => {
   const stop = (name, more = {}) => ({ id: name.slice(0, 2), name, town: null, path: `stop/${name.toLowerCase()}`, start: false, end: false, ...more });
   const vehicle = (id, more) => ({ id, to: 'Langwasser Süd', delay: null, warnings: [], branch: null, ...more });

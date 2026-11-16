@@ -637,6 +637,12 @@ export class Timetable extends Schedule {
     const { trips, patterns, profiles } = data;
     const { tripCount } = this;
     this.routeModes = this.routes.type.map((type, r) => routeMode(type, this.routes.short[r]));
+    // The kind the timetable gives a route where that is another (#358): a bus given as a tram or a U-Bahn, whose
+    // stops are not at tracks (kinds.js). null for the others, and for all of them in a dataset without it.
+    this.listedModes = this.routes.listed?.map((type, r) => {
+      const mode = routeMode(type, this.routes.short[r]);
+      return mode === this.routeModes[r] ? null : mode;
+    }) ?? null;
     // The kinds of transport the timetable has, in the order of MODES: those
     // of which a trip runs. The page shows a chip for each of them, and for no other.
     const run = new Uint8Array(this.routeModes.length);
@@ -774,6 +780,11 @@ export class Timetable extends Schedule {
       const line = this.lines[this.tripLine[t]];
       const headsign = this.headsign(t);
       line.trips++;
+      const listed = this.listedModes?.[trips.route[t]];
+      if (listed) {
+        (line.listedModes ??= new Set()).add(listed);
+        line.listedTrips = (line.listedTrips ?? 0) + 1;
+      }
       line.headsigns.set(headsign, (line.headsigns.get(headsign) ?? 0) + 1);
       line.lat += latSum[trips.pattern[t]];
       line.lon += lonSum[trips.pattern[t]];
@@ -781,6 +792,21 @@ export class Timetable extends Schedule {
     }
     // (of the lines of a name the busiest first: the one meant where nothing says which)
     for (const numbers of this.lineIndex.values()) numbers.sort((a, b) => this.lines[b].trips - this.lines[a].trips || a - b);
+    // A line of which the timetable gives some trips another kind (#358): which kinds, and whether it gives all its
+    // trips one of them or only a part ("teils"). Asked for by one of those kinds, as a favourite saved before may
+    // be, it is found as well, where no line of that kind has its name.
+    this.listedIndex = new Map();
+    lines.forEach((line, i) => {
+      if (!line.listedModes) return;
+      line.listed = { modes: MODES.filter((mode) => line.listedModes.has(mode)), partly: line.listedTrips < line.trips };
+      for (const mode of line.listed.modes) {
+        const key = lineKey({ ...line, mode });
+        if (!this.lineIndex.has(key)) this.listedIndex.set(key, [...(this.listedIndex.get(key) ?? []), i]);
+      }
+      delete line.listedModes;
+      delete line.listedTrips;
+    });
+    for (const numbers of this.listedIndex.values()) numbers.sort((a, b) => this.lines[b].trips - this.lines[a].trips || a - b);
 
     // (the kinds that call at each station in the area, by its stop: modesAt)
     this.stationModes = stationModes;
@@ -1211,6 +1237,8 @@ export class Timetable extends Schedule {
       lat: line.lat / line.stops,
       lon: line.lon / line.stops,
       service: line.trips,
+      // (the kinds the timetable data gives a bus that the page shows as one, #358: a favourite kept before has it)
+      ...(line.listed ? { listed: line.listed.modes } : {}),
     }));
     const { list, at } = searchList(stations, lines, MODES, this.towns);
     return { list, stationAt: (lat, lon) => this.stations[at(lat, lon)]?.id };
@@ -1223,7 +1251,7 @@ export class Timetable extends Schedule {
    * without one the busiest.
    */
   lineNumber(line, at = null) {
-    const numbers = this.lineIndex.get(lineKey(line));
+    const numbers = this.lineIndex.get(lineKey(line)) ?? this.listedIndex.get(lineKey(line));
     if (!numbers || !at) return numbers?.[0];
     const away = (i) => {
       const [lat, lon] = this.lines[i].place;
@@ -1240,12 +1268,12 @@ export class Timetable extends Schedule {
    * @param pathOf (stop number) => the address of that station (Addresses.stopAddress)
    */
   lineVehicles(index, vehicles, pathOf) {
-    const { name, mode, agency, place } = this.lines[index];
+    const { name, mode, agency, place, listed } = this.lines[index];
     const own = vehicles.filter((v) => v.lineIndex === index);
     const list = own
       .sort((a, b) => a.to.localeCompare(b.to) || a.stopsLeft - b.stopsLeft)
       .map((v) => ({ id: v.id, to: v.to, next: v.next, delay: v.delay, lat: round5(v.lat), lon: round5(v.lon), warnings: v.warnings }));
-    return { name, mode, agency, at: place, vehicles: list, ways: this.lineStops(index, own, pathOf) };
+    return { name, mode, agency, ...(listed ? { listed } : {}), at: place, vehicles: list, ways: this.lineStops(index, own, pathOf) };
   }
 
   /**
@@ -1572,6 +1600,8 @@ export class Timetable extends Schedule {
       id: `${tripId}_${date}`,
       line: this.lineName(route),
       mode: this.routeModes[route],
+      // (the kind the timetable gives it, where that is another: #358)
+      ...(this.listedModes?.[route] ? { listedMode: this.listedModes[route] } : {}),
       to: this.headsign(t),
       agency: this.routes.agency[route],
       // (the place of its line, which asks for that among those of its name, #152)
@@ -1621,7 +1651,12 @@ export class Timetable extends Schedule {
     const keep = lines.length ? (t, next) => {
       const route = this.tripRoute[t];
       const id = `${route} ${next}`;
-      if (!chosen.has(id)) chosen.set(id, inChoice(lines, { mode: this.routeModes[route], line: this.lineName(route), next: next < 0 ? null : this.stops.name[this.stationOf[next]] }));
+      if (!chosen.has(id)) {
+        const departure = { mode: this.routeModes[route], line: this.lineName(route), next: next < 0 ? null : this.stops.name[this.stationOf[next]] };
+        // (also as chosen by the kind the timetable data gives it, where the page shows another: a choice kept before, #358)
+        const listed = this.listedModes?.[route];
+        chosen.set(id, inChoice(lines, departure) || (listed !== null && listed !== undefined && inChoice(lines, { ...departure, mode: listed })));
+      }
       return chosen.get(id);
     } : null;
     let found = this.leaving(station, now, realtime, windowS, keep).slice(0, limit);
@@ -1720,7 +1755,7 @@ export class Timetable extends Schedule {
    * days. A direction is a line with the next station of its trips; it is
    * named by the destination most of them have here, and leaves the stop
    * the way the bearing to that station says.
-   * @returns [{ line, mode, next, to, heading, key }], by kind, then by line
+   * @returns [{ line, mode, next, to, heading, key, also }], by kind, then by line
    *   as names of lines are sorted, then the busier direction first; null for
    *   an unknown station
    */
@@ -1739,9 +1774,11 @@ export class Timetable extends Schedule {
         const route = this.tripRoute[t];
         const direction = { mode: this.routeModes[route], line: this.lineName(route), next: this.stops.name[this.stationOf[next]] };
         const key = choiceKey(direction);
-        if (!found.has(key)) found.set(key, { ...direction, trips: 0, to: new Map(), heading: bearing(this.stops.lat[stop], this.stops.lon[stop], this.stops.lat[next], this.stops.lon[next]) });
+        if (!found.has(key)) found.set(key, { ...direction, trips: 0, to: new Map(), also: new Set(), heading: bearing(this.stops.lat[stop], this.stops.lon[stop], this.stops.lat[next], this.stops.lon[next]) });
         const entry = found.get(key);
         entry.trips++;
+        // (the key of the kind the timetable data gives it, where the page shows another, #358: a choice kept before has it)
+        if (this.listedModes?.[route]) entry.also.add(choiceKey({ ...direction, mode: this.listedModes[route] }));
         const to = this.headsignAt(t, p);
         entry.to.set(to, (entry.to.get(to) ?? 0) + 1);
       }
@@ -1750,7 +1787,7 @@ export class Timetable extends Schedule {
     return [...found.entries()]
       .map(([key, { to, trips, ...direction }]) => ({ ...direction, to: [...to].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))[0][0], key, trips }))
       .sort((a, b) => lineOrder(a, b) || b.trips - a.trips || a.next.localeCompare(b.next))
-      .map(({ mode, line, next, to, heading, key }) => ({ mode, line, next, to, heading, key }));
+      .map(({ mode, line, next, to, heading, key, also }) => ({ mode, line, next, to, heading, key, ...(also.size ? { also: [...also] } : {}) }));
   }
 
   /**

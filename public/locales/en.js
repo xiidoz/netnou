@@ -128,6 +128,18 @@ export default {
   'badge.kind.cable': 'Cable',
   'badge.kind.other': 'Line',
 
+  // a bus the timetable data gives as a tram or a U-Bahn, shown as a bus from the tracks at its stops (#358): the
+  // name of the (i) behind its kind, and the first line of what it opens
+  'kind.listed.tram': 'A tram in the timetable data',
+  'kind.listed.subway': 'A U-Bahn in the timetable data',
+  'kind.listed.both': 'A tram or U-Bahn in the timetable data',
+  'kind.listedPartly.tram': 'Partly a tram in the timetable data',
+  'kind.listedPartly.subway': 'Partly a U-Bahn in the timetable data',
+  'kind.listedPartly.both': 'Partly a tram or U-Bahn in the timetable data',
+  'kind.why': 'Why a bus?',
+  'kind.because': 'Some buses are listed as a tram or U-Bahn in the timetable data. Where fewer than 6 in 10 of their stops are at tracks, the map shows them as buses.',
+  'kind.partly': 'On this line, that holds for some of its trips.',
+
 
   // the button with the eye next to the settings: it takes the controls of the page away, and brings them back
   'display.wall': 'As a wall screen',

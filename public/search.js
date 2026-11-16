@@ -265,6 +265,8 @@ export function buildIndex({ modes, stations, lines }, modeNames = {}) {
       lon: degrees(lines.lon),
       service: lines.service,
       compact: lines.name.map(compact),
+      // (the kinds the timetable data gives a line that is shown as a bus, #358, by its number)
+      listed: new Map(Object.entries(lines.listed ?? {}).map(([i, kinds]) => [Number(i), kinds.map((number) => modes[number])])),
     },
     modeOf: new Map(Object.entries(modeNames).map(([mode, name]) => [compact(name), mode])),
   };
@@ -672,7 +674,8 @@ export function favouritesIn(index, { stops = [], lines = [] } = {}) {
     let best = -1;
     let nearest = LINE_REACH_M;
     for (let i = 0; i < all.name.length; i++) {
-      if (all.name[i] !== kept.name || all.mode[i] !== kept.mode || all.agency[i] !== kept.agency) continue;
+      // (a line kept as the kind the timetable data gives it, where the page shows it as a bus, is that bus: #358)
+      if (all.name[i] !== kept.name || (all.mode[i] !== kept.mode && !all.listed?.get(i)?.includes(kept.mode)) || all.agency[i] !== kept.agency) continue;
       const apart = metres(kept.lat, kept.lon, all.lat[i], all.lon[i]);
       if (apart > nearest) continue;
       best = i;

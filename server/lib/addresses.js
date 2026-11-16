@@ -136,6 +136,16 @@ export class Addresses {
     timetable.lines.forEach((line, i) => {
       if (line.stops > 0) this.lines.set(linePath(line), [...(this.lines.get(linePath(line)) ?? []), i]);
     });
+    // A bus the timetable gives as a tram or a U-Bahn (#358), by the address it would have of that kind, where no
+    // line of that kind has it: the busiest first.
+    this.listedLines = new Map();
+    timetable.lines.forEach((line, i) => {
+      for (const mode of (line.stops > 0 && line.listed?.modes) || []) {
+        const path = linePath({ ...line, mode });
+        if (!this.lines.has(path)) this.listedLines.set(path, [...(this.listedLines.get(path) ?? []), i]);
+      }
+    });
+    for (const numbers of this.listedLines.values()) numbers.sort((a, b) => timetable.lines[b].trips - timetable.lines[a].trips || a - b);
     this.places = new Map(); // line number → the place in its address
     for (const numbers of this.lines.values()) {
       numbers.sort((a, b) => timetable.lines[b].trips - timetable.lines[a].trips || a - b);
@@ -390,6 +400,8 @@ export class Addresses {
    *   type from one version to the next (#302): of that operator and name,
    *   those of the one other kind on rails, where the address is of one on
    *   rails.
+   * - A bus the timetable gives as a tram or a U-Bahn (#358), by the address
+   *   of that kind.
    * - A line whose operator's name has gained or lost words before it, as a
    *   feed writes a code before it or leaves one out (#305): of that kind and
    *   name, those of the operators whose name in an address ends with the one
@@ -400,6 +412,8 @@ export class Addresses {
   linesNamed({ agency, mode, name }) {
     const own = this.lines.get(`line/${agency}/${mode}/${name}`);
     if (own) return own;
+    const listed = this.listedLines.get(`line/${agency}/${mode}/${name}`);
+    if (listed) return listed;
     const family = (kind) => (RAILS.includes(kind) ? 'rails' : kind);
     const others = MODES.filter((kind) => kind !== mode && family(kind) === family(mode) && this.lines.has(`line/${agency}/${kind}/${name}`));
     if (others.length === 1) return this.lines.get(`line/${agency}/${others[0]}/${name}`);

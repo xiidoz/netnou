@@ -41,6 +41,19 @@ test('a stop of the same name up to 1 km away is the one kept, a line of the sam
   assert.ok(!sameLine(U1, { ...U1, agency: 'Stadtwerke München' }));
 });
 
+test('a line kept as a tram is the bus the page shows it as, where the timetable gives that bus as a tram (#358)', () => {
+  const tram65 = { name: '65', mode: 'tram', agency: 'VerkehrsAG Nürnberg', lat: 49.44137, lon: 11.08937 };
+  const bus65 = lineFavourite({ name: '65', mode: 'bus', agency: 'VerkehrsAG Nürnberg', at: [49.44137, 11.08937], listed: { modes: ['tram'], partly: false } });
+  assert.deepEqual(bus65.listed, ['tram']);
+  assert.ok(sameLine(tram65, bus65));
+  assert.ok(isFavourite({ stops: [], lines: [tram65] }, 'lines', bus65));
+  assert.ok(!sameLine({ ...tram65, mode: 'subway' }, bus65));
+  assert.ok(!sameLine(tram65, { ...bus65, listed: undefined }));
+  // (no longer one: the one kept as a tram goes; made one: kept as the bus, without what the timetable gives)
+  assert.deepEqual(withFavourite({ stops: [], lines: [tram65] }, 'lines', bus65, false).lines, []);
+  assert.deepEqual(withFavourite({ stops: [], lines: [] }, 'lines', bus65, true).lines, [{ name: '65', mode: 'bus', agency: 'VerkehrsAG Nürnberg', lat: 49.44137, lon: 11.08937 }]);
+});
+
 test('a stop or a line is made a favourite at the end of the list, and is one no longer with every one kept for it', () => {
   let favourites = favouritesFrom(null);
   assert.ok(!isFavourite(favourites, 'stops', PLAERRER));

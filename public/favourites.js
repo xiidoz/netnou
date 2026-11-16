@@ -49,14 +49,22 @@ export function favouritesFrom(stored) {
 /** A stop as it is kept, from what api/departures says of it, with the kinds that call there and the lines chosen of it, if any. */
 export const stopFavourite = ({ name, lat, lon }, modes, lines = []) => ({ name, lat: round5(lat), lon: round5(lon), modes: [...modes], ...(lines.length ? { lines: [...lines] } : {}) });
 
-/** A line as it is kept, from what api/line says of it: its place is `at`. */
-export const lineFavourite = ({ name, mode, agency, at: [lat, lon] }) => ({ name, mode, agency, lat: round5(lat), lon: round5(lon) });
+/**
+ * A line as it is kept, from what api/line says of it: its place is `at`;
+ * with the kinds the timetable data gives it where it is shown as another
+ * (#358), to know a favourite kept of one of those by. Those are not kept.
+ */
+export const lineFavourite = ({ name, mode, agency, at: [lat, lon], listed }) => ({ name, mode, agency, lat: round5(lat), lon: round5(lon), ...(listed ? { listed: listed.modes } : {}) });
 
 /** Whether two stops are the same one, kept in different timetables. */
 export const sameStop = (a, b) => a.name === b.name && metres(a.lat, a.lon, b.lat, b.lon) <= STOP_REACH_M;
 
-/** Whether two lines are the same one. */
-export const sameLine = (a, b) => a.name === b.name && a.mode === b.mode && a.agency === b.agency && metres(a.lat, a.lon, b.lat, b.lon) <= LINE_REACH_M;
+/**
+ * Whether two lines are the same one: also where one is the kind the
+ * timetable data gives the other, a bus kept as a tram before the page
+ * showed it as a bus (#358).
+ */
+export const sameLine = (a, b) => a.name === b.name && (a.mode === b.mode || b.listed?.includes(a.mode) || a.listed?.includes(b.mode)) === true && a.agency === b.agency && metres(a.lat, a.lon, b.lat, b.lon) <= LINE_REACH_M;
 
 const same = (kind) => (kind === 'stops' ? sameStop : sameLine);
 
@@ -70,7 +78,10 @@ export const isFavourite = (favourites, kind, item) => favourites[kind].some((ke
  */
 export function withFavourite(favourites, kind, item, yes) {
   const others = favourites[kind].filter((kept) => !same(kind)(kept, item));
-  return { ...favourites, [kind]: yes ? [...others, item] : others };
+  // (a line without the kinds the timetable data gives it: they are for knowing it by, not kept, see lineFavourite)
+  const kept = { ...item };
+  delete kept.listed;
+  return { ...favourites, [kind]: yes ? [...others, kept] : others };
 }
 
 /** The favourites with the lines chosen of a favourite stop kept, where it is one: in its place in the list. */
