@@ -8,6 +8,13 @@ This file is written by
 messages when a release is made. Do not edit it by hand; see
 [Releases](CONTRIBUTING.md#releases).
 
+## [0.28.0](https://github.com/xiidoz/netnou/compare/v0.27.3...v0.28.0) (2026-11-16)
+
+
+### Features
+
+* **timetable:** a bus the feed gives as a tram or U-Bahn is a bus, with an (i) that says so ([#359](https://github.com/xiidoz/netnou/issues/359)) ([7022a3d](https://github.com/xiidoz/netnou/commit/7022a3dc5b2cc18d9a51e5c15f65d0624ce951b9)), closes [#358](https://github.com/xiidoz/netnou/issues/358)
+
 ## [0.27.3](https://github.com/xiidoz/netnou/compare/v0.27.2...v0.27.3) (2026-11-15)
 
 
