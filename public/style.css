@@ -683,6 +683,29 @@ button:focus-visible, select:focus-visible, .row:focus-visible, .panel:focus-vis
   flex-wrap: wrap;
 }
 .panel-head .sub { margin: 4px 0 0; color: var(--text-muted); font-size: 13px; }
+/* The (i) behind the kind of a bus that the timetable data gives as a tram or
+   a U-Bahn (#358): in the grey of the line below the name, as big as the
+   letters beside it; it opens why. Close to its word, in a name nearer than
+   the gap between the parts of the name. */
+.kind-info { position: relative; display: inline-grid; place-items: center; width: 1.15em; height: 1.15em; margin: 0 0.1em 0 0.4em; padding: 0; border: 0; border-radius: 50%; background: none; color: var(--text-muted); vertical-align: -0.22em; cursor: pointer; }
+.kind-info .icon { width: 100%; height: 100%; }
+.panel-head h1 .kind-info { margin: 0 0 0 -2px; }
+.kind-info:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+@media (hover: hover) {
+  .kind-info:hover { color: var(--text); }
+}
+/* (for a finger, on a phone and on any touch screen: in the name of a line 44 px around it, from the foot of the bar on
+   top of the sheet; in the line below the name of a trip from its own top down, as the badge above takes the 12 px below
+   itself, over a note below that is text, which is drawn later, so above it; as far as the foot of the head where no
+   note follows, and as the first note where that is a button) */
+@media (max-width: 720px), (pointer: coarse) {
+  .panel-head .kind-info::after { content: ""; position: absolute; left: calc(50% - 22px); width: 44px; }
+  .panel-head h1 .kind-info::after { top: calc(50% - 20px); height: 44px; }
+  .panel-head .sub .kind-info { z-index: 1; }
+  .panel-head .sub .kind-info::after { top: 0; height: 43px; }
+  .panel-head:not(:has(> .notes)) .sub .kind-info::after { height: calc(100% + 12px); }
+  .panel-head:has(> .notes > li:first-child > button) .sub .kind-info::after { height: calc(100% + 10px); }
+}
 /* What the timetable says beyond the minute (#289): how often now and the
    last trip, below the name of a line or a stop; the main message of the
    head, so in the colour of the text. */

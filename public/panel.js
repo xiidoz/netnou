@@ -12,7 +12,7 @@
 // as it is (test/panel.test.js).
 
 import { HEART_MIDDLE, heartMark, stopMark, townToShow, townsAlong } from './stops.js';
-import { mdiAlert, mdiChevronRight, mdiChevronUp, mdiClose, mdiFilterVariant, mdiHeart } from './vendor/material-design-icons/icons.js';
+import { mdiAlert, mdiChevronRight, mdiChevronUp, mdiClose, mdiFilterVariant, mdiHeart, mdiInformationOutline } from './vendor/material-design-icons/icons.js';
 
 // The kinds of transport, as the API names them; any other is drawn as "other".
 const KINDS = ['subway', 'tram', 'bus', 'suburban', 'regional', 'longdistance', 'ferry', 'cable', 'other'];
@@ -431,6 +431,28 @@ export function stopHeading(name, town) {
  */
 export const panelHead = (heading, ...more) => h('div', { class: 'panel-head' }, h('h1', {}, heading), more);
 
+/**
+ * What the timetable data gives a bus as, where the page shows it as a bus
+ * from the tracks at its stops (#358): "Laut Fahrplandaten eine Tram", of a
+ * line some of whose trips only "teils".
+ * @param listed { modes, partly } of a line, or of a trip with its one mode
+ */
+export const listedText = ({ modes, partly }, { t }) => {
+  const kind = modes.length > 1 ? 'both' : modes[0] === 'subway' ? 'subway' : 'tram';
+  return partly ? t(`kind.listedPartly.${kind}`) : t(`kind.listed.${kind}`);
+};
+
+/**
+ * The (i) behind the kind of a line or trip that the timetable data gives
+ * as another (#358), named with what it gives; it opens why (app.js). Sent
+ * hidden, like the heart and the share button: it does something only once
+ * the script runs, which shows it.
+ */
+export const kindInfo = (listed, context) => {
+  const said = listedText(listed, context);
+  return h('button', { type: 'button', class: 'kind-info', hidden: true, 'aria-haspopup': 'dialog', 'aria-label': said, title: said }, iconOf(mdiInformationOutline));
+};
+
 // ---------- what the timetable says beyond the minute (#289) ----------
 
 /**
@@ -827,7 +849,7 @@ export function lineHead(line, context, way = null) {
   const toTimetable = timetable?.week?.length
     ? h('button', { type: 'button', class: 'timetable-key spoken', 'data-focus': 'timetable', 'aria-label': [t('facts.timetable'), timetable.stop ? t('facts.timetableFrom', { stop: timetable.stop }) : null].filter(Boolean).join(' ') })
     : null;
-  return panelHead([badge(line.name, line.mode), h('span', {}, t(`mode.${kindOf(line.mode)}`))], h('p', { class: 'sub' }, sub),
+  return panelHead([badge(line.name, line.mode), h('span', {}, t(`mode.${kindOf(line.mode)}`)), line.listed ? kindInfo(line.listed, context) : null], h('p', { class: 'sub' }, sub),
     // (how often it runs now the way its stops show and its last trip today, #289)
     line.facts?.ways?.length ? h('p', { class: 'facts' }, todayText(line.facts.ways[Math.min(way ?? 0, line.facts.ways.length - 1)].today, context, line.facts.ways[Math.min(way ?? 0, line.facts.ways.length - 1)].stop)) : null,
     way !== null && ways.length > 1

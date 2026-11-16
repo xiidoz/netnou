@@ -437,6 +437,7 @@ of its train. Lines without a stop in the area are left out.
 | `to` | array of arrays | the one or two destinations most of its trips have; the feed has no other description of a line |
 | `lat`, `lon` | arrays of whole numbers | the middle of its stops inside the area, written as the places of the stations are |
 | `service` | array of whole numbers | the number of its trips in the whole timetable |
+| `listed` | object | only where there is one: of a bus the timetable gives as another kind (see [Modes](#modes)), by its number in these arrays, those kinds as numbers in `modes` |
 
 The answer only changes with the timetable. It carries an `ETag`, and a
 request with a matching `If-None-Match` is answered with 304.
@@ -474,6 +475,7 @@ direction with its vehicles along them.
 | --- | --- | --- |
 | `at` | `[lat, lon]` | the place of the line, the middle of its stations: what asks for it among those of its name |
 | `path` | string | its address, see [`/api/address`](#get-apiaddress) |
+| `listed` | object | only for a bus the timetable gives as another kind, see [Modes](#modes): `modes`, the kinds it gives (`tram`, `subway`), and `partly`, true where it gives only some of the line's trips so |
 | `vehicles[].id` | string | for `/api/trip` |
 | `vehicles[].to` | string | where the vehicle goes from the stop ahead, as for [`/api/vehicles`](#get-apivehicles) |
 | `vehicles[].next` | string | the name of the stop ahead of it |
@@ -640,6 +642,7 @@ address where visits are counted ([Counting visits](configuration.md#counting-vi
 | Field | Type | Meaning |
 | --- | --- | --- |
 | `line`, `mode` | | as for a vehicle |
+| `listedMode` | string | only for a bus the timetable gives as another kind, see [Modes](#modes): that kind |
 | `to` | string | where the trip sets out for: the destination at its first stop, which the title of its page has as well |
 | `agency` | string | operator, from the timetable |
 | `lineAt` | `[lat, lon]` | the place of its line: `at` for [`/api/line`](#get-apiline), which tells it from lines of its name in places apart |
@@ -759,6 +762,7 @@ trips come to next; trips that end earlier on the same way are in it.
 | `to` | string | the destination most of them have here |
 | `heading` | integer | where it leaves the stop: the bearing to `next` in degrees, clockwise from north |
 | `key` | string | what `lines` takes for this direction |
+| `also` | array of strings | only for a bus the timetable gives as another kind, see [Modes](#modes): the keys of that kind, which `lines` takes for it as well |
 
 They are sorted by mode, then by line, then the busier direction first.
 
@@ -914,6 +918,17 @@ named U and a number (`U1`, `U 43`) is a `subway` also where the feed gives
 it the route type of a tram: so are all U-Bahn and Stadtbahn lines called in
 Germany and Austria, and their route type changes from one version of a feed
 to the next.
+
+A line the timetable gives as a `tram` or a `subway` is a `bus` where
+fewer than 6 in 10 of its stops are within 30 m of a railway track of any
+kind in the OpenStreetMap data (#358): rail and light rail, U-Bahn, tram,
+narrow gauge, monorail, funicular. Feeds have given whole networks of buses
+the route type of a tram from one version to the next. A stop counts only
+where the map data reaches it, and without OpenStreetMap data every line
+keeps its kind. Such a line and its trips say the kind the timetable gives
+(`listed` of [`/api/line`](#get-apiline), `listedMode` of
+[`/api/trip`](#get-apitrip)), and `/api/line` and the addresses find it
+by that kind as well.
 
 ## Stability and licence
 

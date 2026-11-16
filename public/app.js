@@ -12,8 +12,8 @@ import { parseAddress, stopPathAt, wordsOf } from './address.js';
 import { APP_NAME, READMES, chooseLanguage, dayOf, formatHour, formatList, formatNumber, formatTime, formatWeekday, languagePicker, languageToOffer, loadLanguage, pageTexts, sentInAnother, setTimeZone, t, textsOf, translatePage } from './i18n.js';
 import { FAVOURITE_NAME_ZOOM, HEART_MIDDLE, PLACES_ZOOM, RAIL_MODES, heartMark, joiningLines, mergePlaces, namePrecedence, namedAt, placeNames, stopMark, townToShow, townsAlong, withoutStyleStops } from './stops.js';
 import { favouritesFrom, isFavourite, lineFavourite, sameStop, stopFavourite, withChoice, withFavourite } from './favourites.js';
-import { choiceValue, chosenWays, readChoice, toggled } from './choice.js';
-import { DELAY_MAJOR_S, DELAY_MINOR_S, DELAY_SEVERE_S, MINUTES_MAX, NOTE_CHARS, badge as badgeOf, choiceChip as choiceChipOf, clockOf, delayCell as delayCellOf, delayClass, delayNode as delayNodeOf, delaySum as delaySumOf, unknownDelay as unknownDelayOf, delayFlag, delayText, departureLists, departureRow as departureRowOf, departuresSub as departuresSubOf, leavesAt, lineBadge, lineHead, lineLists, lineSaid as lineSaidOf, lineStops, lineTimetable, leftAlready, GONE_S, whenBack, minutesNode as minutesNodeOf, twoKinds, vehicleSpot, VEHICLE_R, panelHead as panelHeadOf, stopHeading, stopRing, stopSaid, stopSign, stopToday, tallMark, tomorrowAt as tomorrowAtOf, untilText as untilTextOf, vehicleLabel, vehicleName, warningSign as warningSignOf, warns } from './panel.js';
+import { choiceValue, chosenWays, readChoice, shownKeys, toggled } from './choice.js';
+import { DELAY_MAJOR_S, DELAY_MINOR_S, DELAY_SEVERE_S, MINUTES_MAX, NOTE_CHARS, badge as badgeOf, choiceChip as choiceChipOf, clockOf, delayCell as delayCellOf, delayClass, delayNode as delayNodeOf, delaySum as delaySumOf, unknownDelay as unknownDelayOf, delayFlag, delayText, departureLists, departureRow as departureRowOf, departuresSub as departuresSubOf, leavesAt, lineBadge, kindInfo, lineHead, lineLists, listedText, lineSaid as lineSaidOf, lineStops, lineTimetable, leftAlready, GONE_S, whenBack, minutesNode as minutesNodeOf, twoKinds, vehicleSpot, VEHICLE_R, panelHead as panelHeadOf, stopHeading, stopRing, stopSaid, stopSign, stopToday, tallMark, tomorrowAt as tomorrowAtOf, untilText as untilTextOf, vehicleLabel, vehicleName, warningSign as warningSignOf, warns } from './panel.js';
 import { BOARD_MAX, BOARD_SHARE, BOARD_STOPS, boardBlocks, boardQuery, boardShare, displayQuery, ledBy, readBoard, readDisplay, readStops } from './display.js';
 import { mdiArrowCollapse, mdiArrowExpand, mdiCheck, mdiChevronLeft, mdiChevronRight, mdiCityVariantOutline, mdiFullscreen, mdiFullscreenExit, mdiHeart, mdiHeartOutline, mdiMinusCircleOutline, mdiPlus } from './vendor/material-design-icons/icons.js';
 import { AttributionControl, MapLibreMap, NavigationControl } from './vendor/maplibre-gl/maplibre-gl.mjs';
@@ -898,7 +898,7 @@ function renderChoice() {
     el('span', { class: 'choice-line', 'aria-hidden': 'true' }, [toDom(lineBadge(name, mode, drawing(), both.has(name)))]),
     el('span', { class: 'choice-ways' }, directions.map((direction) => {
       const to = directionName(direction, list);
-      const button = chip(direction.key, chosen.has(direction), [el('span', { class: 'name', text: to })], () => applyChoice(toggled(state.lines, direction.key, keys)));
+      const button = chip(direction.key, chosen.has(direction), [el('span', { class: 'name', text: to })], () => applyChoice(toggled(shownKeys(state.lines, list), direction.key, keys)));
       button.dataset.mode = direction.mode;
       button.setAttribute('aria-label', t('choice.direction', { line: lineSaid(direction.line, direction.mode), to }));
       return button;
@@ -5099,6 +5099,32 @@ function fitNotes() {
   listed.forEach((item, i) => open(item, notes[i].title ?? notes[i].text, notes[i]));
 }
 
+/**
+ * The line below the name of a trip: its kind, and behind it the (i) where
+ * the timetable data gives it as another (#358), then the rest.
+ * @param listedMode the mode the timetable data gives it, where that is another than the one shown
+ */
+function tripSub(mode, rest, listedMode) {
+  if (!listedMode) return el('p', { class: 'sub', text: [mode, rest].filter(Boolean).join(' · ') });
+  const sub = el('p', { class: 'sub' }, [mode, toDom(kindInfo({ modes: [listedMode], partly: false }, drawing())), rest ? ` · ${rest}` : '']);
+  armKindInfo(sub, { modes: [listedMode], partly: false });
+  return sub;
+}
+
+/**
+ * Shows the (i) behind a kind the timetable data gives as another (#358),
+ * which kindInfo (panel.js) sends hidden, and lets it open why: in the
+ * dialog of the notes, what the data gives first, then why the page shows a
+ * bus, and of a line only some of whose trips it gives so, that too.
+ */
+function armKindInfo(root, listed) {
+  const button = root.querySelector('.kind-info');
+  if (!button || !listed) return;
+  button.hidden = false;
+  const why = [t('kind.because'), listed.partly ? t('kind.partly') : null].filter(Boolean).join(' ');
+  button.addEventListener('click', () => showNotes([{ title: `${listedText(listed, { t })}.`, text: why }], t('kind.why'), button));
+}
+
 function noteButton(text, notes, heading) {
   return el('button', { type: 'button', class: 'note', 'aria-haspopup': 'dialog', onclick: (event) => showNotes(notes, heading, event.currentTarget) }, [
     el('span', { text }),
@@ -5265,7 +5291,7 @@ function renderTrip(trip, scrollToNext) {
     [
       el('div', { class: 'panel-head' }, [
         el('h1', {}, [toLine, el('span', { text: `→ ${to}` })]),
-        el('p', { class: 'sub', text: [mode, trip.agency, othersData || state.selection?.failing ? null : trip.realtime ? t('trip.realtime') : t('trip.scheduleOnly')].filter(Boolean).join(' · ') }),
+        tripSub(mode, [trip.agency, othersData || state.selection?.failing ? null : trip.realtime ? t('trip.realtime') : t('trip.scheduleOnly')].filter(Boolean).join(' · '), trip.listedMode),
         notesList(trip.notes, source, trip.cancelled ? t('trip.cancelled') : null),
       ]),
     ],
@@ -5384,6 +5410,7 @@ function renderLine(line, first) {
   // (and after them its timetable of the coming days that way, #289, with the hours shown of the days they were opened for)
   const timetableOf = lineTimetable(line.facts, drawn, way, selection.hours ?? new Set(), line.mode) ?? [];
   const head = toDom(lineHead(line, drawn, way));
+  armKindInfo(head, line.listed);
   // (it has none of the feed: only that the connection is lost, where it is)
   const notes = notesList([]);
   if (notes) head.append(notes);

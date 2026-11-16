@@ -88,7 +88,9 @@ out of curiosity stays to watch.
 - **Data:** a GTFS timetable and GTFS-RT delays (in Germany from gtfs.de),
   routes and towns from OpenStreetMap extracts, the base map from a tile
   service the operator chooses. Times, delays and the operators' texts are
-  shown as they come; Netnou does not correct them.
+  shown as they come; Netnou does not correct them. One exception: a line
+  the timetable gives as a tram or U-Bahn whose stops are not at tracks is
+  shown as a bus, and its details say what the timetable data has.
 - **One process:** one Node.js program, without a database and without
   runtime dependencies; the timetable of all of Germany fits in it.
 - **What stays in the browser:** the visitor's location, what they type in
@@ -136,7 +138,8 @@ out of curiosity stays to watch.
    never for tidiness, and one kind never makes room for another.
 5. **Honest, and private.** What is drawn or said must be so: calculated
    positions say they are, figures hold for every departure they name,
-   operators' data is shown as provided. What a visitor does stays in their
+   operators' data is shown as provided, and where the page shows it
+   otherwise, it says so. What a visitor does stays in their
    browser, and no service is added that has nothing to do with public
    transport.
 

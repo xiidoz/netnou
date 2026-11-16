@@ -3,7 +3,7 @@
 
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { bearing, choiceKey, choiceValue, chosenWays, inChoice, readChoice, toggled } from '../public/choice.js';
+import { bearing, choiceKey, choiceValue, chosenWays, inChoice, readChoice, shownKeys, toggled } from '../public/choice.js';
 
 const U1_EAST = { mode: 'subway', line: 'U1', next: 'Nürnberg Weißer Turm' };
 
@@ -54,6 +54,20 @@ const WEST = { mode: 'subway', line: 'U1', next: 'Nürnberg Gostenhof', to: 'Fü
 const TRAM = { mode: 'tram', line: '4', next: 'Nürnberg Kohlenhof', to: 'Gibitzenhof', key: 'tram/4~nuernberg-kohlenhof' };
 const LIST = [EAST, WEST, TRAM];
 const ALL = LIST.map(({ key }) => key);
+
+test('a direction chosen by the kind the timetable data gives a bus is that bus, and a tap works on the key shown (#358)', () => {
+  const BUS = { mode: 'bus', line: '65', next: 'Nürnberg Tillystr.', to: 'Röthenbach', key: 'bus/65~nuernberg-tillystr', also: ['tram/65~nuernberg-tillystr'] };
+  const list = [...LIST, BUS];
+  assert.deepEqual(chosenWays(['tram/65~nuernberg-tillystr'], list), [BUS]);
+  assert.deepEqual(chosenWays(['tram/65'], list), [BUS]);
+  assert.deepEqual(shownKeys(['tram/65~nuernberg-tillystr', TRAM.key], list), [BUS.key, TRAM.key]);
+  assert.deepEqual(shownKeys(['tram/65'], list), ['bus/65']);
+  assert.deepEqual(shownKeys([BUS.key, 'tram/65~nuernberg-tillystr'], list), [BUS.key]);
+  // (a tap on it takes it out, as it would its own key; the tram 4 is no bus)
+  const keys = list.map(({ key }) => key);
+  assert.deepEqual(toggled(shownKeys(['tram/65~nuernberg-tillystr', TRAM.key], list), BUS.key, keys), [TRAM.key]);
+  assert.deepEqual(shownKeys([TRAM.key], list), [TRAM.key]);
+});
 
 test('a line chosen whole stands for each of its directions at the stop, as the chip names them and the sheet ticks them (#342)', () => {
   assert.deepEqual(chosenWays([], LIST), []);

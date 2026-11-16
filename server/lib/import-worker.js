@@ -14,8 +14,10 @@ import { Area } from './area.js';
 import { readDataset, writeDataset } from './dataset.js';
 import { buildDataset, callsAt, joinPlatforms } from './importer.js';
 import { KeptRoutes } from './kept-routes.js';
+import { kindsFromTracks } from './kinds.js';
 import { NETWORKS_VERSION } from './network.js';
 import { buildSegments, loadNetworks } from './shapes.js';
+import { findSharedWays } from './timetable.js';
 import { townsOf } from './towns.js';
 import { slug } from '../../public/address.js';
 import { townToShow } from '../../public/stops.js';
@@ -58,6 +60,12 @@ if (osm.urls.length) {
   });
   networks = await loadNetworks({ dataDir, urls: osm.urls, area: region, scope, maxAgeMs: osm.maxAgeMs, timeoutMs: downloadTimeoutMs, onProgress });
   if (networks) {
+    // (the kind of the routes the timetable gives as a tram or a U-Bahn, from the tracks at their stops, before any
+    // route is looked for: a bus is looked for on the roads, #358; and trains run coupled with trains, not with buses)
+    const before = data.routes.type.slice();
+    const turned = kindsFromTracks(data, networks.nets, (region.bbox[0] + region.bbox[2]) / 2);
+    if (turned.length) onProgress(`${turned.length} routes given as a tram or a U-Bahn are buses: their stops are not at tracks`);
+    if (data.routes.type.some((type, r) => type !== before[r])) data.sharedWays = findSharedWays(data);
     // (with the routes of the imports before, as far as they were found on these networks)
     const kept = new KeptRoutes(dataDir, { fetchedAt: networks.fetchedAt, scope });
     data.segments = buildSegments(data, networks.nets, region, onProgress, { kept });

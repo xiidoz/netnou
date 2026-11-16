@@ -612,7 +612,10 @@ export function packDataset({ area = null, stops, towns = [], districts = [], ro
 //   districts  [name] – the district of each town, '' where none is
 //              known or the town is a district itself (#24)
 //   routes     { id, short, long, type: GTFS route_type, color, text,
-//                agency: name }   (color and text are not used yet)
+//                agency: name, listed }   (color and text are not used
+//              yet); a bus the timetable gives as a tram or a U-Bahn
+//              has the route type of a bus, and listed the one it gives,
+//              for every route: added by import-worker.js, see kinds.js
 //   headsigns  [text]
 //   dates      [yyyymmdd], sorted
 //   services   [[index into dates]] – the days each service runs

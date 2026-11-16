@@ -60,8 +60,9 @@ const inOrder = (a, b) => (a < b ? -1 : a > b ? 1 : 0);
  * @param stations [{ name, lat, lon, modes, service, town }]: the place in
  *   degrees, the modes by their names, how often a trip stops there, and the
  *   number of the town it is in among `towns`, -1 if none is known
- * @param lines [{ name, mode, agency, to, lat, lon, service }]: where most of
- *   its trips go, the middle of its stops and the number of its trips
+ * @param lines [{ name, mode, agency, to, lat, lon, service, listed }]: where most of
+ *   its trips go, the middle of its stops and the number of its trips; the
+ *   kinds the timetable data gives a bus shown as one (#358), where it does
  * @param modes the names of all modes: a mode is sent as its number in them
  * @param towns [{ name, district }]: the towns, with the name of the district
  *   each is in, null where that is not known
@@ -130,6 +131,9 @@ export function searchList(stations, lines, modes, towns = []) {
       lat: differences(byOperator.map((line) => Math.round(line.lat * UNIT))),
       lon: differences(byOperator.map((line) => Math.round(line.lon * UNIT))),
       service: byOperator.map((line) => line.service),
+      // (of a bus that the timetable data gives as a tram or a U-Bahn, #358, by its number here: those kinds, by
+      // their numbers; only where there is one)
+      ...(byOperator.some((line) => line.listed) ? { listed: Object.fromEntries(byOperator.flatMap((line, i) => (line.listed ? [[i, line.listed.map((mode) => modes.indexOf(mode))]] : []))) } : {}),
     },
   };
 

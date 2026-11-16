@@ -539,6 +539,24 @@ test('a favourite is the stop of its name nearest its place, as the list has it 
   assert.deepEqual(favouritesIn(index), { stops: [], lines: [] });
 });
 
+test('a line kept as the kind the timetable data gives it is the bus the page shows it as (#358)', () => {
+  // (bus 65, which the timetable data gives as a tram, kept as "Tram 65" before the page showed it as a bus)
+  const { list } = searchList([], [
+    { name: '65', mode: 'bus', agency: 'VerkehrsAG Nürnberg', to: ['Röthenbach'], lat: 49.44137, lon: 11.08937, service: 425, listed: ['tram'] },
+    { name: '65', mode: 'bus', agency: 'Stadtwerke Erlangen', to: ['Erlangen'], lat: 49.6, lon: 11.0, service: 20 },
+  ], MODES);
+  const sent = JSON.parse(JSON.stringify(list));
+  assert.deepEqual(sent.lines.listed, { 1: [MODES.indexOf('tram')] });
+  const own = buildIndex(sent, MODE_NAMES);
+  const kept = { name: '65', mode: 'tram', agency: 'VerkehrsAG Nürnberg', lat: 49.44137, lon: 11.08937 };
+  assert.deepEqual(favouritesIn(own, { lines: [kept] }).lines, [1]);
+  assert.deepEqual(searchLines(own, '', { favourites: [1] }).map((line) => [line.name, line.mode, line.favourite]), [['65', 'bus', true]]);
+  // (not as a U-Bahn, and not the other operator's)
+  assert.deepEqual(favouritesIn(own, { lines: [{ ...kept, mode: 'subway' }] }).lines, []);
+  // (a list without such a line has no `listed`)
+  assert.equal('listed' in DATA.lines, false);
+});
+
 test('with nothing typed, the favourites are what is listed, in the order they were marked (#245)', () => {
   const marked = favourites('Hersbruck Plärrer', 'Nürnberg Hbf');
   assert.deepEqual(search(index, '', { favourites: marked }).map((stop) => [stop.name, stop.favourite]), [['Hersbruck Plärrer', true], ['Nürnberg Hbf', true]]);
