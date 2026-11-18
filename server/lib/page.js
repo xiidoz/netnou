@@ -55,6 +55,7 @@ export const PAGE_MODULES = [
   'stops.js',
   'panel.js',
   'favourites.js',
+  'held.js',
   'choice.js',
   'vendor/material-design-icons/icons.js',
   'vendor/maplibre-gl/maplibre-gl.mjs',

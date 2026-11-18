@@ -431,8 +431,9 @@ test('the script takes a title and a description of the operator\'s own for the 
   assert.match(app, /pageTitle = area\.siteTitle\[language\] \?\? page\.title;/);
   assert.match(app, /querySelector\('meta\[name="description"\]'\)\.content = area\.siteDescription\[language\] \?\? page\.description;/);
   // (and nowhere else does it set either: the title is that, or the one of the stop, the line or the trip whose address the page
-  // is at, #37, also where the page opened them with the answer it was sent with before it knew this, #333)
-  assert.deepEqual(app.match(/document\.title = [^;]+;/g), ['document.title = title ?? pageTitle;', 'document.title = here() && open?.data && !open.left && open.path === here() ? detailsTitle(open) : pageTitle;']);
+  // is at, #37, also where the page opened them with the answer it was sent with before it knew this, #333; the page's own
+  // where its address names nothing now, #362)
+  assert.deepEqual(app.match(/document\.title = [^;]+;/g), ['document.title = title ?? pageTitle;', 'document.title = pageTitle;', 'document.title = here() && open?.data && !open.left && open.path === here() ? detailsTitle(open) : pageTitle;']);
   assert.equal(app.match(/meta\[name="description"\]/g).length, 1);
 });
 
@@ -613,7 +614,7 @@ test('the page writes a title of its own where the visitor chose another languag
   assert.ok(!sentInAnother('de'));
   await loadLanguage('xx', ['en-US']);
   assert.ok(!sentInAnother('de'));
-  assert.match(withoutComments(read('app.js')), /let servedAt = sentInAnother\(\) \? null : here\(\);/);
+  assert.match(withoutComments(read('app.js')), /let servedAt = sentInAnother\(\) \|\| KEPT \? null : here\(\);/);
 });
 
 test('what the page is called and says about itself, with and without the name of its area', async () => {
@@ -883,7 +884,7 @@ test('long without an answer, the details show their delays grey for as long as 
   // the note gives the time of what the details show, true whether or not the page saw the connection go: their own last
   // answer, or for "Alle Linien" kept from an earlier one, that one's; that the delays are not current only where it shows one
   assert.match(app, /const time = formatTime\(shownAt\(selection\)\);/);
-  assert.match(app, /return staleness\(\) === 1 && showsDelays\(selection\) \? t\('panel\.offlineStale', \{ time \}\) : t\('panel\.offline', \{ time \}\);/);
+  assert.match(app, /const stale = staleness\(\) === 1 && showsDelays\(selection\);\s*if \(selection\.connecting\) return stale \? t\('panel\.connectingStale', \{ time \}\) : t\('panel\.connecting', \{ time \}\);\s*return stale \? t\('panel\.offlineStale', \{ time \}\) : t\('panel\.offline', \{ time \}\);/);
   assert.match(app, /return linesAt \? Math\.min\(selection\.answeredAt, linesAt\) : selection\.answeredAt;/);
   assert.match(app, /data\.linesAt = selection\.data\.linesAt;\s*\} else if \(data\.lines\) data\.linesAt = selection\.answeredAt;/);
   // the delays held are grey wherever they are drawn: a line's vehicles and the map's, flags and colours, and a vehicle's
@@ -893,7 +894,7 @@ test('long without an answer, the details show their delays grey for as long as 
   assert.match(app, /delaysHeld = !state\.online && staleness\(\) === 1;/);
   assert.match(app, /delaysHeld = staleness\(\) === 1;/);
   assert.match(read('panel.js'), /stale \? null : delayText\(v\.delay\)/);
-  assert.match(app, /return selection\?\.failing && selection\.liveAt !== undefined \? selection\.liveAt : realtimeState\(\) === 'live';/);
+  assert.match(app, /return heldShown\(selection\) && selection\.liveAt !== undefined \? selection\.liveAt : realtimeState\(\) === 'live';/);
   // a departure shown by its time of day goes once it has left, as one shown by its minutes
   assert.match(app, /\|\| goneSinceDrawn\(at\)\)\) \{/);
   // the note is never cut: it goes on in a second line, between its parts, with its dot
@@ -924,4 +925,40 @@ test('without a connection, a vehicle whose known way has ended leaves the map a
   assert.match(app, /\} else if \(selection\.type === 'line'\) \{/);
   // a board says it too, after its rows or alone
   assert.match(app, /const lost = state\.selection\?\.failing \? toDom\(whenBack\(drawing\(\)\)\) : null;/);
+});
+
+test('a start without a connection opens what the page holds for its address, saying that it connects; the app at the map opens what was open (#362)', () => {
+  const app = withoutComments(read('app.js'));
+  const sw = read('sw.js');
+  // the service worker marks the page it keeps as it serves it, at the address of details and at the map
+  assert.match(sw, /const KEPT_MARK = '<meta name="netnou-kept" content="">';/);
+  assert.equal(sw.match(/return keptPage\(kept/g).length, 2);
+  assert.match(sw, /if \(!kept \|\| request\.mode !== 'navigate' \|\| path !== '\.\/'\) return kept \?\? Response\.error\(\);/);
+  // (with the headers it was kept with, its security policy among them)
+  assert.match(sw, /const headers = new Headers\(kept\.headers\);\s*headers\.delete\('Content-Length'\);\s*headers\.delete\('Content-Encoding'\);/);
+  assert.match(app, /const KEPT = Boolean\(document\.querySelector\('meta\[name="netnou-kept"\]'\)\);/);
+  assert.match(app, /if \(KEPT\) startHeld\(\)\.finally\(recallHeld\);\s*else setTimeout\(recallHeld, 2000\);/);
+  // (a stop without a place of its own placed by its answer; a 404 for what is held asks the address again)
+  assert.match(app, /const \{ lat, lon \} = selection\.at \?\? selection\.data \?\? \{\};/);
+  assert.match(app, /if \(res\.status === 404\) \{\s*state\.selection = null;\s*openAddress\(\);\s*return;\s*\}/);
+  // what is held opens as Back without a connection opens it, saying that the page connects, until its first answer or failure
+  assert.match(app, /const lost = connectionLost\(\);\s*restore\(entry, path, lost, !lost\);\s*placeSent\(entry\.selection\);/);
+  // (drawn as held, as where the connection is lost, while it connects: only the note tells them apart, its dot grey)
+  assert.match(app, /return Boolean\(selection\?\.failing \|\| selection\?\.connecting\);/);
+  assert.match(app, /lost: heldShown\(\) \};/);
+  assert.match(read('style.css'), /\.panel-head \.notes \.connection\.connecting \.dot \{ background: var\(--delay-none\); \}/);
+  // (an error answer ends the waiting: an address gone says so)
+  assert.match(app, /\} else if \(heldShown\(selection\)\) \{[^]*?\}\s*disconnected\(selection\);/);
+  assert.match(app, /const lost = !connecting && \(lostNow \|\| connectionLost\(\) \|\| Boolean\(state\.selection\?\.failing\)\);\s*back\.selection\.connecting = connecting;/);
+  assert.match(app, /selection\.liveAt = realtimeState\(\) === 'live';\s*if \(selection\.connecting && !selection\.failing\) say\(''\);\s*selection\.connecting = false;/);
+  assert.match(app, /selection\.failing = true;\s*selection\.connecting = false;/);
+  // at the map, what was open last, where any of it lies ahead
+  assert.match(app, /const fits = held && readBoard\(location\.search\) === null && \(atMap \|\| asked === choiceValue\(held\.lines \?\? \[\]\)\);\s*if \(fits && \(!atMap \|\| stillAhead\(held\)\)\) \{/);
+  // each answer stored, not a board's, with which address is open, the map alone too; the area with the server's clock
+  assert.match(app, /if \(entry\.board === null\) holdDetails\(path, \{ \.\.\.entry, selection: storable\(selection\) \}\);/);
+  assert.match(app, /showAddress\('', null\);\s*holdLast\(''\);/);
+  assert.match(app, /holdArea\(area, state\.clockOffset\);/);
+  assert.match(app, /const VISITED = HELD;/);
+  assert.match(read('locales/de.js'), /'panel\.connecting': 'Stand \{time\} · Verbinde …',\s*'panel\.connectingStale': 'Stand \{time\} · Verbinde … · Verspätungen veraltet',/);
+  assert.match(read('locales/en.js'), /'panel\.connecting': 'As of \{time\} · connecting …',[^]*'panel\.connectingStale': 'As of \{time\} · connecting … · delays not current',/);
 });

@@ -1108,9 +1108,17 @@ otherwise a server would load a file written by older code:
   browser ([what the server gets to see](deployment.md#running-a-public-instance)).
 - **Offline start.** The service worker fetches from the network first and
   falls back to its cache, so an update shows up immediately and the
-  installed app can still start without a connection (and then says that it
-  needs one). It takes the page it has kept, in whatever language that came.
-  API answers and the map are never cached.
+  installed app can still start without a connection. It takes the page it
+  has kept, in whatever language that came, and marks it as kept. API answers
+  and the map are never cached by it. What open details last had the page
+  keeps itself, in the browser's Cache Storage (`held.js`, #362): the last
+  25 addresses for a day, with the area and the server's clock. At a start
+  from the kept page, the address opens what is held for it at once, with a
+  note that says how old it is and that the page connects ("Stand 13:37 ·
+  Verbinde …"); the page's own first question then decides, with its answer
+  or with "keine Verbindung". The installed app, which starts at the map,
+  opens again what was open when it went away, where any of it lies ahead.
+  Back and Forward reach the stored addresses after a reload too.
 - **A new version.** A page that stays open runs the version it was loaded
   with: a tab, a phone that brings its tab back without loading it, the
   installed app, a screen on a wall. And what it loads later, such as the

@@ -3,12 +3,17 @@
 //
 // Everything is fetched from the network first, so a new version of the page
 // is used as soon as it is deployed; the cache is the fallback for offline
-// starts. Live data (api/) and the map are never cached.
+// starts. Live data (api/) and the map are never cached: what the page holds
+// of them for such a start it keeps itself (held.js). The page served from
+// the cache says so (KEPT_MARK), for the page to know that it starts without
+// its answer.
 
 // Changed files need no new name: with network first the cache follows. Bump
 // the version only to get rid of entries for files that were removed or renamed.
 const CACHE_PREFIX = 'netnou-shell-';
 const CACHE = `${CACHE_PREFIX}v6`;
+// What the page served from the cache carries, after its charset (app.js, "a start without a connection").
+const KEPT_MARK = '<meta name="netnou-kept" content="">';
 // What the page needs to start. test/frontend.test.js checks that the files
 // exist and that every language of i18n.js is among them. The style sheets
 // and the first script come within the page (PAGE_INLINE in
@@ -20,6 +25,7 @@ const SHELL = [
   'choice.js',
   'display.js',
   'favourites.js',
+  'held.js',
   'i18n.js',
   'nearby.js',
   'panel.js',
@@ -36,6 +42,21 @@ const SHELL = [
   'vendor/maplibre-gl/maplibre-gl-worker.mjs',
   'vendor/material-design-icons/icons.js',
 ];
+
+/**
+ * The page as kept, served for a navigation the network failed: marked as
+ * kept (KEPT_MARK), with what goes after its charset besides, and with the
+ * headers it came with, its security policy among them (not its length nor
+ * its encoding: the text is new).
+ */
+async function keptPage(kept, more = '') {
+  const headers = new Headers(kept.headers);
+  headers.delete('Content-Length');
+  headers.delete('Content-Encoding');
+  headers.set('Content-Type', 'text/html; charset=utf-8');
+  const text = (await kept.text()).replace('<meta charset="utf-8">', (charset) => `${charset}\n  ${more}${KEPT_MARK}`);
+  return new Response(text, { headers });
+}
 
 self.addEventListener('install', (event) => {
   event.waitUntil(caches.open(CACHE).then((cache) => cache.addAll(SHELL)).then(() => self.skipWaiting()));
@@ -65,8 +86,7 @@ self.addEventListener('fetch', (event) => {
     event.respondWith(fetch(request).catch(async () => {
       const kept = await caches.match(new URL('./', scope).href, { ignoreSearch: true, ignoreVary: true });
       if (!kept) return Response.error();
-      const base = `<base href="${'../'.repeat(path.split('/').length - 1)}">`;
-      return new Response((await kept.text()).replace('<meta charset="utf-8">', (charset) => `${charset}\n  ${base}`), { headers: { 'Content-Type': 'text/html; charset=utf-8' } });
+      return keptPage(kept, `<base href="${'../'.repeat(path.split('/').length - 1)}">\n  `);
     }));
     return;
   }
@@ -87,6 +107,11 @@ self.addEventListener('fetch', (event) => {
       // (What is kept is taken whatever the address asks for besides, and
       // whatever the browser: the server sends the page in the browser's
       // language, and the one that was kept is the one there is.)
-      .catch(async () => (await caches.match(request, { ignoreSearch: true, ignoreVary: true })) ?? Response.error()),
+      .catch(async () => {
+        const kept = await caches.match(request, { ignoreSearch: true, ignoreVary: true });
+        // (the page itself, at the map, marked as kept; any other file as it was kept)
+        if (!kept || request.mode !== 'navigate' || path !== './') return kept ?? Response.error();
+        return keptPage(kept);
+      }),
   );
 });
