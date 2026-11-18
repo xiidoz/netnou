@@ -13,6 +13,7 @@ import { APP_NAME, READMES, chooseLanguage, dayOf, formatHour, formatList, forma
 import { FAVOURITE_NAME_ZOOM, HEART_MIDDLE, PLACES_ZOOM, RAIL_MODES, heartMark, joiningLines, mergePlaces, namePrecedence, namedAt, placeNames, stopMark, townToShow, townsAlong, withoutStyleStops } from './stops.js';
 import { favouritesFrom, isFavourite, lineFavourite, sameStop, stopFavourite, withChoice, withFavourite } from './favourites.js';
 import { choiceValue, chosenWays, readChoice, shownKeys, toggled } from './choice.js';
+import { HELD, heldArea, heldDetails, heldLast, heldPaths, holdArea, holdDetails, holdLast } from './held.js';
 import { DELAY_MAJOR_S, DELAY_MINOR_S, DELAY_SEVERE_S, MINUTES_MAX, NOTE_CHARS, badge as badgeOf, choiceChip as choiceChipOf, clockOf, delayCell as delayCellOf, delayClass, delayNode as delayNodeOf, delaySum as delaySumOf, unknownDelay as unknownDelayOf, delayFlag, delayText, departureLists, departureRow as departureRowOf, departuresSub as departuresSubOf, leavesAt, lineBadge, kindInfo, lineHead, lineLists, listedText, lineSaid as lineSaidOf, lineStops, lineTimetable, leftAlready, GONE_S, whenBack, minutesNode as minutesNodeOf, twoKinds, vehicleSpot, VEHICLE_R, panelHead as panelHeadOf, stopHeading, stopRing, stopSaid, stopSign, stopToday, tallMark, tomorrowAt as tomorrowAtOf, untilText as untilTextOf, vehicleLabel, vehicleName, warningSign as warningSignOf, warns } from './panel.js';
 import { BOARD_MAX, BOARD_SHARE, BOARD_STOPS, boardBlocks, boardQuery, boardShare, displayQuery, ledBy, readBoard, readDisplay, readStops } from './display.js';
 import { mdiArrowCollapse, mdiArrowExpand, mdiCheck, mdiChevronLeft, mdiChevronRight, mdiCityVariantOutline, mdiFullscreen, mdiFullscreenExit, mdiHeart, mdiHeartOutline, mdiMinusCircleOutline, mdiPlus } from './vendor/material-design-icons/icons.js';
@@ -30,6 +31,8 @@ const DRAW_ORDER = ['other', 'bus', 'ferry', 'cable', 'tram', 'subway', 'suburba
 // address the page was opened with asks for, if it asks for a display.
 const ASKED = readDisplay(location.search, MODES);
 const OPENED_AS_DISPLAY = ASKED !== null;
+// Whether the page is the one the service worker keeps, served as the network failed (sw.js; see "a start without a connection").
+const KEPT = Boolean(document.querySelector('meta[name="netnou-kept"]'));
 // A screen on a wall that nobody operates: the map stands still, and the page looks after itself (startFixed).
 const FIXED = ASKED?.fixed ?? false;
 const DISPLAY_LEAVE_MS = 6000; // how long the way out shows after a fixed display was touched
@@ -199,7 +202,7 @@ const touchScreen = matchMedia('(pointer: coarse)');
  * whether the screen is touched, for how high the rows of a line are.
  */
 function drawing() {
-  return { t, time: formatTime, day: dayOf, hour: formatHour, weekday: formatWeekday, list: formatList, now: now(), times: state.times, touch: touchScreen.matches, live: delaysLive(), stale: staleness() === 1, colorBy: state.colorBy, flags: state.flags, moving: true, favourite: favouriteStop, chosen: (stop) => stop.id === state.selection?.fromStop?.id, lost: Boolean(state.selection?.failing) };
+  return { t, time: formatTime, day: dayOf, hour: formatHour, weekday: formatWeekday, list: formatList, now: now(), times: state.times, touch: touchScreen.matches, live: delaysLive(), stale: staleness() === 1, colorBy: state.colorBy, flags: state.flags, moving: true, favourite: favouriteStop, chosen: (stop) => stop.id === state.selection?.fromStop?.id, lost: heldShown() };
 }
 
 // The icons on the page's own buttons are from Material Design Icons
@@ -3639,6 +3642,7 @@ function closePanel() {
   if (choiceDialog.open) choiceDialog.close();
   shareable(false);
   showAddress('', null);
+  holdLast('');
   pickedChanged(picked);
   clearTimeout(panelTimer);
   hideSaid();
@@ -3726,7 +3730,7 @@ function tripTitle({ line: name, mode, to }) {
 
 // (the address the page was sent for: the title the server gave it says more than this script knows, a line's ends, and is kept while the page is there;
 // not where it is in another language than the one chosen here, which the server knows nothing of)
-let servedAt = sentInAnother() ? null : here();
+let servedAt = sentInAnother() || KEPT ? null : here();
 
 /**
  * An address of a stop by its name and its place (stopPathAt), from what an
@@ -3906,7 +3910,9 @@ function placeSent(selection) {
   selection.kept = state.viewAsked;
   if (selection.type === 'station') {
     if (selection.kept) return;
-    const { lat, lon } = selection.at;
+    // (by the place it was asked for, else by its answer's: a stop opened from the map or a row of a trip has no other)
+    const { lat, lon } = selection.at ?? selection.data ?? {};
+    if (lat === undefined) return;
     map.easeTo({ center: [lon, lat], zoom: Math.max(map.getZoom(), SEARCH_ZOOM), offset: state.board === null ? stopOffset() : [0, 0], duration: 0 });
     if (state.board === null || !selection.data) return;
     showBoardStops(selection.data);
@@ -3952,6 +3958,7 @@ async function openFavouriteStop(stop) {
 /** Says that the address names nothing now, and looks for the name in it. */
 function addressGone(path) {
   state.selection = null;
+  document.title = pageTitle;
   markLost(false);
   $('panel-said').textContent = '';
   askDraw(); // (what was open goes from the map with the next frame)
@@ -4215,6 +4222,16 @@ async function loadSelection(first = false) {
       panelBody.replaceChildren(el('p', { class: 'panel-empty', text: t('panel.noData') }));
       // (no station where the search has one: its list is of another timetable than the server's)
       if (selection.at) forgetSearchList();
+    } else if (heldShown(selection)) {
+      // (what the page holds, which the server does not answer: where its id is not in the timetable now, as after a new
+      // one, its address is asked again, which may name it still, #178, or says that it is gone; another error is no
+      // answer, as the card says too)
+      if (res.status === 404) {
+        state.selection = null;
+        openAddress();
+        return;
+      }
+      disconnected(selection);
     }
   } catch (err) {
     console.warn('details not loaded:', err);
@@ -4313,7 +4330,7 @@ function showSelection(first = false) {
   // come to be drawn anew then; see "a connection lost")
   const stage = staleness();
   // (whether delays come in as the details are drawn while they answer: what they keep once they do not, delaysLive)
-  if (!state.selection.failing) state.selection.liveAt = realtimeState() === 'live';
+  if (!heldShown(state.selection)) state.selection.liveAt = realtimeState() === 'live';
   if (stage > (state.selection.stage ?? 0)) say(lostSince());
   state.selection.stage = stage;
   state.selection.drawnAt = now();
@@ -4322,8 +4339,8 @@ function showSelection(first = false) {
   panel.classList.toggle('stale', stage === 1);
   let shown = data;
   // (without answers a trip goes on by the page's clock: the stops it has passed, the next; a line's number of vehicles under way is not known)
-  if (state.selection.failing && type === 'trip') shown = { ...shown, now: now() };
-  if (state.selection.failing && type === 'line') shown = { ...shown, counted: false };
+  if (heldShown(state.selection) && type === 'trip') shown = { ...shown, now: now() };
+  if (heldShown(state.selection) && type === 'line') shown = { ...shown, counted: false };
   if (type === 'trip') renderTrip(shown, first);
   // (a line the page was sent with is put on the map once the map is there: placeSent)
   else if (type === 'line') renderLine(shown, first && !state.selection.unplaced);
@@ -4591,6 +4608,9 @@ const connectionLost = () => !state.online && state.polled;
 function connected(selection) {
   selection.answeredAt = now();
   selection.liveAt = realtimeState() === 'live';
+  // (that it connects is not so any more)
+  if (selection.connecting && !selection.failing) say('');
+  selection.connecting = false;
   if (!selection.failing) return;
   selection.failing = false;
   $('panel-said').textContent = '';
@@ -4601,6 +4621,7 @@ function connected(selection) {
 function disconnected(selection) {
   const was = selection.failing;
   selection.failing = true;
+  selection.connecting = false;
   markLost();
   if (choiceDialog.open && !stopDirections()) renderChoice();
   if (!selection.loaded) {
@@ -4623,10 +4644,19 @@ function disconnected(selection) {
   if (!was) say(selection.loaded ? lostSince() : t('panel.loadFailed'));
 }
 
+/**
+ * Whether the open details show what the page holds, not an answer of now:
+ * where the connection is lost, and at a start without one while the page
+ * connects (#362). Drawn alike then; only the note tells the two apart.
+ */
+function heldShown(selection = state.selection) {
+  return Boolean(selection?.failing || selection?.connecting);
+}
+
 /** How long the open details are without an answer: 0 for a while, 1 from STALE_S on, with their delays grey for as long as it lasts. */
 function staleness() {
   const selection = state.selection;
-  if (!selection?.failing || !selection.answeredAt) return 0;
+  if (!(selection?.failing || selection?.connecting) || !selection.answeredAt) return 0;
   return now() - shownAt(selection) >= STALE_S ? 1 : 0;
 }
 
@@ -4674,13 +4704,17 @@ function showsDelays(selection) {
 /**
  * The note that the connection is lost: how old what the details show is
  * (shownAt), and what that means for them: the delays they show not current
- * any more (staleness). Null while it is not.
+ * any more (staleness). Where the page shows what it held at a start without
+ * a connection and has not had an answer or a failure yet, that it connects
+ * (#362): "keine Verbindung" only once it could not. Null while it is neither.
  */
 function lostSince() {
   const selection = state.selection;
-  if (!selection?.failing || !selection.answeredAt) return null;
+  if (!(selection?.failing || selection?.connecting) || !selection.answeredAt) return null;
   const time = formatTime(shownAt(selection));
-  return staleness() === 1 && showsDelays(selection) ? t('panel.offlineStale', { time }) : t('panel.offline', { time });
+  const stale = staleness() === 1 && showsDelays(selection);
+  if (selection.connecting) return stale ? t('panel.connectingStale', { time }) : t('panel.connecting', { time });
+  return stale ? t('panel.offlineStale', { time }) : t('panel.offline', { time });
 }
 
 /** What a screen reader hears of the details' connection (#panel-said): written only as it changes, so that it is heard once. */
@@ -4697,7 +4731,7 @@ function say(text) {
  */
 function delaysLive() {
   const selection = state.selection;
-  return selection?.failing && selection.liveAt !== undefined ? selection.liveAt : realtimeState() === 'live';
+  return heldShown(selection) && selection.liveAt !== undefined ? selection.liveAt : realtimeState() === 'live';
 }
 
 /** Whether the details say that the connection is lost: the folded card does not say it as well then (style.css). */
@@ -4855,17 +4889,36 @@ function heldRow(selection) {
 // What the addresses opened in this visit showed, as the page holds them,
 // the last VISITED of them: where the connection is lost, Back goes to them.
 const visited = new Map();
-const VISITED = 12;
+const VISITED = HELD;
 
-/** Keeps what the address of the page shows now, with the details' answer. */
+/**
+ * Keeps what the address of the page shows now, with the details' answer:
+ * in the page, and in the browser for a start without a connection (held.js;
+ * not a board, whose further stops are not held so).
+ */
 function remember(selection) {
   // (under their own address, where they have one: an answer may come after the address bar has moved on)
   const path = selection.path ?? here();
   if (!path) return;
   visited.delete(path);
-  visited.set(path, { selection, view: state.view, lines: state.lines, board: state.board, directions: state.directions });
+  const entry = { selection, view: state.view, lines: state.lines, board: state.board, directions: state.directions };
+  visited.set(path, entry);
   if (visited.size > VISITED) visited.delete(visited.keys().next().value);
+  if (entry.board === null) holdDetails(path, { ...entry, selection: storable(selection) });
+  if (state.selection === selection && !selection.left) holdLast(entry.board === null ? path : '');
 }
+
+/**
+ * What of details is stored (held.js): what restore() and the questions after
+ * it need, not what the page holds of the moment (whether an answer is on its
+ * way, what the map is fitted to, which hours of a timetable are open).
+ */
+function storable({ type, id, path, line, at, way, route, data, answeredAt, liveAt, linesShown, linesAsked }) {
+  return { type, id, path, line, at, way, route, data, answeredAt, liveAt, linesShown, linesAsked };
+}
+
+/** Details as stored, as the page holds them: loaded, and their visit counted already. */
+const unstored = (entry) => ({ ...entry, board: null, selection: { ...entry.selection, loaded: true, counted: true } });
 
 /**
  * What the page holds of an address that it can show again as it was: not a
@@ -4904,15 +4957,19 @@ function heldHead(path) {
 /**
  * Shows details again as the page holds them, at their address (where Back
  * has gone, it is there already), and asks for them anew.
+ * @param connecting whether it is a start without a connection, whose first
+ *   question decides whether there is one (startHeld)
  */
-function restore(back, path = here(), lostNow = false) {
+function restore(back, path = here(), lostNow = false, connecting = false) {
   const { type, data } = back.selection;
   state.moves = (state.moves ?? 0) + 1;
   closeChoice();
   back.selection.path = path;
   const picked = pickedQuery();
-  // (where the connection is known to be lost, what is restored says so at once; else not, whatever it said before)
-  const lost = lostNow || connectionLost() || Boolean(state.selection?.failing);
+  // (where the connection is known to be lost, what is restored says so at once; else not, whatever it said before; at a
+  // start without one, that it connects, until its question has an answer or fails)
+  const lost = !connecting && (lostNow || connectionLost() || Boolean(state.selection?.failing));
+  back.selection.connecting = connecting;
   // (the way back as the step it is restored at has it; a line's chosen stop shown again)
   if (here() === path) {
     back.selection.from = history.state?.from;
@@ -4943,7 +5000,7 @@ function restore(back, path = here(), lostNow = false) {
   pickedChanged(picked);
   shareable(true, type === 'station');
   markLost();
-  $('panel-said').textContent = lostSince() ?? '';
+  say(lostSince() ?? '');
   // (a trip opens at its next stop, as it does with an answer)
   showSelection(type === 'trip');
   loadSelection();
@@ -4963,6 +5020,92 @@ function backFromFailed() {
     return;
   }
   restore(back);
+}
+
+// A start without a connection (#362)
+//
+// Where the network fails, the service worker serves the page it keeps and
+// marks it (sw.js), so the page knows that it starts without its answer. What
+// it holds for its address (held.js) opens at once, as Back without a
+// connection opens it (restore), saying how old it is and that the page
+// connects: its own first question decides, its answer taking the place of
+// what was held, its failing making the note "keine Verbindung". The installed
+// app, which starts at the map, opens again what was open when it went away,
+// if any of it lies ahead, in a step of its own. Where nothing is held, the
+// address asks for itself, and says that it loads once the connection is back
+// where that fails (addressLost).
+
+/** Whether held details still have something ahead: what a start at the map opens again. */
+function stillAhead({ selection: { type, data } }) {
+  const at = now();
+  if (type === 'trip') return data.stops.some((stop) => stop.arr + (stop.arrDelay ?? stop.depDelay ?? 0) + GONE_S > at);
+  if (type === 'station') return (data.departures ?? []).some((dep) => !leftAlready(dep, at));
+  return true;
+}
+
+/** Opens at a start without a connection (KEPT) what the page holds for its address, or at the map what was open last. */
+async function startHeld() {
+  const stored = await heldArea();
+  // (the times as the instance has them, and the server's clock beside the phone's: until the server says them anew)
+  if (stored && !state.areaKnown) setTimeZone(stored.area.timeZone);
+  // (the map where it was last, as the area would put it, rather than where a page starts before it knows its area)
+  const view = state.areaKnown ? null : loadSetting('view', null);
+  if (view && [view.lat, view.lon, view.zoom].every(Number.isFinite)) map.jumpTo({ center: [view.lon, view.lat], zoom: view.zoom });
+  if (stored && !state.online) state.clockOffset = stored.clockOffset;
+  const atMap = !here();
+  // (a screen on a wall, at the map, is set up to show the map)
+  if (atMap && OPENED_AS_DISPLAY) return;
+  const path = atMap ? await heldLast() : here();
+  // (what was opened meanwhile, by a tap or by the map's first answer, stands)
+  const passed = () => Boolean(state.selection) || state.addressOpened || here() !== (atMap ? '' : path);
+  if (!path || passed()) return;
+  const held = await heldDetails(path);
+  if (passed()) return;
+  // (as Back without a connection takes what is held, heldAt: not for a board, nor for other lines than it was asked with)
+  const asked = new URLSearchParams(location.search).get('lines') ?? '';
+  const fits = held && readBoard(location.search) === null && (atMap || asked === choiceValue(held.lines ?? []));
+  if (fits && (!atMap || stillAhead(held))) {
+    state.addressOpened = true;
+    const entry = unstored(held);
+    visited.delete(path);
+    visited.set(path, entry);
+    // (where the map's own question has failed meanwhile, the connection is known to be lost: said at once)
+    const lost = connectionLost();
+    restore(entry, path, lost, !lost);
+    // (the map on them, as on details the page was sent with; and again once the area has come with the first answer)
+    placeSent(entry.selection);
+    entry.selection.unplaced = true;
+    state.sentOpened = true;
+    return;
+  }
+  // (nothing held: the address asks for itself, without waiting for the map's first answer, see poll)
+  if (atMap) return;
+  state.addressOpened = true;
+  openAddress(true).then((done) => {
+    if (!done) state.addressOpened = false;
+  }).catch((err) => {
+    console.warn('address not opened:', err);
+    state.addressOpened = false;
+  });
+}
+
+/**
+ * Takes the addresses stored in the browser into the page's memory of the
+ * visit, behind those of this visit, for Back and Forward without a
+ * connection after a reload too (#362). After the start, so as not to hold it up.
+ */
+async function recallHeld() {
+  const stored = [];
+  for (const { path } of await heldPaths()) {
+    const entry = await heldDetails(path);
+    if (entry) stored.push([path, unstored(entry)]);
+  }
+  const merged = [...stored.filter(([path]) => !visited.has(path)), ...visited].slice(-VISITED);
+  visited.clear();
+  for (const [path, entry] of merged) visited.set(path, entry);
+  // (an address that says it loads once the connection is back, and is held now: open as Back without a connection opens it)
+  const path = here();
+  if (path && state.addressPending && !state.selection && connectionLost() && heldAt(path)) addressLost(path, state.addressPending.loaded);
 }
 
 /**
@@ -5096,7 +5239,8 @@ function notesList(notes, own = [], alert = null) {
   // (first that the connection is lost, with the dot of the status line in the card: see "a connection lost". Never cut:
   // where it does not fit, it goes on in a second line, broken between its parts only, "Stand 13:37 · keine Verbindung")
   const lostNote = lostSince();
-  const connection = lostNote ? el('li', { class: 'connection warning' }, [el('span', {}, [
+  const connecting = Boolean(state.selection?.connecting) && !state.selection?.failing;
+  const connection = lostNote ? el('li', { class: `connection warning${connecting ? ' connecting' : ''}` }, [el('span', {}, [
     el('i', { class: 'dot', 'aria-hidden': 'true' }),
     ...lostNote.split(' · ').flatMap((part, i) => [...(i ? ['\u00a0· '] : []), el('span', { class: 'part', text: part })]),
   ])]) : null;
@@ -5357,7 +5501,7 @@ function renderTrip(trip, scrollToNext) {
     [
       el('div', { class: 'panel-head' }, [
         el('h1', {}, [toLine, el('span', { text: `→ ${to}` })]),
-        tripSub(mode, [trip.agency, othersData || state.selection?.failing ? null : trip.realtime ? t('trip.realtime') : t('trip.scheduleOnly')].filter(Boolean).join(' · '), trip.listedMode),
+        tripSub(mode, [trip.agency, othersData || heldShown() ? null : trip.realtime ? t('trip.realtime') : t('trip.scheduleOnly')].filter(Boolean).join(' · '), trip.listedMode),
         notesList(trip.notes, source, trip.cancelled ? t('trip.cancelled') : null),
       ]),
     ],
@@ -5505,11 +5649,13 @@ function renderLine(line, first) {
  */
 function fitLine(line) {
   const bounds = state.selection?.route?.bounds;
-  if (bounds) map.fitBounds([[bounds[1], bounds[0]], [bounds[3], bounds[2]]], { padding: clearOfCards(), maxZoom: LINE_ZOOM });
+  // (at once where the map has no style yet, as at a start without a connection: before it has one it moves no camera that glides)
+  const glide = map.isStyleLoaded() ? {} : { duration: 0 };
+  if (bounds) map.fitBounds([[bounds[1], bounds[0]], [bounds[3], bounds[2]]], { padding: clearOfCards(), maxZoom: LINE_ZOOM, ...glide });
   else if (line.vehicles.length) {
     const lats = line.vehicles.map((v) => v.lat);
     const lons = line.vehicles.map((v) => v.lon);
-    map.fitBounds([[Math.min(...lons), Math.min(...lats)], [Math.max(...lons), Math.max(...lats)]], { padding: clearOfCards(), maxZoom: LINE_ZOOM });
+    map.fitBounds([[Math.min(...lons), Math.min(...lats)], [Math.max(...lons), Math.max(...lats)]], { padding: clearOfCards(), maxZoom: LINE_ZOOM, ...glide });
   }
 }
 
@@ -6724,6 +6870,10 @@ function versionCredit(about) {
   return `${credit} <a class="update" href="${escapeHtml(about.update.url)}" title="${note}" target="_blank" rel="noopener">↑ ${escapeHtml(about.update.version)}</a>`;
 }
 
+// The answer of api/area, and the server's clock as kept with it last (holdArea).
+let areaAnswer = null;
+let heldClock = null;
+
 /**
  * @returns nothing once the map shows the area. An instance without an area
  *   does not know what it covers before it has a timetable: then what the
@@ -6738,6 +6888,10 @@ async function loadArea() {
   if (!res.ok) throw new Error(`api/area: HTTP ${res.status}`);
   const area = await res.json();
   if (state.areaKnown) return; // asked twice at the same time
+  // (kept for a start without a connection, with the server's clock beside the phone's, see "a start without a connection")
+  areaAnswer = area;
+  holdArea(area, state.clockOffset);
+  heldClock = state.clockOffset;
   // Returning visitors get the section they last looked at.
   const saved = loadSetting('view', null);
 
@@ -6863,6 +7017,11 @@ async function poll() {
       const offset = data.now - Date.now() / 1000;
       // The server clock arrives with up to ~1 s of jitter; follow it slowly so vehicles do not twitch.
       state.clockOffset = state.vehicles.size ? state.clockOffset * 0.8 + offset * 0.2 : offset;
+      // (kept anew where it has moved: see "a start without a connection")
+      if (areaAnswer && (heldClock === null || Math.abs(state.clockOffset - heldClock) > 2)) {
+        heldClock = state.clockOffset;
+        holdArea(areaAnswer, heldClock);
+      }
       state.realtimeAt = data.realtime;
       // (the first answer, or the first one again after the server or the connection was away)
       if (!state.online) startAsking();
@@ -7124,8 +7283,11 @@ function init() {
   // (the map measured before anything is put on it: the details of the page's address below are placed by its size, as
   // the one tip above their sheet)
   resizeCanvas();
-  // (the details of the page's address, with the answer the page was sent with)
+  // (the details of the page's address, with the answer the page was sent with; or, at a start without a connection, with
+  // what the page holds of them, see "a start without a connection")
   takeSent();
+  if (KEPT) startHeld().finally(recallHeld);
+  else setTimeout(recallHeld, 2000);
   // (the header card is what this visitor gets now; where the page came that way, first.js has shown it already)
   document.documentElement.dataset.controls = 'shown';
   // (and what was typed into it before this script had arrived is looked for)

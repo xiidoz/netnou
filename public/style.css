@@ -810,6 +810,9 @@ button:focus-visible, select:focus-visible, .row:focus-visible, .panel:focus-vis
 .panel-head .notes .connection > span { padding-left: 1.28em; text-indent: -1.28em; white-space: normal; overflow: visible; }
 .panel-head .notes .connection .part { display: inline; padding: 0; white-space: nowrap; overflow: visible; }
 .panel-head .notes .connection .dot { width: 0.8em; height: 0.8em; margin-right: 0.48em; }
+/* While the page connects at a start without a connection, the dot of the card's "Verbinde …" (.status .dot): grey,
+   not the red of a connection lost, which is not known yet (app.js, "a start without a connection"). */
+.panel-head .notes .connection.connecting .dot { background: var(--delay-none); }
 :root[data-display] .board-head .notes .connection { font-size: 1.6em; }
 :root[data-display] .board-head .notes .connection .dot { width: 0.6em; height: 0.6em; }
 :root[data-display] .board-head .notes .connection > span { padding-left: 1.08em; text-indent: -1.08em; }

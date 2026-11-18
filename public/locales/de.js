@@ -172,6 +172,8 @@ export default {
   'panel.loadFailed': 'Gerade keine Verbindung – lädt, sobald sie wieder da ist.',
   'panel.offline': 'Stand {time} · keine Verbindung',
   'panel.offlineStale': 'Stand {time} · keine Verbindung · Verspätungen veraltet',
+  'panel.connecting': 'Stand {time} · Verbinde …',
+  'panel.connectingStale': 'Stand {time} · Verbinde … · Verspätungen veraltet',
   'panel.retry': 'Nochmal versuchen',
   'panel.share': 'Teilen',
   'panel.copied': 'Adresse kopiert',

@@ -94,7 +94,8 @@ out of curiosity stays to watch.
 - **One process:** one Node.js program, without a database and without
   runtime dependencies; the timetable of all of Germany fits in it.
 - **What stays in the browser:** the visitor's location, what they type in
-  the search, their settings and favourites.
+  the search, their settings and favourites, and the details they opened in
+  the last day, kept for a start without a connection.
 - **Terms:** Linie (line), Fahrt (trip), Haltestelle (stop), Richtung
   (direction), Abfahrten (departures), Tafel (board), Verspätung (delay);
   "unterwegs" for vehicles under way.
