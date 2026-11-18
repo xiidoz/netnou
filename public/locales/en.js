@@ -224,6 +224,11 @@ export default {
   // panel.offline a while after the last answer, once the delays the details show are grey: the last ones known, for as
   // long as the connection stays away
   'panel.offlineStale': 'As of {time} · no connection · delays not current',
+  // in place of panel.offline where the page shows what it held at a start without a connection and has not yet asked
+  // the server itself: whether there is a connection is not known yet
+  'panel.connecting': 'As of {time} · connecting …',
+  // panel.connecting where the delays the details hold are over 2 minutes old: grey, as with panel.offlineStale
+  'panel.connectingStale': 'As of {time} · connecting … · delays not current',
   'panel.retry': 'Try again',
   'panel.share': 'Share',
   'panel.copied': 'Address copied',
