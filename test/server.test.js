@@ -761,7 +761,9 @@ test('the address of a stop or a line is a page of its own, found again by its n
   assert.deepEqual(lineSent.found, (await get('/api/address?path=line/testbetrieb/subway/u1')).json);
   const lineAnswer = (await get('/api/line?name=U1&mode=subway&agency=Testbetrieb')).json;
   assert.deepEqual(Object.keys(lineSent.answer).sort(), Object.keys(lineAnswer).sort());
-  assert.deepEqual([lineSent.answer.path, lineSent.answer.ways, lineSent.answer.vehicles.map((v) => v.id)], [lineAnswer.path, lineAnswer.ways, lineAnswer.vehicles.map((v) => v.id)]);
+  // (its ways alike, with the same vehicles on them; where those are, which the two answers give for two moments, may differ)
+  const moment = (ways) => ways.map((way) => ({ ...way, vehicles: way.vehicles?.map((v) => v.id) }));
+  assert.deepEqual([lineSent.answer.path, moment(lineSent.answer.ways), lineSent.answer.vehicles.map((v) => v.id)], [lineAnswer.path, moment(lineAnswer.ways), lineAnswer.vehicles.map((v) => v.id)]);
   // (a page that names nothing has none)
   assert.ok(!(await request('/stop/kaputt')).body.toString().includes('sent-answer'));
   const otherKind = await request('/line/testbetrieb/bus/u1');
