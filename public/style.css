@@ -805,8 +805,14 @@ button:focus-visible, select:focus-visible, .row:focus-visible, .panel:focus-vis
 .held-row .stale .delay { color: var(--text-muted); }
 .when-back { text-wrap: balance; }
 /* On a screen on a wall, read from a distance, as large as the rows of its board. */
+/* It is never cut: where it does not fit one line, it goes on in a second, broken between its parts only ("Stand
+   13:37 · keine Verbindung"), the second line beginning where the text of the first does, after the dot (notesList). */
+.panel-head .notes .connection > span { padding-left: 1.28em; text-indent: -1.28em; white-space: normal; overflow: visible; }
+.panel-head .notes .connection .part { display: inline; padding: 0; white-space: nowrap; overflow: visible; }
+.panel-head .notes .connection .dot { width: 0.8em; height: 0.8em; margin-right: 0.48em; }
 :root[data-display] .board-head .notes .connection { font-size: 1.6em; }
 :root[data-display] .board-head .notes .connection .dot { width: 0.6em; height: 0.6em; }
+:root[data-display] .board-head .notes .connection > span { padding-left: 1.08em; text-indent: -1.08em; }
 /* "Nochmal versuchen" below it, as the chips of the head are, a finger high. */
 .retry { margin: 0 14px 14px; min-height: 44px; padding: 0 18px; border: 1px solid var(--border); border-radius: 999px; background: var(--bg); color: var(--text); font: inherit; font-weight: 600; cursor: pointer; }
 .retry:hover { background: var(--bg-subtle); }

@@ -59,10 +59,8 @@ const SLOW_MS = 1_000;
 /** A question to the server, which gives up after ANSWER_MS. */
 const askServer = (url) => fetch(url, { signal: AbortSignal.timeout(ANSWER_MS) });
 // How long after the last answer for the open details their delays are shown
-// grey, as the last ones known, and then left out for the timetable alone, in
-// s (see "a connection lost").
+// grey, as the last ones known and not current, in s (see "a connection lost").
 const STALE_S = 120;
-const SCHEDULE_S = 600;
 const MOVE_SETTLE_MS = 150; // wait this long after the map was moved before reloading
 const FRAME_MS = 80;
 // Between two frames the vehicles move on by the time alone. Mostly that is
@@ -201,7 +199,7 @@ const touchScreen = matchMedia('(pointer: coarse)');
  * whether the screen is touched, for how high the rows of a line are.
  */
 function drawing() {
-  return { t, time: formatTime, day: dayOf, hour: formatHour, weekday: formatWeekday, list: formatList, now: now(), times: state.times, touch: touchScreen.matches, live: realtimeState() === 'live' && staleness() < 2, colorBy: state.colorBy, flags: state.flags, moving: true, favourite: favouriteStop, chosen: (stop) => stop.id === state.selection?.fromStop?.id, lost: Boolean(state.selection?.failing) };
+  return { t, time: formatTime, day: dayOf, hour: formatHour, weekday: formatWeekday, list: formatList, now: now(), times: state.times, touch: touchScreen.matches, live: delaysLive(), stale: staleness() === 1, colorBy: state.colorBy, flags: state.flags, moving: true, favourite: favouriteStop, chosen: (stop) => stop.id === state.selection?.fromStop?.id, lost: Boolean(state.selection?.failing) };
 }
 
 // The icons on the page's own buttons are from Material Design Icons
@@ -577,8 +575,14 @@ let drawAsked = true;
 let settling = false;
 let quietMs = FRAME_MS;
 
+// Whether the delays drawn now are the last ones known, long without an
+// answer: grey then, as in the lists, flags and colours alike (see "a
+// connection lost"). draw() sets it for the map, drawLineVehicles() for the
+// stops of a line, before they draw.
+let delaysHeld = false;
+
 function vehicleColor(v) {
-  return state.colorBy === 'delay' ? colors.delay[delayClass(v.delay)] : colors.mode[v.mode] ?? colors.mode.other;
+  return state.colorBy === 'delay' ? colors.delay[delaysHeld ? 'none' : delayClass(v.delay)] : colors.mode[v.mode] ?? colors.mode.other;
 }
 
 /** By name, numbers by their value: N2 before N10. For the order within a group, which must not change from frame to frame. */
@@ -658,7 +662,7 @@ function drawRing(x, y, r, w, color) {
 function flagOf(v, live) {
   if (state.colorBy !== 'mode' || !state.flags) return null;
   const flag = delayFlag(v.delay, live);
-  return flag && { text: flag.text, color: colors.delay[flag.color] };
+  return flag && { text: flag.text, color: colors.delay[delaysHeld ? 'none' : flag.color] };
 }
 
 /** The flag of a vehicle at x, y: its width. */
@@ -1318,7 +1322,10 @@ function draw() {
   const r = labeled ? (zoom >= 14 ? 11 : LABEL_R) : 4.5;
   // A vehicle without a reported delay carries a sign of that – while others
   // have one. Without any realtime data the card says so once (updateStatus).
-  const live = realtimeState() === 'live';
+  // (long without an answer, the delays of those still drawn, the open trip's or line's, are the last ones known: grey,
+  // and their question marks as the details have them, delaysLive)
+  delaysHeld = !state.online && staleness() === 1;
+  const live = delaysHeld ? delaysLive() : realtimeState() === 'live';
 
   // The visitor's own position, under the vehicles. The ring around it is
   // wider than their markers, the arrow and the ring of the selected one
@@ -1706,7 +1713,9 @@ function drawLineVehicles(paper) {
   c.clearRect(0, 0, LINE_CANVAS_PX, paper.height / dpr);
   c.textAlign = 'center';
   c.textBaseline = 'middle';
-  const live = realtimeState() === 'live';
+  const live = delaysLive();
+  // (long without an answer, their delays are the last ones known: grey, as the lists' are)
+  delaysHeld = staleness() === 1;
   const at = now();
   let focused = null;
   // (the stop the list was opened from: its ring over a vehicle there, which it rings, and under one going by)
@@ -3164,8 +3173,9 @@ function besideMapButtons(bubble, edge = Infinity) {
 
 // The map without a connection: its vehicles leave it as their known ways
 // end (draw). Where the details are open, which hold the banner back and
-// say since when in their head, a quiet line on the map says that they
-// load once it is back, once none is left there but the open trip's own.
+// say in their head that the connection is lost, a quiet line on the map
+// says that they load once it is back, once none is left there but the open
+// trip's own.
 // One bubble at a time: not while the tip or the offer of a language is up.
 const mapNoteNode = $('map-note');
 let mapNoteText = null;
@@ -3173,7 +3183,7 @@ let mapNoteWatched = false;
 
 /** Shows the line on the map, or hides it: after each frame, with how many vehicles are still on it (draw). */
 function mapNote(left, selection) {
-  // (only where the head of the details says since when the connection is lost: not while the page waits for its first
+  // (only where the head of the details says that the connection is lost: not while the page waits for its first
   // answers, nor once an answer has come back)
   const lost = connectionLost() && Boolean(selection?.failing) && !panel.hidden && state.board === null && !state.display && tip.hidden && offer.hidden;
   const text = lost && (left.all === 0 || (selection?.type === 'trip' && left.all === left.open)) ? t('map.vehiclesLoad') : null;
@@ -4227,9 +4237,13 @@ function takeAnswer(selection, data, first, sentAt = null) {
   selection.loaded = true;
   delete selection.back;
   connected(selection);
-  if (sentAt !== null) selection.answeredAt = state.heardAt = Math.min(selection.answeredAt, sentAt);
-  // (the lines of the stop as they were last, until the next answer with them: to be shown at once on the switch)
-  if (selection.type === 'station' && !data.lines && selection.data?.id === data.id && selection.data.lines) data.lines = selection.data.lines;
+  if (sentAt !== null) selection.answeredAt = Math.min(selection.answeredAt, sentAt);
+  // (the lines of the stop as they were last, until the next answer with them: to be shown at once on the switch; with
+  // the time they came, which their view says once the connection is lost, shownAt)
+  if (selection.type === 'station' && !data.lines && selection.data?.id === data.id && selection.data.lines) {
+    data.lines = selection.data.lines;
+    data.linesAt = selection.data.linesAt;
+  } else if (data.lines) data.linesAt = selection.answeredAt;
   selection.data = data;
   // (of the lines chosen when they were asked for: see renderStation)
   selection.linesShown = choiceValue(state.lines);
@@ -4295,11 +4309,18 @@ function takeAnswer(selection, data, first, sentAt = null) {
 function showSelection(first = false) {
   const { type, data } = state.selection ?? {};
   if (!data) return;
-  // (long without an answer: its delays grey, as the last known, then the timetable alone; see "a connection lost")
+  // (long without an answer: its delays grey, as the last known, which a screen reader hears once, however the details
+  // come to be drawn anew then; see "a connection lost")
   const stage = staleness();
+  // (whether delays come in as the details are drawn while they answer: what they keep once they do not, delaysLive)
+  if (!state.selection.failing) state.selection.liveAt = realtimeState() === 'live';
+  if (stage > (state.selection.stage ?? 0)) say(lostSince());
   state.selection.stage = stage;
+  state.selection.drawnAt = now();
+  // (whether the note says that the delays shown are not current: drawn anew where that changes, tickTimes)
+  state.selection.delaysShown = stage === 1 && showsDelays(state.selection);
   panel.classList.toggle('stale', stage === 1);
-  let shown = stage === 2 ? byTimetable(type, data) : data;
+  let shown = data;
   // (without answers a trip goes on by the page's clock: the stops it has passed, the next; a line's number of vehicles under way is not known)
   if (state.selection.failing && type === 'trip') shown = { ...shown, now: now() };
   if (state.selection.failing && type === 'line') shown = { ...shown, counted: false };
@@ -4541,16 +4562,20 @@ function showWayBack() {
 // Where an answer for the open details does not come (no connection: a
 // fetch that fails), what they show stays, as the page has it: its minutes
 // count on, and a departure that has left goes (GONE_S, tickTimes). Their head
-// says since when, as the first of its notes (notesList), and a screen reader
-// hears it once; the banner of the map says it no more while they are open.
+// says how old what they show is, "Stand 13:37": the time of their own last
+// answer, which holds however the connection was lost, while the page looked
+// or while it was in the background and asked nothing (#361). It is the first
+// of its notes (notesList), and a screen reader hears it once; the banner of
+// the map says it no more while they are open.
 // What has not loaded yet says so instead of itself, with the way back and a
 // button to try again. The page asks again as it does anyway, every
 // PANEL_REFRESH_MS, and at once when the browser is online again.
 //
 // While it stays away, the delays shown are the last ones known: grey from
-// STALE_S after the last answer, and from SCHEDULE_S on left out, the details
-// by the timetable alone, as the note then says (staleness). The card does not
-// say what the head says (markLost). Back, or the way back, goes to what an
+// STALE_S after the last answer, as the note then says, and so for as long as
+// it stays away (staleness). On a late train the last delay is a better guess
+// than the timetable alone, which the details do not fall back to (#361).
+// The card does not say what the head says (markLost). Back, or the way back, goes to what an
 // address showed in this visit, as the page holds it (remember, restore);
 // where it holds nothing, that address says it will load, and loads once
 // the connection is back (addressLost).
@@ -4565,7 +4590,7 @@ const connectionLost = () => !state.online && state.polled;
 /** An answer for the open details came. */
 function connected(selection) {
   selection.answeredAt = now();
-  state.heardAt = selection.answeredAt;
+  selection.liveAt = realtimeState() === 'live';
   if (!selection.failing) return;
   selection.failing = false;
   $('panel-said').textContent = '';
@@ -4595,43 +4620,84 @@ function disconnected(selection) {
       stepHeld = true;
     }
   } else if (!was || selection.type === 'trip') showSelection();
-  if (!was) $('panel-said').textContent = selection.loaded ? lostSince() : t('panel.loadFailed');
+  if (!was) say(selection.loaded ? lostSince() : t('panel.loadFailed'));
 }
 
-/** How long the open details are without an answer: 0 for a while, 1 with their delays grey (STALE_S), 2 by the timetable alone (SCHEDULE_S). */
+/** How long the open details are without an answer: 0 for a while, 1 from STALE_S on, with their delays grey for as long as it lasts. */
 function staleness() {
   const selection = state.selection;
   if (!selection?.failing || !selection.answeredAt) return 0;
-  const age = now() - selection.answeredAt;
-  return age >= SCHEDULE_S ? 2 : age >= STALE_S ? 1 : 0;
-}
-
-/** Details as the timetable has them: without their delays, the departures in the order they are planned. */
-function byTimetable(type, data) {
-  const planned = (dep) => ({ ...dep, delay: null });
-  if (type === 'trip') return { ...data, realtime: false, stops: data.stops.map((stop) => ({ ...stop, arrDelay: null, depDelay: null })) };
-  // (a line's vehicles are those under way at the last answer, each to the end of its trip: by the timetable alone, none, nor their number)
-  if (type === 'line') return { ...data, vehicles: [], ways: data.ways?.map((way) => ({ ...way, vehicles: [] })) };
-  return {
-    ...data,
-    departures: data.departures.map(planned).sort((a, b) => a.planned - b.planned),
-    lines: data.lines?.map((line) => ({ ...line, ways: line.ways.map((way) => (way.departure ? { ...way, departure: planned(way.departure) } : way)) })),
-  };
+  return now() - shownAt(selection) >= STALE_S ? 1 : 0;
 }
 
 /**
- * The note that the connection is lost: since the last answer of the server,
- * and what that means for the details: their delays not current any more,
- * then by the timetable alone (staleness). Null while it is not.
+ * When what the open details show came: their last answer, not the map's,
+ * which may have come later; for "Alle Linien" kept from an earlier answer
+ * of the stop (takeAnswer), that one's.
+ */
+function shownAt(selection) {
+  const linesAt = selection.type === 'station' && state.view === 'lines' && state.board === null ? selection.data?.linesAt : undefined;
+  return linesAt ? Math.min(selection.answeredAt, linesAt) : selection.answeredAt;
+}
+
+/**
+ * Whether the open details show a delay, for the note to say that the delays
+ * shown are not current only where one is: a departure that has not left (of
+ * a stop, of "Alle Linien", of the stops on a board, which says a delay of a
+ * minute or more only), a stop of a trip, a vehicle on the stops of a line
+ * still on its known way whose delay is drawn, by its flag or its colour.
+ */
+function showsDelays(selection) {
+  const data = selection.data;
+  if (!data) return false;
+  const known = (delay) => delay !== null && delay !== undefined;
+  const at = now();
+  if (selection.type === 'trip') return data.stops.some((stop) => known(stop.arrDelay) || known(stop.depDelay));
+  if (selection.type === 'line') {
+    const drawn = (delay) => known(delay) && (state.colorBy === 'delay' || (state.flags && Math.round(delay / 60) !== 0));
+    // (those of its ways, which its stops draw: a track is [time, place, …], and past its last time the vehicle is not
+    // there any more, drawLineVehicles)
+    const onTheWay = (v) => !v.track?.length || at <= v.track[v.track.length - 2];
+    return (data.ways ?? []).some((way) => (way.vehicles ?? []).some((v) => drawn(v.delay) && onTheWay(v)));
+  }
+  // (none where other lines are chosen than those held: the list says that they load once the connection is back)
+  if (otherLinesHeld()) return false;
+  const ahead = (dep) => !dep.cancelled && !leftAlready(dep, at);
+  if (state.board !== null) {
+    const stops = [data, ...state.extra.map((stop) => boardStopData.get(stop.path)?.departures).filter(Boolean)];
+    return stops.some((stop) => (stop.departures ?? []).some((dep) => ahead(dep) && known(dep.delay) && Math.round(dep.delay / 60) !== 0));
+  }
+  const departures = state.view === 'lines' ? (data.lines ?? []).flatMap((line) => line.ways.map((way) => way.departure).filter(Boolean)) : data.departures ?? [];
+  return departures.some((dep) => ahead(dep) && known(dep.delay));
+}
+
+/**
+ * The note that the connection is lost: how old what the details show is
+ * (shownAt), and what that means for them: the delays they show not current
+ * any more (staleness). Null while it is not.
  */
 function lostSince() {
   const selection = state.selection;
   if (!selection?.failing || !selection.answeredAt) return null;
-  const time = formatTime(Math.max(selection.answeredAt, state.heardAt ?? 0));
-  const stage = staleness();
-  // (a line shows no delays to call not current: its vehicles alone, which leave as their known ways end)
-  if (stage === 1 && selection.type === 'line') return t('panel.offline', { time });
-  return stage === 2 ? t('panel.offlineSchedule', { time }) : stage === 1 ? t('panel.offlineStale', { time }) : t('panel.offline', { time });
+  const time = formatTime(shownAt(selection));
+  return staleness() === 1 && showsDelays(selection) ? t('panel.offlineStale', { time }) : t('panel.offline', { time });
+}
+
+/** What a screen reader hears of the details' connection (#panel-said): written only as it changes, so that it is heard once. */
+function say(text) {
+  const said = $('panel-said');
+  if (said.textContent !== text) said.textContent = text;
+}
+
+/**
+ * Whether delays come in, for what the details show: while their answers do
+ * not come, as at their last answer, not as the map's realtime data age (a
+ * departure without a reported delay keeps its question mark beside those
+ * that have one, grey).
+ */
+function delaysLive() {
+  const selection = state.selection;
+  return selection?.failing && selection.liveAt !== undefined ? selection.liveAt : realtimeState() === 'live';
 }
 
 /** Whether the details say that the connection is lost: the folded card does not say it as well then (style.css). */
@@ -4692,23 +4758,21 @@ let stepHeld = false; // whether the history has a step that stands for details 
  * Where a vehicle of the open trip or line is on the map once its known way
  * has ended without a connection: by the stops the page holds, as their list
  * puts it (on a stop for the first and last quarter of the way to the next,
- * else halfway, vehicleSpot in panel.js); a trip's by the timetable alone
- * where the details are so, a line then has none. Null for any other
- * vehicle, and once its trip is over.
+ * else halfway, vehicleSpot in panel.js), with the last delays known. Null
+ * for any other vehicle, and once its trip is over.
  */
 function openPlace(id, time) {
   const selection = state.selection;
   if (!selection?.data) return null;
-  const timetable = staleness() === 2;
   const track = [];
   if (selection.type === 'trip' && selection.id === id) {
     for (const stop of selection.data.stops) {
       if (stop.skipped || stop.lat === undefined) continue;
-      const arrives = stop.arr + (timetable ? 0 : stop.arrDelay ?? stop.depDelay ?? 0);
-      const leaves = Math.max(arrives, stop.dep + (timetable ? 0 : stop.depDelay ?? stop.arrDelay ?? 0));
+      const arrives = stop.arr + (stop.arrDelay ?? stop.depDelay ?? 0);
+      const leaves = Math.max(arrives, stop.dep + (stop.depDelay ?? stop.arrDelay ?? 0));
       track.push([arrives, leaves, stop.lat, stop.lon]);
     }
-  } else if (selection.type === 'line' && !timetable) {
+  } else if (selection.type === 'line') {
     // (its track: a time and the place of a stop of its way, as lineStops in panel.js has it, a branch's beside its line)
     for (const way of selection.data.ways ?? []) {
       const vehicle = way.vehicles?.find((one) => one.id === id);
@@ -4754,7 +4818,7 @@ function tripHint(id) {
     const vehicle = data?.ways?.flatMap((way) => way.vehicles ?? []).find((one) => one.id === id);
     return vehicle ? { line: data.name, mode: data.mode, to: vehicle.to } : null;
   }
-  const held = (dep, from, byLine = false) => ({ line: dep.line, mode: dep.mode, to: dep.to, dep, from, byLine, answeredAt: selection?.answeredAt ?? null });
+  const held = (dep, from, byLine = false) => ({ line: dep.line, mode: dep.mode, to: dep.to, dep, from, byLine, answeredAt: selection?.answeredAt ? shownAt(selection) : null, liveAt: selection?.liveAt });
   for (const [board, from] of [[data, data?.name], ...[...boardStopData.values()].map((stop) => [stop?.departures, stop?.name])]) {
     const dep = board?.departures?.find((one) => one.trip === id);
     if (dep) return held(dep, from);
@@ -4770,21 +4834,20 @@ function tripHint(id) {
  * What the row a trip was opened by said of its departure, kept below the
  * head of the trip where it did not load: from which stop, when, its delay
  * and the minutes, as the list has them, which go on counting (tickTimes).
- * By the list's rules for a connection lost: its delay grey after a while,
- * then left out; gone once it has left (GONE_S). Null where there is none.
+ * By the list's rules for a connection lost: its delay grey after a while;
+ * gone once it has left (GONE_S). Null where there is none.
  */
 function heldRow(selection) {
   const hint = selection?.type === 'trip' && !selection.loaded ? selection.hint : null;
   if (!hint?.dep || !hint.from) return null;
   const at = now();
   const age = hint.answeredAt ? at - hint.answeredAt : 0;
-  const stage = age >= SCHEDULE_S ? 2 : age >= STALE_S ? 1 : 0;
-  const dep = { ...hint.dep, ...(stage === 2 ? { delay: null } : {}), to: t('board.from', { stop: hint.from }) };
+  const stage = age >= STALE_S ? 1 : 0;
+  const dep = { ...hint.dep, to: t('board.from', { stop: hint.from }) };
   if (leftAlready(dep, at)) return null;
-  // (by the timetable alone, without the question mark of a delay not reported, as the list then; one of another day
-  // says so only where its row did, in "Alle Linien")
+  // (one of another day says so only where its row did, in "Alle Linien"; its question mark as the list had it, delaysLive)
   const context = drawing();
-  const row = toDom(departureRowOf(dep, false, { ...context, live: context.live && stage < 2 }, Boolean(hint.byLine), true));
+  const row = toDom(departureRowOf(dep, false, hint.liveAt === undefined ? context : { ...context, live: hint.liveAt }, Boolean(hint.byLine), true));
   row.classList.toggle('stale', stage === 1);
   return el('div', { class: 'held-row', data: { stage: String(stage) } }, [row]);
 }
@@ -5030,11 +5093,13 @@ function notesList(notes, own = [], alert = null) {
     item.querySelector('span').prepend(warningSign());
     return item;
   };
-  // (first that the connection is lost, with the dot of the status line in the card: see "a connection lost")
+  // (first that the connection is lost, with the dot of the status line in the card: see "a connection lost". Never cut:
+  // where it does not fit, it goes on in a second line, broken between its parts only, "Stand 13:37 · keine Verbindung")
   const lostNote = lostSince();
-  const connection = lostNote ? line(lostNote, 'connection') : null;
-  connection?.classList.add('warning');
-  connection?.querySelector('span').prepend(el('i', { class: 'dot', 'aria-hidden': 'true' }));
+  const connection = lostNote ? el('li', { class: 'connection warning' }, [el('span', {}, [
+    el('i', { class: 'dot', 'aria-hidden': 'true' }),
+    ...lostNote.split(' · ').flatMap((part, i) => [...(i ? ['\u00a0· '] : []), el('span', { class: 'part', text: part })]),
+  ])]) : null;
   const first = [...(connection ? [connection] : []), ...(alert ? [warning(line(alert, 'alert'))] : [])];
   const items = own.map((text) => line(text));
   // (the server has them in this order already; the page does not count on it)
@@ -5095,7 +5160,8 @@ function fitNotes() {
     if (item.classList.contains('warning')) button.querySelector('span').prepend(warningSign());
     part.replaceWith(button);
   };
-  for (const item of items) open(item);
+  // (but not the one that the connection is lost, which goes on in a second line instead: notesList)
+  for (const item of items) if (!item.classList.contains('connection')) open(item);
   listed.forEach((item, i) => open(item, notes[i].title ?? notes[i].text, notes[i]));
 }
 
@@ -5563,21 +5629,23 @@ let goneDrawn = 0; // when tickTimes() last drew the details anew for a departur
 /** The minutes in the lists of departures and the clock of a board, as time goes on. */
 function tickTimes() {
   if (panel.hidden) return;
-  // (long without an answer: its delays grey, then the timetable alone, which the note says once; see "a connection lost")
+  // (long without an answer: its delays grey, which the note says, and a screen reader hears once: showSelection; and the
+  // note anew where the last delay it speaks of has gone, as when a line's vehicles leave its stops; see "a connection
+  // lost")
   const stage = staleness();
-  if (state.selection?.data && !state.selection.left && stage !== (state.selection.stage ?? 0)) {
-    if (stage > 0) $('panel-said').textContent = lostSince();
+  if (state.selection?.data && !state.selection.left && (stage !== (state.selection.stage ?? 0) || (stage === 1 && showsDelays(state.selection) !== state.selection.delaysShown))) {
     showSelection();
     return;
   }
-  // (one that has left goes: the details drawn anew without it, GONE_S; at most every few seconds, should one stay)
+  // (one that has left goes: the details drawn anew without it, GONE_S; at most every few seconds, should one stay. By
+  // its minutes, or where the rows show the time of day, by the departures held: goneSinceDrawn)
   const at = now();
-  if (at - goneDrawn > 5 && state.selection?.data && !state.selection.left && [...panel.querySelectorAll('.minutes[data-leaves]')].some((node) => Number(node.dataset.leaves) < at - GONE_S)) {
+  if (at - goneDrawn > 5 && state.selection?.data && !state.selection.left && ([...panel.querySelectorAll('.minutes[data-leaves]')].some((node) => Number(node.dataset.leaves) < at - GONE_S) || goneSinceDrawn(at))) {
     goneDrawn = at;
     showSelection();
     return;
   }
-  // (the row kept below a trip that did not load: its delay grey, then left out, and gone once it has left; see heldRow)
+  // (the row kept below a trip that did not load: its delay grey after a while, and gone once it has left; see heldRow)
   const held = panel.querySelector('.held-row');
   if (held) {
     const fresh = heldRow(state.selection);
@@ -5590,6 +5658,21 @@ function tickTimes() {
   for (const node of panel.querySelectorAll('.minutes[data-leaves]')) update(node, untilText(Number(node.dataset.leaves), node.dataset.far));
   const clock = panel.querySelector('.board-clock');
   if (clock) update(clock, formatTime(now()));
+}
+
+/**
+ * Whether a departure the open stop or its board holds has left since the
+ * details were last drawn (GONE_S): for the rows that show the time of day,
+ * which have no minutes to go by.
+ */
+function goneSinceDrawn(at) {
+  const selection = state.selection;
+  if (selection?.type !== 'station' || !selection.data) return false;
+  const { data } = selection;
+  const drawnAt = selection.drawnAt ?? 0;
+  const held = [...(data.departures ?? []), ...(data.lines ?? []).flatMap((line) => line.ways.map((way) => way.departure).filter(Boolean)),
+    ...(state.board === null ? [] : [...boardStopData.values()].flatMap((stop) => stop?.departures?.departures ?? []))];
+  return held.some((dep) => leavesAt(dep) + GONE_S > drawnAt && leavesAt(dep) + GONE_S <= at);
 }
 
 /** Whether, without a connection, other lines are chosen than those the departures held are of (linesShown, as they came). */
@@ -6048,7 +6131,7 @@ function boardRow(dep, times, from = null, both = false) {
   // (a delay shows where there is one: on time the board says nothing; with none reported while delays come in for
   // others, the map's question mark, which tells it from one on time)
   const delay = Math.round((dep.delay ?? 0) / 60) === 0 ? null : dep.delay;
-  const unknown = realtimeState() === 'live' && !dep.cancelled && (dep.delay === null || dep.delay === undefined);
+  const unknown = delaysLive() && !dep.cancelled && (dep.delay === null || dep.delay === undefined);
   // (with the time it leaves, as a sum with the planned time; before the minutes, alone)
   // (with both times, on a narrow board where the time of day stands in the sum below the minutes, beside its time as
   // a sum would be, "13:40+?"; style.css hides the time and the sign on a wide one, where the time has its column)
@@ -6098,9 +6181,8 @@ function blockRows(block, times, open = false) {
   const { rows: from } = namesOf(block);
   const merged = shown.length > 1;
   const listed = merged ? mergedDepartures(shown) : shown[0].known.departures.departures.map((dep) => ({ dep, from: null }));
-  // (long without an answer, by the timetable alone, as the open stop's: see byTimetable; and not those that have left, GONE_S)
-  const planned = staleness() === 2 ? listed.map(({ dep, from }) => ({ dep: { ...dep, delay: null }, from })).sort((a, b) => a.dep.planned - b.dep.planned) : listed;
-  const departures = planned.filter(({ dep }) => !leftAlready(dep, now()));
+  // (not those that have left, GONE_S)
+  const departures = listed.filter(({ dep }) => !leftAlready(dep, now()));
   // (the badges of a name the block's stops have in two kinds say their kind)
   const kinds = twoKinds(shown.map((entry) => entry.known.departures.today), departures.map(({ dep }) => dep));
   const rows = departures.map((each) => boardRow(each.dep, times, merged ? from[block.indexOf(each.from)] : null, kinds.has(each.dep.line)));
@@ -6826,7 +6908,6 @@ async function poll() {
       if (!state.online && !state.addressPending && selection && (selection.failing || !selection.loaded) && !selection.asking) setTimeout(loadSelection);
       state.online = true;
       state.polled = true;
-      state.heardAt = now();
       // (the server answers again: an address that could not be opened without it, now, once: see "a connection lost")
       if (state.addressPending) openPending();
       updateStatus();
