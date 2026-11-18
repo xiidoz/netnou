@@ -248,7 +248,8 @@ running instances will load data written by older code:
 - The documentation is updated when a setting or an API answer changes
   ([docs/configuration.md](docs/configuration.md),
   [docs/api.md](docs/api.md)). `CHANGELOG.md` is not edited: it is written
-  from the commit messages.
+  from the commit messages (all but the name of a release, see
+  [Releases](#releases)).
 - The name of a new setting begins with `NETNOU_`, as all of them do, and
   continues the family it belongs to (`NETNOU_SITE_…`, `NETNOU_REALTIME_…`).
 - A cache format version is bumped where needed (see above).
@@ -340,7 +341,7 @@ Not the other way round: "Update branch" brings in the commits but not their
 lines in the changelog, so it must not stand in for a run of the workflow
 that did not happen.
 
-For maintainers, three things outside the repository files:
+For maintainers, four things outside the repository files:
 
 - Under Settings → Actions → General, "Allow GitHub Actions to create and
   approve pull requests" has to be switched on, or release-please cannot open
@@ -355,6 +356,43 @@ For maintainers, three things outside the repository files:
   required, and so are the status checks "CI passed" and "Conventional
   Commits" together with "Require branches to be up to date before merging".
   Nobody is exempt from it.
+- The secret `ANTHROPIC_API_KEY` is optional: with it, the release pull
+  request proposes a name for the release (see below).
+
+### The name of a release
+
+A release can have a name and a few sentences on what it brings, ahead of
+its list: "v0.29.0 – The Offline Release" as the title of its GitHub release,
+and the same in the changelog, in the heading of its section with the
+sentences under it:
+
+```markdown
+## [0.29.0](https://github.com/xiidoz/netnou/compare/v0.28.0...v0.29.0) (2026-11-18) – The Offline Release
+
+Riders who lose the connection on a train keep what they had open: …
+
+
+### Features
+```
+
+- Where the repository has the secret `ANTHROPIC_API_KEY`, a key of the
+  Claude API, the workflow asks Claude for them each time release-please
+  opens the release pull request or writes it anew. Claude is given the list
+  and the first paragraph of the description of each pull request in it, and
+  the name the release had before, to keep if it still fits. The answer is
+  committed to the release pull request as `chore(main): name release X.Y.Z`
+  (`tools/release-notes.mjs` reads and writes it). Without the secret, as in
+  a fork, nothing is asked and nothing changes.
+- They are read before the release is made, in the release pull request,
+  and can be changed there: edit the section in its `CHANGELOG.md` (GitHub's
+  editor will do) and commit to its branch. The workflow leaves a section
+  that has a name alone. When a merge adds to the notes, release-please
+  writes the section anew without them, and Claude is asked again, given
+  the name it had.
+- Merging the release pull request publishes the release with the name in
+  its title and the section of the changelog, sentences included, as its
+  notes. A release without a name is published as release-please makes it,
+  "vX.Y.Z".
 
 ### Deploying what was built
 
