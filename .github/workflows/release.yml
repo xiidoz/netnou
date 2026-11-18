@@ -7,7 +7,10 @@ name: Release
 #    CONTRIBUTING.md), sets it in package.json and writes CHANGELOG.md. Merging
 #    that pull request is the release: release-please then tags the commit
 #    vX.Y.Z and publishes a GitHub release. Whatever the push was, the pull
-#    request ends up on top of it (see the second step of the first job).
+#    request ends up on top of it (see the step "Keep the release pull
+#    request on top of main"). Claude proposes a name for the release and a
+#    few sentences on what it brings, in the pull request, and the release is
+#    published with them (see "Releases" in CONTRIBUTING.md).
 # 2. The container image is built and pushed to ghcr.io/xiidoz/netnou: always
 #    as "edge", and for a release also as "latest", X.Y.Z, X.Y and - from
 #    1.0.0 on - X. So "latest" is the newest release and "edge" is main.
@@ -44,6 +47,37 @@ jobs:
       issues: write
       pull-requests: write
     steps:
+      # For tools/release-notes.mjs, which reads and writes the name of a
+      # release in CHANGELOG.md.
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .node-version
+
+      # Should release-please write the release pull request anew below, the
+      # name the release had goes with it. It is kept here for Claude, who is
+      # asked to keep it if it still fits (see "Name the release pull request").
+      - name: Note the name the release pull request has
+        # Only a hint for later: never in the way of a release.
+        continue-on-error: true
+        run: |
+          own='map(select((.isCrossRepository | not) and (.headRefName | startswith("release-please--"))))[0] // empty | [.headRefName, .title] | @tsv'
+          pr=$(gh pr list --state open --base "$GITHUB_REF_NAME" --label 'autorelease: pending' --json headRefName,title,isCrossRepository --jq "$own")
+          if [ -z "$pr" ]; then
+            echo "No release pull request is open."
+            exit 0
+          fi
+          IFS=$'\t' read -r head title <<< "$pr"
+          gh api -H 'Accept: application/vnd.github.raw+json' "repos/$GH_REPO/contents/CHANGELOG.md?ref=$head" > "$RUNNER_TEMP/before.md"
+          node tools/release-notes.mjs read "$RUNNER_TEMP/before.md" "${title##* }" | jq '{name, text}' > "$RUNNER_TEMP/previous.json" || true
+          name=$(jq -r '.name // ""' "$RUNNER_TEMP/previous.json" 2>/dev/null || true)
+          echo "The release it proposes is called \"${name:-(no name)}\"."
+        env:
+          GH_TOKEN: ${{ secrets.RELEASE_PLEASE_TOKEN || secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+
       - uses: googleapis/release-please-action@v5
         with:
           config-file: release-please-config.json
@@ -53,6 +87,36 @@ jobs:
           # request. A personal access token or app token in this secret
           # changes that; without the secret everything else works the same.
           token: ${{ secrets.RELEASE_PLEASE_TOKEN || secrets.GITHUB_TOKEN }}
+
+      # release-please publishes a release as "vX.Y.Z", with its notes from the
+      # description of the release pull request. Where the merged CHANGELOG.md
+      # gives the release a name and sentences, the release takes them: the
+      # name in its title, and the section of the changelog as its notes. The
+      # tag is looked up, as in the job "image", so that running this workflow
+      # again for the same commit names the release again.
+      - name: Give the release its name
+        # A release left as "vX.Y.Z" is not worth a failed run; the step shows
+        # that it failed all the same.
+        continue-on-error: true
+        run: |
+          ref=$(gh api "repos/$GH_REPO/git/matching-refs/tags/v" --jq "map(select(.object.sha == \"$GITHUB_SHA\"))[0].ref // \"\"")
+          tag=${ref#refs/tags/}
+          if [ -z "$tag" ]; then
+            echo "This commit is not a release."
+            exit 0
+          fi
+          release=$(node tools/release-notes.mjs read CHANGELOG.md "${tag#v}")
+          name=$(jq -r .name <<< "$release")
+          if [ -z "$name" ] && [ -z "$(jq -r .text <<< "$release")" ]; then
+            echo "CHANGELOG.md gives $tag no name: it stays as release-please published it."
+            exit 0
+          fi
+          jq -r .section <<< "$release" > "$RUNNER_TEMP/notes.md"
+          gh release edit "$tag" --title "$tag${name:+ – $name}" --notes-file "$RUNNER_TEMP/notes.md" > /dev/null
+          echo "Release $tag is called \"$tag${name:+ – $name}\"."
+        env:
+          GH_TOKEN: ${{ secrets.RELEASE_PLEASE_TOKEN || secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
 
       # release-please writes its pull request anew only when a push adds
       # something to the notes. After any other push (docs, tests, CI) it
@@ -82,6 +146,76 @@ jobs:
             echo "::warning title=Release pull request left behind::Pull request #$number could not be put on top of $GITHUB_REF_NAME. Use \"Update branch\" on it before merging it."
           fi
         env:
+          GH_TOKEN: ${{ secrets.RELEASE_PLEASE_TOKEN || secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+
+      # Where the section of the release in the pull request's CHANGELOG.md
+      # has no name, Claude is asked for one and for a few sentences, from the
+      # list and the first paragraph of each listed pull request's description
+      # (tools/release-notes.mjs), and they are committed to the pull request.
+      # release-please compares only the description of its pull request, so
+      # it keeps the commit until a merge adds to the notes; then it writes the
+      # pull request anew, and Claude is asked again, with the name the release
+      # had. A name written by hand is left alone in the same way. Without the
+      # secret ANTHROPIC_API_KEY nothing is asked.
+      - name: Name the release pull request
+        # A release without a name is not worth a failed run.
+        continue-on-error: true
+        run: |
+          if [ -z "$ANTHROPIC_API_KEY" ]; then
+            echo "No secret ANTHROPIC_API_KEY: the release is not given a name."
+            exit 0
+          fi
+          own='map(select((.isCrossRepository | not) and (.headRefName | startswith("release-please--"))))[0] // empty | [.number, .headRefName, .title] | @tsv'
+          pr=$(gh pr list --state open --base "$GITHUB_REF_NAME" --label 'autorelease: pending' --json number,headRefName,title,isCrossRepository --jq "$own")
+          if [ -z "$pr" ]; then
+            echo "No release pull request is open."
+            exit 0
+          fi
+          IFS=$'\t' read -r number head title <<< "$pr"
+          version=${title##* }
+          changelog=$RUNNER_TEMP/CHANGELOG.md
+          gh api -H 'Accept: application/vnd.github.raw+json' "repos/$GH_REPO/contents/CHANGELOG.md?ref=$head" > "$changelog"
+          release=$(node tools/release-notes.mjs read "$changelog" "$version")
+          if [ -n "$(jq -r .name <<< "$release")" ]; then
+            echo "Pull request #$number calls the release \"$(jq -r .name <<< "$release")\"."
+            exit 0
+          fi
+
+          pulls='[]'
+          for pull in $(jq -r '.pulls[]' <<< "$release"); do
+            body=$(gh pr view "$pull" --json body --jq .body 2>/dev/null || true)
+            about=$(node tools/release-notes.mjs excerpt <<< "$body")
+            pulls=$(jq --argjson number "$pull" --arg about "$about" '. + [{number: $number, about: $about}]' <<< "$pulls")
+          done
+          previous=$(jq -c -s '.[0] // null' "$RUNNER_TEMP/previous.json" 2>/dev/null || echo null)
+          jq -n --arg version "$version" --argjson release "$release" --argjson pulls "$pulls" --argjson previous "$previous" \
+            '{version: $version, section: $release.section, pulls: $pulls, previous: $previous}' \
+            | node tools/release-notes.mjs request > "$RUNNER_TEMP/request.json"
+          # (fallbacks: should the model decline, another one answers in the same call)
+          if ! curl --silent --show-error --max-time 600 https://api.anthropic.com/v1/messages \
+              -H 'Content-Type: application/json' \
+              -H "x-api-key: $ANTHROPIC_API_KEY" \
+              -H 'anthropic-version: 2026-10-21' \
+              -H 'anthropic-beta: server-side-fallback-2026-07-01' \
+              --data @"$RUNNER_TEMP/request.json" > "$RUNNER_TEMP/response.json"; then
+            echo "::warning title=Release not named::The Claude API could not be reached."
+            exit 0
+          fi
+          if ! node tools/release-notes.mjs answer < "$RUNNER_TEMP/response.json" > "$RUNNER_TEMP/answer.json" 2> "$RUNNER_TEMP/why.txt"; then
+            echo "::warning title=Release not named::No name from Claude: $(cat "$RUNNER_TEMP/why.txt")"
+            exit 0
+          fi
+
+          node tools/release-notes.mjs write "$changelog" "$version" < "$RUNNER_TEMP/answer.json"
+          blob=$(gh api "repos/$GH_REPO/contents/CHANGELOG.md?ref=$head" --jq .sha)
+          jq -n --arg branch "$head" --arg sha "$blob" --arg message "chore(main): name release $version" \
+            --rawfile content <(base64 -w0 "$changelog") '{branch: $branch, sha: $sha, message: $message, content: $content}' \
+            | gh api -X PUT "repos/$GH_REPO/contents/CHANGELOG.md" --input - > /dev/null
+          echo "Pull request #$number calls the release \"$(jq -r .name "$RUNNER_TEMP/answer.json")\":"
+          jq -r .text "$RUNNER_TEMP/answer.json"
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           GH_TOKEN: ${{ secrets.RELEASE_PLEASE_TOKEN || secrets.GITHUB_TOKEN }}
           GH_REPO: ${{ github.repository }}
 
