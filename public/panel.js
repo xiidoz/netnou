@@ -1006,12 +1006,14 @@ function vehicleSign(line, v, context, arrow = true) {
  * trip ("Tram 10 nach Am Wegfeld"), with the stop it comes to next and its
  * delay, so that several of a line are told apart. The same for one under
  * the crosshair of the map (app.js), which may come without where it goes.
+ * Without the delay where it is the last one known, long without an answer
+ * (`stale`, see "a connection lost" in app.js): the note says so then.
  */
 export function vehicleName(line, v, context) {
-  const { t } = context;
+  const { t, stale = false } = context;
   const said = lineSaid(line.name, line.mode, context);
   const named = `${said.charAt(0).toUpperCase()}${said.slice(1)}`;
-  return [v.to ? `${named} ${t('line.to', { destination: v.to })}` : named, v.next ? `${t('trip.next')} ${v.next}` : null, delayText(v.delay)].filter(Boolean).join(', ');
+  return [v.to ? `${named} ${t('line.to', { destination: v.to })}` : named, v.next ? `${t('trip.next')} ${v.next}` : null, stale ? null : delayText(v.delay)].filter(Boolean).join(', ');
 }
 
 /** A vehicle on the line of the stops (lineStops) in its place, as the page sent has it: a button drawn there, with its track in px. */

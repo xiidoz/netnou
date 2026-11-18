@@ -218,12 +218,12 @@ export default {
   'panel.noData': 'There is no data on this right now.',
   // in place of details that did not load for want of a connection, with panel.retry below it: the page tries again by itself as well
   'panel.loadFailed': 'No connection right now – loads once it’s back.',
-  // the first note under the name of a stop, a trip or a line while their answers do not come: since the time of the last one
-  'panel.offline': 'No connection since {time}',
-  // panel.offline a while after the last answer, once the delays the details show are grey: the last ones known
-  'panel.offlineStale': 'No connection since {time} · delays not current',
-  // panel.offline long after the last answer, once the details leave out the delays they had (by the timetable alone)
-  'panel.offlineSchedule': 'No connection since {time} · timetable only',
+  // the first note under the name of a stop, a trip or a line while their answers do not come: how old what they show is,
+  // the time of their last answer ("as of"), whether or not the page saw the connection go
+  'panel.offline': 'As of {time} · no connection',
+  // panel.offline a while after the last answer, once the delays the details show are grey: the last ones known, for as
+  // long as the connection stays away
+  'panel.offlineStale': 'As of {time} · no connection · delays not current',
   'panel.retry': 'Try again',
   'panel.share': 'Share',
   'panel.copied': 'Address copied',

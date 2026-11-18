@@ -685,13 +685,15 @@ test('the button of the board is in the corner of the details, between the heart
   assert.match(page, /<button type="button" class="board-toggle" id="panel-board" hidden aria-pressed="false" aria-label="Enlarge" data-i18n-aria-label="panel\.enlarge" title="Enlarge" data-i18n-title="panel\.enlarge" data-icon="mdiArrowExpand"><\/button>/);
 });
 
-test('where the connection is lost, the details say since when, and what did not load keeps the way back and is tried again', () => {
+test('where the connection is lost, the details say how old they are, and what did not load keeps the way back and is tried again', () => {
   const app = withoutComments(read('app.js'));
   // until a first answer has come, every try is the first: what failed to load opens as it would have, with its address
   assert.match(app, /first \|\|= !selection\.loaded;/);
-  // a fetch that fails keeps what is shown, with a note since the last answer, which a screen reader hears once
+  // a fetch that fails keeps what is shown, with a note of the time of its last answer, which a screen reader hears once:
+  // written only as it changes
   assert.match(app, /if \(state\.selection === selection && selection\.turn === turn\) disconnected\(selection\);/);
-  assert.match(app, /\$\('panel-said'\)\.textContent = selection\.loaded \? lostSince\(\) : t\('panel\.loadFailed'\);/);
+  assert.match(app, /if \(!was\) say\(selection\.loaded \? lostSince\(\) : t\('panel\.loadFailed'\)\);/);
+  assert.match(app, /function say\(text\) \{\s*const said = \$\('panel-said'\);\s*if \(said\.textContent !== text\) said\.textContent = text;/);
   assert.match(read('index.html'), /<p class="spoken" id="panel-said" role="status"><\/p>/);
   // the way back from what did not load is not the history's: the address never went there
   // (not from details Back has left already, while the address it went to opens)
@@ -868,15 +870,37 @@ test('the map with the keyboard has its crosshair in the middle of its free part
   assert.match(app, /cross\.opened = null;\s*setSheetHeight\(null\);/);
 });
 
-test('long without an answer, the details show their delays grey and then go by the timetable alone; Back without a connection goes to what the page holds', () => {
+test('long without an answer, the details show their delays grey for as long as it lasts and say how old they are; Back without a connection goes to what the page holds', () => {
   const app = withoutComments(read('app.js'));
   const css = read('style.css');
-  // grey from two minutes after the last answer, by the timetable alone from ten, which the note says
-  assert.match(app, /const STALE_S = 120;\s*const SCHEDULE_S = 600;/);
-  assert.match(app, /return age >= SCHEDULE_S \? 2 : age >= STALE_S \? 1 : 0;/);
-  assert.match(app, /let shown = stage === 2 \? byTimetable\(type, data\) : data;/);
-  assert.match(app, /departures: data\.departures\.map\(planned\)\.sort\(\(a, b\) => a\.planned - b\.planned\)/);
-  assert.match(app, /return stage === 2 \? t\('panel\.offlineSchedule', \{ time \}\) : stage === 1 \? t\('panel\.offlineStale', \{ time \}\) : t\('panel\.offline', \{ time \}\);/);
+  // grey from two minutes after the last answer, and so for as long as it lasts: never by the timetable alone (#361)
+  assert.match(app, /const STALE_S = 120;/);
+  assert.match(app, /return now\(\) - shownAt\(selection\) >= STALE_S \? 1 : 0;/);
+  // (as the delays turn grey, a screen reader hears it once, however the details come to be drawn anew then)
+  assert.match(app, /if \(stage > \(state\.selection\.stage \?\? 0\)\) say\(lostSince\(\)\);/);
+  assert.match(app, /let shown = data;/);
+  assert.doesNotMatch(app, /SCHEDULE_S|byTimetable|offlineSchedule|heardAt/);
+  // the note gives the time of what the details show, true whether or not the page saw the connection go: their own last
+  // answer, or for "Alle Linien" kept from an earlier one, that one's; that the delays are not current only where it shows one
+  assert.match(app, /const time = formatTime\(shownAt\(selection\)\);/);
+  assert.match(app, /return staleness\(\) === 1 && showsDelays\(selection\) \? t\('panel\.offlineStale', \{ time \}\) : t\('panel\.offline', \{ time \}\);/);
+  assert.match(app, /return linesAt \? Math\.min\(selection\.answeredAt, linesAt\) : selection\.answeredAt;/);
+  assert.match(app, /data\.linesAt = selection\.data\.linesAt;\s*\} else if \(data\.lines\) data\.linesAt = selection\.answeredAt;/);
+  // the delays held are grey wherever they are drawn: a line's vehicles and the map's, flags and colours, and a vehicle's
+  // name says none then; a departure without one keeps its question mark, as at the last answer
+  assert.match(app, /colors\.delay\[delaysHeld \? 'none' : delayClass\(v\.delay\)\]/);
+  assert.match(app, /color: colors\.delay\[delaysHeld \? 'none' : flag\.color\]/);
+  assert.match(app, /delaysHeld = !state\.online && staleness\(\) === 1;/);
+  assert.match(app, /delaysHeld = staleness\(\) === 1;/);
+  assert.match(read('panel.js'), /stale \? null : delayText\(v\.delay\)/);
+  assert.match(app, /return selection\?\.failing && selection\.liveAt !== undefined \? selection\.liveAt : realtimeState\(\) === 'live';/);
+  // a departure shown by its time of day goes once it has left, as one shown by its minutes
+  assert.match(app, /\|\| goneSinceDrawn\(at\)\)\) \{/);
+  // the note is never cut: it goes on in a second line, between its parts, with its dot
+  assert.match(app, /if \(!item\.classList\.contains\('connection'\)\) open\(item\);/);
+  assert.match(css, /\.panel-head \.notes \.connection \.part \{ display: inline; padding: 0; white-space: nowrap; overflow: visible; \}/);
+  assert.match(read('locales/de.js'), /'panel\.offline': 'Stand \{time\} · keine Verbindung',\s*'panel\.offlineStale': 'Stand \{time\} · keine Verbindung · Verspätungen veraltet',/);
+  assert.match(read('locales/en.js'), /'panel\.offline': 'As of \{time\} · no connection',[^]*'panel\.offlineStale': 'As of \{time\} · no connection · delays not current',/);
   assert.match(css, /#panel\.stale \.delay \{ color: var\(--text-muted\); \}/);
   // the folded card does not say what the head says, and a sheet up to it stays below it as it grows
   assert.match(css, /:root\[data-lost\] \.status\[data-state="error"\] \{ display: none; \}/);
@@ -893,11 +917,11 @@ test('long without an answer, the details show their delays grey and then go by 
   assert.match(app, /if \(type === 'trip' && hint\) return el\('div', \{ class: 'panel-head' \}, \[el\('h1', \{\}, \[badge\(hint\.line, hint\.mode\)/);
 });
 
-test('without a connection, a vehicle whose known way has ended leaves the map and a line, and by the timetable alone a line has none', () => {
+test('without a connection, a vehicle whose known way has ended leaves the map and a line, and an open line keeps its vehicles by its stops', () => {
   const app = withoutComments(read('app.js'));
   assert.match(app, /const beyond = !state\.online && time > v\.knots\[v\.knots\.length - 3\];\s*const target = beyond \? openPlace\(v\.id, time\) : positionAt\(v\.knots, time\);\s*if \(!target\) continue;/);
   assert.match(app, /const ended = node\.dataset\.track !== undefined && at > track\[track\.length - 3\];\s*if \(ended && node === document\.activeElement\) panel\.focus\(\{ preventScroll: true \}\);\s*node\.hidden = ended;/);
-  assert.match(app, /if \(type === 'line'\) return \{ \.\.\.data, vehicles: \[\], ways: data\.ways\?\.map\(\(way\) => \(\{ \.\.\.way, vehicles: \[\] \}\)\) \};/);
+  assert.match(app, /\} else if \(selection\.type === 'line'\) \{/);
   // a board says it too, after its rows or alone
   assert.match(app, /const lost = state\.selection\?\.failing \? toDom\(whenBack\(drawing\(\)\)\) : null;/);
 });
