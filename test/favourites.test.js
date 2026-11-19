@@ -4,7 +4,7 @@
 
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { favouritesFrom, isFavourite, lineFavourite, sameLine, sameStop, stopFavourite, withChoice, withFavourite } from '../public/favourites.js';
+import { favouritesFrom, isFavourite, lineFavourite, sameLine, sameStop, stopFavourite, stopNamedAt, withChoice, withFavourite } from '../public/favourites.js';
 
 const PLAERRER = { name: 'Nürnberg Plärrer', lat: 49.44809, lon: 11.0648 };
 const U1 = { name: 'U1', mode: 'subway', agency: 'VerkehrsAG Nürnberg', lat: 49.44428, lon: 11.05986 };
@@ -84,4 +84,26 @@ test('a favourite stop keeps the lines chosen of it, in its place in the list (#
   assert.deepEqual(withChoice(favourites, PLAERRER, []).stops, [PLAERRER, hbf]);
   // (a stop that is no favourite: nothing changes)
   assert.deepEqual(withChoice(favourites, { name: 'Fürth Rathaus', lat: 49.47765, lon: 10.98859 }, lines), favourites);
+});
+
+// A favourite's link names its stop by its name and place (stopPathAt). The
+// page finds what it holds of that stop under the stop's own address by it,
+// as api/address finds the stop (#363).
+test('an address by name and place names the stop of that name nearest its place, up to STOP_REACH_M away', () => {
+  const stops = [
+    { name: 'Nürnberg Plärrer', lat: 49.44809, lon: 11.0648 },
+    { name: 'Nürnberg Hauptbahnhof', lat: 49.4467, lon: 11.0828 },
+    // (a stop of the name farther away, and the first held again later: of the same stop, the later)
+    { name: 'Nürnberg Plärrer', lat: 49.455, lon: 11.07 },
+    { name: 'Nürnberg Plärrer', lat: 49.44809, lon: 11.0648 },
+  ];
+  assert.equal(stopNamedAt('stop/nuernberg-plaerrer@49.4480,11.0620', stops), 3);
+  assert.equal(stopNamedAt('stop/nuernberg-plaerrer@49.4550,11.0700', stops), 2);
+  assert.equal(stopNamedAt('stop/nuernberg-hauptbahnhof@49.4467,11.0828', stops), 1);
+  // (not of another name, not farther away than a stop moves, nor an address that names no place)
+  assert.equal(stopNamedAt('stop/fuerth-hauptbahnhof@49.4467,11.0828', stops), -1);
+  assert.equal(stopNamedAt('stop/nuernberg-plaerrer@49.4700,11.0620', stops), -1);
+  assert.equal(stopNamedAt('stop/nuernberg-plaerrer', stops), -1);
+  assert.equal(stopNamedAt('line/vag/subway/u1', stops), -1);
+  assert.equal(stopNamedAt('stop/nuernberg-plaerrer@49.4480,11.0620', [{}, { name: 'Nürnberg Plärrer' }]), -1);
 });

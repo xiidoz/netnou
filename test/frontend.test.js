@@ -117,11 +117,24 @@ test('the thread the page starts is a script of its own that is precached', () =
   assert.match(worker, /limit = setTimeout\(\(\) => asking\.abort\(\), 120_000\);/);
 });
 
+// A page that starts from the service worker's cache is of the version kept
+// there: it knows that version as the page was sent with it, not by the
+// server's first answer, which may come from a newer one (#363).
+test('the page knows the version of its files as it was sent, and compares it with the server\'s', () => {
+  const app = withoutComments(read('app.js'));
+  assert.match(app, /let runningVersion = document\.querySelector\('meta\[name="netnou-page-version"\]'\)\?\.content \?\? null;/);
+  assert.match(app, /const versionOf = \(about\) => about\.pageVersion \?\? null;/);
+  // (and tells the service worker, at the start and when another one takes the page over: sw.js takes its files from that version)
+  assert.match(app, /const sayVersion = \(\) => navigator\.serviceWorker\.controller\?\.postMessage\(\{ pageVersion: runningVersion \}\);\s*if \(navigator\.serviceWorker\) \{\s*sayVersion\(\);\s*navigator\.serviceWorker\.addEventListener\('controllerchange', sayVersion\);/);
+});
+
 // The page is sent in the language its browser asks for, and says so (Vary). A
 // start without a connection takes the one that was kept, whatever the browser
 // asks for by then: a cache that held that against it would have no page at all.
 test('the service worker finds the page it kept, whatever is asked for besides', () => {
-  assert.match(withoutComments(read('sw.js')), /caches\.match\(request, \{ ignoreSearch: true, ignoreVary: true \}\)/);
+  const sw = withoutComments(read('sw.js'));
+  assert.match(sw, /caches\.match\(PAGE, \{ cacheName: CACHE, ignoreSearch: true, ignoreVary: true \}\)/);
+  assert.match(sw, /caches\.match\(request, \{ cacheName: `\$\{CACHE_PREFIX\}\$\{version\}`, ignoreSearch: true, ignoreVary: true \}\)/);
 });
 
 // An installed app starts from the shell alone: a script in it that imports
@@ -932,8 +945,8 @@ test('a start without a connection opens what the page holds for its address, sa
   const sw = read('sw.js');
   // the service worker marks the page it keeps as it serves it, at the address of details and at the map
   assert.match(sw, /const KEPT_MARK = '<meta name="netnou-kept" content="">';/);
-  assert.equal(sw.match(/return keptPage\(kept/g).length, 2);
-  assert.match(sw, /if \(!kept \|\| request\.mode !== 'navigate' \|\| path !== '\.\/'\) return kept \?\? Response\.error\(\);/);
+  assert.match(sw, /if \(request\.mode === 'navigate' && \(path === '\.\/' \|\| \/\^\(stop\|line\|trip\)\\\/\/\.test\(path\)\)\) \{\s*event\.respondWith\(start\(event, path, url\)\);/);
+  assert.match(sw, /return keptPage\(kept, path === '\.\/' \? '' : `<base href="\$\{'\.\.\/'\.repeat\(path\.split\('\/'\)\.length - 1\)\}">\\n {2}`\);/);
   // (with the headers it was kept with, its security policy among them)
   assert.match(sw, /const headers = new Headers\(kept\.headers\);\s*headers\.delete\('Content-Length'\);\s*headers\.delete\('Content-Encoding'\);/);
   assert.match(app, /const KEPT = Boolean\(document\.querySelector\('meta\[name="netnou-kept"\]'\)\);/);
@@ -942,7 +955,12 @@ test('a start without a connection opens what the page holds for its address, sa
   assert.match(app, /const \{ lat, lon \} = selection\.at \?\? selection\.data \?\? \{\};/);
   assert.match(app, /if \(res\.status === 404\) \{\s*state\.selection = null;\s*openAddress\(\);\s*return;\s*\}/);
   // what is held opens as Back without a connection opens it, saying that the page connects, until its first answer or failure
-  assert.match(app, /const lost = connectionLost\(\);\s*restore\(entry, path, lost, !lost\);\s*placeSent\(entry\.selection\);/);
+  assert.match(app, /const lost = connectionLost\(\);\s*restoreHeld\(entry, path, lost, !lost\);\s*placeSent\(entry\.selection\);/);
+  // (at the address of a stop by its name and place, as a favourite's link has it, the stop held under its own address, which
+  // takes that one's place)
+  assert.match(app, /const held = \(await heldDetails\(path\)\) \?\? \(atMap \? null : await heldStopStored\(path\)\);/);
+  assert.match(app, /const held = visited\.get\(path\) \?\? heldStop\(\[\.\.\.visited\.values\(\)\], path\);/);
+  assert.match(app, /const own = held\.selection\.path \?\? path;\s*if \(own !== path\) stepHeld = true;\s*restore\(held, own, \.\.\.more\);/);
   // (drawn as held, as where the connection is lost, while it connects: only the note tells them apart, its dot grey)
   assert.match(app, /return Boolean\(selection\?\.failing \|\| selection\?\.connecting\);/);
   assert.match(app, /lost: heldShown\(\) \};/);

@@ -15,7 +15,7 @@ import { Addresses, KeptNumbers, stopTitle } from './lib/addresses.js';
 import { facts } from './lib/facts.js';
 import { FeedUpdater } from './lib/feed.js';
 import { RealtimePoller } from './lib/realtime.js';
-import { addressTitle, inlineHashes, LANGUAGE_CODES, languageFor, ownFiles, PAGE_INLINE, panelHtml, pictureSize, renderManifest, renderPage, robotsTxt, securityPolicy, sitemapFiles, titleOf, versionsOfFiles } from './lib/page.js';
+import { addressTitle, inlineHashes, LANGUAGE_CODES, languageFor, ownFiles, PAGE_INLINE, pageVersion, panelHtml, pictureSize, renderManifest, renderPage, robotsTxt, securityPolicy, serviceWorker, shellOf, sitemapFiles, titleOf, versionsOfFiles } from './lib/page.js';
 import { localDate, setTimeZone, timeZone } from './lib/time.js';
 import { sharesFor, thinOut, ZOOM_ALL, ZOOM_MIN } from './lib/thinning.js';
 import { LITE_AHEAD_S, MODES, lite } from './lib/timetable.js';
@@ -239,7 +239,7 @@ function pageLanguage(req, url) {
 /** index.html as it is sent (renderPage), in a language: the page itself, or at the address of a stop or a line. */
 function pageBody(language, asked, address = null) {
   const file = path.join(config.publicDir, 'index.html');
-  return Buffer.from(renderPage(fs.readFileSync(file, 'utf8'), { language, main: config.language, asked, texts: texts[language], siteName: config.siteName, areaName: config.areaName, siteTitle: config.siteTitle[language], siteDescription: config.siteDescription[language], links: config.links, preview: own.preview, previewSize, publicUrl: config.publicUrl, listed: config.searchEngines, styleUrl: config.styleUrl, mapOrigins: config.mapOrigins, kinds: timetable?.kinds ?? null, nearby: nearbySent(), address, inline: pageInline().inline, fileVersions }));
+  return Buffer.from(renderPage(fs.readFileSync(file, 'utf8'), { language, main: config.language, asked, texts: texts[language], siteName: config.siteName, areaName: config.areaName, siteTitle: config.siteTitle[language], siteDescription: config.siteDescription[language], links: config.links, preview: own.preview, previewSize, publicUrl: config.publicUrl, listed: config.searchEngines, styleUrl: config.styleUrl, mapOrigins: config.mapOrigins, kinds: timetable?.kinds ?? null, nearby: nearbySent(), address, inline: pageInline().inline, fileVersions, version: shell().version }));
 }
 
 const etagOf = (body) => `"${crypto.createHash('sha1').update(body).digest('hex').slice(0, 16)}"`;
@@ -248,7 +248,7 @@ function servePage(req, res, url) {
   const file = path.join(config.publicDir, 'index.html');
   const stat = fs.statSync(file);
   // (the page has a chip for each kind of transport the timetable has, and the stations its search suggests: another timetable may need another page)
-  const stamp = `${stat.size}-${stat.mtimeMs}-${pageInline().stamp}-${timetable?.kinds.join() ?? ''}-${nearbySent().map((stop) => stop.path).join()}`;
+  const stamp = `${stat.size}-${stat.mtimeMs}-${pageInline().stamp}-${shell().version}-${timetable?.kinds.join() ?? ''}-${nearbySent().map((stop) => stop.path).join()}`;
   const { asked, language } = pageLanguage(req, url);
   // (the page of an address with a language names that address as its own: not the same page)
   const key = asked ? `?lang=${asked}` : language;
@@ -531,6 +531,66 @@ function serveSitemap(req, res, part) {
   return send(req, res, 200, MIME['.xml'], kept.body, { 'Cache-Control': 'no-cache' }, kept);
 }
 
+// The service worker keeps the files of the page for a start without a
+// connection, per version of them (#363): it is sent with that version
+// (pageVersion), worked out again when one of the files has changed, the
+// operator's own icons with them.
+let shellNow = null;
+function shell() {
+  const worker = path.join(config.publicDir, 'sw.js');
+  const fileOf = (address) => own.files.get(address) ?? path.join(config.publicDir, address);
+  // (a file that cannot be read counts as empty: the page and api/status do not fail with it)
+  const stampOf = (file) => {
+    try {
+      const stat = fs.statSync(file);
+      return `${stat.size}-${stat.mtimeMs}`;
+    } catch {
+      return 'none';
+    }
+  };
+  const contentOf = (file) => {
+    try {
+      return fs.readFileSync(file);
+    } catch {
+      return Buffer.alloc(0);
+    }
+  };
+  if (shellNow?.workerStamp !== stampOf(worker)) {
+    const text = contentOf(worker).toString('utf8');
+    let listed = [];
+    try {
+      listed = shellOf(text).filter((address) => address !== './');
+    } catch {
+      // (no service worker: no files of its own to keep, and none to send)
+    }
+    shellNow = { workerStamp: stampOf(worker), text, addresses: ['sw.js', 'index.html', ...PAGE_INLINE, ...listed], stamp: null };
+  }
+  const stamp = shellNow.addresses.map((address) => stampOf(fileOf(address))).join();
+  if (shellNow.stamp !== stamp) {
+    const version = pageVersion(build, new Map(shellNow.addresses.map((address) => [address, contentOf(fileOf(address))])));
+    let body = null;
+    try {
+      body = Buffer.from(serviceWorker(shellNow.text, version));
+    } catch {
+      // (as above)
+    }
+    Object.assign(shellNow, { stamp, version, body, etag: body && etagOf(body), packed: null });
+  }
+  return shellNow;
+}
+
+function serveServiceWorker(req, res) {
+  const now = shell();
+  const { body, etag } = now;
+  if (!body) return sendJson(req, res, 404, { error: 'not found' });
+  const headers = { ETag: etag, 'Cache-Control': 'no-cache' };
+  if (etagMatches(req, etag)) {
+    res.writeHead(304, { ...headers, Vary: 'Accept-Encoding' });
+    return res.end();
+  }
+  return send(req, res, 200, MIME['.js'], body, headers, (now.packed ??= keep(body)));
+}
+
 // The manifest of the installed app says what the instance is called, in its
 // main language (lib/page.js). Put together once and again when the file has
 // changed.
@@ -677,6 +737,8 @@ function status() {
     // known, the newer release: { version, url }.
     version: build.version,
     commit: build.commit,
+    // (of the page's files: an open page loads itself again once it differs from its own)
+    pageVersion: shell().version,
     homepage,
     update: updates.update,
     now: Math.floor(Date.now() / 1000),
@@ -901,6 +963,7 @@ const server = http.createServer((req, res) => {
     if (page && url.searchParams.get('lang') === config.language) return moved(res, url.pathname, `${url.pathname}${withoutLanguage(url.search)}`);
     if (url.pathname === '/' || url.pathname === '/index.html') return servePage(req, res, url);
     if (url.pathname === '/manifest.webmanifest') return serveManifest(req, res);
+    if (url.pathname === '/sw.js') return serveServiceWorker(req, res);
     // Where a page names no icon, browsers and search engines ask for this
     // one, and Google's asks for it also where the page does: the icon of
     // the app, own or built-in, a PNG as a favicon may be.

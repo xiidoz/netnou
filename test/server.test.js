@@ -643,6 +643,16 @@ test('the page says what and where the instance is before any script runs', asyn
   assert.equal(manifest.json.icons.length, JSON.parse(fs.readFileSync(path.join(root, 'public', 'manifest.webmanifest'), 'utf8')).icons.length);
   assert.equal((await request('/manifest.webmanifest', { headers: { 'If-None-Match': manifest.headers.etag } })).status, 304);
 
+  // the service worker, with the version of the page's files, which the page and api/status name as well (#363)
+  const worker = await request('/sw.js');
+  assert.deepEqual([worker.status, worker.headers['content-type'], worker.headers['cache-control']], [200, 'text/javascript; charset=utf-8', 'no-cache']);
+  const { pageVersion } = (await get('/api/status')).json;
+  assert.match(pageVersion, /^[0-9a-f]{12}$/);
+  assert.ok(worker.body.toString().includes(`\nconst VERSION = '${pageVersion}';\n`));
+  assert.ok((await request('/')).body.toString().includes(`<meta charset="utf-8">\n  <meta name="netnou-page-version" content="${pageVersion}">\n`));
+  assert.ok((await request('/stop/alpha')).body.toString().includes(`<base href="../">\n  <meta name="netnou-page-version" content="${pageVersion}">\n`));
+  assert.equal((await request('/sw.js', { headers: { 'If-None-Match': worker.headers.etag } })).status, 304);
+
   const robots = await request('/robots.txt');
   assert.deepEqual([robots.status, robots.headers['content-type']], [200, 'text/plain; charset=utf-8']);
   assert.equal(robots.body.toString(), `User-agent: *\nAllow: /\n\nSitemap: ${address}sitemap.xml\n`);
@@ -924,6 +934,15 @@ test('an instance that is not to be listed says so with every answer', async () 
       // it may be read, or nobody would see the request; but it is not handed out
       assert.equal((await request('/robots.txt')).body.toString(), 'User-agent: *\nAllow: /\n');
       assert.equal((await request('/sitemap.xml')).status, 404);
+      // (an icon of its own is one of the page's files: changed, the page's files are a new version, which the service worker keeps anew, #363)
+      if (settings.NETNOU_BRAND_DIR) {
+        const before = (await get('/api/status')).json.pageVersion;
+        fs.writeFileSync(path.join(brand, 'favicon.svg'), '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1 1"/>');
+        const after = (await get('/api/status')).json.pageVersion;
+        assert.notEqual(after, before);
+        assert.ok((await request('/sw.js')).body.toString().includes(`\nconst VERSION = '${after}';\n`));
+        assert.ok((await request('/')).body.toString().includes(`<meta name="netnou-page-version" content="${after}">`));
+      }
     } finally {
       proc.kill();
       await once(proc, 'exit');
