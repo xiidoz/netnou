@@ -11,6 +11,9 @@ import vm from 'node:vm';
 import { serviceWorker } from '../server/lib/page.js';
 
 const SCOPE = 'https://karte.example.org/';
+// The map's server, and the style of the map (NETNOU_MAP_STYLE_URL) as the server writes it into the service worker.
+const MAP = 'https://tiles.example.org';
+const STYLE = `${MAP}/styles/bright`;
 const START = 3000;
 const LATE = 60_000;
 const source = fs.readFileSync(new URL('../public/sw.js', import.meta.url), 'utf8');
@@ -132,7 +135,7 @@ function network() {
 }
 
 /** A run of the service worker of a version: as the browser starts it, and starts it again after stopping it. */
-function run(version, storage, net, open = new Set()) {
+function run(version, storage, net, open = new Set(), mapStyle = STYLE) {
   const handlers = {};
   const self = {
     registration: { scope: SCOPE, updates: 0, async update() { this.updates += 1; } },
@@ -154,7 +157,7 @@ function run(version, storage, net, open = new Set()) {
   };
   storage.fetch = net.fetch;
   net.later = timers.setTimeout;
-  vm.runInNewContext(serviceWorker(source, version), { self, caches: storage, fetch: (request) => net.fetch(request), ...timers, Date: { now: () => clock.now }, TextDecoder, ReadableStream, Response, Headers, URL, console });
+  vm.runInNewContext(serviceWorker(source, version, mapStyle), { self, caches: storage, fetch: (request, options) => net.fetch(request, options), ...timers, Date: { now: () => clock.now }, TextDecoder, ReadableStream, Response, Headers, URL, console });
   /** Dispatches an event: what it answers (respondWith) and all it does besides (waitUntil). */
   const dispatch = (type, fields = {}) => {
     const waits = [];
@@ -207,11 +210,11 @@ function run(version, storage, net, open = new Set()) {
 }
 
 /** A browser with version `version` of the service worker installed, its files kept. */
-async function installed(version = 'v2') {
+async function installed(version = 'v2', mapStyle = STYLE) {
   const storage = cacheStorage();
   const net = network();
   net.version = version;
-  const worker = run(version, storage, net);
+  const worker = run(version, storage, net, new Set(), mapStyle);
   await worker.install();
   net.asked = [];
   return { storage, net, worker };
@@ -514,4 +517,180 @@ test('a start waits three seconds at most for the network, and its page a minute
   assert.match(source, /const START_MS = 3000;/);
   assert.match(source, /const START_MIN_MS = 750;/);
   assert.match(source, /const LATE_MS = 60_000;/);
+});
+
+// ---------- the map (#366) ----------
+
+/** A style of the map as OpenFreeMap's: a list of tiles (TileJSON), tiles of its own besides, icons and fonts. */
+const styleOf = (icons = 'sprites/v1/ofm') => ({ version: 8, sources: { omt: { type: 'vector', url: `${MAP}/planet` }, shade: { type: 'raster', tiles: [`${MAP}/shade/{z}/{x}/{y}.png`] } }, sprite: `${MAP}/${icons}`, glyphs: `${MAP}/fonts/{fontstack}/{range}.pbf`, layers: [] });
+const MAP_FILES = [`${MAP}/planet`, `${MAP}/sprites/v1/ofm@2x.json`, `${MAP}/sprites/v1/ofm@2x.png`, `${MAP}/fonts/Noto%20Sans%20Regular/0-255.pbf`];
+const TILE = `${MAP}/planet/20261115/14/8712/5600.pbf`;
+
+/**
+ * The map's server beside the network of the page: `mode` as the network's
+ * ('answer', 'refuse', 'hang', 'error'), each answer with the tag `tag`; what
+ * was asked, with the browser's cache it was asked from where not the usual.
+ */
+function withMap(net) {
+  const page = net.fetch;
+  const map = { mode: 'answer', style: styleOf(), tag: 'one', asked: [] };
+  net.fetch = (request, options = {}) => {
+    const url = typeof request === 'string' ? request : request.url;
+    if (!url.startsWith(MAP)) return page(request, options);
+    map.asked.push(url.slice(MAP.length) + (options.cache ? ` (${options.cache})` : ''));
+    const body = url === STYLE ? JSON.stringify(map.style) : url.endsWith('/planet') ? '{"tiles":[]}' : `${url.slice(MAP.length)} ${map.tag}`;
+    switch (map.mode) {
+      case 'refuse': return Promise.reject(new TypeError('Failed to fetch'));
+      case 'hang': return new Promise(() => {});
+      case 'error': return Promise.resolve(new Response('', { status: 502 }));
+      default: return Promise.resolve(new Response(body, { headers: { 'Content-Type': 'application/json', ETag: `"${map.tag}"` } }));
+    }
+  };
+  return map;
+}
+
+const MAP_KEPT = 'netnou-map /';
+const mapText = async (storage, url) => (await (await storage.open(MAP_KEPT)).match(url))?.text() ?? null;
+
+/** The map's start as a page asks for it: the style, then what it names, each answered and done. */
+async function mapStart(worker) {
+  for (const url of [STYLE, ...MAP_FILES]) {
+    const asked = worker.other(url);
+    assert.ok(asked.answer, url);
+    await asked.answer;
+    await asked.done();
+  }
+}
+
+test('what the map needs to start is kept as it asks for it: the style and what that names, not the tiles', async () => {
+  const { storage, net, worker } = await installed();
+  const map = withMap(net);
+  // (none yet: none made)
+  assert.equal(storage.named.has(MAP_KEPT), false);
+  await mapStart(worker);
+  assert.equal(JSON.parse(await mapText(storage, STYLE)).sprite, `${MAP}/sprites/v1/ofm`);
+  for (const url of MAP_FILES) assert.ok(await mapText(storage, url), url);
+  // (the tiles are the browser's cache's, as before: not asked through the service worker)
+  assert.equal(worker.other(TILE).answer, null);
+  assert.equal(worker.other(`${MAP}/shade/3/4/2.png`).answer, null);
+  assert.equal(storage.named.get(MAP_KEPT).entries.size, 5);
+  assert.deepEqual(map.asked, ['/styles/bright', '/planet', '/sprites/v1/ofm@2x.json', '/sprites/v1/ofm@2x.png', '/fonts/Noto%20Sans%20Regular/0-255.pbf']);
+});
+
+test('where the map\'s server fails, or a server behind it, the files kept come at once; where it hangs, after the time a start waits', async () => {
+  const { storage, net, worker } = await installed();
+  const map = withMap(net);
+  await mapStart(worker);
+  map.tag = 'two';
+  map.mode = 'refuse';
+  assert.match(await text(worker.other(MAP_FILES[3])), / one$/);
+  map.mode = 'error';
+  assert.match(await text(worker.other(MAP_FILES[1])), / one$/);
+  // (a worker started again: what it keeps it reads first, also what the style names)
+  const again = run('v2', storage, net);
+  map.mode = 'hang';
+  const style = again.other(STYLE);
+  assert.ok(style.answer);
+  assert.equal(await settles(style.answer), false);
+  await again.advance(START);
+  assert.equal(JSON.parse(await text(style)).sprite, `${MAP}/sprites/v1/ofm`);
+  // (the network found away: the next file at once, without waiting again)
+  const list = again.other(MAP_FILES[0]);
+  assert.equal(await settles(list.answer), true);
+  // (a file that none has kept: as the browser would have it)
+  map.mode = 'refuse';
+  await assert.rejects(again.other(`${MAP}/fonts/Noto%20Sans%20Bold/0-255.pbf`).answer);
+});
+
+test('a start without the network has the map\'s files come from those kept at once; one with it, from the network first', async () => {
+  const { storage, net, worker } = await installed();
+  const map = withMap(net);
+  await mapStart(worker);
+  net.mode = 'refuse';
+  map.mode = 'hang';
+  assert.match(await text(worker.start('./', 'p1')), /netnou-kept/);
+  const style = worker.other(STYLE);
+  assert.equal(await settles(style.answer), true);
+  // (the network back: a start that has its page in time, and the map's server answering, gives the network's files again)
+  net.mode = 'answer';
+  map.mode = 'answer';
+  map.tag = 'two';
+  await worker.start('./', 'p2').answer;
+  assert.match(await text(worker.other(MAP_FILES[3])), / two$/);
+  // (and keeps them in place of the old ones; a file the same as kept, by its tag, is not written again)
+  await worker.other(MAP_FILES[3]).done();
+  assert.match(await mapText(storage, MAP_FILES[3]), / two$/);
+});
+
+test('the map\'s answer that comes too late for its file is kept for the next time', async () => {
+  const { storage, net, worker } = await installed();
+  const map = withMap(net);
+  await mapStart(worker);
+  map.tag = 'two';
+  const held = [];
+  const page = net.fetch;
+  net.fetch = (request, options) => (typeof request !== 'string' && request.url === MAP_FILES[3] ? new Promise((resolve) => held.push(() => resolve(page(request, options)))) : page(request, options));
+  const font = worker.other(MAP_FILES[3]);
+  await worker.advance(START);
+  assert.match(await text(font), / one$/);
+  for (const answer of held) answer();
+  await font.done();
+  assert.match(await mapText(storage, MAP_FILES[3]), / two$/);
+});
+
+test('a new style keeps what it names and lets go of what it no longer does, as the icons of its older version', async () => {
+  const { storage, net, worker } = await installed();
+  const map = withMap(net);
+  await mapStart(worker);
+  map.style = styleOf('sprites/v2/ofm');
+  map.tag = 'two';
+  const style = worker.other(STYLE);
+  await style.answer;
+  await style.done();
+  assert.equal(await mapText(storage, `${MAP}/sprites/v1/ofm@2x.png`), null);
+  assert.ok(await mapText(storage, `${MAP}/planet`));
+  // (the new icons are its own now)
+  assert.ok(worker.other(`${MAP}/sprites/v2/ofm@2x.png`).answer);
+  assert.equal(worker.other(`${MAP}/sprites/v1/ofm@2x.png`).answer, null);
+});
+
+test('the files of the map a page fetched before the worker served it are kept, from the browser\'s cache; of the style\'s only', async () => {
+  const { storage, net, worker } = await installed();
+  const map = withMap(net);
+  const told = worker.message('first', { mapFiles: [`${SCOPE}api/area`, STYLE, ...MAP_FILES, TILE, 'https://elsewhere.example.org/x.js'] });
+  await told.done();
+  assert.equal(storage.named.get(MAP_KEPT).entries.size, 5);
+  assert.ok(map.asked.every((asked) => asked.endsWith(' (force-cache)')));
+  assert.equal(map.asked.some((asked) => asked.includes('5600.pbf')), false);
+  // (what is kept is not asked again)
+  map.asked = [];
+  await worker.message('first', { mapFiles: [STYLE, ...MAP_FILES] }).done();
+  assert.deepEqual(map.asked, []);
+  // (and a list without the style is none: what else to keep, the style says)
+  const other = await installed();
+  withMap(other.net);
+  await other.worker.message('x', { mapFiles: MAP_FILES }).done();
+  assert.equal(other.storage.named.has(MAP_KEPT), false);
+});
+
+test('with raster tiles, which the page draws without a style, nothing of the map is the service worker\'s', async () => {
+  const { storage, net, worker } = await installed('v2', null);
+  withMap(net);
+  assert.equal(worker.other(STYLE).answer, null);
+  await worker.message('first', { mapFiles: [STYLE, ...MAP_FILES] }).done();
+  assert.equal(storage.named.has(MAP_KEPT), false);
+});
+
+test('the files of the map stay as a new version of the page takes over', async () => {
+  const { storage, net, worker } = await installed();
+  withMap(net);
+  await mapStart(worker);
+  net.version = 'v3';
+  assert.equal(await run('v3', storage, net).install(), true);
+  assert.ok(storage.named.has(MAP_KEPT));
+  assert.equal(storage.named.get(MAP_KEPT).entries.size, 5);
+});
+
+test('the map\'s files come from those kept for a minute after the network was found away', () => {
+  assert.match(source, /const QUIET_MS = 60_000;/);
 });

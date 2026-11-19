@@ -438,11 +438,19 @@ export function pageVersion(build, files) {
   return hash.digest('hex').slice(0, 12);
 }
 
-/** public/sw.js as it is sent: with the version of the page's files (pageVersion) in place of the one it has. */
-export function serviceWorker(sw, version) {
+/**
+ * public/sw.js as it is sent: with the version of the page's files
+ * (pageVersion) in place of the one it has, and with the style of the map
+ * (NETNOU_MAP_STYLE_URL), whose files it keeps (#366); null with raster tiles.
+ */
+export function serviceWorker(sw, version, mapStyle = null) {
   const marked = /const VERSION = '[^']*';/;
+  const style = /const MAP_STYLE = [^;\n]*;/;
   if (!marked.test(sw)) throw new Error('sw.js: no VERSION to write the version into');
-  return sw.replace(marked, () => `const VERSION = '${version}';`);
+  if (!style.test(sw)) throw new Error('sw.js: no MAP_STYLE to write the style of the map into');
+  // (as the browser writes the address of a request, which the service worker compares it with)
+  const address = mapStyle === null ? null : new URL(mapStyle).href;
+  return sw.replace(marked, () => `const VERSION = '${version}';`).replace(style, () => `const MAP_STYLE = ${JSON.stringify(address)};`);
 }
 
 /**

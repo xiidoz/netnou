@@ -1130,7 +1130,8 @@ otherwise a server would load a file written by older code:
   page that the network sends too late for its start is kept for the next one
   where it is of the kept version; of a newer one, it has the browser look for
   the service worker that keeps that. Each instance of an origin keeps its
-  own. API answers and the map are never cached by it. What open details last
+  own. API answers are never cached by it, nor the map's tiles; what the map
+  needs to start it keeps (below). What open details last
   had the page keeps itself, in the browser's Cache Storage (`held.js`, #362):
   the last 25 addresses for a day, with the area and the server's clock. At a
   start from the kept page, the address opens what is held for it at once (at
@@ -1153,6 +1154,32 @@ otherwise a server would load a file written by older code:
   it is back stands only after the last of what is held (#364). They are held
   with the details (`held.js`), so that a start without a connection has them
   too.
+- **The map without a connection.** The service worker keeps what the map
+  needs to start: its style (`NETNOU_MAP_STYLE_URL`, which the server writes
+  into `sw.js`), and the lists of tiles, the icons and the fonts that the style
+  names, as the map asks for them; nothing is fetched ahead (#366). The
+  browser itself keeps OpenFreeMap's style for a day and its list of tiles for
+  an hour, and after that a start without a connection could not set the map
+  up, even with its tiles at hand. Each file comes from the network first, as
+  a start does, waiting about as long; where the network fails, or does not
+  answer in time, the kept one comes, and for a minute after a start or a file
+  found the network away, it comes at once. A file that comes later is kept
+  for the next time; a new style lets go of what it no longer names. A page
+  that the service worker did not serve, as at the first visit, lists the files
+  it fetched once the map has drawn, and the service worker keeps those the
+  style names from the browser's cache, as it does where another one takes
+  over after an update. At a start from the kept page, and wherever the
+  server cannot say its area yet (no connection, or no timetable yet), the
+  map shows the area as the page holds it (`held.js`), with its style;
+  before #366 it waited for the server's answer, and stayed without streets.
+  Where a part of the map's setup failed even so, nothing kept and the
+  browser's copy stale, the map is set up anew as the server answers. The
+  tiles stay with the browser's
+  cache, for as long as their server lets it: OpenFreeMap's ten years. So the
+  map draws the streets of the places seen before, as far as their tiles are
+  under the list of tiles kept: OpenFreeMap renews its tiles about once a week,
+  under a new list. Raster tiles (`NETNOU_TILE_URL`) need no style: there it
+  keeps nothing.
 - **Catching up between tunnels.** On a train the connection comes back for
   seconds between tunnels, mostly without the browser noticing (#365). While
   the questions fail, the page tries again 2, 4 and 8 seconds after a try

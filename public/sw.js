@@ -18,11 +18,15 @@
 // starts, then takes all its files from one version, its own, so that two
 // versions do not mix (sources): from the files kept of that version, also
 // after a newer one has been installed, and from the network where it is a
-// newer one than any kept. Live data (api/) and the map are never cached:
-// what the page holds of them for such a start it keeps itself (held.js).
+// newer one than any kept. Live data (api/) is never cached: what the page
+// holds of it for such a start it keeps itself (held.js). Of the map, what it
+// needs to start is kept as well, its style and what that names (#366), but
+// not its tiles: those the browser's own cache keeps.
 
-// (written by the server as it sends this file)
+// (written by the server as it sends this file: the version of the page's files, and the style of the map,
+// NETNOU_MAP_STYLE_URL, or null where the map is of raster tiles, NETNOU_TILE_URL)
 const VERSION = 'unversioned';
+const MAP_STYLE = null;
 const scope = new URL(self.registration.scope);
 // (the caches of each instance of an origin are its own: one at /nuernberg/ and one at /muenchen/ do not touch each other's)
 const CACHE_PREFIX = `netnou-shell ${scope.pathname} `;
@@ -214,6 +218,131 @@ function noteTime(ms) {
   return timing;
 }
 
+// ---------- the map ----------
+
+// What the map needs to start, kept for a start without a connection (#366):
+// its style, and the lists of tiles (TileJSON), the icons (sprite) and the
+// fonts (glyphs) that the style names, as the map has asked for them; nothing
+// fetched ahead. Not its tiles: the browser's cache keeps those, for as long
+// as their server lets it. The browser keeps the style and the lists only for
+// a day and an hour (OpenFreeMap's), and without them a start cannot set the
+// map up, even where its tiles are there. The files are the map's, not of a
+// version of the page: one cache for each instance, which a new version keeps.
+const MAP_CACHE = `netnou-map ${scope.pathname}`;
+// How long after a start or a file of the map has found the network away the
+// map's files come from those kept at once, in ms, rather than after waiting
+// for the network: in a tunnel, the map would wait for each in turn.
+const QUIET_MS = 60_000;
+let quietUntil = 0;
+let mapKept = null; // the addresses kept, once read: a Set
+let mapNamed = null; // whether the style kept names an address: a function, once read
+
+/** Whether a style names an address for the map to start: one of its lists of tiles, its icons or its fonts. */
+function namedBy(style) {
+  const at = (url) => new URL(url, MAP_STYLE).href;
+  const lists = new Set(Object.values(style?.sources ?? {}).map((source) => source?.url).filter((url) => typeof url === 'string' && /^https?:/.test(at(url))).map(at));
+  const icons = new Set();
+  const sprites = typeof style?.sprite === 'string' ? [style.sprite] : Array.isArray(style?.sprite) ? style.sprite.map((sprite) => sprite?.url) : [];
+  for (const sprite of sprites.filter((url) => typeof url === 'string')) {
+    for (const file of ['.json', '.png', '@2x.json', '@2x.png']) {
+      const address = new URL(sprite, MAP_STYLE);
+      address.pathname += file;
+      icons.add(address.href);
+    }
+  }
+  // (the address of the fonts with its {fontstack} and {range}, as a URL writes them: in its path as %7B…%7D)
+  const glyphs = typeof style?.glyphs === 'string'
+    ? new RegExp(`^${at(style.glyphs).replace(/[.*+?^${}()|[\]\\]/g, (char) => `\\${char}`).replace(/%7Bfontstack%7D|\\\{fontstack\\\}/g, '[^/?#&]+').replace(/%7Brange%7D|\\\{range\\\}/g, '\\d+-\\d+')}$`)
+    : null;
+  return (url) => lists.has(url) || icons.has(url) || Boolean(glyphs?.test(url));
+}
+
+// (what is kept, read as the worker starts: the style comes first in a page's start, and the rest after its answer)
+const mapReady = MAP_STYLE
+  ? caches.has(MAP_CACHE).then(async (has) => {
+    // (not made where there is none yet: opening one makes it)
+    if (!has) {
+      mapKept = new Set();
+      return;
+    }
+    const cache = await caches.open(MAP_CACHE);
+    mapKept = new Set((await cache.keys()).map((request) => request.url));
+    const style = await cache.match(MAP_STYLE, { ignoreVary: true });
+    if (style) mapNamed = namedBy(await style.json());
+  }).catch(() => {})
+  : Promise.resolve();
+
+/** Whether a request is for a file the map needs to start, as far as this run of the worker knows yet. */
+const isMapFile = (url) => MAP_STYLE !== null && (url === MAP_STYLE || Boolean(mapKept?.has(url)) || Boolean(mapNamed?.(url)));
+
+/**
+ * Keeps a file of the map from the network, in place of the one kept: not
+ * where it is the same (by its tag or date). A new style decides what else is
+ * kept: what it no longer names goes, as the icons of an older version.
+ */
+async function keepMap(url, answer) {
+  const cancel = () => answer.body?.cancel().catch(() => {});
+  if (!answer.ok) return cancel();
+  // (after what was kept has been read: that is older)
+  await mapReady;
+  const cache = await caches.open(MAP_CACHE);
+  const kept = await cache.match(url, { ignoreVary: true });
+  if (kept && ['ETag', 'Last-Modified'].some((name) => answer.headers.get(name) && answer.headers.get(name) === kept.headers.get(name))) return cancel();
+  if (url === MAP_STYLE) {
+    const style = await answer.clone().json().catch(() => null);
+    if (!style) return cancel();
+    mapNamed = namedBy(style);
+    for (const request of await cache.keys()) {
+      if (request.url === MAP_STYLE || mapNamed(request.url)) continue;
+      await cache.delete(request);
+      mapKept?.delete(request.url);
+    }
+  }
+  await cache.put(url, answer);
+  mapKept?.add(url);
+}
+
+/**
+ * A file the map needs to start: the network's, where it answers about as
+ * soon as it does at a start (startLimit), kept for the next time; else the
+ * one kept, at once where the network was just found away. The network's
+ * answer is kept also where it comes too late.
+ */
+async function mapFile(event) {
+  const { request } = event;
+  const network = fetch(request);
+  // (the network's answer kept, also where it comes too late for this one; a 5xx is none, as while its server restarts)
+  const keeping = network.then((answer) => {
+    if (answer.status >= 500) return undefined;
+    quietUntil = 0;
+    return keepMap(request.url, answer.clone());
+  }, () => {});
+  event.waitUntil(Promise.race([keeping.catch(() => {}), sleep(LATE_MS)]));
+  await mapReady;
+  const kept = await caches.match(request.url, { cacheName: MAP_CACHE, ignoreVary: true });
+  // (none kept: as the browser would have it, however long it takes)
+  if (!kept) return network;
+  if (Date.now() < quietUntil) return kept;
+  const first = await Promise.race([network.catch(() => null), sleep(await startLimit())]);
+  if (first && first.status < 500) return first;
+  quietUntil = Date.now() + QUIET_MS;
+  return kept;
+}
+
+/**
+ * The files of the map that a page fetched before this worker served it, as
+ * at the first visit, which the page lists (app.js): kept as well, from the
+ * browser's cache where it has them. The style first, which names the others.
+ */
+async function keepListed(urls) {
+  await mapReady;
+  const listed = new Set(urls.filter((url) => typeof url === 'string'));
+  if (MAP_STYLE === null || !listed.has(MAP_STYLE)) return;
+  const fetched = (url) => fetch(url, { mode: 'cors', credentials: 'same-origin', cache: 'force-cache' }).then((answer) => keepMap(url, answer), () => {});
+  if (!mapKept?.has(MAP_STYLE)) await fetched(MAP_STYLE);
+  for (const url of listed) if (url !== MAP_STYLE && !mapKept?.has(url) && mapNamed?.(url)) await fetched(url);
+}
+
 // ---------- the life of the worker ----------
 
 self.addEventListener('install', (event) => {
@@ -241,6 +370,8 @@ self.addEventListener('activate', (event) => {
 self.addEventListener('message', (event) => {
   const version = event.data?.pageVersion;
   if (typeof version === 'string' && event.source?.id) event.waitUntil(note(event.source.id, version));
+  // (and which files of the map it fetched, #366)
+  if (Array.isArray(event.data?.mapFiles)) event.waitUntil(keepListed(event.data.mapFiles).catch(() => {}));
 });
 
 // ---------- requests ----------
@@ -262,6 +393,7 @@ async function start(event, path, url) {
   const first = await Promise.race([network.catch(() => null), sleep(Math.max(0, began + limit - Date.now()))]);
   // (an answer in time; not one of a server that has failed, or is restarted behind its proxy)
   if (first && first.status < 500) {
+    quietUntil = 0;
     event.waitUntil(noteTime(answered - began));
     const version = versionOf(first.clone());
     event.waitUntil(note(event.resultingClientId, version));
@@ -271,6 +403,8 @@ async function start(event, path, url) {
   const kept = await caches.match(PAGE, { cacheName: CACHE, ignoreSearch: true, ignoreVary: true });
   // (nothing kept: the network's answer after all, however long it takes)
   if (!kept) return first ?? network;
+  // (the network away: the map's files from those kept at once, see "the map")
+  quietUntil = Date.now() + QUIET_MS;
   first?.body?.cancel().catch(() => {});
   event.waitUntil(note(event.resultingClientId, VERSION));
   if (first === undefined) {
@@ -316,7 +450,13 @@ async function file(event) {
 self.addEventListener('fetch', (event) => {
   const { request } = event;
   const url = new URL(request.url);
-  if (request.method !== 'GET' || url.origin !== scope.origin || !url.pathname.startsWith(scope.pathname)) return;
+  if (request.method !== 'GET') return;
+  // The files the map needs to start, mostly of another server (#366); not its tiles.
+  if (isMapFile(request.url)) {
+    event.respondWith(mapFile(event));
+    return;
+  }
+  if (url.origin !== scope.origin || !url.pathname.startsWith(scope.pathname)) return;
   const path = url.pathname.slice(scope.pathname.length) || './';
   // The page, and the address of a stop, a line or a trip (#37, #178), which
   // is the page with what the server writes into it.
@@ -325,7 +465,7 @@ self.addEventListener('fetch', (event) => {
     return;
   }
   // Of this origin only the shell is kept. It may serve more than this app's
-  // files: its live data (api/) and even the map (NETNOU_MAP_STYLE_URL or NETNOU_TILE_URL of
+  // files: its live data (api/) and even the map's tiles (NETNOU_TILE_URL of
   // the server), of which there is no end.
   if (SHELL.includes(path)) event.respondWith(file(event));
 });

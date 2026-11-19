@@ -345,6 +345,7 @@ const state = {
   polled: false, // the map's questions have had an answer or have failed: before that, a connection is not known to be lost (connectionLost)
   sentOpened: false, // the details of the address were opened with the answer the page was sent with, the map not yet put on them (takeSent)
   areaKnown: false, // api/area has answered: the map shows the area
+  areaShown: false, // the map shows the area: as api/area answered, or as the page held it at a start without a connection (#366)
   addressOpened: false, // what the address of the page names has been asked for (openAddress)
   viewAsked: false, // the address of a display named the section of the map, which the stop it names then does not move (loadArea)
   outline: [], // the edge of the area: rings of [lat, lon]; none where the instance has no area
@@ -476,6 +477,16 @@ try {
 }
 map.touchZoomRotate.disableRotation();
 map.keyboard.disableRotation();
+// Whether a part of the map's setup failed, its style, a list of tiles or its
+// icons, and not one of its tiles: as at a start without a connection where
+// the browser's copies have gone stale and the service worker keeps none. Set
+// up anew as the server answers (showArea, #366). MapLibre says what failed in
+// the console only where nobody listens, so it is said here.
+let mapUnset = false;
+map.on('error', (event) => {
+  if (!event.tile) mapUnset = true;
+  console.error(event.error ?? event);
+});
 // (what its keys do, for a screen reader: the frame and the cross that show it has them are in style.css)
 map.getCanvas().setAttribute('aria-describedby', 'map-keys');
 
@@ -5168,14 +5179,44 @@ function stillAhead({ selection: { type, data } }) {
   return true;
 }
 
+/**
+ * Shows the area as held (held.js, showArea). Held by an older version of the
+ * page, it may lack what this one shows: then as before, the map waiting for
+ * the server.
+ */
+function showStoredArea(stored) {
+  try {
+    showArea(stored.area, null);
+    mapHeld = true;
+  } catch (err) {
+    console.warn('held area not shown:', err);
+  }
+}
+
+/**
+ * Where the map shows no area yet and the server cannot say it, as where the
+ * connection fails before it has answered, or the server has no timetable
+ * yet: the area as held, so that the map draws its streets meanwhile (#366).
+ */
+async function showHeldArea() {
+  if (state.areaShown) return;
+  const stored = await heldArea();
+  if (!stored || state.areaShown) return;
+  showStoredArea(stored);
+  // (the details the page was sent with, on the map as held, as a start without a connection puts them, see startHeld;
+  // and again with the server's area, see poll)
+  const open = state.selection;
+  if (state.sentOpened && open?.unplaced && !open.left && open.path === here()) {
+    placeSent(open);
+    open.unplaced = true;
+  }
+}
+
 /** Opens at a start without a connection (KEPT) what the page holds for its address, or at the map what was open last. */
 async function startHeld() {
   const stored = await heldArea();
-  // (the times as the instance has them, and the server's clock beside the phone's: until the server says them anew)
-  if (stored && !state.areaKnown) setTimeZone(stored.area.timeZone);
-  // (the map where it was last, as the area would put it, rather than where a page starts before it knows its area)
-  const view = state.areaKnown ? null : loadSetting('view', null);
-  if (view && [view.lat, view.lon, view.zoom].every(Number.isFinite)) map.jumpTo({ center: [view.lon, view.lat], zoom: view.zoom });
+  // (the area as held, until the server says it anew: its times, and the map where it was last with its streets, #366)
+  if (stored && !state.areaShown) showStoredArea(stored);
   if (stored && !state.online) state.clockOffset = stored.clockOffset;
   const atMap = !here();
   // (a screen on a wall, at the map, is set up to show the map)
@@ -7056,6 +7097,23 @@ async function loadArea() {
   areaAnswer = area;
   holdArea(area, state.clockOffset);
   heldClock = state.clockOffset;
+  showArea(area, about);
+  state.areaKnown = true;
+}
+
+/**
+ * Shows the area: its name and times, and the map at it with its style and
+ * credits. As the server answers (loadArea); and at a start without a
+ * connection as the page holds it (startHeld), so that the map draws its
+ * streets before the server answers, from what the browser and the service
+ * worker keep (#366). Shown again as the server answers, it leaves the map
+ * where it is, and its style and credits as they are where the style is the
+ * same: the credits name the version of the software only from the next
+ * start then.
+ * @param about the answer of api/status, or null where there is none (held)
+ */
+function showArea(area, about) {
+  const again = state.areaShown;
   // Returning visitors get the section they last looked at.
   const saved = loadSetting('view', null);
 
@@ -7084,15 +7142,24 @@ async function loadArea() {
   map.setMaxBounds([[limit[1], limit[0]], [limit[3], limit[2]]]);
   const usable = saved && [saved.lat, saved.lon, saved.zoom].every(Number.isFinite)
     && saved.lat >= limit[0] && saved.lon >= limit[1] && saved.lat <= limit[2] && saved.lon <= limit[3];
-  // (at once: gliding there from the placeholder would show nothing, and the vehicles are asked for right after)
-  state.viewAsked = OPENED_AS_DISPLAY && Boolean(usable);
-  if (usable) map.jumpTo({ center: [saved.lon, saved.lat], zoom: saved.zoom });
-  else map.fitBounds([[area.view[1], area.view[0]], [area.view[3], area.view[2]]], { animate: false });
+  // (at once: gliding there from the placeholder would show nothing, and the vehicles are asked for right after; shown
+  // again, where it is)
+  if (!again) {
+    state.viewAsked = OPENED_AS_DISPLAY && Boolean(usable);
+    if (usable) map.jumpTo({ center: [saved.lon, saved.lat], zoom: saved.zoom });
+    else map.fitBounds([[area.view[1], area.view[0]], [area.view[3], area.view[2]]], { animate: false });
+  }
 
   // Which map, and whom to name for the data, are settings of the server. A
   // style names its sources itself; what the server adds for the map and for
-  // the data is HTML and may contain links.
-  map.setStyle(area.styleUrl ?? rasterStyle(area.tileUrl), { transformStyle: (previous, next) => withoutStyleStops(localizedStyle(next)) });
+  // the data is HTML and may contain links. (Not set again where it is the
+  // same: shown again, as the server answers.)
+  setMapStyle(area);
+  // (its files, once it has drawn with them, for the service worker to keep: see sayMapFiles)
+  if (area.styleUrl && !mapStyled) {
+    mapStyled = true;
+    map.on('idle', sayMapFiles);
+  }
   // A style may name icons its own set lacks: OpenFreeMap's names that of a
   // place after its kind and has none for some kinds, such as sports_centre,
   // office or recycling. Such a place gets the style's plain circle, in the
@@ -7112,13 +7179,15 @@ async function loadArea() {
   const credits = [area.attribution.map, data].filter(Boolean);
   // (where a board takes all of the screen, it names the data itself: the map is not there)
   boardCredits = `${t('attribution.data')} ${area.attribution.data}`;
-  // (the credits first: of the controls in a bottom corner, the one added last is on top)
-  map.addControl(new AttributionControl({ customAttribution: credits }), 'bottom-right');
-  map.addControl(new NavigationControl({ showCompass: false }), 'bottom-right');
-  // (a browser tells where it is to pages with HTTPS only)
-  if (window.isSecureContext && navigator.geolocation) map.addControl(locateControl, 'bottom-right');
-  // (not every browser lets a page have the whole screen: an iPhone does not)
-  if (document.fullscreenEnabled) map.addControl(fullscreenControl, 'bottom-right');
+  // (the credits first: of the controls in a bottom corner, the one added last is on top; once)
+  if (!again) {
+    map.addControl(new AttributionControl({ customAttribution: credits }), 'bottom-right');
+    map.addControl(new NavigationControl({ showCompass: false }), 'bottom-right');
+    // (a browser tells where it is to pages with HTTPS only)
+    if (window.isSecureContext && navigator.geolocation) map.addControl(locateControl, 'bottom-right');
+    // (not every browser lets a page have the whole screen: an iPhone does not)
+    if (document.fullscreenEnabled) map.addControl(fullscreenControl, 'bottom-right');
+  }
   // (details may be open already, from the address)
   clearMapButtons();
   // (and the one tip, where it waited for these buttons: still about the departures of a stop)
@@ -7132,7 +7201,31 @@ async function loadArea() {
     $('about-source').replaceChildren(before, el('a', { href: readmeOf(about.homepage), target: '_blank', rel: 'noopener', text: APP_NAME }), after);
     $('about-source').hidden = false;
   }
-  state.areaKnown = true;
+  state.areaShown = true;
+}
+
+// (the style of the map as it was set last: its address, or that of its raster tiles; whether the map was set up first from
+// the area as held; and how often since, and when last, it was set up anew, see poll)
+let mapStyleShown = null;
+let mapHeld = false;
+let mapRetries = 0;
+let mapRetriedAt = 0;
+// (how often at most the map is set up anew where a part of its setup failed after the area came, and how long apart)
+const MAP_RETRIES = 5;
+const MAP_RETRY_MS = 60_000;
+
+/**
+ * Gives the map the style of the area. Not again where it has it, as when
+ * the area is shown again; but anew, whole, where a part of it failed: a style
+ * the same as before would leave a failed part as it was, and one that did
+ * not load would hold the next up, which MapLibre waits for, so it goes first.
+ */
+function setMapStyle(area) {
+  if ((area.styleUrl ?? area.tileUrl) === mapStyleShown && !mapUnset) return;
+  if (mapUnset) map.setStyle(null);
+  mapUnset = false;
+  mapStyleShown = area.styleUrl ?? area.tileUrl;
+  map.setStyle(area.styleUrl ?? rasterStyle(area.tileUrl), { transformStyle: (previous, next) => withoutStyleStops(localizedStyle(next)) });
 }
 
 // Stations are only drawn zoomed in, so they are only loaded then.
@@ -7167,6 +7260,8 @@ async function poll() {
   try {
     // (without an area the server cannot say what it covers before it has a timetable)
     const waiting = state.areaKnown ? null : await loadArea();
+    // (meanwhile the map at the area as held, #366)
+    if (waiting && !state.areaShown) showHeldArea();
     const request = { box: boxAround(map.getBounds(), VEHICLE_MARGIN), detail: detailWanted(), zoom: zoomAsked() };
     const res = waiting ? { status: 503 } : await askServer(`api/vehicles?bbox=${boxQuery(request.box)}&detail=${request.detail}&zoom=${request.zoom}${modesQuery()}${pickedQuery()}`);
     const data = waiting ?? await res.json();
@@ -7242,6 +7337,13 @@ async function poll() {
       if (!state.online && !state.addressPending && selection && (selection.failing || !selection.loaded) && !selection.asking) setTimeout(loadSelection);
       state.online = true;
       state.polled = true;
+      // (a part of the map's setup that failed after the area came, as a style still on its way then at a start without a
+      // connection: set up anew, a few times at most, a minute apart, #366)
+      if (mapUnset && mapHeld && areaAnswer && mapRetries < MAP_RETRIES && !(Date.now() - mapRetriedAt < MAP_RETRY_MS)) {
+        mapRetries += 1;
+        mapRetriedAt = Date.now();
+        setMapStyle(areaAnswer);
+      }
       // (the server answers again: an address that could not be opened without it, now, once: see "a connection lost")
       if (state.addressPending) openPending();
       updateStatus();
@@ -7266,6 +7368,8 @@ async function poll() {
     $('status-text').textContent = t('status.noConnection');
     // The installed app also starts without a connection – but has nothing to show then.
     if (!navigator.onLine) showBanner(t('banner.offline'), true);
+    // (no area yet: the map at the area as held meanwhile, #366)
+    if (!state.areaShown) showHeldArea();
     // (tried again sooner while it fails, #365: by the open details first, which would try only at their next refresh
     // otherwise, while the map's question waits for theirs)
     delay = retryIn(begun, ++mapTries);
@@ -7296,7 +7400,7 @@ function detailsFirst() {
 // another zoom.
 let moveTimer = null;
 map.on('moveend', () => {
-  if (!state.areaKnown) return; // still the placeholder view
+  if (!state.areaShown) return; // still the placeholder view
   const center = map.getCenter();
   saveSetting('view', { lat: center.lat, lon: center.lng, zoom: map.getZoom() });
   clearTimeout(moveTimer);
@@ -7507,7 +7611,27 @@ function init() {
   if (navigator.serviceWorker) {
     sayVersion();
     navigator.serviceWorker.addEventListener('controllerchange', sayVersion);
+    navigator.serviceWorker.addEventListener('controllerchange', sayMapFiles);
   }
+}
+
+// (whether the map has a style of the server's, and which service worker the page has told which files of it it fetched)
+let mapStyled = false;
+let mapFilesTold = null;
+
+/**
+ * Tells the service worker which files of other servers the page fetched,
+ * once the map has drawn with its style: of them it keeps those the map needs
+ * to start (sw.js, "the map", #366), also where it did not serve them itself,
+ * as at the first visit, before it took over. Once to each service worker
+ * that serves the page: one that takes over from an older one, as at the
+ * first visit after an update, is told as well.
+ */
+function sayMapFiles() {
+  const worker = navigator.serviceWorker?.controller;
+  if (!worker || worker === mapFilesTold || !mapStyled || !map.loaded()) return;
+  mapFilesTold = worker;
+  worker.postMessage({ mapFiles: performance.getEntriesByType('resource').map((entry) => entry.name).filter((name) => !name.startsWith(`${location.origin}/`)) });
 }
 
 init();
