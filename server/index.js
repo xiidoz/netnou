@@ -323,9 +323,12 @@ function addressAnswer({ type, found, path }) {
  *   does not change with the minute
  * @param lines with every line of it and its next departure each way, while
  *   the page shows them: of all, whatever is chosen (#255)
+ * @param later with the departures after those, and after the next one of
+ *   each way, of the next LATER_S seconds: the page asks for them now and
+ *   then, and keeps them for while its connection is lost (#364)
  */
-function departuresAnswer(stationId, now, { chosen = [], directions = false, lines = false } = {}) {
-  const board = timetable.departures(stationId, now, realtime.snapshot, { lines: chosen });
+function departuresAnswer(stationId, now, { chosen = [], directions = false, lines = false, later = false } = {}) {
+  const board = timetable.departures(stationId, now, realtime.snapshot, { lines: chosen, windowS: LATER_S, later });
   if (!board) return null;
   const known = stopFacts(board.id, now);
   return {
@@ -334,9 +337,13 @@ function departuresAnswer(stationId, now, { chosen = [], directions = false, lin
     today: todayOf(known),
     path: stopAddress(timetable.stopIndex.get(board.id)),
     ...(directions ? { directions: timetable.directions(board.id) } : {}),
-    ...(lines ? linesOf(board.id, now, known) : {}),
+    ...(lines ? linesOf(board.id, now, known, later) : {}),
   };
 }
+
+// How far ahead a stop's answer looks (Timetable.departures), and the departures the page keeps for while its
+// connection is lost go (#364).
+const LATER_S = 7200;
 
 /**
  * What the timetable says of a station beyond the minute (#289), of the
@@ -367,8 +374,8 @@ function twoKinds(indexes) {
  * Every line of a station with its next departure each way (Timetable.linesAt, #255), each with the address of its page
  * and each way with how often it leaves there that way today (#289); and the towns they go to.
  */
-function linesOf(stationId, now, known = stopFacts(stationId, now)) {
-  const lines = timetable.linesAt(stationId, now, realtime.snapshot).map(({ index, ways, ...line }) => ({
+function linesOf(stationId, now, known = stopFacts(stationId, now), later = false) {
+  const lines = timetable.linesAt(stationId, now, realtime.snapshot, { laterS: later ? LATER_S : 0 }).map(({ index, ways, ...line }) => ({
     ...line,
     path: addressesNow().linePath(index),
     ways: ways.map((way) => ({ ...way, facts: known.lines.get(index)?.get(way.to) ?? null })),
@@ -933,7 +940,7 @@ function handleApi(req, res, url) {
       const at = parsePlace(url.searchParams.get('at'));
       const station = at ? searchList().stationAt(...at) : url.searchParams.get('station');
       // (only the lines and directions chosen, where some are: public/choice.js, #164)
-      const answer = departuresAnswer(station ?? '', now, { chosen: readChoice(url.searchParams.get('lines')), directions: url.searchParams.get('directions') === '1', lines: url.searchParams.get('list') === 'lines' });
+      const answer = departuresAnswer(station ?? '', now, { chosen: readChoice(url.searchParams.get('lines')), directions: url.searchParams.get('directions') === '1', lines: url.searchParams.get('list') === 'lines', later: url.searchParams.get('later') === '1' });
       if (!answer) return sendJson(req, res, 404, { error: 'station not found' });
       realtime.touch();
       visitOpened(req, res, url, answer.path, (language, words) => stopTitle(answer.name, words, townToShow(answer.name, answer.town)));

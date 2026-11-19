@@ -7,11 +7,12 @@
 // and which address was open last (app.js: "a start without a connection").
 //
 // Stored in the browser's Cache Storage, which is written without holding up
-// what the page draws and has room for it (an address takes 10 to 60 KB). One
-// write at a time, also from several tabs of the page (a lock of the
-// browser's), so that the list of addresses is never written over by an older
-// one; what the list does not name goes with the next write. Nothing of it
-// leaves the browser; it goes with the site's data.
+// what the page draws and has room for it (an address takes 10 to 60 KB, a
+// busy stop with its departures for while the connection is lost, #364, up to
+// about 200 KB). One write at a time, also from several tabs of the page (a
+// lock of the browser's), so that the list of addresses is never written over
+// by an older one; what the list does not name goes with the next write.
+// Nothing of it leaves the browser; it goes with the site's data.
 
 const CACHE = 'netnou-held';
 // What is stored, in its form: an entry of another FORMAT is not taken. Bump it when what an entry means changes.

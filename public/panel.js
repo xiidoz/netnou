@@ -208,12 +208,63 @@ export const GONE_S = 30;
 /** Whether a departure has left long enough to be out of the lists, by the clock it is drawn at (context.now). */
 export const leftAlready = (dep, now) => now !== undefined && leavesAt(dep) < now - GONE_S;
 
+const departureKey = (dep) => `${dep.trip} ${dep.planned}`;
+
+/**
+ * The departures a stop's list shows, of those of its answer that are still
+ * to come (leftAlready). Where the connection is lost, those the page holds
+ * for that (`later`, #364) join them and move up as others leave: all of
+ * them that the answer has not, by when they leave. (They may be of an answer
+ * a few minutes older: one whose delay has grown since may lie among the
+ * answer's own now; the answer's have its newer delays.) At most `limit` of
+ * them; `more` where the page holds more after them, and `reserve` those
+ * of them that came from `later`.
+ */
+export function heldDepartures(board, now, lost, limit = Infinity) {
+  const listed = board.departures ?? [];
+  let all = listed;
+  let reserve = new Set();
+  if (lost && board.later?.length) {
+    const seen = new Set(listed.map(departureKey));
+    reserve = new Set(board.later.filter((dep) => !seen.has(departureKey(dep))));
+    all = [...listed, ...reserve].sort((a, b) => leavesAt(a) - leavesAt(b));
+  }
+  const ahead = all.filter((dep) => !leftAlready(dep, now));
+  return { departures: ahead.slice(0, limit), more: ahead.length > limit, reserve };
+}
+
+/**
+ * The next departure of a way of a stop's lines: its own, and where the
+ * connection is lost and that has left, the next of those held for that
+ * after it (`later`, #364), not cancelled; the same trip in those, of an
+ * older answer, only once, as the way's own has it.
+ */
+export function nextOfWay({ departure, later }, now, lost) {
+  if (!lost || !departure || !later?.length || !leftAlready(departure, now)) return departure;
+  // (by when they leave, as heldDepartures: a trip planned before it may leave after it, late)
+  return later.find((dep) => leavesAt(dep) >= leavesAt(departure) && departureKey(dep) !== departureKey(departure) && !dep.cancelled && !leftAlready(dep, now)) ?? departure;
+}
+
+/**
+ * Every departure that the details of a stop may show now (an answer, or a
+ * board's stop's): its own, each way's next, and where the connection is lost
+ * those held for that (heldDepartures, nextOfWay). By these the page knows
+ * when one has left, which a row that shows the time of day does not count.
+ */
+export function departuresShown(board, lost) {
+  return [
+    ...(board.departures ?? []), ...(lost ? board.later ?? [] : []),
+    ...(board.lines ?? []).flatMap((line) => line.ways.flatMap((way) => [way.departure, ...(lost ? way.later ?? [] : [])])).filter(Boolean),
+  ];
+}
+
 /**
  * Where the connection is lost (context.lost), what a list of departures
  * says after the last one the page holds, or alone where all have left: that
  * there are more, once it is back. The page holds only those of its last
- * answer, not the whole timetable (app.js, "a connection lost"). Quiet: the
- * head says that the connection is lost, with its sign.
+ * answers, not the whole timetable (app.js, "a connection lost"): the next
+ * two hours of a stop at most (heldDepartures). Quiet: the head says that the
+ * connection is lost, with its sign.
  */
 export const whenBack = ({ t }) => h('p', { class: 'panel-empty when-back' }, t('departures.whenBack'));
 
@@ -258,19 +309,22 @@ export function tomorrowAt(departures, { day, now }) {
  */
 export function departureLists(board, context) {
   const { t } = context;
-  // (not those that have left: GONE_S)
-  const departures = board.departures.filter((dep) => !leftAlready(dep, context.now));
+  // (not those that have left: GONE_S; where the connection is lost, as many as the answer listed, those held for that
+  // moving up, and the line that more come once it is back only after the last of them; their delays grey as their
+  // answer's are, from `staleS` after it, laterNow)
+  const { departures, more, reserve } = heldDepartures(board, context.now, context.lost, board.departures.length || Infinity);
+  const old = context.staleS !== undefined && context.now - (board.laterNow ?? -Infinity) >= context.staleS;
   const signed = departures.some((dep) => dep.warnings.length > 0);
   // (the badges of a name the stop has in two kinds say their kind)
   const withKinds = { ...context, twoKinds: twoKinds([board.today], departures) };
-  const rows = departures.map((dep) => h('li', {}, departureRow(dep, signed, withKinds)));
+  const rows = departures.map((dep) => h('li', { class: old && reserve.has(dep) ? 'stale' : null }, departureRow(dep, signed, withKinds)));
   // (the 24 hours the text speaks of are the furthest departures() in server/lib/timetable.js looks; where the
   // connection is lost, the page does not know there are none: the note in the head says why it is empty)
   if (!rows.length) return [context.lost ? whenBack(context) : h('p', { class: 'panel-empty' }, t('departures.none'))];
   const list = (part) => h('ul', { class: `rows departures${signed ? ' signed' : ''}` }, part);
   const split = tomorrowAt(departures, context);
   const lists = split < 0 ? [list(rows)] : [split > 0 ? list(rows.slice(0, split)) : null, h('h2', { class: 'rows-head day-head' }, t('departures.tomorrow')), list(rows.slice(split))].filter(Boolean);
-  return context.lost ? [...lists, whenBack(context)] : lists;
+  return context.lost && !more ? [...lists, whenBack(context)] : lists;
 }
 
 /**
@@ -343,13 +397,17 @@ export function lineLists(board, context) {
   const signed = lines.some((line) => line.ways.some((way) => way.departure?.warnings.length > 0));
   const kinds = [...new Set(lines.map((line) => kindOf(line.mode)))];
   // (each way with how often it leaves here that way now, and when last today, #289)
-  // (one whose next departure has left, GONE_S, rests until the server says which is next: not "not in 24 h")
-  const way = (line, { to, departure, facts }) => h('li', {}, departure && !leftAlready(departure, context.now)
-    ? departureRow({ ...departure, line: line.name, mode: line.mode }, signed, context, true)
-    : h('div', { class: `row departure times-${times} by-line resting` },
-      h('span', { class: 'name', title: to }, to),
-      departure ? null : h('abbr', { class: 'later', title: t('lines.laterLong') }, t('lines.later'))),
-  facts ? h('p', { class: 'line-facts' }, todayText(facts, context)) : null);
+  // (one whose next departure has left, GONE_S, rests until the server says which is next: not "not in 24 h"; where the
+  // connection is lost, the next of those held for that after it comes up, nextOfWay)
+  const way = (line, { to, facts, ...held }) => {
+    const departure = nextOfWay(held, context.now, context.lost);
+    return h('li', {}, departure && !leftAlready(departure, context.now)
+      ? departureRow({ ...departure, line: line.name, mode: line.mode }, signed, context, true)
+      : h('div', { class: `row departure times-${times} by-line resting` },
+        h('span', { class: 'name', title: to }, to),
+        departure ? null : h('abbr', { class: 'later', title: t('lines.laterLong') }, t('lines.later'))),
+    facts ? h('p', { class: 'line-facts' }, todayText(facts, context)) : null);
+  };
   const towns = board.towns?.towns ?? [];
   return [...kinds.flatMap((kind) => [
     kinds.length > 1 ? h('h2', { class: 'rows-head' }, t(`mode.${kind}`)) : null,
