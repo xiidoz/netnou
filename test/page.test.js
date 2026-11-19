@@ -13,7 +13,7 @@ import { LANGUAGES, pageTexts, pickLanguage } from '../public/i18n.js';
 import de from '../public/locales/de.js';
 import en from '../public/locales/en.js';
 import * as shapes from '../public/vendor/material-design-icons/icons.js';
-import { inlineHashes, LANGUAGE_CODES, languageFor, ownFiles, PAGE_INLINE, PAGE_MODULES, panelHtml, pictureSize, renderManifest, renderPage, robotsTxt, securityPolicy, sentData, sitemapFiles, versionsOfFiles } from '../server/lib/page.js';
+import { inlineHashes, LANGUAGE_CODES, languageFor, ownFiles, PAGE_INLINE, PAGE_MODULES, pageVersion, panelHtml, pictureSize, renderManifest, renderPage, robotsTxt, securityPolicy, sentData, serviceWorker, shellOf, sitemapFiles, versionsOfFiles } from '../server/lib/page.js';
 
 const html = fs.readFileSync(new URL('../public/index.html', import.meta.url), 'utf8');
 const URL_ = 'https://karte.example.org/live/';
@@ -558,4 +558,23 @@ test('every address in the sitemap has the date of the timetable, where it is kn
   assert.ok(xml.includes(`  <url><loc>${URL_}stop/plaerrer@49.4480,11.0620</loc><lastmod>2026-10-20</lastmod></url>`));
   assert.ok(xml.includes(`  <url>\n    <loc>${URL_}</loc>\n    <lastmod>2026-10-20</lastmod>\n    <xhtml:link`));
   assert.doesNotMatch(sitemapFiles(URL_, ['line/vag/subway/u1'])[0], /lastmod/);
+});
+
+// The service worker keeps the page's files per version, the server writes
+// that version into it as it sends it, and the page is sent with it (#363).
+test('the version of the page\'s files changes with each of them and with what runs, and is written into the service worker', () => {
+  const build = { version: '0.28.1', commit: 'abc1234' };
+  const files = new Map([['app.js', 'one'], ['sw.js', 'two']]);
+  const version = pageVersion(build, files);
+  assert.match(version, /^[0-9a-f]{12}$/);
+  assert.equal(pageVersion(build, new Map([...files].reverse())), version);
+  assert.notEqual(pageVersion(build, new Map([['app.js', 'one!'], ['sw.js', 'two']])), version);
+  assert.notEqual(pageVersion({ ...build, commit: 'def5678' }, files), version);
+  assert.notEqual(pageVersion({ version: 'edge', commit: null }, files), version);
+  const sw = fs.readFileSync(new URL('../public/sw.js', import.meta.url), 'utf8');
+  assert.ok(serviceWorker(sw, version).includes(`\nconst VERSION = '${version}';\n`));
+  assert.throws(() => serviceWorker('self.addEventListener();', version), /no VERSION/);
+  assert.deepEqual(shellOf(sw).slice(0, 3), ['./', 'address.js', 'app.js']);
+  assert.ok(renderPage(html, { ...german, version }).includes(`<meta charset="utf-8">\n  <meta name="netnou-page-version" content="${version}">\n`));
+  assert.doesNotMatch(renderPage(html, german), /netnou-page-version/);
 });
