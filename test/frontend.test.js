@@ -117,6 +117,30 @@ test('the thread the page starts is a script of its own that is precached', () =
   assert.match(worker, /limit = setTimeout\(\(\) => asking\.abort\(\), 120_000\);/);
 });
 
+// On a train the connection comes back for seconds between tunnels, often
+// without the browser noticing: while it fails, the page tries again soon, the
+// open details first, each try given TRY_MS for its answer to begin (#365).
+test('while the connection fails, the page tries again 2, 4 and 8 s after a try began and then every 10 s, the open details first; with a connection as before', () => {
+  const app = withoutComments(read('app.js'));
+  assert.match(app, /const TRY_MS = 8000;/);
+  assert.match(app, /const RETRY_MS = \[2000, 4000, 8000, 10_000\];/);
+  assert.match(app, /const step = RETRY_MS\[Math\.min\(tries, RETRY_MS\.length\) - 1\];\s*return Math\.max\(0, begun \+ step \* \(0\.8 \+ Math\.random\(\) \* 0\.4\) - Date\.now\(\)\);/);
+  assert.match(app, /function failingNow\(\) \{\s*return connectionLost\(\) \|\| Boolean\(state\.selection\?\.failing\);/);
+  // (the tries in a row while no answer comes at all: the details' sooner only then, not for an answer that is an error)
+  assert.match(app, /answered = true;\s*await further;\s*if \(state\.selection !== selection \|\| selection\.turn !== turn\) return;\s*selection\.unanswered = false;\s*detailTries = 0;\s*if \(connectionLost\(\)\) poll\(\);\s*if \(data\) \{/);
+  assert.match(app, /if \(state\.selection === selection && selection\.turn === turn\) \{\s*if \(!answered\) selection\.unanswered = true;\s*disconnected\(selection\);\s*\}/);
+  // (the map's own count, which its answers end, as they end the details': the connection has worked since)
+  assert.match(app, /delay = RETRY_LOADING_MS;\s*mapTries = 0;\s*detailTries = 0;\s*\} else if \(res\.ok\) \{\s*mapTries = 0;\s*detailTries = 0;/);
+  assert.match(app, /delay = retryIn\(begun, \+\+mapTries\);\s*const open = state\.selection;\s*if \(open\?\.failing && !open\.left && !open\.asking && !document\.hidden\) \{\s*open\.unanswered = true;\s*clearTimeout\(panelTimer\);\s*panelTimer = setTimeout\(loadSelection, delay\);\s*\}\s*\}\s*if \(!document\.hidden\) pollTimer = setTimeout\(poll, delay\);/);
+  // (the map's question waits for the open details' while they try and no answer comes, and follows any answer of theirs)
+  assert.match(app, /async function poll\(\) \{\s*clearTimeout\(pollTimer\);\s*if \(detailsFirst\(\)\) \{\s*if \(!document\.hidden\) pollTimer = setTimeout\(poll, POLL_MS\);\s*return;\s*\}/);
+  assert.match(app, /return connectionLost\(\) && Boolean\(open\?\.failing && open\.unanswered\) && !open\.left && \(Boolean\(open\.asking\) \|\| Date\.now\(\) - open\.askedAt < DETAILS_FIRST_MS\);/);
+  assert.match(app, /const begun = \(selection\.askedAt = Date\.now\(\)\);\s*let answered = false;/);
+  assert.match(app, /if \(document\.hidden\) return;\s*startAsking\(\);\s*loadSelection\(\);\s*poll\(\);/);
+  // (and the details first when the browser is online again: theirs is the handler added first)
+  assert.ok(app.indexOf("addEventListener('online', () => {") < app.indexOf("window.addEventListener('online', poll);"));
+});
+
 // A stop's answer holds its next 40 departures; while the connection is lost,
 // those after them that the page asked for now and then move up (#364).
 test('a stop asks for its departures after those listed now and then, keeps them between, and its lists show them where the connection is lost', () => {
@@ -124,7 +148,7 @@ test('a stop asks for its departures after those listed now and then, keeps them
   assert.match(app, /const LATER_MS = 5 \* 60_000;/);
   assert.match(app, /return selection\.type === 'station' && !first && \(selection\.laterLines !== choiceValue\(lines\) \|\| !\(Date\.now\(\) - selection\.laterAt < LATER_MS\)\);/);
   // (not with the first question, which comes as small as before; right after its answer; of all lines where they can be shown)
-  assert.match(app, /panelTimer = setTimeout\(loadSelection, selection\.laterSoon \? LATER_FIRST_MS : PANEL_REFRESH_MS\);/);
+  assert.match(app, /panelTimer = setTimeout\(loadSelection, selection\.failing && selection\.unanswered \? retryIn\(begun, \+\+detailTries\) : selection\.laterSoon \? LATER_FIRST_MS : PANEL_REFRESH_MS\);/);
   assert.match(app, /\(state\.view === 'lines' \|\| \(later && !FIXED\)\) && state\.board === null \? '&list=lines' : ''/);
   assert.match(app, /\$\{later \? '&later=1' : ''\}`;/);
   assert.match(app, /connected\(selection\);\s*if \(selection\.type === 'station'\) keepLater\(selection, data\);/);
@@ -728,7 +752,7 @@ test('where the connection is lost, the details say how old they are, and what d
   assert.match(app, /first \|\|= !selection\.loaded;/);
   // a fetch that fails keeps what is shown, with a note of the time of its last answer, which a screen reader hears once:
   // written only as it changes
-  assert.match(app, /if \(state\.selection === selection && selection\.turn === turn\) disconnected\(selection\);/);
+  assert.match(app, /if \(state\.selection === selection && selection\.turn === turn\) \{\s*if \(!answered\) selection\.unanswered = true;\s*disconnected\(selection\);/);
   assert.match(app, /if \(!was\) say\(selection\.loaded \? lostSince\(\) : t\('panel\.loadFailed'\)\);/);
   assert.match(app, /function say\(text\) \{\s*const said = \$\('panel-said'\);\s*if \(said\.textContent !== text\) said\.textContent = text;/);
   assert.match(read('index.html'), /<p class="spoken" id="panel-said" role="status"><\/p>/);
@@ -944,8 +968,9 @@ test('long without an answer, the details show their delays grey for as long as 
   assert.match(app, /if \(sheetAtTop \|\| panel\.offsetHeight > high \+ 1\) setSheetHeight\(high\);\s*\}\)\.observe\(\$\('controls'\)\);/);
   // an address the page cannot ask about: what it showed in this visit, else that it will load, once the connection is back
   assert.match(app, /res = await askServer\(`api\/address\?path=\$\{encodeURIComponent\(path\)\}`\);\s*\} catch \{\s*clearTimeout\(slow\);\s*return here\(\) === path && state\.moves === moves \? addressLost\(path, loaded\) : true;/);
-  // (every question to the server gives up after ANSWER_MS: a hang counts as not coming)
-  assert.match(app, /const askServer = \(url\) => fetch\(url, \{ signal: AbortSignal\.timeout\(ANSWER_MS\) \}\);/);
+  // (every question to the server gives up after ANSWER_MS: a hang counts as not coming; while the connection fails, after
+  // TRY_MS where its answer has not begun, #365)
+  assert.match(app, /const whole = giveUp\(ANSWER_MS\);\s*const begun = failingNow\(\) \? giveUp\(TRY_MS\) : null;\s*const asked = fetch\(url, \{ signal: asking\.signal \}\);\s*asked\.then\(\(\) => clearTimeout\(begun\), \(\) => \{\s*clearTimeout\(begun\);\s*clearTimeout\(whole\);\s*\}\);\s*return asked;/);
   assert.deepEqual(app.match(/\bfetch\(/g), ['fetch(']);
   assert.match(app, /function openPending\(\) \{\s*const \{ loaded \} = state\.addressPending;\s*state\.addressPending = false;\s*openAddress\(loaded\);/);
   assert.match(app, /if \(state\.addressPending\) openPending\(\);/);
