@@ -1641,8 +1641,10 @@ export class Timetable extends Schedule {
    * @param lines the lines and directions to show (public/choice.js), every
    *   one where none: chosen before the limit, so that a busy station has as
    *   many of them as a quiet one (#164)
+   * @param later whether also those after them within the `windowS` seconds
+   *   (`later`), which the page keeps for while its connection is lost (#364)
    */
-  departures(stationId, now, realtime, { windowS = 7200, limit = 40, least = 10, furthestS = 86_400, lines = [] } = {}) {
+  departures(stationId, now, realtime, { windowS = 7200, limit = 40, least = 10, furthestS = 86_400, lines = [], later = false } = {}) {
     const station = this.stopIndex.get(stationId);
     if (station === undefined || this.visitStart[station] === this.visitStart[station + 1]) return null;
 
@@ -1659,7 +1661,8 @@ export class Timetable extends Schedule {
       }
       return chosen.get(id);
     } : null;
-    let found = this.leaving(station, now, realtime, windowS, keep).slice(0, limit);
+    const within = this.leaving(station, now, realtime, windowS, keep);
+    let found = within.slice(0, limit);
     // (the longer search only where it is needed: a busy station has enough within the window)
     if (found.length < least) found = this.leaving(station, now, realtime, furthestS, keep).slice(0, least);
     return {
@@ -1671,6 +1674,7 @@ export class Timetable extends Schedule {
       lon: this.stops.lon[station],
       notes: realtime?.notesOfStation(station) ?? [],
       departures: found.map((leaves) => this.departureOf(leaves, realtime)),
+      ...(later ? { later: within.slice(found.length).map((leaves) => this.departureOf(leaves, realtime)) } : {}),
     };
   }
 
@@ -1698,12 +1702,15 @@ export class Timetable extends Schedule {
    * have here; those of a line with the same name are one, as a train that
    * leaves for one place by several next stops goes there all the same. Of
    * each, the next departure of the next `windowS` seconds that runs, or none.
-   * @returns [{ index, name, mode, agency, at, ways: [{ to, departure }] }]:
+   * @param laterS where more than 0, each way also with its departures after
+   *   the next within that many seconds (`later`), which the page keeps for
+   *   while its connection is lost (#364)
+   * @returns [{ index, name, mode, agency, at, ways: [{ to, departure, later? }] }]:
    *   `index` is the number of the line (its address, Addresses.linePath), `at`
    *   its place; by kind, then by line as names of lines are sorted, the
    *   busier way first; null for an unknown station
    */
-  linesAt(stationId, now, realtime, { windowS = 86_400 } = {}) {
+  linesAt(stationId, now, realtime, { windowS = 86_400, laterS = 0 } = {}) {
     const station = this.stopIndex.get(stationId);
     if (station === undefined) return null;
     // (each line and its ways by their next station, with how many trips go which way)
@@ -1736,17 +1743,24 @@ export class Timetable extends Schedule {
     }
     // the next departure each way, of those that run
     let open = lines.reduce((sum, line) => sum + line.ways.length, 0);
+    // (and after it, those within laterS: departures come by when they leave, so once every way has its next one,
+    // the first beyond laterS ends the search)
+    const until = now + laterS;
     for (const leaves of this.leaving(station, now, realtime, windowS)) {
       if (leaves.cancelled) continue;
+      const expected = leaves.planned + (leaves.delay ?? 0);
+      if (open === 0 && (laterS <= 0 || expected > until)) break;
       const next = this.nextStation(this.tripPattern[leaves.t], leaves.p);
       const way = wayOf.get(`${this.tripLine[leaves.t]} ${this.stationOf[next]}`);
-      if (!way || way.departure) continue;
-      way.departure = this.departureOf(leaves, realtime);
-      if (--open === 0) break;
+      if (!way) continue;
+      if (!way.departure) {
+        way.departure = this.departureOf(leaves, realtime);
+        open--;
+      } else if (laterS > 0 && expected <= until) (way.later ??= []).push(this.departureOf(leaves, realtime));
     }
     return lines
       .sort((a, b) => MODES.indexOf(a.mode) - MODES.indexOf(b.mode) || a.name.localeCompare(b.name, undefined, { numeric: true }) || (a.agency ?? '').localeCompare(b.agency ?? ''))
-      .map(({ ways, ...line }) => ({ ...line, ways: ways.map(({ to, departure }) => ({ to, departure })) }));
+      .map(({ ways, ...line }) => ({ ...line, ways: ways.map(({ to, departure, later }) => ({ to, departure, ...(laterS > 0 ? { later: later ?? [] } : {}) })) }));
   }
 
   /**

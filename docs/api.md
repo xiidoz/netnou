@@ -697,6 +697,7 @@ going.
 | `lines` | only these lines and directions, comma-separated: `<mode>/<line>` for a line both ways, `<mode>/<line>~<next station>` for one direction, the names written as in addresses, e.g. `lines=subway/u1~nuernberg-weisser-turm,tram/4`. They are chosen before the departures are counted, so the 40 and the further ones are all of them (#164) |
 | `directions` | `1`: also list the lines of the station and their directions (`directions` below), for choosing among them |
 | `list` | `lines`: also list every line of the station with the next departure each way (`lines` below), of all lines, whatever `lines` chooses (#255) |
+| `later` | `1`: also the departures after those listed, within the next two hours (`later` below), for while a connection is lost (#364) |
 
 404 `{ "error": "station not found" }` for an unknown id and for a place
 without a station.
@@ -798,10 +799,20 @@ earlier), or `null` where none leaves that way within 24 hours.
 | `ways[].to` | string | the destination most of its trips have here |
 | `ways[].departure` | object or null | the next departure that way, as in `departures` |
 | `ways[].facts` | object or null | how often it leaves here that way on the service day of `today` (#289): `first`, `last` and `runs` as `today` of a way in the `facts` of [`/api/line`](#get-apiline), one way of saying each number an hour in all of `lines`; `null` where it does not leave that way that day |
+| `ways[].later` | array | only with `later=1`: the departures that way after `departure` within the next two hours, not cancelled, as in `departures` |
 
 They are sorted by mode, then by line, then the busier way first. With
 them comes `towns`: `towns`, the names of up to eight towns the lines go to, the
 nearest first, and `more`, how many more there are.
+
+With `later=1` the answer also has `later`: the departures after those in
+`departures` within the next two hours, of the lines chosen where `lines`
+chooses some, as in `departures` and with the delays known now; empty where
+`departures` reach further, as at a quiet stop. The page asks for them now
+and then, not with every refresh, and keeps them for while its connection is
+lost, when they move up as others leave (#364). At the busiest stations of
+Germany they are about 400 departures, about 5 KB compressed; with
+`list=lines`, each way's as well, about twice that.
 
 `warnings` of a departure are those of the notes of its trip that warn, the
 ones with the `severity` `"warning"` or `"severe"`: what is wrong with it

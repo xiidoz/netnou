@@ -799,6 +799,8 @@ button:focus-visible, select:focus-visible, .row:focus-visible, .panel:focus-vis
 :root[data-lost] .status[data-state="error"] { display: none; }
 /* Long without an answer, the delays the details show are the last ones known: grey (app.js, staleness). */
 #panel.stale .delay { color: var(--text-muted); }
+/* So a row of those held for while the connection is lost whose answer is that old already (panel.js heldDepartures, #364). */
+#panel li.stale .delay { color: var(--text-muted); }
 /* (what the row a trip was opened by said of it, below the head of the trip that did not load, its delay grey as the
    list's would be by then: heldRow in app.js) */
 .held-row { padding: 4px 0 0 14px; border-bottom: 1px solid var(--border); }

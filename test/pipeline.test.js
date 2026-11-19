@@ -843,6 +843,32 @@ test('a station has every line that leaves it, with the next departure each way 
   assert.equal(timetable.linesAt('nowhere', at('10:00'), null), null);
 });
 
+test('a station has, asked for, the departures after those it lists within the window, and each way those after its next (#364)', async () => {
+  // three more U1 from Alpha by Beta to Gamma, at Beta at 10:42, 11:42 and 12:42
+  const busy = await importFeed({
+    'trips.txt': `${FEED['trips.txt']}R1,DAILY,T5\nR1,DAILY,T6\nR1,DAILY,T7\n`,
+    'stop_times.txt': FEED['stop_times.txt'] + ['T5', 'T6', 'T7'].map((trip, i) => [
+      `${trip},${10 + i}:30:00,${10 + i}:30:00,A,0,"Gamma, Endstation",,`,
+      `${trip},${10 + i}:40:00,${10 + i}:42:00,B,1,"Gamma, Endstation",,`,
+      `${trip},${10 + i}:50:00,${10 + i}:50:00,C,2,"Gamma, Endstation",,`,
+    ].join('\n')).join('\n') + '\n',
+  }, 'busy.zip');
+  const times = (list) => list.map((dep) => [dep.line, dep.planned]);
+  // of two listed, the U1 at 10:42 and 11:42 after them; the one at 12:42 is beyond two hours of 09:50
+  const board = busy.departures('B', at('09:50'), null, { limit: 2, least: 1, later: true });
+  assert.deepEqual(times(board.departures), [['ICE 5', at('10:05')], ['U1', at('10:12')]]);
+  assert.deepEqual(times(board.later), [['U1', at('10:42')], ['U1', at('11:42')]]);
+  // (not asked for: none; and of the lines chosen alone)
+  assert.equal(busy.departures('B', at('09:50'), null, { limit: 2 }).later, undefined);
+  assert.deepEqual(times(busy.departures('B', at('09:50'), null, { limit: 1, least: 1, later: true, lines: ['subway/u1'] }).later), [['U1', at('10:42')], ['U1', at('11:42')]]);
+  assert.deepEqual(busy.departures('B', at('09:50'), null, { limit: 1, least: 1, later: true, lines: ['longdistance/ice-5'] }).later, []);
+  // each way with its next departure, and where asked for, those after it within that time; else as before
+  const ways = (laterS) => busy.linesAt('B', at('09:50'), null, laterS ? { laterS } : {}).map((line) => line.ways.map((way) => [way.departure.planned, way.later?.map((dep) => dep.planned)]));
+  assert.deepEqual(ways(7200), [[[at('10:12'), [at('10:42'), at('11:42')]]], [[at('10:05'), []]]]);
+  assert.deepEqual(ways(0), [[[at('10:12'), undefined]], [[at('10:05'), undefined]]]);
+  assert.deepEqual(busy.linesAt('B', at('09:50'), null), busy.linesAt('B', at('09:50'), null, { laterS: 0 }));
+});
+
 test('a line has its stops in each direction, and its vehicles between them (#256)', async () => {
   const u1 = timetable.lines.findIndex((line) => line.name === 'U1');
   const trip = (id) => timetable.tripIndex.get(id);

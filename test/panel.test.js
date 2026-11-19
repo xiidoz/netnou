@@ -6,7 +6,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { t as translate } from '../public/i18n.js';
 import en from '../public/locales/en.js';
-import { badge, stopRing, stopSaid, stopSign, tallMark, vehicleSpot, choiceChip, clockOf, delayClass, delayFlag, delayText, departureLists, departuresSub, h, lineHead, lineLists, lineStops, panelHead, stopHeading, toHtml, trackAt, vehicleLabel } from '../public/panel.js';
+import { badge, stopRing, stopSaid, stopSign, tallMark, vehicleSpot, choiceChip, clockOf, delayClass, delayFlag, delayText, departureLists, departuresSub, h, lineHead, lineLists, lineStops, panelHead, stopHeading, toHtml, trackAt, vehicleLabel, departuresShown, heldDepartures, nextOfWay } from '../public/panel.js';
 
 const NOW = Date.parse('2026-10-23T10:00:00Z') / 1000;
 // (times of day and dates in UTC, so that the test reads the same anywhere)
@@ -139,6 +139,64 @@ test('a departure that has left goes from the lists 30 s after it left, as the n
   const u1 = { name: 'U1', mode: 'subway', agency: 'VAG', at: [49.45, 11.07], path: 'line/vag/subway/u1', ways: [{ to: 'Langwasser Süd', departure: departure(-2) }] };
   const lines = html(lineLists({ lines: [u1] }, drawing('minutes')));
   assert.ok(lines.includes('<div class="row departure times-minutes by-line resting"><span class="name" title="Langwasser Süd">Langwasser Süd</span></div>') && !lines.includes('class="later"'), lines);
+});
+
+test('where the connection is lost, the departures held for that move up as others leave, as many as the answer listed (#364)', () => {
+  // an answer of three at 10:00, and those after them in the next two hours, of an answer a few minutes older: with two
+  // of the three among them, and one in the minute of the last (10:04, as the answer's third leaves a minute late)
+  const board = { name: 'Plärrer', departures: [departure(1), departure(2), departure(3, { delay: 60 })], later: [departure(2), departure(3), departure(4), departure(5), departure(6)] };
+  const trips = (out) => [...out.matchAll(/data-trip="T([-\d.e]+)_/g)].map((match) => Number(match[1]));
+  const whenBack = `<p class="panel-empty when-back">${en['departures.whenBack']}</p>`;
+  const lost = (minutes) => html(departureLists(board, { ...drawing('minutes', NOW + minutes * 60), lost: true }));
+  // with the connection, the answer's own, as before
+  assert.deepEqual(trips(html(departureLists(board, drawing('minutes')))), [1, 2, 3]);
+  // without it, as many as the answer listed, each once; and no line that more come while the page holds more
+  assert.deepEqual(trips(lost(0)), [1, 2, 3]);
+  assert.ok(!lost(0).includes('when-back'));
+  assert.deepEqual(trips(lost(3)), [3, 4, 5]);
+  assert.ok(!lost(3).includes('when-back'));
+  // at the end of what it holds, the line, after the last; once all have left, alone
+  assert.deepEqual(trips(lost(5)), [5, 6]);
+  assert.ok(lost(5).endsWith(`</ul>${whenBack}`));
+  assert.equal(lost(7), whenBack);
+  // of all lines, where the connection is lost, a way's next of those held after the one that has left; with it, it rests
+  const u1 = { name: 'U1', mode: 'subway', agency: 'VAG', at: [49.45, 11.07], path: 'line/vag/subway/u1', ways: [{ to: 'Langwasser Süd', departure: departure(-2), later: [departure(-1), departure(4), departure(9)] }] };
+  const lines = (lost) => html(lineLists({ lines: [u1] }, { ...drawing('minutes'), lost }));
+  assert.deepEqual(trips(lines(true)), [4]);
+  assert.ok(lines(false).includes('resting') && trips(lines(false)).length === 0);
+});
+
+test('what the page holds for while the connection is lost loses no departure, shows each once, and greys as old as it is (#364)', () => {
+  const trips = (list) => list.map((dep) => Number(dep.trip.slice(1, dep.trip.indexOf('_'))));
+  // the answer's two, and of an answer a few minutes older those after them: 2 left on time then and is 4 minutes late
+  // now, after the answer's two; 4 leaves in the minute of the answer's last, which a delay in seconds puts there
+  const board = { departures: [departure(1), departure(3, { delay: 20 })], later: [departure(2), departure(4), departure(5, { cancelled: true }), departure(3)] };
+  const held = heldDepartures(board, NOW, true);
+  assert.deepEqual(trips(held.departures), [1, 2, 3, 4, 5]);
+  assert.deepEqual(trips([...held.reserve]), [2, 4, 5]);
+  // (the answer's own, with its newer delay, rather than the older one held; a cancelled one as the answer has them)
+  assert.equal(held.departures.find((dep) => dep.trip.startsWith('T3_')).delay, 20);
+  assert.ok(held.departures.find((dep) => dep.trip.startsWith('T5_')).cancelled);
+  // as many as the answer listed, and whether more are held; with the connection, the answer's alone
+  assert.deepEqual([trips(heldDepartures(board, NOW, true, 2).departures), heldDepartures(board, NOW, true, 2).more], [[1, 2], true]);
+  assert.deepEqual(trips(heldDepartures(board, NOW, false).departures), [1, 3]);
+  // their delays grey once their answer is as old as the list's would be (staleS), not the answer's own
+  const rows = (laterNow) => html(departureLists({ name: 'Plärrer', ...board, laterNow }, { ...drawing('minutes'), lost: true, staleS: 120 }));
+  assert.equal((rows(NOW - 200).match(/<li class="stale">/g) ?? []).length, 1);
+  assert.equal((rows(NOW - 60).match(/<li class="stale">/g) ?? []).length, 0);
+  // of all lines: a way's own next until it has left, then the next held after it, not the same trip again of an older
+  // answer, where it would stay as if it had not left
+  const way = { departure: departure(5), later: [departure(5, { delay: 120 }), departure(10)] };
+  const at = (minutes) => trips([nextOfWay(way, NOW + minutes * 60, true)]);
+  assert.deepEqual([at(4), at(6), at(6.5)], [[5], [10], [10]]);
+  // (one planned before it that leaves after it, five minutes late, is its next after it)
+  const overtaken = { departure: departure(5), later: [departure(3, { delay: 300 }), departure(10)] };
+  assert.deepEqual(trips([nextOfWay(overtaken, NOW + 6 * 60, true)]), [3]);
+  assert.deepEqual(trips([nextOfWay(way, NOW + 360, false)]), [5]);
+  // every departure the details may show, by which the page knows that one has left: those held only where it is lost
+  const withLines = { ...board, lines: [{ ways: [way, { departure: null }] }] };
+  assert.deepEqual(trips(departuresShown(withLines, false)), [1, 3, 5]);
+  assert.deepEqual(trips(departuresShown(withLines, true)), [1, 3, 2, 4, 5, 3, 5, 5, 10]);
 });
 
 test('a stop whose name does not say its town has the town below its name, in the main heading (#254)', () => {

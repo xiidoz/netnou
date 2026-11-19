@@ -14,7 +14,7 @@ import { FAVOURITE_NAME_ZOOM, HEART_MIDDLE, PLACES_ZOOM, RAIL_MODES, heartMark, 
 import { favouritesFrom, isFavourite, lineFavourite, sameStop, stopFavourite, stopNamedAt, withChoice, withFavourite } from './favourites.js';
 import { choiceValue, chosenWays, readChoice, shownKeys, toggled } from './choice.js';
 import { HELD, heldArea, heldDetails, heldLast, heldPaths, holdArea, holdDetails, holdLast } from './held.js';
-import { DELAY_MAJOR_S, DELAY_MINOR_S, DELAY_SEVERE_S, MINUTES_MAX, NOTE_CHARS, badge as badgeOf, choiceChip as choiceChipOf, clockOf, delayCell as delayCellOf, delayClass, delayNode as delayNodeOf, delaySum as delaySumOf, unknownDelay as unknownDelayOf, delayFlag, delayText, departureLists, departureRow as departureRowOf, departuresSub as departuresSubOf, leavesAt, lineBadge, kindInfo, lineHead, lineLists, listedText, lineSaid as lineSaidOf, lineStops, lineTimetable, leftAlready, GONE_S, whenBack, minutesNode as minutesNodeOf, twoKinds, vehicleSpot, VEHICLE_R, panelHead as panelHeadOf, stopHeading, stopRing, stopSaid, stopSign, stopToday, tallMark, tomorrowAt as tomorrowAtOf, untilText as untilTextOf, vehicleLabel, vehicleName, warningSign as warningSignOf, warns } from './panel.js';
+import { DELAY_MAJOR_S, DELAY_MINOR_S, DELAY_SEVERE_S, MINUTES_MAX, NOTE_CHARS, badge as badgeOf, choiceChip as choiceChipOf, clockOf, delayCell as delayCellOf, delayClass, delayNode as delayNodeOf, delaySum as delaySumOf, unknownDelay as unknownDelayOf, delayFlag, delayText, departureLists, departureRow as departureRowOf, departuresShown, heldDepartures, nextOfWay, departuresSub as departuresSubOf, leavesAt, lineBadge, kindInfo, lineHead, lineLists, listedText, lineSaid as lineSaidOf, lineStops, lineTimetable, leftAlready, GONE_S, whenBack, minutesNode as minutesNodeOf, twoKinds, vehicleSpot, VEHICLE_R, panelHead as panelHeadOf, stopHeading, stopRing, stopSaid, stopSign, stopToday, tallMark, tomorrowAt as tomorrowAtOf, untilText as untilTextOf, vehicleLabel, vehicleName, warningSign as warningSignOf, warns } from './panel.js';
 import { BOARD_MAX, BOARD_SHARE, BOARD_STOPS, boardBlocks, boardQuery, boardShare, displayQuery, ledBy, readBoard, readDisplay, readStops } from './display.js';
 import { mdiArrowCollapse, mdiArrowExpand, mdiCheck, mdiChevronLeft, mdiChevronRight, mdiCityVariantOutline, mdiFullscreen, mdiFullscreenExit, mdiHeart, mdiHeartOutline, mdiMinusCircleOutline, mdiPlus } from './vendor/material-design-icons/icons.js';
 import { AttributionControl, MapLibreMap, NavigationControl } from './vendor/maplibre-gl/maplibre-gl.mjs';
@@ -51,6 +51,12 @@ const RETRY_LOADING_MS = 5000; // while the server has no timetable yet
 const RETRY_NO_REALTIME_MS = 3000;
 const QUICK_RETRIES = 5; // so often in a row; the realtime feed may also be down for hours
 const PANEL_REFRESH_MS = 15_000;
+// How often a stop asks also for its departures after those it lists, which the page keeps for while its connection is
+// lost (#364): not with every refresh, as they are many more.
+const LATER_MS = 5 * 60_000;
+// How soon after a stop's first answer it asks for them: the first comes without, so that a slow connection shows the
+// stop as soon as before.
+const LATER_FIRST_MS = 1000;
 // How long an answer of the server may take: one that takes longer counts as
 // not coming, as where the connection hangs without failing (see "a
 // connection lost").
@@ -202,7 +208,7 @@ const touchScreen = matchMedia('(pointer: coarse)');
  * whether the screen is touched, for how high the rows of a line are.
  */
 function drawing() {
-  return { t, time: formatTime, day: dayOf, hour: formatHour, weekday: formatWeekday, list: formatList, now: now(), times: state.times, touch: touchScreen.matches, live: delaysLive(), stale: staleness() === 1, colorBy: state.colorBy, flags: state.flags, moving: true, favourite: favouriteStop, chosen: (stop) => stop.id === state.selection?.fromStop?.id, lost: heldShown() };
+  return { t, time: formatTime, day: dayOf, hour: formatHour, weekday: formatWeekday, list: formatList, now: now(), times: state.times, touch: touchScreen.matches, live: delaysLive(), stale: staleness() === 1, colorBy: state.colorBy, flags: state.flags, moving: true, favourite: favouriteStop, chosen: (stop) => stop.id === state.selection?.fromStop?.id, lost: heldShown(), staleS: STALE_S };
 }
 
 // The icons on the page's own buttons are from Material Design Icons
@@ -4171,14 +4177,15 @@ function select(type, id, more = {}) {
  *   opened: the server counts that as a visit of its address, where visits
  *   are counted (#158). A trip has no address.
  */
-function selectionUrl({ type, id, line, at, route, fromTrip }, open = false, first = false, lines = state.lines) {
+function selectionUrl({ type, id, line, at, route, fromTrip }, open = false, first = false, lines = state.lines, later = false) {
   if (type === 'trip') return `api/trip?id=${encodeURIComponent(id)}${open ? '&open=1' : ''}`;
   // (a line is its name, its mode and its operator together, and its place where lines of the name are in places
   // apart, #152; where it runs is asked for until it is known, #148)
   if (type === 'line') return `api/line?${new URLSearchParams({ name: line.name, mode: line.mode, agency: line.agency, ...(line.at ? { at: line.at.join(',') } : {}), ...(route ? {} : { route: '1' }), ...(open ? { open: '1' } : {}), ...(first && fromTrip ? { trip: fromTrip } : {}) })}`;
   // (only the lines chosen, #164; once, with the first answer, which lines and directions there are; and all
   // lines with their next departures while they are shown, #255, which a board does not)
-  const choice = `${lines.length ? `&lines=${choiceValue(lines)}` : ''}${first ? '&directions=1' : ''}${state.view === 'lines' && state.board === null ? '&list=lines' : ''}`;
+  // (and now and then those after them, for while the connection is lost, #364; of all lines too, where they can be shown)
+  const choice = `${lines.length ? `&lines=${choiceValue(lines)}` : ''}${first ? '&directions=1' : ''}${(state.view === 'lines' || (later && !FIXED)) && state.board === null ? '&list=lines' : ''}${later ? '&later=1' : ''}`;
   return `${at ? `api/departures?at=${at.lat.toFixed(5)},${at.lon.toFixed(5)}` : `api/departures?station=${encodeURIComponent(id)}`}${open ? '&open=1' : ''}${choice}`;
 }
 
@@ -4196,7 +4203,7 @@ async function loadSelection(first = false) {
   const wanted = selection.linesWanted ?? null;
   try {
     // (while it is asked, a retry waits for it: one question at a time, a visit counted once)
-    const asked = askServer(selectionUrl(selection, first && !selection.counted, first, wanted ?? state.lines));
+    const asked = askServer(selectionUrl(selection, first && !selection.counted, first, wanted ?? state.lines, asksLater(selection, wanted ?? state.lines, first)));
     selection.asking = asked;
     const res = await asked.finally(() => {
       if (selection.asking === asked) selection.asking = null;
@@ -4237,7 +4244,38 @@ async function loadSelection(first = false) {
     console.warn('details not loaded:', err);
     if (state.selection === selection && selection.turn === turn) disconnected(selection);
   }
-  if (state.selection === selection && selection.turn === turn && !document.hidden) panelTimer = setTimeout(loadSelection, PANEL_REFRESH_MS);
+  // (a stop's departures for while the connection is lost soon after its first answer, which came without them)
+  if (state.selection === selection && selection.turn === turn && !document.hidden) panelTimer = setTimeout(loadSelection, selection.laterSoon ? LATER_FIRST_MS : PANEL_REFRESH_MS);
+  delete selection.laterSoon;
+}
+
+/** Whether a stop's question asks for its departures after those listed too (#364): right after the first, and every LATER_MS. */
+function asksLater(selection, lines, first = false) {
+  return selection.type === 'station' && !first && (selection.laterLines !== choiceValue(lines) || !(Date.now() - selection.laterAt < LATER_MS));
+}
+
+/**
+ * The departures of a stop after those listed, and of each way of its lines
+ * after its next (#364), which an answer has every LATER_MS: from the one
+ * before it, of the same stop and lines, where this one has none.
+ */
+function keepLater(selection, data) {
+  const before = selection.data;
+  const lines = choiceValue(state.lines);
+  if (data.later !== undefined) {
+    selection.laterAt = Date.now();
+    selection.laterLines = lines;
+    delete selection.laterSoon;
+    // (by the server's clock, when its delays were current: they grey from STALE_S after it, see departureLists)
+    data.laterNow = data.now;
+  } else if (before?.id === data.id && before.later && selection.laterLines === lines) {
+    data.later = before.later;
+    data.laterNow = before.laterNow;
+  } else selection.laterSoon = !selection.data;
+  if (data.lines && before?.id === data.id && before.lines) {
+    const kept = new Map(before.lines.flatMap((line) => line.ways.map((way) => [`${line.path} ${way.to}`, way.later])));
+    for (const line of data.lines) for (const way of line.ways) way.later ??= kept.get(`${line.path} ${way.to}`);
+  }
 }
 
 /**
@@ -4254,6 +4292,7 @@ function takeAnswer(selection, data, first, sentAt = null) {
   selection.loaded = true;
   delete selection.back;
   connected(selection);
+  if (selection.type === 'station') keepLater(selection, data);
   if (sentAt !== null) selection.answeredAt = Math.min(selection.answeredAt, sentAt);
   // (the lines of the stop as they were last, until the next answer with them: to be shown at once on the switch; with
   // the time they came, which their view says once the connection is lost, shownAt)
@@ -4693,11 +4732,15 @@ function showsDelays(selection) {
   // (none where other lines are chosen than those held: the list says that they load once the connection is back)
   if (otherLinesHeld()) return false;
   const ahead = (dep) => !dep.cancelled && !leftAlready(dep, at);
+  // (as the lists show them: where the connection is lost, with those held for that, #364)
+  const held = heldShown(selection);
   if (state.board !== null) {
     const stops = [data, ...state.extra.map((stop) => boardStopData.get(stop.path)?.departures).filter(Boolean)];
-    return stops.some((stop) => (stop.departures ?? []).some((dep) => ahead(dep) && known(dep.delay) && Math.round(dep.delay / 60) !== 0));
+    return stops.some((stop) => heldDepartures(stop, at, held, stop.departures?.length || Infinity).departures.some((dep) => ahead(dep) && known(dep.delay) && Math.round(dep.delay / 60) !== 0));
   }
-  const departures = state.view === 'lines' ? (data.lines ?? []).flatMap((line) => line.ways.map((way) => way.departure).filter(Boolean)) : data.departures ?? [];
+  const departures = state.view === 'lines'
+    ? (data.lines ?? []).flatMap((line) => line.ways.map((way) => nextOfWay(way, at, held)).filter(Boolean))
+    : heldDepartures(data, at, held, data.departures?.length || Infinity).departures;
   return departures.some((dep) => ahead(dep) && known(dep.delay));
 }
 
@@ -5057,7 +5100,8 @@ function backFromFailed() {
 function stillAhead({ selection: { type, data } }) {
   const at = now();
   if (type === 'trip') return data.stops.some((stop) => stop.arr + (stop.arrDelay ?? stop.depDelay ?? 0) + GONE_S > at);
-  if (type === 'station') return (data.departures ?? []).some((dep) => !leftAlready(dep, at));
+  // (of a stop, those held for while the connection is lost as well, #364)
+  if (type === 'station') return heldDepartures(data, at, true).departures.length > 0;
   return true;
 }
 
@@ -5845,8 +5889,9 @@ function goneSinceDrawn(at) {
   if (selection?.type !== 'station' || !selection.data) return false;
   const { data } = selection;
   const drawnAt = selection.drawnAt ?? 0;
-  const held = [...(data.departures ?? []), ...(data.lines ?? []).flatMap((line) => line.ways.map((way) => way.departure).filter(Boolean)),
-    ...(state.board === null ? [] : [...boardStopData.values()].flatMap((stop) => stop?.departures?.departures ?? []))];
+  // (where the connection is lost, those held for that as well, which move up as others leave, #364)
+  const lost = heldShown(selection);
+  const held = [...departuresShown(data, lost), ...(state.board === null ? [] : [...boardStopData.values()].flatMap((stop) => (stop?.departures ? departuresShown(stop.departures, lost) : [])))];
   return held.some((dep) => leavesAt(dep) + GONE_S > drawnAt && leavesAt(dep) + GONE_S <= at);
 }
 
@@ -6355,17 +6400,30 @@ function blockRows(block, times, open = false) {
   if (!shown.length) return state.selection?.failing && block.some((entry) => !entry.known?.gone) ? notYet : gone;
   const { rows: from } = namesOf(block);
   const merged = shown.length > 1;
-  const listed = merged ? mergedDepartures(shown) : shown[0].known.departures.departures.map((dep) => ({ dep, from: null }));
+  // (where the connection is lost, each stop's with those held for that, which move up as others leave, as many as its
+  // answer listed, #364; those of them whose answer is older than STALE_S with their delays grey, see departureLists)
+  const staleRows = new Set();
+  let heldMore = false;
+  const heldOf = (entry) => {
+    const { departures, more, reserve } = heldDepartures(entry.known.departures, now(), true, entry.known.departures.departures.length || Infinity);
+    if (now() - (entry.known.departures.laterNow ?? -Infinity) >= STALE_S) for (const dep of reserve) staleRows.add(dep);
+    heldMore ||= more;
+    return departures;
+  };
+  const listOf = heldShown() ? heldOf : (entry) => entry.known.departures.departures;
+  const listed = merged ? mergedDepartures(shown, listOf) : listOf(shown[0]).map((dep) => ({ dep, from: null }));
   // (not those that have left, GONE_S)
   const departures = listed.filter(({ dep }) => !leftAlready(dep, now()));
   // (the badges of a name the block's stops have in two kinds say their kind)
   const kinds = twoKinds(shown.map((entry) => entry.known.departures.today), departures.map(({ dep }) => dep));
   const rows = departures.map((each) => boardRow(each.dep, times, merged ? from[block.indexOf(each.from)] : null, kinds.has(each.dep.line)));
+  departures.forEach((each, i) => rows[i].classList.toggle('stale', staleRows.has(each.dep)));
   // (where the next day begins, a line across the board says so)
   const split = tomorrowAt(departures.map(({ dep }) => dep));
   if (split >= 0) rows.splice(split, 0, el('li', { class: 'day' }, [el('span', { text: t('departures.tomorrow') })]));
-  // (where the connection is lost, the page does not know there are none: the note in the head says why it is empty)
-  const lost = state.selection?.failing ? toDom(whenBack(drawing())) : null;
+  // (where the connection is lost, the page does not know there are none: the note in the head says why it is empty;
+  // after the rows, that more come once it is back, but only once nothing more is held for that, #364)
+  const lost = state.selection?.failing && !heldMore ? toDom(whenBack(drawing())) : null;
   return [...gone, rows.length ? el('ul', { class: `board-rows times-${times}` }, rows) : lost ? null : el('p', { class: 'panel-empty', text: t('departures.none') }), lost].filter(Boolean);
 }
 
@@ -6520,13 +6578,24 @@ async function loadBoardStop(stop) {
     if (!boardStopAt(stop, found.path.slice('stop/'.length), known)) return;
   }
   if (known.gone) return;
-  const res = await askServer(`api/departures?at=${known.lat.toFixed(5)},${known.lon.toFixed(5)}`);
+  // (now and then with its departures after those listed, as the open stop's, not with the first: for while the
+  // connection is lost, #364)
+  const later = Boolean(known.departures) && !(Date.now() - known.laterAt < LATER_MS);
+  const res = await askServer(`api/departures?at=${known.lat.toFixed(5)},${known.lon.toFixed(5)}${later ? '&later=1' : ''}`);
   // (not found at its place: a timetable since has it elsewhere, or not; asked again where it is)
   if (res.status === 404) {
     known.departures = null;
     known.lost = true;
   } else if (res.ok) {
-    known.departures = await res.json();
+    const answer = await res.json();
+    if (later) {
+      known.laterAt = Date.now();
+      answer.laterNow = answer.now;
+    } else if (known.departures?.later) {
+      answer.later = known.departures.later;
+      answer.laterNow = known.departures.laterNow;
+    }
+    known.departures = answer;
     // (one added from the search had the address the page wrote for it: now its own, #288)
     boardStopAt(stop, known.departures.path.slice('stop/'.length), known);
   }
@@ -6628,13 +6697,14 @@ function shortNames(names) {
  * sends only so many), so the list ends where the first of them does: past
  * that, a busy stop would seem to have nothing more.
  */
-function mergedDepartures(entries) {
-  const lists = entries.filter((entry) => entry.known.departures.departures.length);
+function mergedDepartures(entries, listOf = (entry) => entry.known.departures.departures) {
+  // (listOf: the departures of a stop of the board, as they are to be shown: where the connection is lost, with those held for that)
+  const lists = entries.filter((entry) => listOf(entry).length);
   // (an answer of fewer than BOARD_LEAST has all of the next 24 hours; one whose last departure has left is old, and is cut where it ends anyway)
-  const cut = lists.map((entry) => entry.known.departures.departures).filter((deps) => deps.length >= BOARD_LEAST).map((deps) => Math.max(...deps.map(leavesAt))).filter((last) => last >= now());
+  const cut = lists.map(listOf).filter((deps) => deps.length >= BOARD_LEAST).map((deps) => Math.max(...deps.map(leavesAt))).filter((last) => last >= now());
   const until = Math.min(Infinity, ...cut);
   return lists
-    .flatMap((entry, order) => entry.known.departures.departures.map((dep) => ({ dep, from: entry, order })))
+    .flatMap((entry, order) => listOf(entry).map((dep) => ({ dep, from: entry, order })))
     .filter(({ dep }) => leavesAt(dep) <= until)
     .sort((a, b) => leavesAt(a.dep) - leavesAt(b.dep) || a.order - b.order);
 }

@@ -465,6 +465,17 @@ test('/api/departures', async () => {
   assert.deepEqual(listed.lines.map(({ name, mode, agency, path }) => ({ name, mode, agency, path })), [{ name: 'U1', mode: 'subway', agency: 'Testbetrieb', path: 'line/testbetrieb/subway/u1' }]);
   assert.deepEqual(listed.lines[0].ways.map((way) => [way.to, way.departure.trip, way.departure.planned]), [['Rundkurs', departures[0].trip, departures[0].planned]]);
 
+  // asked for, the departures after those listed within two hours, for while the page's connection is lost (#364): none
+  // here, as the ten listed reach further; and with the lines, each way's after its next, within two hours, by time
+  const kept = (await get('/api/departures?station=A&later=1&list=lines')).json;
+  assert.deepEqual(kept.later, []);
+  assert.equal(json.later, undefined);
+  const way = kept.lines[0].ways[0];
+  assert.ok(way.later.length >= 3, `${way.later.length} later departures`);
+  const leaves = (d) => d.planned + (d.delay ?? 0);
+  assert.ok(way.later.every((d, i) => leaves(d) >= leaves(way.departure) && leaves(d) <= kept.now + 7200 && leaves(d) >= leaves(way.later[Math.max(0, i - 1)])));
+  assert.equal(listed.lines[0].ways[0].later, undefined);
+
   for (const station of ['Z', '']) {
     const missing = await get(`/api/departures?station=${station}`);
     assert.equal(missing.status, 404);

@@ -1141,6 +1141,18 @@ otherwise a server would load a file written by older code:
   Verbindung". The installed app, which starts at the map, opens again what
   was open when it went away, where any of it lies ahead. Back and Forward
   reach the stored addresses after a reload too.
+- **Departures for while the connection is lost.** A stop's answer lists its
+  next 40 departures, at a busy stop a quarter of an hour. Right after a
+  stop's first answer, so that the first question is as small as before, and
+  every five minutes after, the page asks also for those of the next two hours
+  after them (`later=1`); where "Alle Linien" can be shown, also for each
+  direction's after its next. The answers between keep them. While the
+  connection is lost they move up as others leave: in the stop's list as many
+  as the last answer listed, on boards and in "Alle Linien" likewise; rows of
+  an answer older than the list's grey as theirs. The line that more come once
+  it is back stands only after the last of what is held (#364). They are held
+  with the details (`held.js`), so that a start without a connection has them
+  too.
 - **A new version.** A page that stays open runs the version it was loaded
   with: a tab, a phone that brings its tab back without loading it, the
   installed app, a screen on a wall. And what it loads later, such as the

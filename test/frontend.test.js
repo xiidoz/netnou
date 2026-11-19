@@ -117,6 +117,29 @@ test('the thread the page starts is a script of its own that is precached', () =
   assert.match(worker, /limit = setTimeout\(\(\) => asking\.abort\(\), 120_000\);/);
 });
 
+// A stop's answer holds its next 40 departures; while the connection is lost,
+// those after them that the page asked for now and then move up (#364).
+test('a stop asks for its departures after those listed now and then, keeps them between, and its lists show them where the connection is lost', () => {
+  const app = withoutComments(read('app.js'));
+  assert.match(app, /const LATER_MS = 5 \* 60_000;/);
+  assert.match(app, /return selection\.type === 'station' && !first && \(selection\.laterLines !== choiceValue\(lines\) \|\| !\(Date\.now\(\) - selection\.laterAt < LATER_MS\)\);/);
+  // (not with the first question, which comes as small as before; right after its answer; of all lines where they can be shown)
+  assert.match(app, /panelTimer = setTimeout\(loadSelection, selection\.laterSoon \? LATER_FIRST_MS : PANEL_REFRESH_MS\);/);
+  assert.match(app, /\(state\.view === 'lines' \|\| \(later && !FIXED\)\) && state\.board === null \? '&list=lines' : ''/);
+  assert.match(app, /\$\{later \? '&later=1' : ''\}`;/);
+  assert.match(app, /connected\(selection\);\s*if \(selection\.type === 'station'\) keepLater\(selection, data\);/);
+  // (the further stops of a board likewise, each by its own time)
+  assert.match(app, /const later = Boolean\(known\.departures\) && !\(Date\.now\(\) - known\.laterAt < LATER_MS\);/);
+  assert.match(app, /if \(later\) \{\s*known\.laterAt = Date\.now\(\);\s*answer\.laterNow = answer\.now;\s*\} else if \(known\.departures\?\.later\) \{\s*answer\.later = known\.departures\.later;/);
+  // (a board's lists, whether the delays shown are old, and a start at the map that opens what lies ahead, with them)
+  assert.match(app, /heldDepartures\(entry\.known\.departures, now\(\), true, entry\.known\.departures\.departures\.length \|\| Infinity\);/);
+  assert.match(app, /const listOf = heldShown\(\) \? heldOf : \(entry\) => entry\.known\.departures\.departures;/);
+  // (and what has left of them is noticed as of the answer's own, also where the rows show the time of day)
+  assert.match(app, /const held = \[\.\.\.departuresShown\(data, lost\), \.\.\.\(state\.board === null \? \[\] : \[\.\.\.boardStopData\.values\(\)\]\.flatMap\(\(stop\) => \(stop\?\.departures \? departuresShown\(stop\.departures, lost\) : \[\]\)\)\)\];/);
+  assert.match(app, /: heldDepartures\(data, at, held, data\.departures\?\.length \|\| Infinity\)\.departures;/);
+  assert.match(app, /if \(type === 'station'\) return heldDepartures\(data, at, true\)\.departures\.length > 0;/);
+});
+
 // A page that starts from the service worker's cache is of the version kept
 // there: it knows that version as the page was sent with it, not by the
 // server's first answer, which may come from a newer one (#363).
@@ -937,7 +960,7 @@ test('without a connection, a vehicle whose known way has ended leaves the map a
   assert.match(app, /const ended = node\.dataset\.track !== undefined && at > track\[track\.length - 3\];\s*if \(ended && node === document\.activeElement\) panel\.focus\(\{ preventScroll: true \}\);\s*node\.hidden = ended;/);
   assert.match(app, /\} else if \(selection\.type === 'line'\) \{/);
   // a board says it too, after its rows or alone
-  assert.match(app, /const lost = state\.selection\?\.failing \? toDom\(whenBack\(drawing\(\)\)\) : null;/);
+  assert.match(app, /const lost = state\.selection\?\.failing && !heldMore \? toDom\(whenBack\(drawing\(\)\)\) : null;/);
 });
 
 test('a start without a connection opens what the page holds for its address, saying that it connects; the app at the map opens what was open (#362)', () => {
@@ -963,7 +986,7 @@ test('a start without a connection opens what the page holds for its address, sa
   assert.match(app, /const own = held\.selection\.path \?\? path;\s*if \(own !== path\) stepHeld = true;\s*restore\(held, own, \.\.\.more\);/);
   // (drawn as held, as where the connection is lost, while it connects: only the note tells them apart, its dot grey)
   assert.match(app, /return Boolean\(selection\?\.failing \|\| selection\?\.connecting\);/);
-  assert.match(app, /lost: heldShown\(\) \};/);
+  assert.match(app, /lost: heldShown\(\), staleS: STALE_S \};/);
   assert.match(read('style.css'), /\.panel-head \.notes \.connection\.connecting \.dot \{ background: var\(--delay-none\); \}/);
   // (an error answer ends the waiting: an address gone says so)
   assert.match(app, /\} else if \(heldShown\(selection\)\) \{[^]*?\}\s*disconnected\(selection\);/);
