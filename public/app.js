@@ -11,7 +11,7 @@
 import { parseAddress, stopPathAt, wordsOf } from './address.js';
 import { APP_NAME, READMES, chooseLanguage, dayOf, formatHour, formatList, formatNumber, formatTime, formatWeekday, languagePicker, languageToOffer, loadLanguage, pageTexts, sentInAnother, setTimeZone, t, textsOf, translatePage } from './i18n.js';
 import { FAVOURITE_NAME_ZOOM, HEART_MIDDLE, PLACES_ZOOM, RAIL_MODES, heartMark, joiningLines, mergePlaces, namePrecedence, namedAt, placeNames, stopMark, townToShow, townsAlong, withoutStyleStops } from './stops.js';
-import { favouritesFrom, isFavourite, lineFavourite, sameStop, stopFavourite, stopNamedAt, withChoice, withFavourite } from './favourites.js';
+import { favouritesFrom, isFavourite, lineFavourite, sameStop, stopFavourite, withChoice, withFavourite } from './favourites.js';
 import { choiceValue, chosenWays, readChoice, shownKeys, toggled } from './choice.js';
 import { HELD, heldArea, heldDetails, heldLast, heldPaths, holdArea, holdDetails, holdLast } from './held.js';
 import { DELAY_MAJOR_S, DELAY_MINOR_S, DELAY_SEVERE_S, MINUTES_MAX, NOTE_CHARS, badge as badgeOf, choiceChip as choiceChipOf, clockOf, delayCell as delayCellOf, delayClass, delayNode as delayNodeOf, delaySum as delaySumOf, unknownDelay as unknownDelayOf, delayFlag, delayText, departureLists, departureRow as departureRowOf, departuresSub as departuresSubOf, leavesAt, lineBadge, kindInfo, lineHead, lineLists, listedText, lineSaid as lineSaidOf, lineStops, lineTimetable, leftAlready, GONE_S, whenBack, minutesNode as minutesNodeOf, twoKinds, vehicleSpot, VEHICLE_R, panelHead as panelHeadOf, stopHeading, stopRing, stopSaid, stopSign, stopToday, tallMark, tomorrowAt as tomorrowAtOf, untilText as untilTextOf, vehicleLabel, vehicleName, warningSign as warningSignOf, warns } from './panel.js';
@@ -3778,7 +3778,7 @@ async function openAddress(loaded = false) {
   // (where the connection is known to be lost, what the page holds of the address at once, not after a question that hangs)
   const held = heldAt(path);
   if (held && (connectionLost() || state.selection?.failing)) {
-    restoreHeld(held, path, true);
+    restore(held, path, true);
     return true;
   }
   // (an answer that takes long: the details of the address left are not shown under this one meanwhile)
@@ -4926,28 +4926,10 @@ const unstored = (entry) => ({ ...entry, board: null, selection: { ...entry.sele
  * for other lines than it was asked for with.
  */
 function heldAt(path) {
-  const held = visited.get(path) ?? heldStop([...visited.values()], path);
+  const held = visited.get(path);
   if (!held || held.board !== null || readBoard(location.search) !== null) return null;
   const asked = new URLSearchParams(location.search).get('lines') ?? '';
   return asked === choiceValue(held.lines) ? held : null;
-}
-
-/**
- * Of held details (entries as in visited), those of the stop that an address
- * names by its name and place (stopNamedAt), as a favourite's link does: held
- * under the stop's own address, as the server would answer that one with.
- */
-function heldStop(entries, path) {
-  const stops = entries.filter((entry) => entry?.selection?.type === 'station' && entry.board === null);
-  const at = stopNamedAt(path, stops.map((entry) => entry.selection.data ?? {}));
-  return at < 0 ? undefined : stops[at];
-}
-
-/** Restores held details (heldAt) at an address: under their own, in place of their stop's other one where that is it. */
-function restoreHeld(held, path, ...more) {
-  const own = held.selection.path ?? path;
-  if (own !== path) stepHeld = true;
-  restore(held, own, ...more);
 }
 
 /** That the details of an address load, under what the page holds of it, where Back waits for the answer about it. */
@@ -5077,8 +5059,7 @@ async function startHeld() {
   // (what was opened meanwhile, by a tap or by the map's first answer, stands)
   const passed = () => Boolean(state.selection) || state.addressOpened || here() !== (atMap ? '' : path);
   if (!path || passed()) return;
-  // (at the address of a stop by its name and place, as a favourite's link has it, the stop held under its own: heldStop)
-  const held = (await heldDetails(path)) ?? (atMap ? null : await heldStopStored(path));
+  const held = await heldDetails(path);
   if (passed()) return;
   // (as Back without a connection takes what is held, heldAt: not for a board, nor for other lines than it was asked with)
   const asked = new URLSearchParams(location.search).get('lines') ?? '';
@@ -5086,12 +5067,11 @@ async function startHeld() {
   if (fits && (!atMap || stillAhead(held))) {
     state.addressOpened = true;
     const entry = unstored(held);
-    const own = entry.selection.path ?? path;
-    visited.delete(own);
-    visited.set(own, entry);
+    visited.delete(path);
+    visited.set(path, entry);
     // (where the map's own question has failed meanwhile, the connection is known to be lost: said at once)
     const lost = connectionLost();
-    restoreHeld(entry, path, lost, !lost);
+    restore(entry, path, lost, !lost);
     // (the map on them, as on details the page was sent with; and again once the area has come with the first answer)
     placeSent(entry.selection);
     entry.selection.unplaced = true;
@@ -5107,15 +5087,6 @@ async function startHeld() {
     console.warn('address not opened:', err);
     state.addressOpened = false;
   });
-}
-
-/** Of the details stored (held.js), those of the stop that an address names by its name and place (heldStop), or null. */
-async function heldStopStored(path) {
-  const named = parseAddress(path);
-  if (named?.type !== 'stop' || named.lat === undefined) return null;
-  const entries = [];
-  for (const { path: one } of await heldPaths()) entries.push(await heldDetails(one));
-  return heldStop(entries, path) ?? null;
 }
 
 /**
@@ -5147,7 +5118,7 @@ async function recallHeld() {
 function addressLost(path, loaded = false) {
   const kept = heldAt(path);
   if (kept) {
-    restoreHeld(kept, path, true);
+    restore(kept, path, true);
     return true;
   }
   // (to be opened once the connection is back, as the page itself would have: a visit its load counted is not counted again)
@@ -7238,16 +7209,13 @@ function startFixed() {
 // the settings and the map, which the browser keeps; an open trip and what
 // was typed into the search go.
 
-// The version of the page's files, as the server sent the page with it (#363):
-// a page that starts from the service worker's cache is of the version kept
-// there, which need not be the one the server runs by then.
-let runningVersion = document.querySelector('meta[name="netnou-page-version"]')?.content ?? null;
+let runningVersion = null; // the version the server ran when the page was loaded (versionOf)
 let newVersion = false; // the server runs another one by now
 let lastInput = Date.now(); // when the page was last touched, clicked or typed into
 for (const type of ['pointerdown', 'keydown', 'wheel']) addEventListener(type, () => { lastInput = Date.now(); }, { capture: true, passive: true });
 
-/** The version of the page's files that the server runs, of an answer of api/status. */
-const versionOf = (about) => about.pageVersion ?? null;
+/** What tells one version of the server from another, of an answer of api/status. */
+const versionOf = (about) => `${about.version} ${about.commit ?? ''}`;
 
 /** Asks which version the server runs. True if it is another than the page's. */
 async function checkVersion() {
@@ -7255,7 +7223,6 @@ async function checkVersion() {
     const res = await askServer('api/status');
     if (!res.ok) return newVersion;
     const version = versionOf(await res.json());
-    if (version === null) return newVersion;
     if (runningVersion === null) runningVersion = version;
     else if (version !== runningVersion) newVersion = true;
   } catch {
@@ -7333,13 +7300,6 @@ function init() {
   poll();
   // Makes the page installable as an app and lets it start offline (see sw.js).
   navigator.serviceWorker?.register('sw.js').catch((err) => console.warn('service worker not registered:', err));
-  // (the page tells it which version it is, at the start and when another one takes it over, as after the first visit: its files come
-  // from that version, see sw.js, also where the service worker could not tell it from the page as it came)
-  const sayVersion = () => navigator.serviceWorker.controller?.postMessage({ pageVersion: runningVersion });
-  if (navigator.serviceWorker) {
-    sayVersion();
-    navigator.serviceWorker.addEventListener('controllerchange', sayVersion);
-  }
 }
 
 init();

@@ -11,7 +11,7 @@
 // page around it, so that it can be tested as it is (test/favourites.test.js);
 // app.js and search.js use it.
 
-import { operatorName, parseAddress, slug } from './address.js';
+import { operatorName } from './address.js';
 
 // How far a stop may have moved with a new timetable and still be the one
 // marked: as far as api/address looks for a stop of the name.
@@ -58,25 +58,6 @@ export const lineFavourite = ({ name, mode, agency, at: [lat, lon], listed }) =>
 
 /** Whether two stops are the same one, kept in different timetables. */
 export const sameStop = (a, b) => a.name === b.name && metres(a.lat, a.lon, b.lat, b.lon) <= STOP_REACH_M;
-
-/**
- * Of stops ({ name, lat, lon }), the one that an address names by its name
- * and place (stopPathAt), as the link of a favourite has it: of that name, the
- * nearest up to STOP_REACH_M away, as api/address finds it. Its index, or -1;
- * -1 also for an address that does not name a stop by its place.
- */
-export function stopNamedAt(path, stops) {
-  const named = parseAddress(path);
-  if (named?.type !== 'stop' || named.lat === undefined) return -1;
-  let [found, nearest] = [-1, STOP_REACH_M];
-  stops.forEach((stop, i) => {
-    if (!isPlace(stop) || slug(stop.name) !== named.name) return;
-    const away = metres(named.lat, named.lon, stop.lat, stop.lon);
-    // (of the same stop held more than once, the last)
-    if (away <= nearest) [found, nearest] = [i, away];
-  });
-  return found;
-}
 
 /**
  * Whether two lines are the same one: also where one is the kind the

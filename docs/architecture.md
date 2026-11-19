@@ -1106,52 +1106,27 @@ otherwise a server would load a file written by older code:
   the icons are those of MapLibre's `GeolocateControl`: that control moves
   the map before it says where the visitor is. The position stays in the
   browser ([what the server gets to see](deployment.md#running-a-public-instance)).
-- **Offline start.** The service worker keeps the page's files per version:
-  the server writes the version of the files (`pageVersion`, a few characters
-  of what they hold) into `sw.js` as it sends it, so that a browser installs
-  it anew whenever one of them has changed, with a cache of its own that it
-  fills with all of them at once. A start asks the network first, so that an
-  update shows at once. Where no answer has come in time, as on a connection
-  that hangs in a tunnel, where the network fails, or where the server behind
-  it does (a 5xx, as while it is restarted), it takes the page it has kept, in
-  whatever language that came, and marks it as kept (#363). In time is about
-  twice as long as the page took to start coming at the slowest of the last
-  five starts, at least ¾ s and at most 3 s, and 3 s while that is not known:
-  a start where the network answers as it usually does shows its page, without
-  a held one first, and one where it does not shows the kept page soon. A page
-  then takes all its files from its own version, and so do the workers it
-  starts: from those kept of that version, which most pages from the network
-  are of as well, and from the network where it is a newer one. So two
-  versions do not mix: a page that opens its search later takes those files
-  from where it took the others, also after the browser has stopped the
-  service worker meanwhile, and after a newer version has taken over, which
-  keeps the files of each version that a page still open is of. A page the
-  service worker did not start, as at the first visit, tells it its version. A
-  page that the network sends too late for its start is kept for the next one
-  where it is of the kept version; of a newer one, it has the browser look for
-  the service worker that keeps that. Each instance of an origin keeps its
-  own. API answers and the map are never cached by it. What open details last
-  had the page keeps itself, in the browser's Cache Storage (`held.js`, #362):
-  the last 25 addresses for a day, with the area and the server's clock. At a
-  start from the kept page, the address opens what is held for it at once (at
-  the address of a stop by its name and place, as a favourite's link has it,
-  what is held of that stop under its own address), with a note that says how
-  old it is and that the page connects ("Stand 13:37 · Verbinde …"); the
-  page's own first question then decides, with its answer or with "keine
-  Verbindung". The installed app, which starts at the map, opens again what
-  was open when it went away, where any of it lies ahead. Back and Forward
-  reach the stored addresses after a reload too.
+- **Offline start.** The service worker fetches from the network first and
+  falls back to its cache, so an update shows up immediately and the
+  installed app can still start without a connection. It takes the page it
+  has kept, in whatever language that came, and marks it as kept. API answers
+  and the map are never cached by it. What open details last had the page
+  keeps itself, in the browser's Cache Storage (`held.js`, #362): the last
+  25 addresses for a day, with the area and the server's clock. At a start
+  from the kept page, the address opens what is held for it at once, with a
+  note that says how old it is and that the page connects ("Stand 13:37 ·
+  Verbinde …"); the page's own first question then decides, with its answer
+  or with "keine Verbindung". The installed app, which starts at the map,
+  opens again what was open when it went away, where any of it lies ahead.
+  Back and Forward reach the stored addresses after a reload too.
 - **A new version.** A page that stays open runs the version it was loaded
   with: a tab, a phone that brings its tab back without loading it, the
   installed app, a screen on a wall. And what it loads later, such as the
-  thread of the search, would be of the new version. The page is sent with
-  the version of its files (`pageVersion`), and kept with it, so it knows
-  its version also where it starts from the service worker's cache. It asks
-  `api/status` which version runs, as it comes into view and every five
-  minutes while it is, and once that differs from its own loads itself again
-  where nobody is using it: as it comes into view, after two minutes without
-  a touch, a click or a key, and on a wall at once. What is open is in the
-  address and stays.
+  thread of the search, would be of the new version. So it asks `api/status`
+  which version runs, as it comes into view and every five minutes while it
+  is, and once that has changed loads itself again where nobody is using
+  it: as it comes into view, after two minutes without a touch, a click or a
+  key, and on a wall at once. What is open is in the address and stays.
 - **Texts** come from locale files through `t()`; nothing a visitor reads is
   written out in `app.js` or in the server, apart from data such as
   names of stops and notes of the feed. See [translating.md](translating.md).

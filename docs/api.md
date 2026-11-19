@@ -86,7 +86,6 @@ the fetching of the realtime feed.
 {
   "version": "0.2.0",
   "commit": "479e29cd13b2afc6b2c447e6e7b452f4ccf1beda",
-  "pageVersion": "3f2a9c1e5b7d",
   "homepage": "https://github.com/xiidoz/netnou",
   "update": { "version": "0.3.0", "url": "https://github.com/xiidoz/netnou/releases/tag/v0.3.0" },
   "now": 1791148705,
@@ -113,7 +112,6 @@ the fetching of the realtime feed.
 | --- | --- | --- |
 | `version` | string | what runs: the number of a release (`0.2.0`), `edge` for a build of the main branch between two releases, or a number with `+dev` for a checkout or an image built by hand |
 | `commit` | string or null | the commit an image was built from; `null` for a development build |
-| `pageVersion` | string | the version of the page's files: a few characters that change with each of them and with `version` and `commit`. The page is sent with it and compares it with its own, and the service worker keeps the files by it ([architecture](architecture.md#the-page)) |
 | `homepage` | string | where the software comes from, as `package.json` says |
 | `update` | object or null | the latest release, if it is newer than what runs: its `version` and the `url` of its notes. `null` if there is none, none is known, or the check is switched off ([Version and updates](configuration.md#version-and-updates)) |
 | `now` | time | clock of the server |

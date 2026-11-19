@@ -279,10 +279,8 @@ const versions = (publicUrl, main) => [...LANGUAGE_CODES.map((code) => [code, ad
  * @param inline the style sheets and the first script, by their address in
  *   index.html (PAGE_INLINE), to be written into the page in place of the
  *   tags that name them; null leaves the tags
- * @param version of the page's files (pageVersion), for the page to know;
- *   null names none
  */
-export function renderPage(html, { language, main, asked, texts, siteName, areaName, siteTitle = null, siteDescription = null, links = [], preview = null, previewSize = null, publicUrl, listed, styleUrl = null, mapOrigins = [], kinds = null, nearby = [], address = null, inline = null, fileVersions = {}, version = null }) {
+export function renderPage(html, { language, main, asked, texts, siteName, areaName, siteTitle = null, siteDescription = null, links = [], preview = null, previewSize = null, publicUrl, listed, styleUrl = null, mapOrigins = [], kinds = null, nearby = [], address = null, inline = null, fileVersions = {} }) {
   const worded = pageTexts(areaName, texts, siteName);
   const named = Boolean(address?.title);
   const title = named ? addressTitle(address.title, siteName) : siteTitle ?? worded.title;
@@ -306,8 +304,6 @@ export function renderPage(html, { language, main, asked, texts, siteName, areaN
     if (file.endsWith('.css')) put(new RegExp(`<link rel="stylesheet" href="${named}">`), () => `<style>${text}</style>`);
     else put(new RegExp(`<script src="${named}"></script>`), () => `<script>${text}</script>`);
   }
-  // (the version of its files, which the page compares with the server's, see pageVersion; the base, if any, goes before it)
-  if (version) put(/<meta charset="utf-8">\n/, (start) => `${start}  <meta name="netnou-page-version" content="${escapeHtml(version)}">\n`);
   // (at an address, the page's own files are as many steps up as the address is deep)
   if (address) put(/<meta charset="utf-8">\n/, (start) => `${start}  <base href="${'../'.repeat(address.depth)}">\n`);
   put(/<title>[^<]*<\/title>/, () => `<title>${escapeHtml(title)}</title>`);
@@ -413,36 +409,6 @@ export function renderPage(html, { language, main, asked, texts, siteName, areaN
 
   put(/\n<\/head>/, () => `\n${tags.map((tag) => `  ${tag}`).join('\n')}\n</head>`);
   return page;
-}
-
-/** The files the service worker keeps for a start without a connection (SHELL in public/sw.js), by their addresses. */
-export function shellOf(sw) {
-  const list = /const SHELL = \[([^\]]*)\]/.exec(sw);
-  if (!list) throw new Error('sw.js: no list of the files it keeps (SHELL)');
-  return list[1].match(/'[^']+'/g).map((entry) => entry.slice(1, -1));
-}
-
-/**
- * The version of the page's files (#363): a few characters of what they hold,
- * the page and its service worker among them, and of what runs (`build`, of
- * describeBuild). It is in the service worker as it is sent (serviceWorker),
- * so that a browser installs it anew, with a cache of its own, whenever one
- * of the files has changed; in the page (renderPage), so that the page knows
- * it, also where it starts from that cache; and in api/status, which the page
- * compares it with.
- * @param files the contents of the files, by their addresses
- */
-export function pageVersion(build, files) {
-  const hash = crypto.createHash('sha1').update(`${build.version} ${build.commit ?? ''}`);
-  for (const [address, content] of [...files].sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))) hash.update(`\0${address}\0`).update(content);
-  return hash.digest('hex').slice(0, 12);
-}
-
-/** public/sw.js as it is sent: with the version of the page's files (pageVersion) in place of the one it has. */
-export function serviceWorker(sw, version) {
-  const marked = /const VERSION = '[^']*';/;
-  if (!marked.test(sw)) throw new Error('sw.js: no VERSION to write the version into');
-  return sw.replace(marked, () => `const VERSION = '${version}';`);
 }
 
 /**
