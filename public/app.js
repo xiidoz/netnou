@@ -61,12 +61,53 @@ const LATER_FIRST_MS = 1000;
 // not coming, as where the connection hangs without failing (see "a
 // connection lost").
 const ANSWER_MS = 20_000;
+// While the connection fails, how long a question may wait for its answer to
+// begin: one that hangs, as in a tunnel, does not hold up the next try, and an
+// answer that has begun, on a slow connection, has ANSWER_MS (#365).
+const TRY_MS = 8000;
+// While it fails, how long after a try began the next one begins: the first
+// three times, and then each time; each with a part of up to a fifth either
+// way by chance, so that pages do not all ask at once after a restart of the
+// server (#365).
+const RETRY_MS = [2000, 4000, 8000, 10_000];
+// How long the map's question waits for the open details' while the
+// connection is lost: longer than from one of their tries to the next.
+const DETAILS_FIRST_MS = 15_000;
 // How long Back may wait for the answer about an address before the details
 // of the one it left give way to a word that it loads.
 const SLOW_MS = 1_000;
 
-/** A question to the server, which gives up after ANSWER_MS. */
-const askServer = (url) => fetch(url, { signal: AbortSignal.timeout(ANSWER_MS) });
+/**
+ * A question to the server, which gives up after ANSWER_MS; while the
+ * connection fails (failingNow), also where its answer has not begun after
+ * TRY_MS.
+ */
+function askServer(url) {
+  const asking = new AbortController();
+  const giveUp = (ms) => setTimeout(() => asking.abort(new DOMException(`${ms} ms`, 'TimeoutError')), ms);
+  const whole = giveUp(ANSWER_MS);
+  const begun = failingNow() ? giveUp(TRY_MS) : null;
+  const asked = fetch(url, { signal: asking.signal });
+  asked.then(() => clearTimeout(begun), () => {
+    clearTimeout(begun);
+    clearTimeout(whole);
+  });
+  return asked;
+}
+
+/** Whether the connection is known to fail: the map's last question, or the open details', got no answer. */
+function failingNow() {
+  return connectionLost() || Boolean(state.selection?.failing);
+}
+
+/**
+ * How long until the next try where one, begun at `begun`, failed, as the
+ * `tries`-th in a row: RETRY_MS, from when it began, with its part by chance.
+ */
+function retryIn(begun, tries) {
+  const step = RETRY_MS[Math.min(tries, RETRY_MS.length) - 1];
+  return Math.max(0, begun + step * (0.8 + Math.random() * 0.4) - Date.now());
+}
 // How long after the last answer for the open details their delays are shown
 // grey, as the last ones known and not current, in s (see "a connection lost").
 const STALE_S = 120;
@@ -3422,6 +3463,8 @@ const panelBody = $('panel-body');
 // focus or the browser's search can scroll all the same): their head with the way back and its buttons stays in sight.
 panel.addEventListener('scroll', () => { if (panel.scrollTop) panel.scrollTop = 0; }, { passive: true });
 let panelTimer = null;
+// (how many tries in a row the open details' answer has not come: see retryIn)
+let detailTries = 0;
 // (what had the keyboard focus when the details opened: see closePanel)
 let panelOpener = null;
 
@@ -4201,6 +4244,9 @@ async function loadSelection(first = false) {
   const turn = (selection.turn = (selection.turn ?? 0) + 1);
   // (the lines a favourite keeps, where the page shows the answer it was sent with: chosen once their answer comes, see takeAnswer)
   const wanted = selection.linesWanted ?? null;
+  // (when it was asked: while the connection is lost, the map's question waits for theirs, see poll)
+  const begun = (selection.askedAt = Date.now());
+  let answered = false;
   try {
     // (while it is asked, a retry waits for it: one question at a time, a visit counted once)
     const asked = askServer(selectionUrl(selection, first && !selection.counted, first, wanted ?? state.lines, asksLater(selection, wanted ?? state.lines, first)));
@@ -4209,8 +4255,14 @@ async function loadSelection(first = false) {
       if (selection.asking === asked) selection.asking = null;
     });
     const data = res.ok ? await res.json() : null;
+    answered = true;
     await further;
     if (state.selection !== selection || selection.turn !== turn) return; // user moved on meanwhile
+    // (an answer, whatever it says: the connection works, tries count from the start again, and the map's question,
+    // which waited for theirs, follows at once, #365)
+    selection.unanswered = false;
+    detailTries = 0;
+    if (connectionLost()) poll();
     if (data) {
       // (asked with a favourite's lines that are not wanted any more, as its heart was taken away meanwhile: asked again with
       // those chosen, rather than shown as theirs)
@@ -4242,10 +4294,15 @@ async function loadSelection(first = false) {
     }
   } catch (err) {
     console.warn('details not loaded:', err);
-    if (state.selection === selection && selection.turn === turn) disconnected(selection);
+    if (state.selection === selection && selection.turn === turn) {
+      // (no answer at all, as where the connection is lost: theirs is the question that tries it, see detailsFirst)
+      if (!answered) selection.unanswered = true;
+      disconnected(selection);
+    }
   }
-  // (a stop's departures for while the connection is lost soon after its first answer, which came without them)
-  if (state.selection === selection && selection.turn === turn && !document.hidden) panelTimer = setTimeout(loadSelection, selection.laterSoon ? LATER_FIRST_MS : PANEL_REFRESH_MS);
+  // (a stop's departures for while the connection is lost soon after its first answer, which came without them; while
+  // no answer comes at all, sooner, #365)
+  if (state.selection === selection && selection.turn === turn && !document.hidden) panelTimer = setTimeout(loadSelection, selection.failing && selection.unanswered ? retryIn(begun, ++detailTries) : selection.laterSoon ? LATER_FIRST_MS : PANEL_REFRESH_MS);
   delete selection.laterSoon;
 }
 
@@ -4624,8 +4681,14 @@ function showWayBack() {
 // of its notes (notesList), and a screen reader hears it once; the banner of
 // the map says it no more while they are open.
 // What has not loaded yet says so instead of itself, with the way back and a
-// button to try again. The page asks again as it does anyway, every
-// PANEL_REFRESH_MS, and at once when the browser is online again.
+// button to try again. The page asks again at once when the browser is online
+// again; and as on a train, where the connection comes back for seconds
+// between tunnels without the browser noticing, it tries again soon (#365):
+// 2, 4 and 8 s after a try began, then every 10 s (RETRY_MS), each try given
+// TRY_MS for its answer to begin. The open details try first, the smaller
+// question and the one looked at: while no answer comes at all, the map's
+// waits for theirs, and follows any answer of theirs at once, an error too
+// (detailsFirst). With a connection, nothing changes.
 //
 // While it stays away, the delays shown are the last ones known: grey from
 // STALE_S after the last answer, as the note then says, and so for as long as
@@ -6938,6 +7001,8 @@ function endAdding() {
 
 let pollTimer = null;
 let pollSeq = 0;
+// (how many tries in a row the map's answer has not come: see retryIn)
+let mapTries = 0;
 let stationSeq = 0;
 
 // What the server covers and how to show it: the area and its name, the map
@@ -7090,7 +7155,14 @@ async function loadStations() {
 
 async function poll() {
   clearTimeout(pollTimer);
+  // (while the connection is lost and the open details try it, theirs goes first, the smaller question and the one
+  // looked at: the map's follows their answer, which asks it, #365)
+  if (detailsFirst()) {
+    if (!document.hidden) pollTimer = setTimeout(poll, POLL_MS);
+    return;
+  }
   const seq = ++pollSeq;
+  const begun = Date.now();
   let delay = POLL_MS;
   try {
     // (without an area the server cannot say what it covers before it has a timetable)
@@ -7109,7 +7181,11 @@ async function poll() {
       $('status').dataset.state = data.state === 'error' ? 'error' : 'schedule';
       $('status-text').textContent = data.state === 'error' ? t('status.noTimetable') : t('status.loading');
       delay = RETRY_LOADING_MS;
+      mapTries = 0;
+      detailTries = 0;
     } else if (res.ok) {
+      mapTries = 0;
+      detailTries = 0;
       showBanner(null);
       // (open details that showed their delays as current, or not, before this answer, by the clock as it was: anew where that has changed)
       const wasLive = realtimeState() === 'live';
@@ -7190,8 +7266,29 @@ async function poll() {
     $('status-text').textContent = t('status.noConnection');
     // The installed app also starts without a connection – but has nothing to show then.
     if (!navigator.onLine) showBanner(t('banner.offline'), true);
+    // (tried again sooner while it fails, #365: by the open details first, which would try only at their next refresh
+    // otherwise, while the map's question waits for theirs)
+    delay = retryIn(begun, ++mapTries);
+    const open = state.selection;
+    if (open?.failing && !open.left && !open.asking && !document.hidden) {
+      open.unanswered = true;
+      clearTimeout(panelTimer);
+      panelTimer = setTimeout(loadSelection, delay);
+    }
   }
   if (!document.hidden) pollTimer = setTimeout(poll, delay);
+}
+
+/**
+ * Whether the map's question waits for the open details' (#365): while the
+ * connection is lost, where they try it, as their last try got no answer at
+ * all, with a question under way or one not long ago, as they try again
+ * sooner than the map would. An answer of theirs, whatever it says, lets the
+ * map's question go at once.
+ */
+function detailsFirst() {
+  const open = state.selection;
+  return connectionLost() && Boolean(open?.failing && open.unanswered) && !open.left && (Boolean(open.asking) || Date.now() - open.askedAt < DETAILS_FIRST_MS);
 }
 
 // After moving the map: reload at once if the new section is not covered by
@@ -7212,8 +7309,9 @@ map.on('moveend', () => {
 document.addEventListener('visibilitychange', () => {
   if (document.hidden) return;
   startAsking();
-  poll();
+  // (the details first, whose answer the map's question waits for while the connection is lost: see poll)
   loadSelection();
+  poll();
 });
 window.addEventListener('online', poll);
 

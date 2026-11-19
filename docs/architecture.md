@@ -1153,6 +1153,16 @@ otherwise a server would load a file written by older code:
   it is back stands only after the last of what is held (#364). They are held
   with the details (`held.js`), so that a start without a connection has them
   too.
+- **Catching up between tunnels.** On a train the connection comes back for
+  seconds between tunnels, mostly without the browser noticing (#365). While
+  the questions fail, the page tries again 2, 4 and 8 seconds after a try
+  began, then every 10 seconds, each time up to a fifth sooner or later by
+  chance, so that pages do not all ask at once after a restart of the server.
+  A try waits at most 8 seconds for its answer to begin; one that has begun,
+  on a slow connection, may take 20 as always. The open details try first,
+  the smaller question and the one looked at: while no answer comes at all,
+  the map's waits for theirs, and follows any answer of theirs at once, an
+  error too. With a connection the page asks as often as before.
 - **A new version.** A page that stays open runs the version it was loaded
   with: a tab, a phone that brings its tab back without loading it, the
   installed app, a screen on a wall. And what it loads later, such as the
