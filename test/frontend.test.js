@@ -117,6 +117,36 @@ test('the thread the page starts is a script of its own that is precached', () =
   assert.match(worker, /limit = setTimeout\(\(\) => asking\.abort\(\), 120_000\);/);
 });
 
+// The service worker keeps what the map needs to start (sw.js, "the map", #366);
+// where it did not serve the page, as at the first visit, the page lists the
+// files it fetched, once the map has drawn with the server's style.
+test('the page lists the files of other servers it fetched for its service worker, once, when the map has drawn with the server\'s style', () => {
+  const app = withoutComments(read('app.js'));
+  assert.match(app, /if \(area\.styleUrl && !mapStyled\) \{\s*mapStyled = true;\s*map\.on\('idle', sayMapFiles\);\s*\}/);
+  assert.match(app, /navigator\.serviceWorker\.addEventListener\('controllerchange', sayMapFiles\);/);
+  // (and at a start without a connection, the map shows the area as held, with its style, before the server answers; as
+  // it answers, the map stays where it is, its style and credits where the style is the same)
+  assert.match(app, /if \(stored && !state\.areaShown\) showStoredArea\(stored\);/);
+  assert.match(app, /function showStoredArea\(stored\) \{\s*try \{\s*showArea\(stored\.area, null\);\s*mapHeld = true;\s*\} catch \(err\) \{\s*console\.warn\('held area not shown:', err\);/);
+  // (and wherever the server cannot say it: the connection lost before it answered, or no timetable yet)
+  assert.match(app, /const waiting = state\.areaKnown \? null : await loadArea\(\);\s*if \(waiting && !state\.areaShown\) showHeldArea\(\);/);
+  assert.match(app, /if \(!navigator\.onLine\) showBanner\(t\('banner\.offline'\), true\);\s*if \(!state\.areaShown\) showHeldArea\(\);/);
+  // (a part of the map's setup that failed, not one of its tiles: set up anew, whole, as the server answers)
+  assert.match(app, /map\.on\('error', \(event\) => \{\s*if \(!event\.tile\) mapUnset = true;\s*console\.error\(event\.error \?\? event\);/);
+  assert.match(app, /holdArea\(area, state\.clockOffset\);\s*heldClock = state\.clockOffset;\s*showArea\(area, about\);\s*state\.areaKnown = true;/);
+  assert.match(app, /if \(!again\) \{\s*state\.viewAsked = OPENED_AS_DISPLAY && Boolean\(usable\);/);
+  assert.match(app, /function setMapStyle\(area\) \{\s*if \(\(area\.styleUrl \?\? area\.tileUrl\) === mapStyleShown && !mapUnset\) return;\s*if \(mapUnset\) map\.setStyle\(null\);\s*mapUnset = false;\s*mapStyleShown = area\.styleUrl \?\? area\.tileUrl;\s*map\.setStyle\(area\.styleUrl \?\? rasterStyle\(area\.tileUrl\), \{ transformStyle:/);
+  // (and where it failed after the area came, as a style still on its way at a start without a connection: anew at a good
+  // poll, a few times at most, a minute apart)
+  assert.match(app, /if \(mapUnset && mapHeld && areaAnswer && mapRetries < MAP_RETRIES && !\(Date\.now\(\) - mapRetriedAt < MAP_RETRY_MS\)\) \{\s*mapRetries \+= 1;\s*mapRetriedAt = Date\.now\(\);\s*setMapStyle\(areaAnswer\);/);
+  // (the details the page was sent with, on the map as held; and again with the server's area)
+  assert.match(app, /if \(state\.sentOpened && open\?\.unplaced && !open\.left && open\.path === here\(\)\) \{\s*placeSent\(open\);\s*open\.unplaced = true;/);
+  assert.match(app, /if \(!again\) \{\s*map\.addControl\(new AttributionControl\(/);
+  assert.match(app, /map\.on\('moveend', \(\) => \{\s*if \(!state\.areaShown\) return;/);
+  // (to each service worker that serves the page: one that takes over from an older one as well)
+  assert.match(app, /if \(!worker \|\| worker === mapFilesTold \|\| !mapStyled \|\| !map\.loaded\(\)\) return;\s*mapFilesTold = worker;\s*worker\.postMessage\(\{ mapFiles: performance\.getEntriesByType\('resource'\)\.map\(\(entry\) => entry\.name\)\.filter\(\(name\) => !name\.startsWith\(`\$\{location\.origin\}\/`\)\) \}\);/);
+});
+
 // On a train the connection comes back for seconds between tunnels, often
 // without the browser noticing: while it fails, the page tries again soon, the
 // open details first, each try given TRY_MS for its answer to begin (#365).

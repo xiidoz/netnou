@@ -574,6 +574,12 @@ test('the version of the page\'s files changes with each of them and with what r
   const sw = fs.readFileSync(new URL('../public/sw.js', import.meta.url), 'utf8');
   assert.ok(serviceWorker(sw, version).includes(`\nconst VERSION = '${version}';\n`));
   assert.throws(() => serviceWorker('self.addEventListener();', version), /no VERSION/);
+  // (with the style of the map, whose files it keeps, #366: written as a string of JavaScript; none with raster tiles)
+  assert.ok(serviceWorker(sw, version, 'https://tiles.example.org/styles/it\'s.json').includes('\nconst MAP_STYLE = "https://tiles.example.org/styles/it\'s.json";\n'));
+  assert.ok(serviceWorker(sw, version).includes('\nconst MAP_STYLE = null;\n'));
+  // (as a browser writes the address of a request: what the operator typed may be written otherwise)
+  assert.ok(serviceWorker(sw, version, 'HTTPS://Tiles.Example.org:443/styles/day night.json').includes('\nconst MAP_STYLE = "https://tiles.example.org/styles/day%20night.json";\n'));
+  assert.throws(() => serviceWorker("const VERSION = 'x';", version), /no MAP_STYLE/);
   assert.deepEqual(shellOf(sw).slice(0, 3), ['./', 'address.js', 'app.js']);
   assert.ok(renderPage(html, { ...german, version }).includes(`<meta charset="utf-8">\n  <meta name="netnou-page-version" content="${version}">\n`));
   assert.doesNotMatch(renderPage(html, german), /netnou-page-version/);

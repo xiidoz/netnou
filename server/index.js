@@ -577,7 +577,7 @@ function shell() {
     const version = pageVersion(build, new Map(shellNow.addresses.map((address) => [address, contentOf(fileOf(address))])));
     let body = null;
     try {
-      body = Buffer.from(serviceWorker(shellNow.text, version));
+      body = Buffer.from(serviceWorker(shellNow.text, version, config.styleUrl));
     } catch {
       // (as above)
     }

@@ -541,6 +541,11 @@ What to know when choosing one:
   tiles, keep theirs.
 - **A key in the URL** is sent to every visitor's browser, like the style
   itself. Providers let you restrict such a key to your domain.
+- **Without a connection.** The page's service worker keeps the style and
+  the lists of tiles, icons and fonts it names, under the same policy, for a
+  start without a connection. The tiles it leaves to the browser's cache, for
+  as long as the tile server's headers allow: a server whose tiles expire soon
+  gives a map without streets there.
 
 Browsers need WebGL 2 for the map, which all current ones have. A visitor
 without it gets a notice instead of the map.
