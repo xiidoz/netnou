@@ -14,10 +14,20 @@ const SCOPE = 'https://karte.example.org/';
 const START = 3000;
 const LATE = 60_000;
 const source = fs.readFileSync(new URL('../public/sw.js', import.meta.url), 'utf8');
-// (of real time; it does not keep the tests running once they are done)
-const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms).unref());
+/**
+ * What a promise has come to within `ms` of real time: `settled` where it
+ * has, `late` otherwise (the timer goes as soon as it is not needed, so that
+ * none keeps the tests running once they are done).
+ */
+const within = (promise, ms, settled = true, late = false) => new Promise((resolve) => {
+  const timer = setTimeout(() => resolve(late), ms);
+  Promise.resolve(promise).then(() => settled, () => settled).then((value) => {
+    clearTimeout(timer);
+    resolve(value);
+  });
+});
 /** Whether a promise settles within `ms` of real time, without the worker's clock moving. */
-const settles = (promise, ms = 100) => Promise.race([Promise.resolve(promise).then(() => true, () => true), sleep(ms).then(() => false)]);
+const settles = (promise, ms = 100) => within(promise, ms);
 
 /** The page as the server sends it, of a version. */
 const pageOf = (version) => `<!DOCTYPE html>\n<html lang="de">\n<head>\n  <meta charset="utf-8">\n  <meta name="netnou-page-version" content="${version}">\n  <title>Netnou</title>\n</head>\n<body></body>\n</html>\n`;
@@ -151,7 +161,7 @@ function run(version, storage, net, open = new Set()) {
     let answer = null;
     handlers[type]({ ...fields, respondWith: (promise) => { answer = promise; }, waitUntil: (promise) => { waits.push(promise); } });
     // (all it does besides: what waits for its clock, once the test has let the time pass; a few seconds at most, so that a test that has not does not stand still)
-    return { answer, waits, done: () => Promise.race([Promise.all(waits.map((one) => Promise.resolve(one).catch(() => {}))), sleep(5000)]) };
+    return { answer, waits, done: () => within(Promise.all(waits.map((one) => Promise.resolve(one).catch(() => {}))), 5000) };
   };
   return {
     self,
