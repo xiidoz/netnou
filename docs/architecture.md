@@ -1180,6 +1180,20 @@ otherwise a server would load a file written by older code:
   under the list of tiles kept: OpenFreeMap renews its tiles about once a week,
   under a new list. Raster tiles (`NETNOU_TILE_URL`) need no style: there it
   keeps nothing.
+- **The search without a connection.** The search's thread keeps the list
+  it searches (`api/search`) in the browser's Cache Storage, with its tag
+  (ETag), each instance under its own address (#367). It asks for the list
+  with that tag, and an unchanged one is a short "not modified"; a new
+  timetable's list takes the place of the kept one. Where the network fails,
+  the server has no timetable yet, or the network has not brought its list
+  within three seconds, it searches the kept list, at once where the page
+  knows its connection to be lost; the network's takes its place once it is
+  in, however late. Once the connection is back, it asks for the list again
+  beside the search. A kept list that cannot be read is let go of. So towns, stops and lines are found
+  without a connection, also after a restart, and the favourites and the
+  stations nearby show. A stop it found, which opens by its place, opens what
+  the page holds of it at that place. For all of Germany the list is 12.5 MB (3 MB
+  compressed); a phone reads it and makes it ready in about a second.
 - **Catching up between tunnels.** On a train the connection comes back for
   seconds between tunnels, mostly without the browser noticing (#365). While
   the questions fail, the page tries again 2, 4 and 8 seconds after a try

@@ -11,7 +11,7 @@
 import { parseAddress, stopPathAt, wordsOf } from './address.js';
 import { APP_NAME, READMES, chooseLanguage, dayOf, formatHour, formatList, formatNumber, formatTime, formatWeekday, languagePicker, languageToOffer, loadLanguage, pageTexts, sentInAnother, setTimeZone, t, textsOf, translatePage } from './i18n.js';
 import { FAVOURITE_NAME_ZOOM, HEART_MIDDLE, PLACES_ZOOM, RAIL_MODES, heartMark, joiningLines, mergePlaces, namePrecedence, namedAt, placeNames, stopMark, townToShow, townsAlong, withoutStyleStops } from './stops.js';
-import { favouritesFrom, isFavourite, lineFavourite, sameStop, stopFavourite, stopNamedAt, withChoice, withFavourite } from './favourites.js';
+import { favouritesFrom, isFavourite, lineFavourite, metres, sameStop, stopFavourite, stopNamedAt, withChoice, withFavourite } from './favourites.js';
 import { choiceValue, chosenWays, readChoice, shownKeys, toggled } from './choice.js';
 import { HELD, heldArea, heldDetails, heldLast, heldPaths, holdArea, holdDetails, holdLast } from './held.js';
 import { DELAY_MAJOR_S, DELAY_MINOR_S, DELAY_SEVERE_S, MINUTES_MAX, NOTE_CHARS, badge as badgeOf, choiceChip as choiceChipOf, clockOf, delayCell as delayCellOf, delayClass, delayNode as delayNodeOf, delaySum as delaySumOf, unknownDelay as unknownDelayOf, delayFlag, delayText, departureLists, departureRow as departureRowOf, departuresShown, heldDepartures, nextOfWay, departuresSub as departuresSubOf, leavesAt, lineBadge, kindInfo, lineHead, lineLists, listedText, lineSaid as lineSaidOf, lineStops, lineTimetable, leftAlready, GONE_S, whenBack, minutesNode as minutesNodeOf, twoKinds, vehicleSpot, VEHICLE_R, panelHead as panelHeadOf, stopHeading, stopRing, stopSaid, stopSign, stopToday, tallMark, tomorrowAt as tomorrowAtOf, untilText as untilTextOf, vehicleLabel, vehicleName, warningSign as warningSignOf, warns } from './panel.js';
@@ -111,6 +111,9 @@ function retryIn(begun, tries) {
 // How long after the last answer for the open details their delays are shown
 // grey, as the last ones known and not current, in s (see "a connection lost").
 const STALE_S = 120;
+// How far apart a stop of the search's list and one the page holds may be to be the same: their places are the
+// station's, rounded; a stop of the same name 300 m away is another (#299, #367).
+const SAME_PLACE_M = 25;
 const MOVE_SETTLE_MS = 150; // wait this long after the map was moved before reloading
 const FRAME_MS = 80;
 // Between two frames the vehicles move on by the time alone. Mostly that is
@@ -2767,8 +2770,9 @@ function ask(query) {
   const modeNames = Object.fromEntries(DRAW_ORDER.map((mode) => [mode, t(`mode.${mode}`)]));
   // (stops alone where one is added to a board)
   const limits = state.adding ? { towns: 0, lines: 0, stops: SEARCH_LIMIT } : { towns: TOWN_LIMIT, lines: LINE_LIMIT, stops: SEARCH_LIMIT };
-  // (and the favourites, which come first, and are what it lists with nothing typed, with stations near the map below them)
-  finder.postMessage({ turn: ++turn, query, near, view, limits, modeNames, favourites });
+  // (and the favourites, which come first, and are what it lists with nothing typed, with stations near the map below them;
+  // and whether the connection is known to be lost: it searches the list it keeps then, without waiting for the network, #367)
+  finder.postMessage({ turn: ++turn, query, near, view, limits, modeNames, favourites, lost: connectionLost() });
 }
 
 /** The list the thread has is not the server's any more: it loads it again with the next question. */
@@ -4738,8 +4742,12 @@ function disconnected(selection) {
   markLost();
   if (choiceDialog.open && !stopDirections()) renderChoice();
   if (!selection.loaded) {
-    // (one the page holds from earlier in this visit, as a trip opened again: that, as Back has it)
-    const held = selection.id === null ? null : [...visited].find(([, kept]) => kept.selection.type === selection.type && kept.selection.id === selection.id);
+    // (one the page holds from earlier in this visit, as a trip opened again: that, as Back has it; a stop that the search
+    // found, which it opens by its place, by its name at that place: not another of the name nearby, #367)
+    const same = ({ board, selection: kept }) => kept.type === selection.type && (selection.id !== null ? kept.id === selection.id
+      : selection.type === 'station' && Boolean(selection.at?.name) && board === null && kept.data?.name === selection.at.name
+        && metres(kept.data.lat, kept.data.lon, selection.at.lat, selection.at.lon) <= SAME_PLACE_M);
+    const held = [...visited].find(([, kept]) => same(kept));
     if (held) {
       const [path, kept] = held;
       restore({ ...kept, selection: { ...kept.selection, from: selection.from, fromStop: selection.fromStop } }, path);

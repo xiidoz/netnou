@@ -111,10 +111,24 @@ test('the thread the page starts is a script of its own that is precached', () =
   assert.deepEqual(started, ['search-worker.js']);
   for (const file of started) assert.ok(shell.includes(file), `${file} is missing in SHELL of sw.js`);
   // (it fetches the list from where the page has its data)
-  // (a limit until the answer begins, a longer one for the list itself)
+  // (a limit until the answer begins, shorter where a list is kept, #367, and a longer one for the list itself)
   const worker = withoutComments(read('search-worker.js'));
-  assert.match(worker, /limit = setTimeout\(\(\) => asking\.abort\(\), 20_000\);\s*const res = await fetch\('api\/search', \{ signal: asking\.signal \}\);/);
+  assert.match(worker, /let limit = setTimeout\(\(\) => asking\.abort\(\), 20_000\);\s*try \{\s*const res = await fetch\('api\/search', \{ signal: asking\.signal,/);
   assert.match(worker, /limit = setTimeout\(\(\) => asking\.abort\(\), 120_000\);/);
+});
+
+// The search keeps its list for a search without a connection (search-worker.js,
+// #367): the page says whether its connection is known to be lost, and a stop
+// the search found, which opens by its place, opens what the page holds of it.
+test('the search is told whether the connection is known to be lost, and a stop it found opens what the page holds of it without one', () => {
+  const app = withoutComments(read('app.js'));
+  assert.match(app, /finder\.postMessage\(\{ turn: \+\+turn, query, near, view, limits, modeNames, favourites, lost: connectionLost\(\) \}\);/);
+  assert.match(app, /selection\.type === 'station' && Boolean\(selection\.at\?\.name\) && board === null && kept\.data\?\.name === selection\.at\.name\s*&& metres\(kept\.data\.lat, kept\.data\.lon, selection\.at\.lat, selection\.at\.lon\) <= SAME_PLACE_M\);\s*const held = \[\.\.\.visited\]\.find\(\(\[, kept\]\) => same\(kept\)\);/);
+  // (at the same place: a stop of the same name 300 m away is another, #299)
+  assert.match(app, /const SAME_PLACE_M = 25;/);
+  const worker = withoutComments(read('search-worker.js'));
+  assert.match(worker, /const KEPT_WAIT_MS = 3000;/);
+  assert.match(worker, /fetch\('api\/search', \{ signal: asking\.signal, cache: 'no-store', headers: tag \? \{ 'If-None-Match': tag \} : \{\} \}\)/);
 });
 
 // The service worker keeps what the map needs to start (sw.js, "the map", #366);
