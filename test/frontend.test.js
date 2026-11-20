@@ -1032,6 +1032,22 @@ test('without a connection, a vehicle whose known way has ended leaves the map a
   assert.match(app, /const lost = state\.selection\?\.failing && !heldMore \? toDom\(whenBack\(drawing\(\)\)\) : null;/);
 });
 
+test('what a board block says where it has no rows is as large and as dark as rows, and starts where they do (#374)', () => {
+  const app = withoutComments(read('app.js'));
+  const css = read('style.css');
+  // each message that stands in place of the rows is marked: departures that did not load, a stop not in the timetable,
+  // that more come once the connection is back, that there are none
+  assert.match(app, /const alone = \(node\) => \{\s*node\.classList\.add\('alone'\);\s*return node;\s*\};/);
+  assert.match(app, /const notYet = \[\.\.\.gone, alone\(el\('p', \{ class: 'panel-empty', text: t\('panel\.loadFailed'\) \}\)\)\];/);
+  assert.match(app, /if \(!shown\.length\) \{\s*if \(state\.selection\?\.failing && block\.some\(\(entry\) => !entry\.known\?\.gone\)\) return notYet;\s*return block\.every\(\(entry\) => entry\.known\?\.gone\) \? gone\.map\(alone\) : gone;\s*\}/);
+  assert.match(app, /if \(!rows\.length\) return \[\.\.\.gone, alone\(lost \?\? el\('p', \{ class: 'panel-empty', text: t\('departures\.none'\) \}\)\)\];\s*return \[\.\.\.gone, el\('ul', \{ class: `board-rows times-\$\{times\}` \}, rows\), lost\]\.filter\(Boolean\);/);
+  // (in the text's colour and the block's own size, which is its rows'; flush, as is the line below rows, which stays grey)
+  assert.match(css, /\.board-block > \.panel-empty \{ padding-left: 0; padding-right: 0; \}\n\.board-block > \.alone \{ color: var\(--text\); font-size: 1em; text-wrap: balance; \}/);
+  assert.match(css, /\.panel-empty \{ padding: 14px; color: var\(--text-muted\); margin: 0; \}/);
+  // (the details keep their empty lists as they are: the rule is the board's alone)
+  assert.equal((css.replace(/\/\*[\s\S]*?\*\//g, '').match(/\.alone\b/g) ?? []).length, 1);
+});
+
 test('a start without a connection opens what the page holds for its address, saying that it connects; the app at the map opens what was open (#362)', () => {
   const app = withoutComments(read('app.js'));
   const sw = read('sw.js');

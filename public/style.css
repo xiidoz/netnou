@@ -1932,6 +1932,13 @@ body:has(> .map-keys:not([hidden], .gave-way)) :is(#tip, #offer, #map-note) { vi
 .board-blocks.columns .board-block > .board-heading { font-size: 1.3em; }
 .board-block > .sub { flex: none; margin: 0.1em 0 0; color: var(--text-muted); font-size: max(13px, 0.6em); }
 .board-block > .notes { flex: none; margin: 0.4em 0 0; font-size: max(12.5px, 0.55em); }
+/* What a block says beside or in place of departures starts where its rows
+   do, not indented as an empty list of the details is; and where it stands
+   in place of the rows (app.js blockRows, .alone), it is as large and as dark
+   as they are, to be read from where they can be, as on a wall (#374). Below
+   rows it stays grey, a note on them. */
+.board-block > .panel-empty { padding-left: 0; padding-right: 0; }
+.board-block > .alone { color: var(--text); font-size: 1em; text-wrap: balance; }
 .panel .board-head.columns { grid-template-areas: "notes clock"; min-height: 32px; }
 .panel.boardable .board-head.columns { padding-right: calc(0.9em + 122px); }
 :root[data-display="fixed"] .panel.boardable .board-head.columns { padding-right: 0.9em; }
