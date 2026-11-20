@@ -8,7 +8,9 @@ This file is written by
 messages when a release is made. Do not edit it by hand; see
 [Releases](CONTRIBUTING.md#releases).
 
-## [0.29.0](https://github.com/xiidoz/netnou/compare/v0.28.0...v0.29.0) (2026-11-20)
+## [0.29.0](https://github.com/xiidoz/netnou/compare/v0.28.0...v0.29.0) (2026-11-20) – The Offline Release
+
+Riders without a connection keep what they had: started offline, the page shows what was open and streets seen before within seconds, and search finds stops and lines. A stop holds two hours of departures, and the page catches up between tunnels. The note gives the data's time and day, known delays stay grey, and no banner covers the map.
 
 
 ### Features
