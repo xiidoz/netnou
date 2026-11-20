@@ -8,6 +8,26 @@ This file is written by
 messages when a release is made. Do not edit it by hand; see
 [Releases](CONTRIBUTING.md#releases).
 
+## [0.29.0](https://github.com/xiidoz/netnou/compare/v0.28.0...v0.29.0) (2026-11-20)
+
+
+### Features
+
+* **page:** a board block with nothing left says so as large and as dark as its rows ([#380](https://github.com/xiidoz/netnou/issues/380)) ([9814453](https://github.com/xiidoz/netnou/commit/9814453f611ab9fb5270bec1d85f67cc16fe666b)), closes [#374](https://github.com/xiidoz/netnou/issues/374)
+* **page:** a start without a connection shows what was open, as the page held it ([#371](https://github.com/xiidoz/netnou/issues/371)) ([13a54f0](https://github.com/xiidoz/netnou/commit/13a54f0d43b7af3a22724a6fb265aa863aa44bba)), closes [#362](https://github.com/xiidoz/netnou/issues/362)
+* **page:** a stop holds two hours of departures for when the connection is lost ([#376](https://github.com/xiidoz/netnou/issues/376)) ([6664e4a](https://github.com/xiidoz/netnou/commit/6664e4a6d0f2ddf44b4b88adcf64116c43000544)), closes [#364](https://github.com/xiidoz/netnou/issues/364)
+* **page:** details held from the day before say so, and no longer speak of today ([#381](https://github.com/xiidoz/netnou/issues/381)) ([4719aea](https://github.com/xiidoz/netnou/commit/4719aeae0ee099ee40981638c6b63e078ef7c4a1)), closes [#375](https://github.com/xiidoz/netnou/issues/375)
+* **page:** the app starts within seconds on a connection that hangs ([#373](https://github.com/xiidoz/netnou/issues/373)) ([f069ae4](https://github.com/xiidoz/netnou/commit/f069ae4d5dad249306d243af4c51d32c31525c8b))
+* **page:** the base map draws its streets without a connection ([#378](https://github.com/xiidoz/netnou/issues/378)) ([c7f700f](https://github.com/xiidoz/netnou/commit/c7f700f63a3609dd29b334463efda2f89cc60598)), closes [#366](https://github.com/xiidoz/netnou/issues/366)
+* **page:** the page catches up in the short windows between tunnels ([#377](https://github.com/xiidoz/netnou/issues/377)) ([d9fb318](https://github.com/xiidoz/netnou/commit/d9fb318d108afdc30e79aba8443dc8abefa3fe89)), closes [#365](https://github.com/xiidoz/netnou/issues/365)
+* **page:** the search finds stops and lines without a connection ([#379](https://github.com/xiidoz/netnou/issues/379)) ([028afc8](https://github.com/xiidoz/netnou/commit/028afc8b69c717134109e2d4a16721a0895ec6f4)), closes [#367](https://github.com/xiidoz/netnou/issues/367)
+
+
+### Bug Fixes
+
+* **page:** offline, the note gives the time of the data and known delays stay grey ([#368](https://github.com/xiidoz/netnou/issues/368)) ([bdccb47](https://github.com/xiidoz/netnou/commit/bdccb4718a087c096973c24eaf31490ac8c3fed2)), closes [#361](https://github.com/xiidoz/netnou/issues/361)
+* **page:** without a connection the card says so, and no banner covers the map ([#383](https://github.com/xiidoz/netnou/issues/383)) ([a136082](https://github.com/xiidoz/netnou/commit/a136082af0c97611a6dc0df9f220f21bc2a38252)), closes [#382](https://github.com/xiidoz/netnou/issues/382)
+
 ## [0.28.0](https://github.com/xiidoz/netnou/compare/v0.27.3...v0.28.0) (2026-11-16)
 
 
