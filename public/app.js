@@ -6505,11 +6505,21 @@ function boardRow(dep, times, from = null, both = false) {
 function blockRows(block, times, open = false) {
   const gone = block.filter((entry) => entry.known?.gone).map((entry) => el('p', { class: 'board-gone', text: t('board.gone', { stop: nameOf(entry) }) }));
   const shown = block.filter((entry) => entry.known?.departures);
+  // (a message that stands where the block's rows would, being all it has: as large and as dark as its rows would be,
+  // read from where they can be, as on a wall, #374)
+  const alone = (node) => {
+    node.classList.add('alone');
+    return node;
+  };
   // (not yet there: the block waits for them, and without a connection says that they load once it is back; so the open
   // stop's, of other lines than those chosen)
-  const notYet = [...gone, el('p', { class: 'panel-empty', text: t('panel.loadFailed') })];
+  const notYet = [...gone, alone(el('p', { class: 'panel-empty', text: t('panel.loadFailed') }))];
   if (open && otherLinesHeld()) return notYet;
-  if (!shown.length) return state.selection?.failing && block.some((entry) => !entry.known?.gone) ? notYet : gone;
+  if (!shown.length) {
+    if (state.selection?.failing && block.some((entry) => !entry.known?.gone)) return notYet;
+    // (alone only where nothing else comes: beside a stop whose departures are on their way, a note on it, as before)
+    return block.every((entry) => entry.known?.gone) ? gone.map(alone) : gone;
+  }
   const { rows: from } = namesOf(block);
   const merged = shown.length > 1;
   // (where the connection is lost, each stop's with those held for that, which move up as others leave, as many as its
@@ -6536,7 +6546,8 @@ function blockRows(block, times, open = false) {
   // (where the connection is lost, the page does not know there are none: the note in the head says why it is empty;
   // after the rows, that more come once it is back, but only once nothing more is held for that, #364)
   const lost = state.selection?.failing && !heldMore ? toDom(whenBack(drawing())) : null;
-  return [...gone, rows.length ? el('ul', { class: `board-rows times-${times}` }, rows) : lost ? null : el('p', { class: 'panel-empty', text: t('departures.none') }), lost].filter(Boolean);
+  if (!rows.length) return [...gone, alone(lost ?? el('p', { class: 'panel-empty', text: t('departures.none') }))];
+  return [...gone, el('ul', { class: `board-rows times-${times}` }, rows), lost].filter(Boolean);
 }
 
 /** Shows as many departures as each list of the board has room for: whole rows, those that do not fit hidden. */
