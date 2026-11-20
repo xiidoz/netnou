@@ -229,6 +229,12 @@ export default {
   'panel.connecting': 'As of {time} · connecting …',
   // panel.connecting where the delays the details hold are over 2 minutes old: grey, as with panel.offlineStale
   'panel.connectingStale': 'As of {time} · connecting … · delays not current',
+  // {time} of the notes above where what is shown is of another day than today (#375): of yesterday, …
+  'when.yesterday': 'yesterday, {time}',
+  // … of the six days before, {day} its weekday in full ("Monday"), …
+  'when.weekday': '{day}, {time}',
+  // … and earlier, {date} its day and month in words, in the order of the visitor's region ("November 9", "9 November")
+  'when.date': '{date}, {time}',
   'panel.retry': 'Try again',
   'panel.share': 'Share',
   'panel.copied': 'Address copied',

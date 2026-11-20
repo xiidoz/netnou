@@ -469,7 +469,9 @@ export class Facts {
       return { stop: station >= 0 ? tt.stops.name[station] : null, today, week };
     })));
     const { minutes, stops, towns } = this.alongOf(index);
-    return { date, ways, minutes, stops, towns };
+    // (the last trip of the day, by which the day is counted: what the page holds of it holds until then, #375)
+    const span = this.lineSpan(index, date);
+    return { date, last: span ? serviceDayStart(date) + span.last : null, ways, minutes, stops, towns };
   }
 
   /**

@@ -9,7 +9,7 @@
 // lines, stops and operators, and the notes of the feed.
 
 import { parseAddress, stopPathAt, wordsOf } from './address.js';
-import { APP_NAME, READMES, chooseLanguage, dayOf, formatHour, formatList, formatNumber, formatTime, formatWeekday, languagePicker, languageToOffer, loadLanguage, pageTexts, sentInAnother, setTimeZone, t, textsOf, translatePage } from './i18n.js';
+import { APP_NAME, READMES, chooseLanguage, dayOf, dayStartOf, formatHour, formatList, formatNumber, formatTime, formatWeekday, formatWhen, languagePicker, languageToOffer, loadLanguage, pageTexts, sentInAnother, setTimeZone, t, textsOf, translatePage } from './i18n.js';
 import { FAVOURITE_NAME_ZOOM, HEART_MIDDLE, PLACES_ZOOM, RAIL_MODES, heartMark, joiningLines, mergePlaces, namePrecedence, namedAt, placeNames, stopMark, townToShow, townsAlong, withoutStyleStops } from './stops.js';
 import { favouritesFrom, isFavourite, lineFavourite, metres, sameStop, stopFavourite, stopNamedAt, withChoice, withFavourite } from './favourites.js';
 import { choiceValue, chosenWays, readChoice, shownKeys, toggled } from './choice.js';
@@ -57,6 +57,9 @@ const LATER_MS = 5 * 60_000;
 // How soon after a stop's first answer it asks for them: the first comes without, so that a slow connection shows the
 // stop as soon as before.
 const LATER_FIRST_MS = 1000;
+// How far ahead of an answer those reach, in s: the server's LATER_S. Beyond them, while the connection is lost, the page
+// knows nothing of what leaves: "nicht in 24 h" is not said then (#375).
+const LATER_S = 7200;
 // How long an answer of the server may take: one that takes longer counts as
 // not coming, as where the connection hangs without failing (see "a
 // connection lost").
@@ -252,7 +255,7 @@ const touchScreen = matchMedia('(pointer: coarse)');
  * whether the screen is touched, for how high the rows of a line are.
  */
 function drawing() {
-  return { t, time: formatTime, day: dayOf, hour: formatHour, weekday: formatWeekday, list: formatList, now: now(), times: state.times, touch: touchScreen.matches, live: delaysLive(), stale: staleness() === 1, colorBy: state.colorBy, flags: state.flags, moving: true, favourite: favouriteStop, chosen: (stop) => stop.id === state.selection?.fromStop?.id, lost: heldShown(), staleS: STALE_S };
+  return { t, time: formatTime, day: dayOf, dayStart: dayStartOf, hour: formatHour, weekday: formatWeekday, list: formatList, now: now(), times: state.times, touch: touchScreen.matches, live: delaysLive(), stale: staleness() === 1, colorBy: state.colorBy, flags: state.flags, moving: true, favourite: favouriteStop, chosen: (stop) => stop.id === state.selection?.fromStop?.id, lost: heldShown(), laterKnown: !heldShown() || !(now() - shownAt(state.selection) > LATER_S), staleS: STALE_S };
 }
 
 // The icons on the page's own buttons are from Material Design Icons
@@ -4367,11 +4370,16 @@ function takeAnswer(selection, data, first, sentAt = null) {
   if (selection.type === 'station') keepLater(selection, data);
   if (sentAt !== null) selection.answeredAt = Math.min(selection.answeredAt, sentAt);
   // (the lines of the stop as they were last, until the next answer with them: to be shown at once on the switch; with
-  // the time they came, which their view says once the connection is lost, shownAt)
+  // the time they came, which their view says once the connection is lost, shownAt; and the service day they are of,
+  // which what they say of it holds for, lineLists, #375)
   if (selection.type === 'station' && !data.lines && selection.data?.id === data.id && selection.data.lines) {
     data.lines = selection.data.lines;
     data.linesAt = selection.data.linesAt;
-  } else if (data.lines) data.linesAt = selection.answeredAt;
+    data.linesDay = selection.data.linesDay;
+  } else if (data.lines) {
+    data.linesAt = selection.answeredAt;
+    data.linesDay = data.today ? { date: data.today.date, last: data.today.last } : null;
+  }
   selection.data = data;
   // (of the lines chosen when they were asked for: see renderStation)
   selection.linesShown = choiceValue(state.lines);
@@ -4836,7 +4844,8 @@ function showsDelays(selection) {
 function lostSince() {
   const selection = state.selection;
   if (!(selection?.failing || selection?.connecting) || !selection.answeredAt) return null;
-  const time = formatTime(shownAt(selection));
+  // (with the day, where that is another than today: "Stand gestern 13:37", #375)
+  const time = formatWhen(shownAt(selection), now());
   const stale = staleness() === 1 && showsDelays(selection);
   if (selection.connecting) return stale ? t('panel.connectingStale', { time }) : t('panel.connecting', { time });
   return stale ? t('panel.offlineStale', { time }) : t('panel.offline', { time });
@@ -5968,6 +5977,14 @@ function tickTimes() {
     showSelection();
     return;
   }
+  // (a new day since they were drawn, or the end of the service day they say "heute" of: the note names the day, and
+  // what a held answer says of its day goes, #375; drawn without a screen reader hearing the note again)
+  if (state.selection?.data && !state.selection.left && dayTurned(state.selection, now())) {
+    showSelection();
+    // (nor kept where it heard it, as an older note than the one shown: emptied, which is not read out)
+    if ($('panel-said').textContent !== (lostSince() ?? '')) say('');
+    return;
+  }
   // (one that has left goes: the details drawn anew without it, GONE_S; at most every few seconds, should one stay. By
   // its minutes, or where the rows show the time of day, by the departures held: goneSinceDrawn)
   const at = now();
@@ -5989,6 +6006,20 @@ function tickTimes() {
   for (const node of panel.querySelectorAll('.minutes[data-leaves]')) update(node, untilText(Number(node.dataset.leaves), node.dataset.far));
   const clock = panel.querySelector('.board-clock');
   if (clock) update(clock, formatTime(now()));
+}
+
+/**
+ * Whether, since the details were drawn, a day began where the area is, or
+ * the service day of what they show ended after midnight with its last
+ * departure (panel.js dayHolds): either changes what they say of the day.
+ */
+function dayTurned(selection, at) {
+  const drawn = selection.drawnAt ?? at;
+  if (dayOf(drawn) !== dayOf(at)) return true;
+  const { data } = selection;
+  // (a day holds up to its last departure, and is over once that is past: dayHolds)
+  const ends = [data.today?.last, data.linesDay?.last, data.facts?.last].filter((last) => last >= drawn);
+  return ends.some((last) => last < at);
 }
 
 /**

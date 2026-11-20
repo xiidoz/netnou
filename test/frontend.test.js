@@ -7,7 +7,8 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import { test } from 'node:test';
 import vm from 'node:vm';
-import { ATTRIBUTES, LANGUAGES, READMES, dayOf, formatNumber, formatTime, languageToOffer, loadLanguage, pageTexts, pickLanguage, sentInAnother, setTimeZone, t, textsOf } from '../public/i18n.js';
+import { ATTRIBUTES, LANGUAGES, READMES, dayOf, dayStartOf, formatNumber, formatTime, formatWhen, languageToOffer, loadLanguage, pageTexts, pickLanguage, sentInAnother, setTimeZone, t, textsOf } from '../public/i18n.js';
+import { serviceDayStart, setTimeZone as setServerZone } from '../server/lib/time.js';
 import en from '../public/locales/en.js';
 import { tomorrowAt as nextDayAt } from '../public/panel.js';
 import { PAGE_INLINE, PAGE_MODULES } from '../server/lib/page.js';
@@ -763,6 +764,39 @@ test('texts with placeholders and plural forms, numbers and times in the languag
   assert.equal(formatTime(0), '01:00');
 });
 
+test('a time of another day than now is said with its day: yesterday, a weekday of the week before, earlier its date (#375)', async () => {
+  const plain = (text) => text.replace(/\s/g, ' ');
+  const at = (iso) => Date.parse(iso) / 1000;
+  setTimeZone('Europe/Berlin');
+  // (Tuesday, 17 November, 15:37 in Nürnberg)
+  const now = at('2026-11-17T14:37:00Z');
+  await loadLanguage('de', ['de-DE']);
+  assert.equal(formatWhen(at('2026-11-17T12:37:00Z'), now), '13:37');
+  assert.equal(formatWhen(at('2026-11-16T12:37:00Z'), now), 'gestern 13:37');
+  assert.equal(formatWhen(at('2026-11-15T12:37:00Z'), now), 'Sonntag 13:37');
+  assert.equal(formatWhen(at('2026-11-11T12:37:00Z'), now), 'Mittwoch 13:37');
+  assert.equal(formatWhen(at('2026-11-10T12:37:00Z'), now), '10. November 13:37');
+  // by the dates where the area is, not by 24 hours: 23:58 is yesterday's at 00:05, and today's at 23:59
+  assert.equal(formatWhen(at('2026-11-16T22:58:00Z'), at('2026-11-16T23:05:00Z')), 'gestern 23:58');
+  assert.equal(formatWhen(at('2026-11-16T22:58:00Z'), at('2026-11-16T22:59:00Z')), '23:58');
+  // (the night the clocks go back has 25 hours, and is one day)
+  assert.equal(formatWhen(at('2026-10-24T12:37:00Z'), at('2026-10-25T14:37:00Z')), 'gestern 14:37');
+  // a time ahead of the page's clock, where the server's runs ahead: the time alone
+  assert.equal(formatWhen(at('2026-11-17T15:37:00Z'), now), '16:37');
+  // the note as it reads
+  assert.equal(t('panel.offline', { time: formatWhen(at('2026-11-16T12:37:00Z'), now) }), 'Stand gestern 13:37 · keine Verbindung');
+  // in English, in the visitor's regional variant
+  await loadLanguage('en', ['en-US']);
+  assert.equal(plain(formatWhen(at('2026-11-16T12:37:00Z'), now)), 'yesterday, 1:37 PM');
+  assert.equal(plain(formatWhen(at('2026-11-15T12:37:00Z'), now)), 'Sunday, 1:37 PM');
+  assert.equal(plain(formatWhen(at('2026-11-10T12:37:00Z'), now)), 'November 10, 1:37 PM');
+  await loadLanguage('en', ['de', 'en-GB']);
+  assert.equal(formatWhen(at('2026-11-10T12:37:00Z'), now), '10 November, 13:37');
+  // the start of a service day as the server counts it, also on the days the clocks change (a line's hours, panel.js)
+  setServerZone('Europe/Berlin');
+  for (const date of ['20261104', '20260329', '20261025', '20261026']) assert.equal(dayStartOf(date), serviceDayStart(date), date);
+});
+
 // The line "tomorrow" in a list of departures, where tomorrowAt in panel.js
 // puts it. The list is in the order they leave:
 // after midnight a train of the day before that leaves late is among those
@@ -986,11 +1020,12 @@ test('long without an answer, the details show their delays grey for as long as 
   assert.match(app, /let shown = data;/);
   assert.doesNotMatch(app, /SCHEDULE_S|byTimetable|offlineSchedule|heardAt/);
   // the note gives the time of what the details show, true whether or not the page saw the connection go: their own last
-  // answer, or for "Alle Linien" kept from an earlier one, that one's; that the delays are not current only where it shows one
-  assert.match(app, /const time = formatTime\(shownAt\(selection\)\);/);
+  // answer, or for "Alle Linien" kept from an earlier one, that one's, with its day where that is another than today (#375);
+  // that the delays are not current only where it shows one
+  assert.match(app, /const time = formatWhen\(shownAt\(selection\), now\(\)\);/);
   assert.match(app, /const stale = staleness\(\) === 1 && showsDelays\(selection\);\s*if \(selection\.connecting\) return stale \? t\('panel\.connectingStale', \{ time \}\) : t\('panel\.connecting', \{ time \}\);\s*return stale \? t\('panel\.offlineStale', \{ time \}\) : t\('panel\.offline', \{ time \}\);/);
   assert.match(app, /return linesAt \? Math\.min\(selection\.answeredAt, linesAt\) : selection\.answeredAt;/);
-  assert.match(app, /data\.linesAt = selection\.data\.linesAt;\s*\} else if \(data\.lines\) data\.linesAt = selection\.answeredAt;/);
+  assert.match(app, /data\.linesAt = selection\.data\.linesAt;\s*data\.linesDay = selection\.data\.linesDay;\s*\} else if \(data\.lines\) \{\s*data\.linesAt = selection\.answeredAt;\s*data\.linesDay = data\.today \? \{ date: data\.today\.date, last: data\.today\.last \} : null;\s*\}/);
   // the delays held are grey wherever they are drawn: a line's vehicles and the map's, flags and colours, and a vehicle's
   // name says none then; a departure without one keeps its question mark, as at the last answer
   assert.match(app, /colors\.delay\[delaysHeld \? 'none' : delayClass\(v\.delay\)\]/);
@@ -1028,6 +1063,14 @@ test('without a connection, a vehicle whose known way has ended leaves the map a
   assert.match(app, /const beyond = !state\.online && time > v\.knots\[v\.knots\.length - 3\];\s*const target = beyond \? openPlace\(v\.id, time\) : positionAt\(v\.knots, time\);\s*if \(!target\) continue;/);
   assert.match(app, /const ended = node\.dataset\.track !== undefined && at > track\[track\.length - 3\];\s*if \(ended && node === document\.activeElement\) panel\.focus\(\{ preventScroll: true \}\);\s*node\.hidden = ended;/);
   assert.match(app, /\} else if \(selection\.type === 'line'\) \{/);
+  // drawn anew when a day begins, or the service day of what is shown ends (#375); the screen reader's line not left with an
+  // older note than the one shown, emptied, which is not read out
+  assert.match(app, /dayTurned\(state\.selection, now\(\)\)\) \{\s*showSelection\(\);\s*if \(\$\('panel-said'\)\.textContent !== \(lostSince\(\) \?\? ''\)\) say\(''\);\s*return;\s*\}/);
+  assert.match(app, /function dayTurned\(selection, at\) \{\s*const drawn = selection\.drawnAt \?\? at;\s*if \(dayOf\(drawn\) !== dayOf\(at\)\) return true;/);
+  assert.match(app, /const ends = \[data\.today\?\.last, data\.linesDay\?\.last, data\.facts\?\.last\]\.filter\(\(last\) => last >= drawn\);\s*return ends\.some\(\(last\) => last < at\);/);
+  assert.match(app, /day: dayOf, dayStart: dayStartOf,/);
+  // ("nicht in 24 h" only as far as the departures held reach, the server's two hours)
+  assert.match(app, /const LATER_S = 7200;/);
   // a board says it too, after its rows or alone
   assert.match(app, /const lost = state\.selection\?\.failing && !heldMore \? toDom\(whenBack\(drawing\(\)\)\) : null;/);
 });
@@ -1071,7 +1114,7 @@ test('a start without a connection opens what the page holds for its address, sa
   assert.match(app, /const own = held\.selection\.path \?\? path;\s*if \(own !== path\) stepHeld = true;\s*restore\(held, own, \.\.\.more\);/);
   // (drawn as held, as where the connection is lost, while it connects: only the note tells them apart, its dot grey)
   assert.match(app, /return Boolean\(selection\?\.failing \|\| selection\?\.connecting\);/);
-  assert.match(app, /lost: heldShown\(\), staleS: STALE_S \};/);
+  assert.match(app, /lost: heldShown\(\), laterKnown: !heldShown\(\) \|\| !\(now\(\) - shownAt\(state\.selection\) > LATER_S\), staleS: STALE_S \};/);
   assert.match(read('style.css'), /\.panel-head \.notes \.connection\.connecting \.dot \{ background: var\(--delay-none\); \}/);
   // (an error answer ends the waiting: an address gone says so)
   assert.match(app, /\} else if \(heldShown\(selection\)\) \{[^]*?\}\s*disconnected\(selection\);/);
