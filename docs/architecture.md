@@ -1170,6 +1170,14 @@ otherwise a server would load a file written by older code:
   is said only as far as the two hours held reach. The details are drawn anew
   as a day begins and as the held one ends, without a screen reader hearing the
   note again; the line it heard is emptied where it says an older note (#375).
+- **Saying that the connection is lost.** The card's line says it, "Keine
+  Verbindung zum Server", which holds whether the internet or the server is
+  away, as dark as the text while it does; nothing covers the map, which goes
+  on with what it has (#382). A screen reader hears the line once as the
+  connection goes (`#status-said`), where no details are open, which say it
+  themselves, and not again as they close. An empty map, with details or
+  without, says that its vehicles load once the connection is back, where any
+  kind is shown (#353).
 - **The map without a connection.** The service worker keeps what the map
   needs to start: its style (`NETNOU_MAP_STYLE_URL`, which the server writes
   into `sw.js`), and the lists of tiles, the icons and the fonts that the style

@@ -56,7 +56,6 @@ export default {
   'loading.routes': 'Streckenverläufe werden berechnet …',
   'loading.timetable': 'Fahrplandaten werden geladen …',
   'loading.error': 'Fahrplandaten konnten nicht geladen werden.',
-  'banner.offline': 'Keine Internetverbindung – die Live-Karte braucht eine Verbindung.',
 
   'locate.denied': 'Diese Seite darf den Standort nicht abfragen. Das lässt sich in den Einstellungen des Browsers oder des Geräts ändern.',
   'locate.failed': 'Der Standort konnte nicht ermittelt werden.',

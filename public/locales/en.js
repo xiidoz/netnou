@@ -83,7 +83,6 @@ export default {
   'loading.routes': 'The server is working out the routes of the lines …',
   'loading.timetable': 'The timetable data is being loaded …',
   'loading.error': 'The timetable data could not be loaded.',
-  'banner.offline': 'No internet connection – the live map needs one.',
 
   // Why the visitor's location is not shown after all; these go away by themselves.
   'locate.denied': 'This page may not see your location. The settings of the browser or of the device can change that.',
