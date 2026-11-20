@@ -196,6 +196,9 @@
   <p id="map-keys" hidden data-i18n="map.keys">Arrow keys move the map, + and − zoom, Enter opens what is under the crosshair.</p>
   <!-- What is under its crosshair, said when it has rested there for a moment (app.js, "the crosshair"). -->
   <p class="spoken" id="map-said" role="status"></p>
+  <!-- The card's line as the connection goes, for a screen reader: once (app.js, poll), and outside the card, which hides
+       what it holds where it is folded. -->
+  <p class="spoken" id="status-said" role="status"></p>
 
   <!-- How the page comes by what it shows, for whoever asks. A dialog over the
        page: in the middle of a wide screen, a sheet from the bottom on a
@@ -275,7 +278,7 @@
   <!-- The one tip, once per browser, on landing at the address of a stop: that
        a departure leads to its vehicle (#226, "the one tip" in app.js). -->
   <p class="tip" id="tip" hidden role="status"></p>
-  <!-- That the vehicles load once the connection is back: on the map without a connection, while details are open (app.js, mapNote). -->
+  <!-- That the vehicles load once the connection is back: on the map without a connection, once none is left on it (app.js, mapNote). -->
   <p class="tip map-note" id="map-note" hidden></p>
 
   <noscript><p class="banner">The live map needs JavaScript. <span lang="de">Die Live-Karte benötigt JavaScript.</span></p></noscript>

@@ -349,6 +349,7 @@ const state = {
   saidOutage: false,
   online: false, // last poll delivered vehicles
   polled: false, // the map's questions have had an answer or have failed: before that, a connection is not known to be lost (connectionLost)
+  lost: false, // the map's last question failed: the connection is lost, not a server that loads its timetable (#382)
   sentOpened: false, // the details of the address were opened with the answer the page was sent with, the map not yet put on them (takeSent)
   areaKnown: false, // api/area has answered: the map shows the area
   areaShown: false, // the map shows the area: as api/area answered, or as the page held it at a start without a connection (#366)
@@ -3117,8 +3118,7 @@ function startAsking() {
 
 function renderBanner() {
   const banner = $('banner');
-  // (that the connection is lost, the details say themselves while they are open, under their name: see "a connection lost")
-  const text = state.note ?? (state.bannerOffline && !panel.hidden ? null : state.banner) ?? '';
+  const text = state.note ?? state.banner ?? '';
   // It is an alert: written only when it changes, so that it is read out once.
   if (banner.textContent !== text) banner.textContent = text;
   banner.hidden = !text;
@@ -3126,11 +3126,13 @@ function renderBanner() {
 
 /**
  * What the visitor has to know for as long as it is so; null takes it away.
- * @param offline whether it says that the connection is lost, which open details say themselves
+ * Not that the connection is lost: the card says that, and the map goes on
+ * with what it has (#382).
+ * @param ofServer whether it says what the server said of its timetable, which a lost connection takes away
  */
-function showBanner(message, offline = false) {
+function showBanner(message, ofServer = false) {
   state.banner = message;
-  state.bannerOffline = Boolean(message) && offline;
+  state.bannerOfServer = Boolean(message) && ofServer;
   renderBanner();
 }
 
@@ -3170,7 +3172,8 @@ let tipTimer = null;
 let tipWaiting = false; // offered before the map had its buttons, and given once they are there
 
 function offerTip() {
-  if (ASKED || state.display || state.board !== null || state.adding || state.banner || state.note || OFFERING) return;
+  // (not while the connection is lost: it says that the map shows the vehicle, #382; at a later landing at a stop)
+  if (ASKED || state.display || state.board !== null || state.adding || state.banner || state.note || OFFERING || connectionLost()) return;
   if (aboutDialog.open || notesDialog.open || choiceDialog.open || settingsButton.getAttribute('aria-expanded') === 'true') return;
   if (loadSetting('tipped', false) === true) return;
   // (not before the map has its buttons: it goes beside them, see placeBubble; a page sent with its stop is drawn before)
@@ -3240,10 +3243,10 @@ function besideMapButtons(bubble, edge = Infinity) {
 }
 
 // The map without a connection: its vehicles leave it as their known ways
-// end (draw). Where the details are open, which hold the banner back and
-// say in their head that the connection is lost, a quiet line on the map
-// says that they load once it is back, once none is left there but the open
-// trip's own.
+// end (draw). The card says that the connection is lost, and open details in
+// their head; nothing covers the map (#382). Once none is left there but the
+// open trip's own, a quiet line on the map says that they load once it is
+// back, with details open or without.
 // One bubble at a time: not while the tip or the offer of a language is up.
 const mapNoteNode = $('map-note');
 let mapNoteText = null;
@@ -3251,9 +3254,12 @@ let mapNoteWatched = false;
 
 /** Shows the line on the map, or hides it: after each frame, with how many vehicles are still on it (draw). */
 function mapNote(left, selection) {
-  // (only where the head of the details says that the connection is lost: not while the page waits for its first
-  // answers, nor once an answer has come back)
-  const lost = connectionLost() && Boolean(selection?.failing) && !panel.hidden && state.board === null && !state.display && tip.hidden && offer.hidden;
+  // (only where the connection is lost: not while the page waits for its first answers, nor while the server loads its
+  // timetable, nor once an answer has come back; on the map alone, or where the head of the details says it, #382. Of
+  // the kinds shown, and not where none is, as it would say that vehicles come: by the chips the card has, as the kinds
+  // of none are not on the map; an open line's vehicles, which show whatever is chosen, are its own)
+  const kinds = () => selection?.type === 'line' || [...chipCounts].some(([mode, node]) => state.enabled.has(mode) && !node.parentElement.hidden);
+  const lost = state.lost && (panel.hidden || Boolean(selection?.failing)) && state.board === null && !state.display && tip.hidden && offer.hidden && kinds();
   const text = lost && (left.all === 0 || (selection?.type === 'trip' && left.all === left.open)) ? t('map.vehiclesLoad') : null;
   if (text === mapNoteText) return;
   mapNoteText = text;
@@ -4701,8 +4707,9 @@ function showWayBack() {
 // says how old what they show is, "Stand 13:37": the time of their own last
 // answer, which holds however the connection was lost, while the page looked
 // or while it was in the background and asked nothing (#361). It is the first
-// of its notes (notesList), and a screen reader hears it once; the banner of
-// the map says it no more while they are open.
+// of its notes (notesList), and a screen reader hears it once; the card's
+// line, which says it for the map, is not read out while they are open
+// (#status-said, #382).
 // What has not loaded yet says so instead of itself, with the way back and a
 // button to try again. The page asks again at once when the browser is online
 // again; and as on a train, where the connection comes back for seconds
@@ -7322,7 +7329,10 @@ async function poll() {
       // for operators; visitors get a text chosen by the state and step.
       state.online = false;
       state.polled = true;
-      showBanner(loadingText(data));
+      // (a connection, to a server that has no timetable yet: not lost; what was said of a loss, emptied unread)
+      state.lost = false;
+      $('status-said').textContent = '';
+      showBanner(loadingText(data), true);
       $('status').dataset.state = data.state === 'error' ? 'error' : 'schedule';
       $('status-text').textContent = data.state === 'error' ? t('status.noTimetable') : t('status.loading');
       delay = RETRY_LOADING_MS;
@@ -7332,6 +7342,9 @@ async function poll() {
       mapTries = 0;
       detailTries = 0;
       showBanner(null);
+      // (emptied, which is not read out: said again only as the connection goes again)
+      state.lost = false;
+      $('status-said').textContent = '';
       // (open details that showed their delays as current, or not, before this answer, by the clock as it was: anew where that has changed)
       const wasLive = realtimeState() === 'live';
       const offset = data.now - Date.now() / 1000;
@@ -7412,12 +7425,17 @@ async function poll() {
     console.warn('poll failed:', err);
     // (open details say it at once, as the card does, not after a question of their own that may hang: see "a connection lost")
     if (state.online && state.selection?.loaded && !panel.hidden && !state.selection.failing && !state.selection.left) disconnected(state.selection);
+    const went = !state.lost;
+    state.lost = true;
     state.online = false;
     state.polled = true;
     $('status').dataset.state = 'error';
     $('status-text').textContent = t('status.noConnection');
-    // The installed app also starts without a connection – but has nothing to show then.
-    if (!navigator.onLine) showBanner(t('banner.offline'), true);
+    // (the card says it, and the map goes on with what it has, not covered by a banner that says it too, #382; a screen
+    // reader hears it once as it goes, politely: not where open details say it themselves, nor again when they close)
+    if (went && (panel.hidden || !state.selection)) $('status-said').textContent = t('status.noConnection');
+    // (what the server said as it loaded its timetable is not known to hold any more: the card says what does)
+    if (state.bannerOfServer) showBanner(null);
     // (no area yet: the map at the area as held meanwhile, #366)
     if (!state.areaShown) showHeldArea();
     // (tried again sooner while it fails, #365: by the open details first, which would try only at their next refresh

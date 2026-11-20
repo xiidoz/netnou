@@ -145,7 +145,7 @@ test('the page lists the files of other servers it fetched for its service worke
   assert.match(app, /function showStoredArea\(stored\) \{\s*try \{\s*showArea\(stored\.area, null\);\s*mapHeld = true;\s*\} catch \(err\) \{\s*console\.warn\('held area not shown:', err\);/);
   // (and wherever the server cannot say it: the connection lost before it answered, or no timetable yet)
   assert.match(app, /const waiting = state\.areaKnown \? null : await loadArea\(\);\s*if \(waiting && !state\.areaShown\) showHeldArea\(\);/);
-  assert.match(app, /if \(!navigator\.onLine\) showBanner\(t\('banner\.offline'\), true\);\s*if \(!state\.areaShown\) showHeldArea\(\);/);
+  assert.match(app, /if \(state\.bannerOfServer\) showBanner\(null\);\s*if \(!state\.areaShown\) showHeldArea\(\);/);
   // (a part of the map's setup that failed, not one of its tiles: set up anew, whole, as the server answers)
   assert.match(app, /map\.on\('error', \(event\) => \{\s*if \(!event\.tile\) mapUnset = true;\s*console\.error\(event\.error \?\? event\);/);
   assert.match(app, /holdArea\(area, state\.clockOffset\);\s*heldClock = state\.clockOffset;\s*showArea\(area, about\);\s*state\.areaKnown = true;/);
@@ -837,9 +837,36 @@ test('where the connection is lost, the details say how old they are, and what d
   // the way back from what did not load is not the history's: the address never went there
   // (not from details Back has left already, while the address it went to opens)
   assert.match(app, /if \(state\.selection\?\.left\) return;\s*(\/\/[^\n]*\n\s*)*if \(event\.detail === 0 && \(panel\.contains\(document\.activeElement\) \|\| document\.activeElement === document\.body\)\) focusBack = openedBy\(state\.selection\);\s*if \(state\.selection\?\.loaded\) history\.back\(\);\s*else backFromFailed\(\);/);
-  // tried again at once when the browser is online again; the banner of the map does not say it over open details
+  // tried again at once when the browser is online again
   assert.match(app, /addEventListener\('online', \(\) => \{/);
-  assert.match(app, /state\.note \?\? \(state\.bannerOffline && !panel\.hidden \? null : state\.banner\) \?\? ''/);
+});
+
+test('without a connection the card says it, and the map goes on with what it has, not covered by a banner (#382)', () => {
+  const app = withoutComments(read('app.js'));
+  const css = read('style.css');
+  // no banner says it: neither its text nor a way to show it so is left
+  assert.doesNotMatch(app, /banner\.offline|bannerOffline/);
+  for (const language of ['de', 'en']) assert.doesNotMatch(read(`locales/${language}.js`), /'banner\.offline'/);
+  assert.match(app, /const text = state\.note \?\? state\.banner \?\? '';/);
+  // the card's line, as dark as the text; read out once as the connection goes, where open details do not say it
+  // themselves, and emptied as it comes back, which is not read out
+  assert.match(css, /\.status\[data-state="error"\] \{ color: var\(--text\); \}/);
+  // (outside the card, which hides what it holds where it is folded)
+  assert.match(read('index.html'), /<p class="spoken" id="map-said" role="status"><\/p>\s*<!--[^]*?-->\s*<p class="spoken" id="status-said" role="status"><\/p>/);
+  assert.match(app, /const went = !state\.lost;\s*state\.lost = true;[^]*?if \(went && \(panel\.hidden \|\| !state\.selection\)\) \$\('status-said'\)\.textContent = t\('status\.noConnection'\);/);
+  // (a server that loads its timetable is a connection: not lost, and what was said of a loss emptied unread, as on an answer)
+  assert.match(app, /state\.lost = false;\s*\$\('status-said'\)\.textContent = '';\s*showBanner\(loadingText\(data\), true\);/);
+  // (and what the server said as it loaded its timetable goes as the connection does; that the map cannot be drawn stays)
+  assert.match(app, /if \(state\.bannerOfServer\) showBanner\(null\);/);
+  assert.match(app, /state\.bannerOfServer = Boolean\(message\) && ofServer;/);
+  assert.match(app, /showBanner\(null\);\s*(\/\/[^\n]*\n\s*)*state\.lost = false;\s*\$\('status-said'\)\.textContent = '';/);
+  // an empty map says that its vehicles come once the connection is back, also with nothing open; of the kinds shown,
+  // and not where none is
+  // (where the connection is lost, not while the server loads its timetable; the kinds by the chips the card shows; an
+  // open line's own vehicles whatever is chosen)
+  assert.match(app, /const kinds = \(\) => selection\?\.type === 'line' \|\| \[\.\.\.chipCounts\]\.some\(\(\[mode, node\]\) => state\.enabled\.has\(mode\) && !node\.parentElement\.hidden\);\s*const lost = state\.lost && \(panel\.hidden \|\| Boolean\(selection\?\.failing\)\) && state\.board === null && !state\.display && tip\.hidden && offer\.hidden && kinds\(\);/);
+  // the one tip waits for a later landing at a stop
+  assert.match(app, /OFFERING \|\| connectionLost\(\)\) return;/);
 });
 
 test('what gets the keyboard focus in the details is in sight: clear of the timetable heading, which waits at the foot only where there is room, in a sheet risen as far as it needs, never on credits under it', () => {

@@ -405,6 +405,8 @@ button { font: inherit; color: inherit; }
   animation: pulse 2s ease-out infinite;
 }
 .status[data-state="error"] .dot { background: var(--delay-severe); }
+/* (the line as dark as the text then, as the note of the details that say it: what the map shows is not current, #382) */
+.status[data-state="error"] { color: var(--text); }
 /* No realtime data at all: the line is a warning that is not overlooked, with
    a sign in place of the dot. (The ground is the orange of the dark theme's signs, thinned.) */
 .status .warn { display: none; color: var(--delay-major-text); }
@@ -1232,8 +1234,8 @@ li:last-child > .row.stop .rail::before { bottom: 50%; }
 }
 
 /* That the vehicles load once the connection is back (mapNote in app.js):
-   placed as the tip, but quiet, in the card's colours, as it says what the
-   head of the details says already; a finger goes through it to the map. */
+   placed as the tip, but quiet, in the card's colours, as the card says that
+   the connection is lost already; a finger goes through it to the map. */
 .tip.map-note { z-index: 999; border: 1px solid var(--border); background: var(--bg); color: var(--text); pointer-events: none; }
 
 /* The keys of the map, while it has the keyboard (app.js, "the crosshair"): placed as the tip, in the quiet look of the
