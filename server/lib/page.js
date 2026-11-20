@@ -23,6 +23,7 @@ import path from 'node:path';
 import { LANGUAGES, pageTexts, pickLanguage, t } from '../../public/i18n.js';
 import * as shapes from '../../public/vendor/material-design-icons/icons.js';
 import { choiceChip, departureLists, departuresSub, h, lineHead, lineLists, lineStops, lineTimetable, panelHead, stopHeading, stopToday, toHtml } from '../../public/panel.js';
+import { serviceDayStart } from './time.js';
 
 export const LANGUAGE_CODES = LANGUAGES.map(([code]) => code);
 // The picture of a link's preview: the icon, unless the operator has one of
@@ -488,7 +489,7 @@ export function panelHtml(kind, data, { language, texts, timeZone, now, fixed = 
   const hour = new Intl.DateTimeFormat(language, { hour: 'numeric', timeZone });
   const weekday = new Intl.DateTimeFormat(language, { weekday: 'short', timeZone });
   const list = new Intl.ListFormat(language, { type: 'conjunction' });
-  const drawing = { t: (key, params) => t(key, params, texts), time: (epoch) => time.format(epoch * 1000), day: (epoch) => day.format(epoch * 1000), hour: (epoch) => hour.format(epoch * 1000), weekday: (epoch) => weekday.format(epoch * 1000), list: (words) => list.format(words), now, times: 'both' };
+  const drawing = { t: (key, params) => t(key, params, texts), time: (epoch) => time.format(epoch * 1000), day: (epoch) => day.format(epoch * 1000), hour: (epoch) => hour.format(epoch * 1000), weekday: (epoch) => weekday.format(epoch * 1000), list: (words) => list.format(words), dayStart: serviceDayStart, now, times: 'both' };
   // (a stop's delays come in where one of its departures has one: the others then have the map's question mark)
   const live = kind === 'stop' && data.departures.some((d) => d.delay !== null && d.delay !== undefined);
   const [head, body] = kind === 'stop'

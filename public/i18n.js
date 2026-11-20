@@ -53,6 +53,9 @@ let timeFormat;
 let dayFormat;
 let hourFormat;
 let weekdayFormat;
+let fullWeekdayFormat;
+let dateFormat;
+let partsFormat;
 let listFormat;
 
 function setFormats() {
@@ -62,6 +65,10 @@ function setFormats() {
   dayFormat = new Intl.DateTimeFormat('en-CA', { year: 'numeric', month: '2-digit', day: '2-digit', timeZone });
   hourFormat = new Intl.DateTimeFormat(locale, { hour: 'numeric', timeZone });
   weekdayFormat = new Intl.DateTimeFormat(locale, { weekday: 'short', timeZone });
+  fullWeekdayFormat = new Intl.DateTimeFormat(locale, { weekday: 'long', timeZone });
+  // (the day and the month in words, as the server writes a line's dates; the order of the visitor's region, as the time)
+  dateFormat = new Intl.DateTimeFormat(locale, { day: 'numeric', month: 'long', timeZone });
+  partsFormat = new Intl.DateTimeFormat('en-US', { timeZone, hourCycle: 'h23', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' });
   listFormat = new Intl.ListFormat(locale, { type: 'conjunction' });
 }
 setFormats();
@@ -201,6 +208,36 @@ export const formatHour = (epoch) => hourFormat.format(epoch * 1000);
 
 /** The day of the week of a point in time given in epoch seconds, short: "Mo", "Mon". */
 export const formatWeekday = (epoch) => weekdayFormat.format(epoch * 1000);
+
+/**
+ * The start of a service day where the area is, as the timetable counts its
+ * times: noon less 12 hours, in epoch seconds; as server/lib/time.js has it.
+ * @param date yyyymmdd
+ */
+export function dayStartOf(date) {
+  const noon = Date.UTC(+date.slice(0, 4), +date.slice(4, 6) - 1, +date.slice(6, 8), 12);
+  const p = Object.fromEntries(partsFormat.formatToParts(noon).map(({ type, value }) => [type, +value]));
+  const offset = Date.UTC(p.year, p.month - 1, p.day, p.hour, p.minute, p.second) - noon;
+  return (noon - offset) / 1000 - 12 * 3600;
+}
+
+/**
+ * When a moment was, as a note of how old what is shown is says it (#375):
+ * its time of day; where it was on another day than `now` (where the area is,
+ * as the times shown), with that day before it: "gestern 13:37", in the week
+ * before the weekday, "Montag 13:37", earlier the date, "9. November 13:37".
+ * @param epoch, now in epoch seconds
+ */
+export function formatWhen(epoch, now) {
+  const time = formatTime(epoch);
+  // (whole days between the two dates, which a day of 23 or 25 hours, as where the clocks change, does not upset)
+  const date = (at) => Date.parse(`${dayOf(at)}T00:00:00Z`);
+  const days = Math.round((date(now) - date(epoch)) / 86_400_000);
+  if (!(days >= 1)) return time;
+  if (days === 1) return t('when.yesterday', { time });
+  if (days < 7) return t('when.weekday', { day: fullWeekdayFormat.format(epoch * 1000), time });
+  return t('when.date', { date: dateFormat.format(epoch * 1000), time });
+}
 
 /** Words as a list: "a, b und c". */
 export const formatList = (words) => listFormat.format(words);

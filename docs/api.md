@@ -579,6 +579,7 @@ minute (#289), as its page says it below its operator and after its stops.
 | Field | Type | Meaning |
 | --- | --- | --- |
 | `date` | string | the service day it is, `yyyymmdd`: yesterday's while its last trip after midnight is still to leave |
+| `last` | time or null | that last trip of the service day `date`, where it sets out: until it has left, `date` is still that day after midnight (#375); `null` where the line does not run that day |
 | `ways` | array | one for each way the page switches between, in the order of `ways` above |
 | `ways[].stop` | string or null | the stop all figures of the way are of: the one most of its trips of the coming 7 days leave from. A first or last trip is when it leaves there |
 | `ways[].today` | object or null | of the service day `date`: the first and last trip and how often it runs hour by hour; `null` where it does not run that way that day |
@@ -735,7 +736,8 @@ none is known; the page shows it below the name where the name does not say
 it (#254). `path` is the address of the station's page, as
 [`/api/address`](#get-apiaddress) describes it (#288).
 `today` is what leaves the station on the service day it is (#289), as the
-line below its name on the page says it: `first` and `last`, the times of
+line below its name on the page says it: `date`, that day (yyyymmdd), which
+the page lets go of in what it holds once it is over (#375); `first` and `last`, the times of
 its first and last departure, `null` where nothing leaves it that day;
 `lines`, how many lines leave it that day, and `all`, how many on any day
 of the timetable; `twoKinds`, the names it has that day in more than one

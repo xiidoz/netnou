@@ -325,7 +325,8 @@ test('/api/line: the vehicles of one line that are under way, and its stops with
   assert.deepEqual([json.name, json.mode, json.agency], ['U1', 'subway', 'Testbetrieb']);
   // what the timetable says of it beyond the minute (#289, lib/facts.js): its one trip a day, which starts at midnight;
   // the coming week as far as the timetable goes (today and three more days) by kind of day, each its one trip; its way from end to end
-  assert.deepEqual(Object.keys(json.facts).sort(), ['date', 'minutes', 'stops', 'towns', 'ways']);
+  // (with when the day's last trip leaves, by which its day is counted, #375)
+  assert.deepEqual(Object.keys(json.facts).sort(), ['date', 'last', 'minutes', 'stops', 'towns', 'ways']);
   assert.equal(json.facts.ways[0].stop, 'Alpha');
   assert.equal(json.facts.ways.length, 1);
   assert.equal(json.facts.ways[0].week.flatMap((group) => group.dates).length, 4);
@@ -441,6 +442,8 @@ test('/api/departures', async () => {
   assert.deepEqual(board, { id: 'A', name: 'Alpha', town: null, lat: 49.4, lon: 11, notes: [{ title: 'Aufzug gestört', text: 'Aufzug außer Betrieb', severity: 'info' }], path: 'stop/alpha' });
   // and what leaves it on the service day (#289): one line, every hour of the day
   assert.deepEqual([day.lines, day.last - day.first, day.twoKinds], [1, 23 * 3600, []]);
+  // (of the service day they are of, which the page lets go of in what it holds once it is over, #375)
+  assert.match(day.date, /^\d{8}$/);
   // one an hour from each of the runs under way: four to nine in the next two hours, and as that is fewer than ten, the next ones up to ten (#165)
   const soon = departures.filter((d) => d.planned <= now + 7200).length;
   assert.ok(soon >= 4 && soon <= 9, `${soon} departures in two hours`);

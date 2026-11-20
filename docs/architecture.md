@@ -1154,6 +1154,22 @@ otherwise a server would load a file written by older code:
   it is back stands only after the last of what is held (#364). They are held
   with the details (`held.js`), so that a start without a connection has them
   too.
+- **What is held of another day.** A screen on a wall can be without a
+  connection since the afternoon before, and details held from the evening
+  before open the next morning. The note then names the day before the time,
+  by the calendar where the area is: "Stand gestern 13:37", within the week
+  before its weekday, earlier its date (`formatWhen` in `i18n.js`). What an
+  answer held while the connection is lost says of its own service day
+  ("heute" below a stop's name, under each direction of "Alle Linien" and in a
+  line's head) stays while that day holds as the server counts days, until
+  midnight or after it until its last departure, and then goes (`dayHolds` in
+  `panel.js`; a stop's answer gives its day, `today.date`, and lines kept from
+  an earlier answer keep theirs; a line's facts give the last trip of the day,
+  `facts.last`). A line's timetable then marks the kind of day of the page's
+  own date as today's, and its hour from that day's own start. "nicht in 24 h"
+  is said only as far as the two hours held reach. The details are drawn anew
+  as a day begins and as the held one ends, without a screen reader hearing the
+  note again; the line it heard is emptied where it says an older note (#375).
 - **The map without a connection.** The service worker keeps what the map
   needs to start: its style (`NETNOU_MAP_STYLE_URL`, which the server writes
   into `sw.js`), and the lists of tiles, the icons and the fonts that the style

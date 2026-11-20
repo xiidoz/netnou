@@ -10,7 +10,7 @@ import { after, before, test } from 'node:test';
 import { t as translate } from '../public/i18n.js';
 import de from '../public/locales/de.js';
 import en from '../public/locales/en.js';
-import { daysText, hourLines, hoursText, hourText, lineLists, lineTimetable, oftenText, stopToday, todayText as todayTextOf, toHtml } from '../public/panel.js';
+import { dayHolds, daysText, hourLines, hoursText, hourText, lineHead, lineLists, lineTimetable, oftenText, stopToday, todayText as todayTextOf, toHtml } from '../public/panel.js';
 import { Addresses } from '../server/lib/addresses.js';
 import { Area } from '../server/lib/area.js';
 import { readDataset, writeDataset } from '../server/lib/dataset.js';
@@ -229,6 +229,8 @@ test('a line, each way it goes: how often it runs today hour by hour, the coming
   assert.deepEqual([line.date, up.stop, down.stop], [wednesday, 'Anger', 'Dorf']);
   assert.equal(up.today.date, wednesday);
   assert.deepEqual([up.today, down.today].map((today) => [clockOf(today.first), clockOf(today.last)]), [['05:30', '23:40'], ['05:32', '23:42']]);
+  // (and when the last trip of its day leaves, where it sets out: by that the day is counted, #375)
+  assert.equal(clockOf(line.last), '23:42');
   assert.deepEqual(up.today.runs.map(({ from, to, ...often }) => [clockOf(from), clockOf(to), often]), [['06:00', '20:00', { every: 10 }], ['20:00', '23:00', { every: 20 }]]);
   // Wednesday to Tuesday by their kind: the working days, Saturday and Sunday, each with what holds on each of its days
   assert.deepEqual(up.week.map((group) => [group.dates, clockOf(group.often.from), clockOf(group.often.to), group.often.every, group.trips]), [
@@ -286,7 +288,8 @@ const drawing = (language, texts, now) => {
   const hour = new Intl.DateTimeFormat(language, { hour: 'numeric', timeZone: 'Europe/Berlin' });
   const weekday = new Intl.DateTimeFormat(language, { weekday: 'short', timeZone: 'Europe/Berlin' });
   const list = new Intl.ListFormat(language, { type: 'conjunction' });
-  return { t: (key, params) => translate(key, params, texts), time: (e) => time.format(e * 1000), hour: (e) => hour.format(e * 1000), weekday: (e) => weekday.format(e * 1000), list: (w) => list.format(w), now };
+  const day = new Intl.DateTimeFormat('en-CA', { year: 'numeric', month: '2-digit', day: '2-digit', timeZone: 'Europe/Berlin' });
+  return { t: (key, params) => translate(key, params, texts), time: (e) => time.format(e * 1000), day: (e) => day.format(e * 1000), dayStart: serviceDayStart, hour: (e) => hour.format(e * 1000), weekday: (e) => weekday.format(e * 1000), list: (w) => list.format(w), now };
 };
 
 test('how often, in the words of the details: the gap, the longest wait, how many an hour, hourly', () => {
@@ -408,6 +411,69 @@ test('the timetable after the stops of a line: two lines for each kind of day, M
   // many towns: how many, from the first to the last
   assert.match(lineTimetable({ ...facts, minutes: 112, stops: 37, towns: ['Bamberg', 'Forchheim', 'Erlangen', 'Fürth', 'Nürnberg', 'Pommelsbrunn'] }, drawing('en-US', en, 0)).map(toHtml).join(''), /<p>Through 6 towns from Bamberg to Pommelsbrunn<\/p>/);
   assert.equal(lineTimetable({ ways: [{ week: [] }] }, drawing('de', de, 0)), null);
+});
+
+test('what an answer says of its service day goes once that day is over: below a stop, its lines and a line, and the mark of today in the timetable (#375)', () => {
+  const day = '20261104';
+  // (as the page holds them while the connection is lost)
+  const on = (when) => ({ ...drawing('de', de, when), lost: true });
+  // (the day's last departure after midnight, 01:04: until then its day holds, as the server counts days)
+  const today = { date: day, first: at(day, '04:36'), last: at(day, '25:04'), lines: 20, all: 20 };
+  assert.deepEqual(['13:37', '23:59', '24:30', '25:04', '25:05'].map((hhmm) => dayHolds(day, today.last, on(at(day, hhmm)))), [true, true, true, true, false]);
+  // a day whose last left before midnight is over at midnight; one that nothing left, too; the day after and later
+  assert.equal(dayHolds(day, at(day, '23:10'), on(at(day, '24:01'))), false);
+  assert.equal(dayHolds(day, null, on(at(day, '24:01'))), false);
+  assert.equal(dayHolds(day, today.last, on(at('20261105', '13:37'))), false);
+  assert.equal(dayHolds(day, today.last, on(at('20261110', '13:37'))), false);
+  // an answer that does not say its day holds, as does one of a day the page's clock has not reached
+  assert.equal(dayHolds(undefined, null, on(at('20261110', '13:37'))), true);
+  assert.equal(dayHolds(day, today.last, on(at('20261103', '23:59'))), true);
+
+  // below the stop's name: while its day holds, then not
+  assert.ok(toHtml(stopToday(today, on(at(day, '24:30')))).includes('20 Linien fahren heute'));
+  assert.equal(stopToday(today, on(at('20261105', '15:37'))), null);
+  // (an answer that comes as the details are open is of the server's day, the next one moments away: it holds)
+  assert.ok(toHtml(stopToday(today, drawing('de', de, at('20261105', '15:37')))).includes('20 Linien fahren heute'));
+
+  // "Alle Linien": how often each way leaves goes with its day; "nicht in 24 h" with the two hours the page holds of an
+  // answer while the connection is lost (app.js laterKnown)
+  const line = { name: '36', mode: 'bus', agency: 'VAG', at: null, path: 'line/vag/bus/36', ways: [{ to: 'Doku-Zentrum', departure: null, facts: { first: at(day, '05:17'), last: at(day, '24:27'), runs: [] } }] };
+  const lists = (when, more = {}) => lineLists({ today, lines: [line], towns: { towns: ['Nürnberg'], more: 0 } }, { ...on(when), times: 'both', ...more }).map(toHtml).join('');
+  assert.ok(lists(at(day, '13:37')).includes('class="line-facts"'));
+  assert.ok(lists(at(day, '13:37')).includes('nicht in 24 h'));
+  assert.ok(!lists(at('20261105', '15:37')).includes('class="line-facts"'));
+  assert.ok(!lists(at(day, '16:37'), { lost: true, laterKnown: false }).includes('nicht in 24 h'));
+  assert.ok(lists(at(day, '16:37'), { lost: true, laterKnown: false }).includes('class="line-facts"'));
+  // lines kept from an answer of the day before beside a stop's of today: what they say holds for their own day
+  const thursday = { ...today, date: '20261105', first: at('20261105', '04:36'), last: at('20261105', '25:04') };
+  const kept = lineLists({ today: thursday, linesDay: { date: day, last: today.last }, lines: [line], towns: { towns: ['Nürnberg'], more: 0 } }, { ...on(at('20261105', '08:00')), times: 'both' }).map(toHtml).join('');
+  assert.ok(!kept.includes('class="line-facts"'), kept);
+  // (also with a connection, shown at once on the switch until the lines of the new day come: nor "nicht in 24 h")
+  const keptOnline = lineLists({ today: thursday, linesDay: { date: day, last: today.last }, lines: [line], towns: { towns: ['Nürnberg'], more: 0 } }, { ...drawing('de', de, at('20261105', '08:00')), times: 'both' }).map(toHtml).join('');
+  assert.ok(!keptOnline.includes('class="line-facts"') && !keptOnline.includes('nicht in 24 h'), keptOnline);
+
+  // a line's head says how often it runs today, while that day holds
+  const week = [{ dates: ['20261104', '20261105', '20261106', '20261109', '20261110'], first: at(day, '05:30'), last: at(day, '24:20'), often: null, trips: [6, 6], runs: [], departures: [] }, { dates: ['20261107'], first: null, last: null, often: null, trips: null, runs: [], departures: [] }];
+  const facts = { date: day, last: at(day, '24:20'), ways: [{ stop: 'Nürnberg Plärrer', today: { date: day, first: at(day, '05:30'), last: at(day, '24:20'), runs: [] }, week }], minutes: 37, stops: 27, towns: ['Nürnberg'] };
+  const subway = { name: 'U1', mode: 'subway', agency: 'VAG', vehicles: [], ways: [], facts };
+  assert.ok(toHtml(lineHead(subway, on(at(day, '13:37')))).includes('<p class="facts">'));
+  assert.ok(toHtml(lineHead(subway, on(at(day, '24:10')))).includes('<p class="facts">'));
+  assert.ok(!toHtml(lineHead(subway, on(at(day, '24:30')))).includes('<p class="facts">'));
+  // its timetable marks the kind of day of the answer while it holds, then that of the page's own date: Saturday 7 November
+  const marked = (when) => lineTimetable(facts, on(when)).map(toHtml).join('').match(/<span class="part">([^<]+)<\/span><span class="today">/)?.[1];
+  assert.equal(marked(at(day, '24:10')), 'Mo–Fr');
+  assert.equal(marked(at('20261107', '15:37')), 'Sa');
+  // and the hour it is on that kind of day, though its hours are counted from the first of its days: on Thursday at 15:37
+  // that of 15, as at 15:37 on Wednesday
+  const minute = (hhmm) => +hhmm.slice(0, 2) * 60 + +hhmm.slice(3);
+  const hours = { ...facts, ways: [{ ...facts.ways[0], week: [{ ...week[0], start: serviceDayStart(day), departures: ['05:30', '15:10', '15:40', '24:20'].map(minute) }, week[1]] }] };
+  const hourNow = (when) => lineTimetable(hours, on(when)).map(toHtml).join('').match(/<li class="now" aria-current="time"><span class="hh" aria-hidden="true">(\d+)</)?.[1];
+  assert.equal(hourNow(at(day, '15:37')), '15');
+  assert.equal(hourNow(at('20261105', '15:37')), '15');
+  assert.equal(hourNow(at('20261107', '15:37')), undefined);
+  // (counted from today's own start: also after the clocks went back on Sunday, 25 October, within the kind of day)
+  const october = { ...facts, date: '20261023', last: at('20261023', '24:20'), ways: [{ ...facts.ways[0], week: [{ dates: ['20261023', '20261026', '20261027', '20261028', '20261029'], first: at('20261023', '05:30'), last: at('20261023', '24:20'), often: null, trips: [4, 4], runs: [], start: serviceDayStart('20261023'), departures: ['05:30', '15:10', '15:40', '24:20'].map(minute) }] }] };
+  assert.equal(lineTimetable(october, on(at('20261026', '15:37'))).map(toHtml).join('').match(/<li class="now" aria-current="time"><span class="hh" aria-hidden="true">(\d+)</)?.[1], '15');
 });
 
 test('all lines of a stop say below each way how often it leaves there now, and at the end the towns they go to', () => {

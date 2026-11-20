@@ -393,6 +393,12 @@ export function lineLink(line, context) {
 export function lineLists(board, context) {
   const { t, times } = context;
   const lines = board.lines ?? [];
+  // (what each way does on the service day, not where that is over, as of an answer held from the day before: the day of the
+  // answer the lines came with, which can be older than the stop's, app.js takeAnswer, #375. Of another day than the
+  // stop's, theirs is over, connection or not: they say nothing of today, shown at once on the switch as they are)
+  const day = board.linesDay ?? board.today;
+  const otherDay = Boolean(board.linesDay && board.today && board.linesDay.date !== board.today.date);
+  const today = !otherDay && dayHolds(day?.date, day?.last, context);
   if (!lines.length) return [h('p', { class: 'panel-empty' }, t('departures.none'))];
   const signed = lines.some((line) => line.ways.some((way) => way.departure?.warnings.length > 0));
   const kinds = [...new Set(lines.map((line) => kindOf(line.mode)))];
@@ -405,8 +411,10 @@ export function lineLists(board, context) {
       ? departureRow({ ...departure, line: line.name, mode: line.mode }, signed, context, true)
       : h('div', { class: `row departure times-${times} by-line resting` },
         h('span', { class: 'name', title: to }, to),
-        departure ? null : h('abbr', { class: 'later', title: t('lines.laterLong') }, t('lines.later'))),
-    facts ? h('p', { class: 'line-facts' }, todayText(facts, context)) : null);
+        // (that none leaves in the next 24 hours, as long as the page knows: not beyond the two hours it holds of an answer
+        // while the connection is lost, #375)
+        departure || context.laterKnown === false || otherDay ? null : h('abbr', { class: 'later', title: t('lines.laterLong') }, t('lines.later'))),
+    facts && today ? h('p', { class: 'line-facts' }, todayText(facts, context)) : null);
   };
   const towns = board.towns?.towns ?? [];
   return [...kinds.flatMap((kind) => [
@@ -562,6 +570,28 @@ const firstUp = (text) => text.charAt(0).toUpperCase() + text.slice(1);
 // (a short part of a line kept whole where the line breaks, "letzte Fahrt 01:04" not after "letzte")
 const whole = (text) => text.replace(/ /g, '\u00a0');
 
+/** The date after a date, as the timetable writes them: yyyymmdd. */
+const dayAfter = (date) => new Date(Date.UTC(+date.slice(0, 4), +date.slice(4, 6) - 1, +date.slice(6, 8) + 1)).toISOString().slice(0, 10).replaceAll('-', '');
+
+/** The date of a moment where the area is, as the timetable writes dates: yyyymmdd. */
+const dateOf = (epoch, { day }) => day(epoch).replaceAll('-', '');
+
+/**
+ * Whether what an answer says of its service day still holds at the
+ * context's `now`, as the server counts days (facts.js dayOf): on that date,
+ * and after midnight while its last departure is still to come. What the page
+ * holds while the connection is lost says "heute" of a day that can be over:
+ * it goes then (#375). An answer that comes as the details are open is of the
+ * server's day, the next one moments away: it holds.
+ * @param date the service day, yyyymmdd; none: it holds
+ * @param last its last departure, in epoch seconds, or null where nothing left that day
+ */
+export function dayHolds(date, last, context) {
+  if (!date || !context.lost) return true;
+  const today = dateOf(context.now, context);
+  return today <= date || (today === dayAfter(date) && last !== null && last !== undefined && context.now <= last);
+}
+
 /**
  * What runs now, of a line or of a line at a stop, in a line of the details:
  * how often in the hour it is and until when that holds, and the last trip
@@ -592,7 +622,8 @@ export function todayText(day, context, stop = null) {
  */
 export function stopToday(today, context) {
   const { t, time } = context;
-  if (!today) return null;
+  // (not of a day that is over, as of an answer held from the day before, #375)
+  if (!today || !dayHolds(today.date, today.last, context)) return null;
   // (of how many, where some of its lines do not run today: their badges are all under "Alle Linien")
   const lines = (today.all ?? today.lines) > today.lines ? t('facts.linesOfToday', { count: today.lines, all: today.all }) : t('facts.linesToday', { count: today.lines });
   const said = today.first === null ? t('facts.stopNone') : t('facts.stopToday', { lines, first: time(today.first), last: time(today.last) });
@@ -668,6 +699,8 @@ export function lineTimetable(facts, context, way = 0, open = new Set(), mode = 
   const week = facts?.ways?.[way]?.week;
   if (!week?.length) return null;
   const { stop } = facts.ways[way];
+  // (the service day it is: that of the answer while it holds, then the page's own, #375)
+  const today = dayHolds(facts.date, facts.last, context) ? facts.date : dateOf(now, context);
   const order = (group) => Math.min(...group.dates.map((date) => (new Date(Date.UTC(+date.slice(0, 4), +date.slice(4, 6) - 1, +date.slice(6, 8))).getUTCDay() + 6) % 7));
   const groups = [...week].sort((a, b) => order(a) - order(b));
   const often = (group) => {
@@ -680,7 +713,7 @@ export function lineTimetable(facts, context, way = 0, open = new Set(), mode = 
   // (the kind of day today is, marked so: the rider need not work out that Wednesday is "Mo–Fr")
   const head = (group, folds) => [
     // (each part of the days on one line: "Mo, Di–" never breaks before "Do")
-    h('span', { class: 'when' }, daysText(group.dates, context).split(', ').map((part, k) => [k ? ', ' : null, h('span', { class: 'part' }, part)]), group.dates.includes(facts.date) ? h('span', { class: 'today' }, t('facts.todayMark')) : null),
+    h('span', { class: 'when' }, daysText(group.dates, context).split(', ').map((part, k) => [k ? ', ' : null, h('span', { class: 'part' }, part)]), group.dates.includes(today) ? h('span', { class: 'today' }, t('facts.todayMark')) : null),
     h('span', { class: 'said' },
       h('span', { class: 'span' }, group.first === null ? t('facts.noTrips') : `${time(group.first)}–${time(group.last)}`),
       group.first === null ? null : h('span', { class: 'often' }, often(group))),
@@ -688,7 +721,11 @@ export function lineTimetable(facts, context, way = 0, open = new Set(), mode = 
   ];
   const days = groups.map((group) => {
     // (a day of one or two departures has them in its head, first and last: nothing more to open)
-    const lines = group.departures?.length > 2 ? hourLines(group, now, group.dates.includes(facts.date)) : [];
+    // (the hour it is, on the kind of day today is: its hours counted from the start of today's service day, where an answer
+    // held from the day before has another first of its days, #375)
+    const marked = group.dates.includes(today);
+    const start = marked && today !== group.dates[0] ? context.dayStart(today) : group.start;
+    const lines = group.departures?.length > 2 ? hourLines({ ...group, start }, now, marked) : [];
     if (!lines.length) return h('li', {}, h('div', { class: 'days-head' }, head(group, false)));
     const key = group.dates.join(',');
     // (one kind of day open at a time: opening another closes it, as the browser does for details of one name)
@@ -909,7 +946,7 @@ export function lineHead(line, context, way = null) {
     : null;
   return panelHead([badge(line.name, line.mode), h('span', {}, t(`mode.${kindOf(line.mode)}`)), line.listed ? kindInfo(line.listed, context) : null], h('p', { class: 'sub' }, sub),
     // (how often it runs now the way its stops show and its last trip today, #289)
-    line.facts?.ways?.length ? h('p', { class: 'facts' }, todayText(line.facts.ways[Math.min(way ?? 0, line.facts.ways.length - 1)].today, context, line.facts.ways[Math.min(way ?? 0, line.facts.ways.length - 1)].stop)) : null,
+    line.facts?.ways?.length && dayHolds(line.facts.date, line.facts.last, context) ? h('p', { class: 'facts' }, todayText(line.facts.ways[Math.min(way ?? 0, line.facts.ways.length - 1)].today, context, line.facts.ways[Math.min(way ?? 0, line.facts.ways.length - 1)].stop)) : null,
     way !== null && ways.length > 1
       ? h('p', { class: 'sub with-choice line-ways' }, h('span', {}, t('line.toward')),
         h('span', { class: 'view-switch ways', role: 'group', 'aria-label': t('line.ways') },

@@ -355,9 +355,11 @@ const stopFacts = (stationId, now) => facts(timetable).stop(timetable.stopIndex.
 /**
  * Of the facts of a station (stopFacts), what the line below its name says;
  * and the names it has that day in more than one kind, such as tram 4 and a
- * bus 4 that stands in for it, whose badges then say their kind.
+ * bus 4 that stands in for it, whose badges then say their kind. With the
+ * date of that service day: what the page holds of it says nothing of
+ * another (#375).
  */
-const todayOf = (known) => ({ first: known.first, last: known.last, lines: known.lines.size, all: known.all, twoKinds: twoKinds(known.lines.keys()) });
+const todayOf = (known) => ({ date: known.date, first: known.first, last: known.last, lines: known.lines.size, all: known.all, twoKinds: twoKinds(known.lines.keys()) });
 
 /** Of lines by their index, the names that more than one kind of them has. */
 function twoKinds(indexes) {
