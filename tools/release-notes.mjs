@@ -1,24 +1,35 @@
 // The name of a release and the few sentences under it, in CHANGELOG.md (see
 // "Releases" in CONTRIBUTING.md). They stand in the section of the version:
 //
-//   ## [0.29.0](https://github.com/…/compare/v0.28.0...v0.29.0) (2026-11-18) – The Offline Release
+//   ## [0.29.0](https://github.com/…/compare/v0.28.0...v0.29.0) – The Offline Release
 //
 //   A few sentences on what the release brings.
 //
 //
 //   ### Features
 //
-// release-please writes the section without them. The Release workflow
-// (.github/workflows/release.yml) has Claude propose them in the release pull
-// request, and puts them on the GitHub release once it is made. It reads and
-// writes them with this script:
+// release-please writes the section without them, and with the day behind the
+// link of the heading ("(2026-11-20)"), which is taken off: GitHub shows when a
+// release was published, and git when the changelog changed. The Release
+// workflow (.github/workflows/release.yml) has Claude propose the name and the
+// sentences in the release pull request, shows them in its description, and
+// puts them on the GitHub release once it is made. It reads and writes them
+// with this script:
 //
 //   node tools/release-notes.mjs read <CHANGELOG.md> <version>
-//     prints {name, text, section, pulls} as JSON: the name and the sentences
-//     ("" where there are none), the whole section as it stands, and the
-//     numbers of the pull requests it lists
+//     prints {name, text, date, section, pulls} as JSON: the name and the
+//     sentences ("" where there are none), the day in the heading ("" where
+//     there is none), the whole section as it is published (its heading
+//     without the day), and the numbers of the pull requests it lists
 //   node tools/release-notes.mjs write <CHANGELOG.md> <version>   < {name, text}
-//     puts the name and the sentences into the section, in place of any there
+//     puts the name and the sentences into the section, in place of any there,
+//     and takes the day off its heading
+//   node tools/release-notes.mjs describe <CHANGELOG.md> <version>   < description
+//     prints the description of the release pull request that shows the
+//     release as it will be published: its title, and its section as its notes
+//   node tools/release-notes.mjs original   < description
+//     prints the description release-please wrote, which "describe" keeps in
+//     its own; a description release-please wrote is printed as it is
 //   node tools/release-notes.mjs excerpt   < description
 //     prints the first paragraph of a pull request's description
 //   node tools/release-notes.mjs request   < {version, section, pulls, previous}
@@ -31,8 +42,9 @@
 import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
-// The heading of a version as release-please writes it, and the name behind it.
-const HEADING = /^(##?# \[(\d+\.\d+\.\d+[^\]]*)\]\([^)]*\) \(\d{4}-\d{2}-\d{2}\))(?: – (.*))?$/;
+// The heading of a version: the version with its link, the day release-please
+// writes behind it, and the name.
+const HEADING = /^(##?# \[(\d+\.\d+\.\d+[^\]]*)\]\([^)]*\))(?: \((\d{4}-\d{2}-\d{2})\))?(?: – (.*))?$/;
 // Between the name and the list.
 const NAME_SEPARATOR = ' – ';
 
@@ -57,9 +69,11 @@ export function readRelease(changelog, version) {
   const lines = changelog.split('\n');
   const where = findSection(lines, version);
   if (!where) return null;
-  const name = (HEADING.exec(lines[where.start])[3] ?? '').trim();
+  const [, link, , date = '', named = ''] = HEADING.exec(lines[where.start]);
+  const name = named.trim();
   const text = lines.slice(where.start + 1, textEnd(lines, where)).join('\n').trim();
-  const section = lines.slice(where.start, where.end).join('\n').trim();
+  const heading = link + (name ? NAME_SEPARATOR + name : '');
+  const section = [heading, ...lines.slice(where.start + 1, where.end)].join('\n').trim();
   // "* **page:** what it does ([#371](…)) ([13a54f0](…)), closes [#362](…)":
   // the first number of a line is its pull request, any later one an issue.
   const pulls = [];
@@ -67,7 +81,7 @@ export function readRelease(changelog, version) {
     const number = /^\* .*?\(\[#(\d+)\]/.exec(line)?.[1];
     if (number && !pulls.includes(Number(number))) pulls.push(Number(number));
   }
-  return { name, text, section, pulls };
+  return { name, text, date, section, pulls };
 }
 
 export function writeRelease(changelog, version, { name = '', text = '' }) {
@@ -76,6 +90,7 @@ export function writeRelease(changelog, version, { name = '', text = '' }) {
   if (!where) throw new Error(`CHANGELOG.md has no section for ${version}`);
   name = name.replace(/\s+/g, ' ').trim();
   text = text.trim();
+  // (without the day release-please wrote)
   const heading = HEADING.exec(lines[where.start])[1] + (name ? NAME_SEPARATOR + name : '');
   // release-please leaves two empty lines between the heading and the list.
   const between = text ? ['', ...text.split('\n'), '', ''] : ['', ''];
@@ -85,6 +100,61 @@ export function writeRelease(changelog, version, { name = '', text = '' }) {
     ...between,
     ...lines.slice(textEnd(lines, where)),
   ].join('\n');
+}
+
+// The description of the release pull request. release-please writes
+//
+//   :robot: I have created a release *beep* *boop*
+//   ---
+//
+//
+//   ## [0.30.0](…) (2026-11-21)
+//   …
+//
+//   ---
+//   This PR was generated with [Release Please](…). …
+//
+// and, once the pull request is merged, publishes the release with what
+// stands between the two lines "---" as its notes. It writes the pull request
+// anew whenever its description is not exactly the one it would write. So the
+// description shown in its place keeps release-please's at its end, and the
+// Release workflow puts that back before it runs release-please.
+const DELIMITER = '---';
+const KEPT = /\n<!-- release-please's own description[^:\n]*: ([A-Za-z0-9+/=]*) -->\s*$/;
+// The longest description GitHub takes.
+const MAX_DESCRIPTION = 65536;
+
+// The description as release-please wrote it.
+export function originalDescription(description) {
+  const kept = KEPT.exec(description)?.[1];
+  return kept === undefined ? description : Buffer.from(kept, 'base64').toString('utf8');
+}
+
+// The description that shows the release as it will be published: its title,
+// and its section of the changelog as its notes. Left as release-please wrote
+// it where that has not the form above, or where it would grow too long.
+export function describeRelease(description, version, { name, section }) {
+  const original = originalDescription(description);
+  const lines = original.replace(/\r\n/g, '\n').trim().split('\n');
+  const first = lines.indexOf(DELIMITER);
+  const last = lines.lastIndexOf(DELIMITER);
+  if (first < 0 || last === first) return original;
+  const title = `v${version}${name ? NAME_SEPARATOR + name : ''}`;
+  const described = [
+    `Merging this pull request publishes the release **${title}**, with these notes:`,
+    DELIMITER,
+    '',
+    '',
+    section,
+    '',
+    DELIMITER,
+    lines.slice(last + 1).join('\n').trim(),
+    '',
+    'The name and the sentences come from the section of this release in the pull request\'s `CHANGELOG.md`: change them there, not here. The Release workflow writes this description anew from it after every push to `main`, or when it is started by hand.',
+    '',
+    `<!-- release-please's own description, put back before each run of the Release workflow: ${Buffer.from(original, 'utf8').toString('base64')} -->`,
+  ].join('\n');
+  return described.length > MAX_DESCRIPTION ? original : described;
 }
 
 // The first paragraph of a pull request's description: what it is about and
@@ -169,6 +239,13 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
       console.log(JSON.stringify(release));
     } else if (command === 'write') {
       fs.writeFileSync(file, writeRelease(fs.readFileSync(file, 'utf8'), version, JSON.parse(stdin())));
+    } else if (command === 'describe') {
+      const release = readRelease(fs.readFileSync(file, 'utf8'), version);
+      if (!release) throw new Error(`${file} has no section for ${version}`);
+      // (as it is: the workflow compares it with what it replaces)
+      process.stdout.write(describeRelease(stdin(), version, release));
+    } else if (command === 'original') {
+      process.stdout.write(originalDescription(stdin()));
     } else if (command === 'excerpt') {
       console.log(firstParagraph(stdin()));
     } else if (command === 'request') {
@@ -176,7 +253,7 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
     } else if (command === 'answer') {
       console.log(JSON.stringify(readAnswer(JSON.parse(stdin()))));
     } else {
-      console.error('usage: node tools/release-notes.mjs read|write <CHANGELOG.md> <version> | excerpt | request | answer');
+      console.error('usage: node tools/release-notes.mjs read|write|describe <CHANGELOG.md> <version> | original | excerpt | request | answer');
       process.exit(2);
     }
   } catch (error) {

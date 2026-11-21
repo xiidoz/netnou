@@ -9,8 +9,9 @@ name: Release
 #    vX.Y.Z and publishes a GitHub release. Whatever the push was, the pull
 #    request ends up on top of it (see the step "Keep the release pull
 #    request on top of main"). Claude proposes a name for the release and a
-#    few sentences on what it brings, in the pull request, and the release is
-#    published with them (see "Releases" in CONTRIBUTING.md).
+#    few sentences on what it brings, in the pull request, whose description
+#    shows the release as it will be published, and the release is published
+#    with them (see "Releases" in CONTRIBUTING.md).
 # 2. The container image is built and pushed to ghcr.io/xiidoz/netnou: always
 #    as "edge", and for a release also as "latest", X.Y.Z, X.Y and - from
 #    1.0.0 on - X. So "latest" is the newest release and "edge" is main.
@@ -78,6 +79,38 @@ jobs:
           GH_TOKEN: ${{ secrets.RELEASE_PLEASE_TOKEN || secrets.GITHUB_TOKEN }}
           GH_REPO: ${{ github.repository }}
 
+      # release-please writes its pull request anew whenever the description
+      # is not exactly the one it would write. The description shown in its
+      # place (see "Name the release pull request") keeps release-please's own
+      # at its end, and it is put back here, so that release-please writes
+      # the pull request anew only where it would have done so anyway.
+      - name: Give release-please its own description back
+        # Else release-please writes the pull request anew, and the release
+        # is named again: not worth a failed run.
+        continue-on-error: true
+        run: |
+          own='map(select((.isCrossRepository | not) and (.headRefName | startswith("release-please--"))))[0].number // empty'
+          number=$(gh pr list --state open --base "$GITHUB_REF_NAME" --label 'autorelease: pending' --json number,headRefName,isCrossRepository --jq "$own")
+          if [ -z "$number" ]; then
+            echo "No release pull request is open."
+            exit 0
+          fi
+          # (exactly, as release-please compares it)
+          gh api "repos/$GH_REPO/pulls/$number" | jq -j '.body // ""' > "$RUNNER_TEMP/shown.md"
+          node tools/release-notes.mjs original < "$RUNNER_TEMP/shown.md" > "$RUNNER_TEMP/original.md"
+          if cmp -s "$RUNNER_TEMP/shown.md" "$RUNNER_TEMP/original.md"; then
+            echo "Pull request #$number has the description release-please wrote."
+            exit 0
+          fi
+          jq -n --rawfile body "$RUNNER_TEMP/original.md" '{body: $body}' \
+            | gh api -X PATCH "repos/$GH_REPO/pulls/$number" --input - > /dev/null
+          echo "Pull request #$number has the description release-please wrote again."
+        env:
+          # (with the workflow's own token, which starts no workflows: an
+          # edited description is not worth checking the commits again)
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+
       - uses: googleapis/release-please-action@v5
         with:
           config-file: release-please-config.json
@@ -89,11 +122,12 @@ jobs:
           token: ${{ secrets.RELEASE_PLEASE_TOKEN || secrets.GITHUB_TOKEN }}
 
       # release-please publishes a release as "vX.Y.Z", with its notes from the
-      # description of the release pull request. Where the merged CHANGELOG.md
-      # gives the release a name and sentences, the release takes them: the
-      # name in its title, and the section of the changelog as its notes. The
-      # tag is looked up, as in the job "image", so that running this workflow
-      # again for the same commit names the release again.
+      # description of the release pull request. The release takes its name
+      # from the merged CHANGELOG.md, in its title, and the section of the
+      # changelog as its notes, without the day in the heading in any case
+      # (GitHub shows when it was published). The tag is looked up, as in the
+      # job "image", so that running this workflow again for the same commit
+      # names the release again.
       - name: Give the release its name
         # A release left as "vX.Y.Z" is not worth a failed run; the step shows
         # that it failed all the same.
@@ -107,10 +141,6 @@ jobs:
           fi
           release=$(node tools/release-notes.mjs read CHANGELOG.md "${tag#v}")
           name=$(jq -r .name <<< "$release")
-          if [ -z "$name" ] && [ -z "$(jq -r .text <<< "$release")" ]; then
-            echo "CHANGELOG.md gives $tag no name: it stays as release-please published it."
-            exit 0
-          fi
           jq -r .section <<< "$release" > "$RUNNER_TEMP/notes.md"
           gh release edit "$tag" --title "$tag${name:+ – $name}" --notes-file "$RUNNER_TEMP/notes.md" > /dev/null
           echo "Release $tag is called \"$tag${name:+ – $name}\"."
@@ -149,23 +179,25 @@ jobs:
           GH_TOKEN: ${{ secrets.RELEASE_PLEASE_TOKEN || secrets.GITHUB_TOKEN }}
           GH_REPO: ${{ github.repository }}
 
-      # Where the section of the release in the pull request's CHANGELOG.md
-      # has no name, Claude is asked for one and for a few sentences, from the
-      # list and the first paragraph of each listed pull request's description
-      # (tools/release-notes.mjs), and they are committed to the pull request.
-      # release-please compares only the description of its pull request, so
-      # it keeps the commit until a merge adds to the notes; then it writes the
-      # pull request anew, and Claude is asked again, with the name the release
-      # had. A name written by hand is left alone in the same way. Without the
-      # secret ANTHROPIC_API_KEY nothing is asked.
+      # The section of the release in the pull request's CHANGELOG.md loses the
+      # day release-please writes in its heading. Where it has no name, Claude
+      # is asked for one and for a few sentences, from the list and the first
+      # paragraph of each listed pull request's description
+      # (tools/release-notes.mjs). What changed is committed to the pull
+      # request. release-please compares only the description of its pull
+      # request, so it keeps the commit until a merge adds to the notes; then
+      # it writes the pull request anew, and Claude is asked again, with the
+      # name the release had. A name written by hand is left alone in the same
+      # way. Without the secret ANTHROPIC_API_KEY nothing is asked.
+      #
+      # Then the description of the pull request is written to show the
+      # release as it will be published: its title, and its section as its
+      # notes, with release-please's own description kept at its end (see
+      # "Give release-please its own description back").
       - name: Name the release pull request
         # A release without a name is not worth a failed run.
         continue-on-error: true
         run: |
-          if [ -z "$ANTHROPIC_API_KEY" ]; then
-            echo "No secret ANTHROPIC_API_KEY: the release is not given a name."
-            exit 0
-          fi
           own='map(select((.isCrossRepository | not) and (.headRefName | startswith("release-please--"))))[0] // empty | [.number, .headRefName, .title] | @tsv'
           pr=$(gh pr list --state open --base "$GITHUB_REF_NAME" --label 'autorelease: pending' --json number,headRefName,title,isCrossRepository --jq "$own")
           if [ -z "$pr" ]; then
@@ -176,47 +208,75 @@ jobs:
           version=${title##* }
           changelog=$RUNNER_TEMP/CHANGELOG.md
           gh api -H 'Accept: application/vnd.github.raw+json' "repos/$GH_REPO/contents/CHANGELOG.md?ref=$head" > "$changelog"
+          cp "$changelog" "$RUNNER_TEMP/CHANGELOG.before.md"
           release=$(node tools/release-notes.mjs read "$changelog" "$version")
+          jq '{name, text}' <<< "$release" > "$RUNNER_TEMP/answer.json"
+          message="chore(main): no date in the heading of release $version"
+
+          # Asks Claude for a name and sentences, into answer.json; says why not
+          # where there are none.
+          ask() {
+            local pulls='[]' pull body about previous
+            for pull in $(jq -r '.pulls[]' <<< "$release"); do
+              body=$(gh pr view "$pull" --json body --jq .body 2>/dev/null || true)
+              about=$(node tools/release-notes.mjs excerpt <<< "$body")
+              pulls=$(jq --argjson number "$pull" --arg about "$about" '. + [{number: $number, about: $about}]' <<< "$pulls")
+            done
+            previous=$(jq -c -s '.[0] // null' "$RUNNER_TEMP/previous.json" 2>/dev/null || echo null)
+            jq -n --arg version "$version" --argjson release "$release" --argjson pulls "$pulls" --argjson previous "$previous" \
+              '{version: $version, section: $release.section, pulls: $pulls, previous: $previous}' \
+              | node tools/release-notes.mjs request > "$RUNNER_TEMP/request.json" || return 1
+            # (fallbacks: should the model decline, another one answers in the same call)
+            if ! curl --silent --show-error --max-time 600 https://api.anthropic.com/v1/messages \
+                -H 'Content-Type: application/json' \
+                -H "x-api-key: $ANTHROPIC_API_KEY" \
+                -H 'anthropic-version: 2026-10-21' \
+                -H 'anthropic-beta: server-side-fallback-2026-07-01' \
+                --data @"$RUNNER_TEMP/request.json" > "$RUNNER_TEMP/response.json"; then
+              echo "::warning title=Release not named::The Claude API could not be reached."
+              return 1
+            fi
+            if ! node tools/release-notes.mjs answer < "$RUNNER_TEMP/response.json" > "$RUNNER_TEMP/claude.json" 2> "$RUNNER_TEMP/why.txt"; then
+              echo "::warning title=Release not named::No name from Claude: $(cat "$RUNNER_TEMP/why.txt")"
+              return 1
+            fi
+            mv "$RUNNER_TEMP/claude.json" "$RUNNER_TEMP/answer.json"
+          }
           if [ -n "$(jq -r .name <<< "$release")" ]; then
             echo "Pull request #$number calls the release \"$(jq -r .name <<< "$release")\"."
-            exit 0
-          fi
-
-          pulls='[]'
-          for pull in $(jq -r '.pulls[]' <<< "$release"); do
-            body=$(gh pr view "$pull" --json body --jq .body 2>/dev/null || true)
-            about=$(node tools/release-notes.mjs excerpt <<< "$body")
-            pulls=$(jq --argjson number "$pull" --arg about "$about" '. + [{number: $number, about: $about}]' <<< "$pulls")
-          done
-          previous=$(jq -c -s '.[0] // null' "$RUNNER_TEMP/previous.json" 2>/dev/null || echo null)
-          jq -n --arg version "$version" --argjson release "$release" --argjson pulls "$pulls" --argjson previous "$previous" \
-            '{version: $version, section: $release.section, pulls: $pulls, previous: $previous}' \
-            | node tools/release-notes.mjs request > "$RUNNER_TEMP/request.json"
-          # (fallbacks: should the model decline, another one answers in the same call)
-          if ! curl --silent --show-error --max-time 600 https://api.anthropic.com/v1/messages \
-              -H 'Content-Type: application/json' \
-              -H "x-api-key: $ANTHROPIC_API_KEY" \
-              -H 'anthropic-version: 2026-10-21' \
-              -H 'anthropic-beta: server-side-fallback-2026-07-01' \
-              --data @"$RUNNER_TEMP/request.json" > "$RUNNER_TEMP/response.json"; then
-            echo "::warning title=Release not named::The Claude API could not be reached."
-            exit 0
-          fi
-          if ! node tools/release-notes.mjs answer < "$RUNNER_TEMP/response.json" > "$RUNNER_TEMP/answer.json" 2> "$RUNNER_TEMP/why.txt"; then
-            echo "::warning title=Release not named::No name from Claude: $(cat "$RUNNER_TEMP/why.txt")"
-            exit 0
+          elif [ -z "$ANTHROPIC_API_KEY" ]; then
+            echo "No secret ANTHROPIC_API_KEY: the release is not given a name."
+          elif ask; then
+            message="chore(main): name release $version"
+            echo "Pull request #$number calls the release \"$(jq -r .name "$RUNNER_TEMP/answer.json")\":"
+            jq -r .text "$RUNNER_TEMP/answer.json"
           fi
 
           node tools/release-notes.mjs write "$changelog" "$version" < "$RUNNER_TEMP/answer.json"
-          blob=$(gh api "repos/$GH_REPO/contents/CHANGELOG.md?ref=$head" --jq .sha)
-          jq -n --arg branch "$head" --arg sha "$blob" --arg message "chore(main): name release $version" \
-            --rawfile content <(base64 -w0 "$changelog") '{branch: $branch, sha: $sha, message: $message, content: $content}' \
-            | gh api -X PUT "repos/$GH_REPO/contents/CHANGELOG.md" --input - > /dev/null
-          echo "Pull request #$number calls the release \"$(jq -r .name "$RUNNER_TEMP/answer.json")\":"
-          jq -r .text "$RUNNER_TEMP/answer.json"
+          if ! cmp -s "$changelog" "$RUNNER_TEMP/CHANGELOG.before.md"; then
+            blob=$(gh api "repos/$GH_REPO/contents/CHANGELOG.md?ref=$head" --jq .sha)
+            jq -n --arg branch "$head" --arg sha "$blob" --arg message "$message" \
+              --rawfile content <(base64 -w0 "$changelog") '{branch: $branch, sha: $sha, message: $message, content: $content}' \
+              | gh api -X PUT "repos/$GH_REPO/contents/CHANGELOG.md" --input - > /dev/null
+            echo "Committed to pull request #$number: $message"
+          fi
+
+          # (exactly, so that an unchanged description is left alone)
+          gh api "repos/$GH_REPO/pulls/$number" | jq -j '.body // ""' > "$RUNNER_TEMP/shown.md"
+          node tools/release-notes.mjs describe "$changelog" "$version" < "$RUNNER_TEMP/shown.md" > "$RUNNER_TEMP/described.md"
+          if cmp -s "$RUNNER_TEMP/shown.md" "$RUNNER_TEMP/described.md"; then
+            echo "The description of pull request #$number shows the release as it will be published."
+            exit 0
+          fi
+          # (with the workflow's own token, as in "Give release-please its own
+          # description back")
+          jq -n --rawfile body "$RUNNER_TEMP/described.md" '{body: $body}' \
+            | GH_TOKEN=$EDIT_TOKEN gh api -X PATCH "repos/$GH_REPO/pulls/$number" --input - > /dev/null
+          echo "The description of pull request #$number now shows the release as it will be published."
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           GH_TOKEN: ${{ secrets.RELEASE_PLEASE_TOKEN || secrets.GITHUB_TOKEN }}
+          EDIT_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
 
   image:
