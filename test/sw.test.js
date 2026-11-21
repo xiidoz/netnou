@@ -108,19 +108,22 @@ function cacheStorage() {
  * 'delay' after `delay` ms of the worker's clock,
  * 'late' once the test releases it, 'hang' never, 'refuse' with an error,
  * 'error' with a 502 of a proxy whose server is down, 'stall' with the
- * headers of a page whose text never comes.
+ * headers of a page whose text never comes. A file of `missing` is not
+ * there (404).
  */
 function network() {
-  const net = { mode: 'answer', version: 'v2', delay: 0, asked: [], besides: '', held: [], later: null };
+  const net = { mode: 'answer', version: 'v2', delay: 0, asked: [], besides: '', held: [], later: null, missing: new Set() };
   net.release = () => { for (const answer of net.held.splice(0)) answer(); };
   net.fetch = (request) => {
-    const url = new URL(request.url);
+    const url = new URL(typeof request === 'string' ? request : request.url);
     const path = url.pathname.slice(1) || './';
     net.asked.push(path);
     const [version, besides] = [net.version, net.besides];
     const answer = () => (path === './' || /^(stop|line|trip)\//.test(path)
       ? new Response(pageOf(version) + besides, { headers: PAGE_HEADERS })
-      : new Response(`// ${path} of ${version}\n`, { headers: { 'Content-Type': 'text/javascript' } }));
+      : net.missing.has(path)
+        ? new Response('Not found', { status: 404 })
+        : new Response(`// ${path} of ${version}\n`, { headers: { 'Content-Type': 'text/javascript' } }));
     switch (net.mode) {
       case 'refuse': return Promise.reject(new TypeError('Failed to fetch'));
       case 'hang': return new Promise(() => {});
@@ -419,6 +422,51 @@ test('a page that the service worker did not start says which version it is, and
   net.version = 'v3';
   assert.equal(await text(worker.file('search.js', 'first')), '// search.js of v2\n');
   assert.deepEqual(net.asked, []);
+});
+
+test('of the languages, a version keeps English and those the browser uses: as the page fetches them, and as it says which one it is in', async () => {
+  const { storage, net, worker } = await installed();
+  const kept = (language) => storage.text(KEPT, `locales/${language}.js`);
+  assert.equal(await kept('en'), '// locales/en.js of v2\n');
+  assert.equal(await kept('de'), null);
+  // (a page the worker started fetches its language: from the network, and kept)
+  const started = worker.start('./', 'page');
+  await text(started);
+  await started.done();
+  const fetched = worker.file('locales/nl.js', 'page');
+  assert.equal(await text(fetched), '// locales/nl.js of v2\n');
+  await fetched.done();
+  assert.equal(await kept('nl'), '// locales/nl.js of v2\n');
+  // (a page of the first visit fetched its language before the worker was there: it says which one it is in)
+  await worker.message('first', { pageVersion: 'v2', language: 'fr' }).done();
+  assert.equal(await kept('fr'), '// locales/fr.js of v2\n');
+  // (not that of a page of another version, nor anything else a message may name)
+  await worker.message('older', { pageVersion: 'v1', language: 'it' }).done();
+  await worker.message('first', { pageVersion: 'v2', language: '../app' }).done();
+  assert.equal(await kept('it'), null);
+  assert.deepEqual(net.asked.filter((path) => path.startsWith('locales/')), ['locales/nl.js', 'locales/fr.js']);
+  // (and the page starts in it without the network, with its texts from those kept)
+  net.mode = 'refuse';
+  const offline = worker.start('./', 'offline');
+  assert.match(await text(offline), /netnou-kept/);
+  assert.equal(await text(worker.file('locales/fr.js', 'offline')), '// locales/fr.js of v2\n');
+});
+
+test('a new version takes the languages of the one before along; one it no longer has is no reason not to install', async () => {
+  const storage = cacheStorage();
+  const net = network();
+  net.version = 'v1';
+  const v1 = run('v1', storage, net);
+  await v1.install();
+  await v1.message('page', { pageVersion: 'v1', language: 'nl' }).done();
+  await v1.message('page', { pageVersion: 'v1', language: 'xx' }).done();
+  net.version = 'v2';
+  net.missing.add('locales/xx.js');
+  net.asked = [];
+  assert.equal(await run('v2', storage, net).install(), true);
+  assert.equal(await storage.text(KEPT, 'locales/nl.js'), '// locales/nl.js of v2\n');
+  assert.equal(await storage.text(KEPT, 'locales/xx.js'), null);
+  assert.deepEqual(net.asked.filter((path) => path.startsWith('locales/')).sort(), ['locales/en.js', 'locales/nl.js', 'locales/xx.js']);
 });
 
 test('a file for a page that the service worker does not know comes from the network, and from the kept ones where the network does not answer in time', async () => {
