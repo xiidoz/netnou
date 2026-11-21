@@ -8,6 +8,21 @@ This file is written by
 messages when a release is made. Do not edit it by hand; see
 [Releases](CONTRIBUTING.md#releases).
 
+## [0.30.0](https://github.com/xiidoz/netnou/compare/v0.29.0...v0.30.0) (2026-11-21) – The European Languages Release
+
+Riders can now read the page in 35 languages of Europe, German and English among them. The installed app keeps only the texts of the languages a rider's browser uses, so new versions no longer bring every language with them. Line descriptions in search engines and link previews also write a stretch of non-running days within one month correctly.
+
+
+### Features
+
+* **i18n:** the page in the languages of Europe, 35 with German and English ([#387](https://github.com/xiidoz/netnou/issues/387)) ([fcfb00b](https://github.com/xiidoz/netnou/commit/fcfb00bc322eb6963647057afe23365b0f85d9b2)), closes [#384](https://github.com/xiidoz/netnou/issues/384)
+* **page:** the installed app keeps the texts of the languages a browser uses, not of all ([#385](https://github.com/xiidoz/netnou/issues/385)) ([bcf145f](https://github.com/xiidoz/netnou/commit/bcf145f546049efe1e1003830e3f4817a43f677e)), closes [#384](https://github.com/xiidoz/netnou/issues/384)
+
+
+### Bug Fixes
+
+* **server:** a stretch of days in one month writes its first day with the dot of the date ([#386](https://github.com/xiidoz/netnou/issues/386)) ([094bf36](https://github.com/xiidoz/netnou/commit/094bf36b1c41bda3cd9bc2bbac3b4f85ca8d7b6f))
+
 ## [0.29.0](https://github.com/xiidoz/netnou/compare/v0.28.0...v0.29.0) (2026-11-20) – The Offline Release
 
 Riders without a connection keep what they had: started offline, the page shows what was open and streets seen before within seconds, and search finds stops and lines. A stop holds two hours of departures, and the page catches up between tunnels. The note gives the data's time and day, known delays stay grey, and no banner covers the map.
