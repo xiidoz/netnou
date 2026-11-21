@@ -53,7 +53,7 @@ Ein Fahrzeug kann also etwas vor oder hinter seiner Markierung sein.
 
 Die Fahrzeuge lassen sich auch nach ihrer Verspätung einfärben. Die Karte kann
 den eigenen Standort zeigen; er bleibt im Browser. Die Seite gibt es in
-35 Sprachen, und sie lässt sich als App installieren.
+50 Sprachen, und sie lässt sich als App installieren.
 
 ## Etwas stimmt nicht?
 
@@ -142,7 +142,7 @@ Sekunde aus seinem Cache. Die Zahlen für ganz Deutschland stehen in
   Besuch meldet: kein Skript in der Seite, kein Cookie
   ([Besuche zählen](docs/configuration.md#counting-visits)).
 - Eine offene JSON-API für andere Clients ([docs/api.md](docs/api.md)).
-- 35 Sprachen, je nach Browser oder eigener Wahl; für eine weitere
+- 50 Sprachen, je nach Browser oder eigener Wahl; für eine weitere
   Sprache braucht es nur eine Datei ([docs/translating.md](docs/translating.md)).
 
 ## Mitmachen

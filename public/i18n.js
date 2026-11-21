@@ -10,10 +10,13 @@
 
 import en from './locales/en.js';
 
-// [code, the language's own name], in the order of those names: Latin letters,
-// then Greek, then Cyrillic. The code is the primary subtag of a language tag,
-// so 'de' also serves a browser that asks for de-AT or de-CH (and see SAME).
+// [code, the language's own name], in the order of those names as
+// Intl.Collator sorts them: Latin letters, then Greek, Cyrillic and the other
+// scripts. The code is the primary subtag of a language tag, so 'de' also
+// serves a browser that asks for de-AT or de-CH (and see SAME).
 export const LANGUAGES = [
+  ['af', 'Afrikaans'],
+  ['id', 'Bahasa Indonesia'],
   ['bs', 'Bosanski'],
   ['ca', 'Català'],
   ['cs', 'Čeština'],
@@ -22,11 +25,15 @@ export const LANGUAGES = [
   ['et', 'Eesti'],
   ['en', 'English'],
   ['es', 'Español'],
+  ['fil', 'Filipino'],
   ['fr', 'Français'],
   ['ga', 'Gaeilge'],
+  ['ha', 'Hausa'],
   ['hr', 'Hrvatski'],
   ['is', 'Íslenska'],
   ['it', 'Italiano'],
+  ['sw', 'Kiswahili'],
+  ['ku', 'Kurdî'],
   ['lv', 'Latviešu'],
   ['lt', 'Lietuvių'],
   ['hu', 'Magyar'],
@@ -41,6 +48,7 @@ export const LANGUAGES = [
   ['sl', 'Slovenščina'],
   ['fi', 'Suomi'],
   ['sv', 'Svenska'],
+  ['vi', 'Tiếng Việt'],
   ['tr', 'Türkçe'],
   ['el', 'Ελληνικά'],
   ['be', 'Беларуская'],
@@ -49,6 +57,14 @@ export const LANGUAGES = [
   ['ru', 'Русский'],
   ['sr', 'Српски'],
   ['uk', 'Українська'],
+  ['mr', 'मराठी'],
+  ['hi', 'हिन्दी'],
+  ['bn', 'বাংলা'],
+  ['ta', 'தமிழ்'],
+  ['te', 'తెలుగు'],
+  ['ko', '한국어'],
+  ['zh', '中文'],
+  ['ja', '日本語'],
 ];
 // Codes a browser may name a language by besides the one above: Norwegian
 // Bokmål as Norwegian (no), Filipino as Tagalog (tl), and the older codes of
@@ -99,16 +115,30 @@ let dateFormat;
 let partsFormat;
 let listFormat;
 
+/**
+ * A language tag whose numbers are written with the digits 0–9, as line
+ * numbers, platforms, delays and the signs have them: Bengali and Marathi,
+ * for example, would write times with their own digits, beside a delay "+2".
+ */
+export function latinDigits(tag) {
+  try {
+    return new Intl.Locale(tag, { numberingSystem: 'latn' }).toString();
+  } catch {
+    return tag; // not a language tag Intl knows
+  }
+}
+
 function setFormats() {
-  numberFormat = new Intl.NumberFormat(locale);
+  const digits = latinDigits(locale);
+  numberFormat = new Intl.NumberFormat(digits);
   pluralRules = new Intl.PluralRules(locale);
-  timeFormat = new Intl.DateTimeFormat(locale, { timeStyle: 'short', timeZone });
+  timeFormat = new Intl.DateTimeFormat(digits, { timeStyle: 'short', timeZone });
   dayFormat = new Intl.DateTimeFormat('en-CA', { year: 'numeric', month: '2-digit', day: '2-digit', timeZone });
-  hourFormat = new Intl.DateTimeFormat(locale, { hour: 'numeric', timeZone });
-  weekdayFormat = new Intl.DateTimeFormat(locale, { weekday: 'short', timeZone });
-  fullWeekdayFormat = new Intl.DateTimeFormat(locale, { weekday: 'long', timeZone });
+  hourFormat = new Intl.DateTimeFormat(digits, { hour: 'numeric', timeZone });
+  weekdayFormat = new Intl.DateTimeFormat(digits, { weekday: 'short', timeZone });
+  fullWeekdayFormat = new Intl.DateTimeFormat(digits, { weekday: 'long', timeZone });
   // (the day and the month in words, as the server writes a line's dates; the order of the visitor's region, as the time)
-  dateFormat = new Intl.DateTimeFormat(locale, { day: 'numeric', month: 'long', timeZone });
+  dateFormat = new Intl.DateTimeFormat(digits, { day: 'numeric', month: 'long', timeZone });
   partsFormat = new Intl.DateTimeFormat('en-US', { timeZone, hourCycle: 'h23', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' });
   listFormat = new Intl.ListFormat(locale, { type: 'conjunction' });
 }
@@ -190,7 +220,7 @@ export function textsIn(code, texts) {
 
 /** The plural rules and the numbers of a language, made once. */
 function rulesOf(code) {
-  if (!rulesByLanguage.has(code)) rulesByLanguage.set(code, { plural: new Intl.PluralRules(code), number: new Intl.NumberFormat(code) });
+  if (!rulesByLanguage.has(code)) rulesByLanguage.set(code, { plural: new Intl.PluralRules(code), number: new Intl.NumberFormat(latinDigits(code)) });
   return rulesByLanguage.get(code);
 }
 
