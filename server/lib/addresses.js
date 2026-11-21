@@ -8,7 +8,7 @@
 
 import fs from 'node:fs';
 import { linePath, slug, stopName, stopPath, stopPathAt, tripPath } from '../../public/address.js';
-import { t } from '../../public/i18n.js';
+import { latinDigits, t } from '../../public/i18n.js';
 import { townToShow } from '../../public/stops.js';
 import { facts } from './facts.js';
 import { addDays, localClock, localDate, serviceDayStart, timeZone, weekday } from './time.js';
@@ -658,8 +658,8 @@ export class Addresses {
     const line = labelled(name, name, tt.routeModes[route], texts);
     const to = tt.headsign(trip);
     const leaves = (serviceDayStart(date) + tt.schedDep(trip, 0)) * 1000;
-    const time = new Intl.DateTimeFormat(language, { timeStyle: 'short', timeZone: timeZone() }).format(leaves);
-    const day = new Intl.DateTimeFormat(language, { day: 'numeric', month: 'long', timeZone: timeZone() }).format(leaves);
+    const time = new Intl.DateTimeFormat(latinDigits(language), { timeStyle: 'short', timeZone: timeZone() }).format(leaves);
+    const day = new Intl.DateTimeFormat(latinDigits(language), { day: 'numeric', month: 'long', timeZone: timeZone() }).format(leaves);
     const from = tt.stops.name[tt.stopsOf(trip)[0]];
     return {
       title: firstUp(t('address.tripTitle', { line, to }, texts), language),
@@ -706,7 +706,7 @@ export function datesText(dates, language, texts) {
   const at = (date) => new Date(Date.UTC(+date.slice(0, 4), +date.slice(4, 6) - 1, +date.slice(6, 8), 12));
   // (the day before the month, as both languages write it in a sentence)
   const locale = language === 'en' ? 'en-GB' : language;
-  const full = new Intl.DateTimeFormat(locale, { day: 'numeric', month: 'long', timeZone: 'UTC' });
+  const full = new Intl.DateTimeFormat(latinDigits(locale), { day: 'numeric', month: 'long', timeZone: 'UTC' });
   const [first, last] = [dates[0], dates.at(-1)];
   if (first === last) return full.format(at(first));
   // (the first day alone as the full date writes it, its dot kept: "4." of "4. November", "4" of "4 November")

@@ -20,7 +20,7 @@
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
-import { LANGUAGES, pageTexts, pickLanguage, t } from '../../public/i18n.js';
+import { LANGUAGES, latinDigits, pageTexts, pickLanguage, t } from '../../public/i18n.js';
 import * as shapes from '../../public/vendor/material-design-icons/icons.js';
 import { choiceChip, departureLists, departuresSub, h, lineHead, lineLists, lineStops, lineTimetable, panelHead, stopHeading, stopToday, toHtml } from '../../public/panel.js';
 import { serviceDayStart } from './time.js';
@@ -483,11 +483,11 @@ export function renderManifest(json, { language, texts, siteName, areaName, site
  * @returns { head, body } as HTML
  */
 export function panelHtml(kind, data, { language, texts, timeZone, now, fixed = false }) {
-  const time = new Intl.DateTimeFormat(language, { timeStyle: 'short', timeZone });
+  const time = new Intl.DateTimeFormat(latinDigits(language), { timeStyle: 'short', timeZone });
   const day = new Intl.DateTimeFormat('en-CA', { year: 'numeric', month: '2-digit', day: '2-digit', timeZone });
   // (whole hours, days of the week and lists, for what the timetable says beyond the minute: #289)
-  const hour = new Intl.DateTimeFormat(language, { hour: 'numeric', timeZone });
-  const weekday = new Intl.DateTimeFormat(language, { weekday: 'short', timeZone });
+  const hour = new Intl.DateTimeFormat(latinDigits(language), { hour: 'numeric', timeZone });
+  const weekday = new Intl.DateTimeFormat(latinDigits(language), { weekday: 'short', timeZone });
   const list = new Intl.ListFormat(language, { type: 'conjunction' });
   const drawing = { t: (key, params) => t(key, params, texts), lang: language, time: (epoch) => time.format(epoch * 1000), day: (epoch) => day.format(epoch * 1000), hour: (epoch) => hour.format(epoch * 1000), weekday: (epoch) => weekday.format(epoch * 1000), list: (words) => list.format(words), dayStart: serviceDayStart, now, times: 'both' };
   // (a stop's delays come in where one of its departures has one: the others then have the map's question mark)
