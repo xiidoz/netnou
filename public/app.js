@@ -336,8 +336,9 @@ const UNDO = takeUndo();
 function takeUndo() {
   try {
     // (for the tab that chose, which keeps it over the reload)
-    const undo = JSON.parse(sessionStorage.getItem(LANGUAGE_UNDO));
+    const kept = sessionStorage.getItem(LANGUAGE_UNDO);
     sessionStorage.removeItem(LANGUAGE_UNDO);
+    const undo = JSON.parse(kept);
     const known = (code) => LANGUAGES.some(([own]) => own === code);
     const texts = ['now', 'back', 'loading', 'offline', 'close'];
     return undo?.to === language && known(undo.back) && (undo.origin?.stored === null || known(undo.origin?.stored)) && texts.every((key) => typeof undo.texts?.[key] === 'string') ? undo : null;
@@ -3383,8 +3384,11 @@ document.addEventListener('keydown', (event) => {
   // (an Escape meant for a dialog or the settings goes there, unless the bubble has the keyboard)
   const under = aboutDialog.open || notesDialog.open || choiceDialog.open || languagesDialog.open || !settings.hidden;
   if (under && !offer.contains(document.activeElement)) return;
-  // (the bubble is on top: Escape is for it, not for what is under it; where the sheet has it out of sight, for that as well)
-  if (offer.style.visibility !== 'hidden') event.stopPropagation();
+  // (out of sight, under a sheet risen high or the keys of the map: Escape is for what is seen, and the bubble stays for
+  // when there is room for it again)
+  if (getComputedStyle(offer).visibility === 'hidden') return;
+  // (the bubble is on top: Escape is for it, not for what is under it)
+  event.stopPropagation();
   dismissOffer();
 }, true);
 
@@ -3643,7 +3647,11 @@ let choosing = null;
 async function chooseFromList(code) {
   if (code === language) {
     // (kept where the address alone asked for it: the offer of the browser's language is then answered too)
-    if (fromAddress() && keepLanguage(code)) offerMade = true;
+    if (fromAddress() && keepLanguage(code)) {
+      offerMade = true;
+      // (and an offer already up goes: it asks what has just been answered)
+      if (!undoShown) hideOffer();
+    }
     languagesDialog.close();
     return;
   }
