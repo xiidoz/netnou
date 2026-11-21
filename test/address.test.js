@@ -6,6 +6,7 @@ import { test } from 'node:test';
 import { linePath, operatorName, parseAddress, slug, stopName, stopPath, stopPathAt, tripPath, wordsOf } from '../public/address.js';
 import { Addresses, KeptNumbers } from '../server/lib/addresses.js';
 import { sitemapFiles } from '../server/lib/page.js';
+import { LANGUAGES } from '../public/i18n.js';
 
 test('a name as an address writes it: small letters, ä as ae, the words joined by hyphens', () => {
   assert.equal(slug('Nürnberg Plärrer'), 'nuernberg-plaerrer');
@@ -255,14 +256,16 @@ test('a sitemap of more addresses than a file may hold is cut into parts, which 
   const at = 'https://karte.example.org/';
   const paths = Array.from({ length: 7 }, (_, i) => `stop/s${i}@49.0000,11.0000`);
   const locs = (xml) => [...xml.matchAll(/<loc>([^<]*)<\/loc>/g)].map(([, loc]) => loc);
-  // the page in three versions and seven stops: one file of ten
-  const [one, ...more] = sitemapFiles(at, paths, 10);
-  assert.equal(locs(one).length, 10);
+  // the page in a version for each language and the plain one, and seven stops: one file of them all
+  const all = [at, ...LANGUAGES.map(([code]) => `${at}?lang=${code}`), ...paths.map((path) => at + path)];
+  const [one, ...more] = sitemapFiles(at, paths, all.length);
+  assert.equal(locs(one).length, all.length);
   assert.deepEqual(more, []);
-  // in parts of four: the index and three parts, all ten addresses in them once
+  // in parts of four: the index and the parts, every address in them once
   const [index, ...parts] = sitemapFiles(at, paths, 4);
   assert.match(index, /^<\?xml[^>]*>\n<sitemapindex /);
-  assert.deepEqual(locs(index), [`${at}sitemap-1.xml`, `${at}sitemap-2.xml`, `${at}sitemap-3.xml`]);
+  assert.deepEqual(locs(index), parts.map((_, i) => `${at}sitemap-${i + 1}.xml`));
+  assert.equal(parts.length, Math.ceil(all.length / 4));
   assert.ok(parts.every((xml) => /^<\?xml[^>]*>\n<urlset /.test(xml)));
-  assert.deepEqual(parts.flatMap(locs), [at, `${at}?lang=de`, `${at}?lang=en`, ...paths.map((path) => at + path)]);
+  assert.deepEqual(parts.flatMap(locs), all);
 });

@@ -610,8 +610,8 @@ export class Addresses {
     // (where it goes most of the time, both ways)
     const route = [...headsigns].sort((a, b) => b[1] - a[1]).slice(0, 2).map(([headsign]) => headsign).join(' – ');
     return {
-      title: firstUp(t('address.lineTitle', { line, route }, texts).replace(/\s+/g, ' ')),
-      description: firstUp(this.lineDescription(i, line, language, texts, now)),
+      title: firstUp(t('address.lineTitle', { line, route }, texts).replace(/\s+/g, ' '), language),
+      description: firstUp(this.lineDescription(i, line, language, texts, now), language),
       heading: line,
       sub: agency,
     };
@@ -662,8 +662,8 @@ export class Addresses {
     const day = new Intl.DateTimeFormat(language, { day: 'numeric', month: 'long', timeZone: timeZone() }).format(leaves);
     const from = tt.stops.name[tt.stopsOf(trip)[0]];
     return {
-      title: firstUp(t('address.tripTitle', { line, to }, texts)),
-      description: firstUp(t('address.tripDescription', { line, to, from, time, day }, texts)),
+      title: firstUp(t('address.tripTitle', { line, to }, texts), language),
+      description: firstUp(t('address.tripDescription', { line, to, from, time, day }, texts), language),
       heading: line,
       sub: t('line.to', { destination: to }, texts),
       unlisted: true,
@@ -717,7 +717,8 @@ export function datesText(dates, language, texts) {
   return t('address.dates', { from: once ? day : full.format(at(first)), to: full.format(at(last)) }, texts);
 }
 
-const firstUp = (text) => text.charAt(0).toUpperCase() + text.slice(1);
+// (by the rules of the language: Turkish "ilk" is "İlk")
+const firstUp = (text, language) => text.charAt(0).toLocaleUpperCase(language) + text.slice(1);
 
 /**
  * The title of a stop of that name, as its page has it (stationWords), in the

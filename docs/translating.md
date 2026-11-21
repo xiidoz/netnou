@@ -1,6 +1,7 @@
 # Translating
 
-The page is available in German and English. Each language is one file in
+The page is available in 35 languages, those of `LANGUAGES` in
+`public/i18n.js`. Each language is one file in
 `public/locales/`, and adding a language needs no build step and no change to
 the server.
 
@@ -11,7 +12,8 @@ the server.
 2. Otherwise the language the address asks for, if it names one the page
    has: `?lang=de`.
 3. Otherwise the first of the browser's preferred languages that exists. A
-   browser asking for `de-AT` gets `de`.
+   browser asking for `de-AT` gets `de`, and one asking for Norwegian by
+   `no` gets Norwegian Bokmål (`nb`).
 4. Otherwise English.
 
 Changing the language in the page reloads it, from the address without

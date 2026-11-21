@@ -299,7 +299,7 @@ const drawing = (language, texts, now) => {
   const weekday = new Intl.DateTimeFormat(language, { weekday: 'short', timeZone: 'Europe/Berlin' });
   const list = new Intl.ListFormat(language, { type: 'conjunction' });
   const day = new Intl.DateTimeFormat('en-CA', { year: 'numeric', month: '2-digit', day: '2-digit', timeZone: 'Europe/Berlin' });
-  return { t: (key, params) => translate(key, params, texts), time: (e) => time.format(e * 1000), day: (e) => day.format(e * 1000), dayStart: serviceDayStart, hour: (e) => hour.format(e * 1000), weekday: (e) => weekday.format(e * 1000), list: (w) => list.format(w), now };
+  return { t: (key, params) => translate(key, params, texts), lang: language, time: (e) => time.format(e * 1000), day: (e) => day.format(e * 1000), dayStart: serviceDayStart, hour: (e) => hour.format(e * 1000), weekday: (e) => weekday.format(e * 1000), list: (w) => list.format(w), now };
 };
 
 test('how often, in the words of the details: the gap, the longest wait, how many an hour, hourly', () => {
@@ -323,6 +323,9 @@ test('whole hours as a clock says them, a stretch of them, midnight at its end a
   assert.equal(hoursText(at(day, '05:00'), at(day, '24:00'), en12), '5 AM–12 AM');
   assert.equal(hoursText(at(day, '05:00'), at(day, '24:00'), de24), '5–24 Uhr');
   assert.equal(hoursText(at(day, '20:00'), at(day, '24:00'), gb), '20:00–24:00');
+  // (also where the language writes the time with a dot: "5.00–7.00", not "5–7.00")
+  assert.equal(hoursText(at(day, '05:00'), at(day, '07:00'), drawing('da', en, at(day, '13:37'))), '5.00–7.00');
+  assert.equal(hoursText(at(day, '20:00'), at(day, '24:00'), drawing('fi', en, at(day, '13:37'))), '20.00–24.00');
 });
 
 test('the line in the head says how often in the hour it is and until when, and the last trip; the first before it, none after', () => {
@@ -345,6 +348,10 @@ test('the line in the head says how often in the hour it is and until when, and 
   assert.equal(todayText(today, drawing('de', de, at(day, '23:50')), 'Nürnberg Plärrer'), 'Ab Nürnberg Plärrer: heute keine Fahrt mehr');
   assert.equal(todayText(today, drawing('en-US', en, at(day, '13:37')), 'Nürnberg Plärrer'), 'From Nürnberg Plärrer: every 10 min until 8 PM · last trip 11:40 PM');
   assert.equal(todayTextOf(today, drawing('de', de, at(day, '13:37'))), 'Bis 20 Uhr alle 10 Min.\u00a0· letzte\u00a0Fahrt\u00a023:40');
+  // (its first letter by the rules of the language: a Turkish i is İ as a capital, and İ is i as a small letter)
+  const tr = { 'facts.first': 'ilk sefer {time}', 'facts.last': 'İlk değil {time}', 'facts.fromStop': '{stop} durağından: {said}' };
+  assert.equal(todayText(today, drawing('tr', tr, at(day, '04:00'))), 'İlk sefer 05:30 · İlk değil 23:40');
+  assert.equal(todayText(today, drawing('tr', tr, at(day, '23:20')), 'Plärrer'), 'Plärrer durağından: ilk değil 23:40');
 });
 
 test('a stop says below its name how many lines leave it today, from when to when', () => {

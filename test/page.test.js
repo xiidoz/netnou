@@ -148,12 +148,14 @@ test('the page names its address and its versions in other languages', () => {
   assert.equal(tag(page, /<meta property="og:url" content="([^"]*)"/), URL_);
   const versions = [...page.matchAll(/<link rel="alternate" hreflang="([^"]*)" href="([^"]*)"/g)].map(([, code, href]) => [code, href]);
   // the version in the main language is the plain address, as is the one for whoever names none (#287)
-  assert.deepEqual(versions, [['de', URL_], ['en', `${URL_}?lang=en`], ['x-default', URL_]]);
+  const each = (main) => [...LANGUAGES.map(([code]) => [code, code === main ? URL_ : `${URL_}?lang=${code}`]), ['x-default', URL_]];
+  assert.deepEqual(versions, each('de'));
+  assert.deepEqual(versions.slice(4, 7), [['de', URL_], ['et', `${URL_}?lang=et`], ['en', `${URL_}?lang=en`]]);
   // (asked for in it by the address all the same, which the server sends on to the plain one, it names that one)
   assert.equal(tag(renderPage(html, { ...german, asked: 'de' }), /<link rel="canonical" href="([^"]*)"/), URL_);
   // at an instance in English, the other way round
   const inEnglish = renderPage(html, { ...german, main: 'en', language: 'en', texts: en });
-  assert.deepEqual([...inEnglish.matchAll(/hreflang="([^"]*)" href="([^"]*)"/g)].map(([, code, href]) => [code, href]), [['de', `${URL_}?lang=de`], ['en', URL_], ['x-default', URL_]]);
+  assert.deepEqual([...inEnglish.matchAll(/hreflang="([^"]*)" href="([^"]*)"/g)].map(([, code, href]) => [code, href]), each('en'));
 
   // asked for in English: the same versions, and this one is the address of its own
   const english = renderPage(html, { ...german, language: 'en', asked: 'en', texts: en });
@@ -544,17 +546,19 @@ test('the sitemap lists each address of the page once: the plain one, in the mai
   const [xml, ...more] = sitemapFiles(URL_, [], undefined, null, 'de');
   assert.deepEqual(more, []);
   assert.ok(xml.startsWith('<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:xhtml="http://www.w3.org/1999/xhtml">\n'));
-  assert.deepEqual([...xml.matchAll(/<loc>([^<]*)<\/loc>/g)].map(([, loc]) => loc), [URL_, `${URL_}?lang=en`]);
+  const others = LANGUAGES.map(([code]) => code).filter((code) => code !== 'de');
+  assert.deepEqual([...xml.matchAll(/<loc>([^<]*)<\/loc>/g)].map(([, loc]) => loc), [URL_, ...others.map((code) => `${URL_}?lang=${code}`)]);
   // each with all of them as its versions
   const links = [...xml.matchAll(/<xhtml:link rel="alternate" hreflang="([^"]*)" href="([^"]*)"\/>/g)].map(([, code, href]) => `${code} ${href}`);
-  assert.equal(links.length, 6);
-  assert.deepEqual(links.slice(0, 3), [`de ${URL_}`, `en ${URL_}?lang=en`, `x-default ${URL_}`]);
-  assert.deepEqual(links.slice(3, 6), links.slice(0, 3));
+  const n = LANGUAGES.length + 1;
+  assert.equal(links.length, LANGUAGES.length * n);
+  assert.deepEqual(links.slice(0, n), [...LANGUAGES.map(([code]) => (code === 'de' ? `de ${URL_}` : `${code} ${URL_}?lang=${code}`)), `x-default ${URL_}`]);
+  assert.deepEqual(links.slice(n, 2 * n), links.slice(0, n));
 });
 
 test('every address in the sitemap has the date of the timetable, where it is known', () => {
   const [xml] = sitemapFiles(URL_, ['stop/plaerrer@49.4480,11.0620', 'line/vag/subway/u1'], undefined, '2026-10-20', 'de');
-  assert.equal(xml.match(/<lastmod>2026-10-20<\/lastmod>/g).length, 4);
+  assert.equal(xml.match(/<lastmod>2026-10-20<\/lastmod>/g).length, LANGUAGES.length + 2);
   assert.ok(xml.includes(`  <url><loc>${URL_}stop/plaerrer@49.4480,11.0620</loc><lastmod>2026-10-20</lastmod></url>`));
   assert.ok(xml.includes(`  <url>\n    <loc>${URL_}</loc>\n    <lastmod>2026-10-20</lastmod>\n    <xhtml:link`));
   assert.doesNotMatch(sitemapFiles(URL_, ['line/vag/subway/u1'])[0], /lastmod/);

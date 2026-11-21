@@ -10,12 +10,50 @@
 
 import en from './locales/en.js';
 
-// [code, the language's own name]. The code is the primary subtag of a language
-// tag, so 'de' also serves a browser that asks for de-AT or de-CH.
+// [code, the language's own name], in the order of those names: Latin letters,
+// then Greek, then Cyrillic. The code is the primary subtag of a language tag,
+// so 'de' also serves a browser that asks for de-AT or de-CH (and see SAME).
 export const LANGUAGES = [
+  ['bs', 'Bosanski'],
+  ['ca', 'Català'],
+  ['cs', 'Čeština'],
+  ['da', 'Dansk'],
   ['de', 'Deutsch'],
+  ['et', 'Eesti'],
   ['en', 'English'],
+  ['es', 'Español'],
+  ['fr', 'Français'],
+  ['ga', 'Gaeilge'],
+  ['hr', 'Hrvatski'],
+  ['is', 'Íslenska'],
+  ['it', 'Italiano'],
+  ['lv', 'Latviešu'],
+  ['lt', 'Lietuvių'],
+  ['hu', 'Magyar'],
+  ['mt', 'Malti'],
+  ['nl', 'Nederlands'],
+  ['nb', 'Norsk'],
+  ['pl', 'Polski'],
+  ['pt', 'Português'],
+  ['ro', 'Română'],
+  ['sq', 'Shqip'],
+  ['sk', 'Slovenčina'],
+  ['sl', 'Slovenščina'],
+  ['fi', 'Suomi'],
+  ['sv', 'Svenska'],
+  ['tr', 'Türkçe'],
+  ['el', 'Ελληνικά'],
+  ['be', 'Беларуская'],
+  ['bg', 'Български'],
+  ['mk', 'Македонски'],
+  ['ru', 'Русский'],
+  ['sr', 'Српски'],
+  ['uk', 'Українська'],
 ];
+// Codes a browser may name a language by besides the one above: Norwegian
+// Bokmål as Norwegian (no), Filipino as Tagalog (tl), and the older codes of
+// Hebrew and Indonesian (iw, in), which Android still gives.
+const SAME = { no: 'nb', tl: 'fil', iw: 'he', in: 'id' };
 // The languages the repository has a README of its own in, README.<code>.md:
 // the page's links to the software lead to the one in the language of the
 // page, else to the main one in English, README.md. Every README names all of
@@ -32,7 +70,10 @@ export const APP_NAME = 'Netnou';
 // The attributes data-i18n-<attribute> can fill in, see translatePage().
 export const ATTRIBUTES = ['aria-label', 'title', 'content', 'placeholder'];
 
-const primary = (tag) => tag.toLowerCase().split('-')[0];
+const primary = (tag) => {
+  const code = tag.toLowerCase().split('-')[0];
+  return SAME[code] ?? code;
+};
 
 // The language the server wrote the page in, as <html lang> says before
 // translatePage puts the visitor's there: picked by the browser's languages
@@ -135,9 +176,27 @@ export function languageToOffer(stored = storedLanguage(), preferred = navigator
   return wanted && wanted !== asked ? wanted : null;
 }
 
+// The language of texts other than the visitor's, which t() is given: their
+// plural forms and numbers follow that language's rules, not those of the
+// page's. The server writes pages in every language with them (#384).
+const languageOf = new WeakMap([[en, FALLBACK]]);
+const rulesByLanguage = new Map();
+
+/** Marks the texts of a language as such, for t(); returns them. */
+export function textsIn(code, texts) {
+  languageOf.set(texts, code);
+  return texts;
+}
+
+/** The plural rules and the numbers of a language, made once. */
+function rulesOf(code) {
+  if (!rulesByLanguage.has(code)) rulesByLanguage.set(code, { plural: new Intl.PluralRules(code), number: new Intl.NumberFormat(code) });
+  return rulesByLanguage.get(code);
+}
+
 /** The texts of a language, for t(): to say something in it on a page in another one. */
 export async function textsOf(code) {
-  return code === FALLBACK ? en : (await import(`./locales/${code}.js`)).default;
+  return code === FALLBACK ? en : textsIn(code, (await import(`./locales/${code}.js`)).default);
 }
 
 /**
@@ -170,17 +229,19 @@ export const sentInAnother = (sent = SENT) => chosen && language !== sent;
 /**
  * The text for a key of locales/en.js. {name} in it is replaced by params.name,
  * numbers formatted for the language; plural forms are chosen by params.count.
- * @param texts those of another language than the visitor's, for the server
+ * @param texts those of another language than the visitor's, for the server:
+ *   by the rules of their language where it is known (textsIn), else the page's
  */
 export function t(key, params = {}, texts = messages) {
   let message = texts[key] ?? en[key];
   if (message === undefined) return key;
+  const own = texts !== messages && languageOf.has(texts) ? rulesOf(languageOf.get(texts)) : null;
   // (a plural by the number itself where the language has words of its own for it, "twice", else by its kind)
-  if (typeof message === 'object') message = message[params.count] ?? message[pluralRules.select(params.count)] ?? message.other;
+  if (typeof message === 'object') message = message[params.count] ?? message[(own?.plural ?? pluralRules).select(params.count)] ?? message.other;
   return message.replace(/\{(\w+)\}/g, (placeholder, name) => {
     const value = params[name];
     if (value === undefined) return placeholder;
-    return typeof value === 'number' ? formatNumber(value) : value;
+    return typeof value === 'number' ? (own?.number ?? numberFormat).format(value) : value;
   });
 }
 

@@ -52,8 +52,8 @@ Ein Fahrzeug kann also etwas vor oder hinter seiner Markierung sein.
 ![Die Abfahrten von Nürnberg Hauptbahnhof als Tafel neben der Karte, auf einem breiten Bildschirm](docs/pictures/board.webp)
 
 Die Fahrzeuge lassen sich auch nach ihrer Verspätung einfärben. Die Karte kann
-den eigenen Standort zeigen; er bleibt im Browser. Die Seite gibt es auf
-Deutsch und Englisch, und sie lässt sich als App installieren.
+den eigenen Standort zeigen; er bleibt im Browser. Die Seite gibt es in
+35 Sprachen, und sie lässt sich als App installieren.
 
 ## Etwas stimmt nicht?
 
@@ -142,7 +142,7 @@ Sekunde aus seinem Cache. Die Zahlen für ganz Deutschland stehen in
   Besuch meldet: kein Skript in der Seite, kein Cookie
   ([Besuche zählen](docs/configuration.md#counting-visits)).
 - Eine offene JSON-API für andere Clients ([docs/api.md](docs/api.md)).
-- Deutsch und Englisch, je nach Browser oder eigener Wahl; für eine weitere
+- 35 Sprachen, je nach Browser oder eigener Wahl; für eine weitere
   Sprache braucht es nur eine Datei ([docs/translating.md](docs/translating.md)).
 
 ## Mitmachen

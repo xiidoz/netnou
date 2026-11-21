@@ -6,7 +6,7 @@ import zlib from 'node:zlib';
 import { parseAddress } from '../public/address.js';
 import { readChoice } from '../public/choice.js';
 import { readDisplay, readStops } from '../public/display.js';
-import { t } from '../public/i18n.js';
+import { t, textsIn } from '../public/i18n.js';
 import { nearby, placesOf } from '../public/nearby.js';
 import { kilometres } from '../public/search.js';
 import { townToShow } from '../public/stops.js';
@@ -209,7 +209,7 @@ const fileVersions = versionsOfFiles(own, config.publicDir);
 // (lib/page.js), in the language the address asks for, else in the one the
 // browser asks for, else in the main language of the instance. Put together
 // once for each and again when the file has changed.
-const texts = Object.fromEntries(await Promise.all(LANGUAGE_CODES.map(async (code) => [code, (await import(`../public/locales/${code}.js`)).default])));
+const texts = Object.fromEntries(await Promise.all(LANGUAGE_CODES.map(async (code) => [code, textsIn(code, (await import(`../public/locales/${code}.js`)).default)])));
 const pages = new Map();
 
 // The style sheets and the first script of the page come within it

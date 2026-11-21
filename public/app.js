@@ -255,7 +255,7 @@ const touchScreen = matchMedia('(pointer: coarse)');
  * whether the screen is touched, for how high the rows of a line are.
  */
 function drawing() {
-  return { t, time: formatTime, day: dayOf, dayStart: dayStartOf, hour: formatHour, weekday: formatWeekday, list: formatList, now: now(), times: state.times, touch: touchScreen.matches, live: delaysLive(), stale: staleness() === 1, colorBy: state.colorBy, flags: state.flags, moving: true, favourite: favouriteStop, chosen: (stop) => stop.id === state.selection?.fromStop?.id, lost: heldShown(), laterKnown: !heldShown() || !(now() - shownAt(state.selection) > LATER_S), staleS: STALE_S };
+  return { t, lang: language, time: formatTime, day: dayOf, dayStart: dayStartOf, hour: formatHour, weekday: formatWeekday, list: formatList, now: now(), times: state.times, touch: touchScreen.matches, live: delaysLive(), stale: staleness() === 1, colorBy: state.colorBy, flags: state.flags, moving: true, favourite: favouriteStop, chosen: (stop) => stop.id === state.selection?.fromStop?.id, lost: heldShown(), laterKnown: !heldShown() || !(now() - shownAt(state.selection) > LATER_S), staleS: STALE_S };
 }
 
 // The icons on the page's own buttons are from Material Design Icons
@@ -3788,7 +3788,7 @@ function lineSaid(name, mode) {
 function lineTitle({ name, mode }) {
   const line = lineSaid(name, mode);
   const words = t('address.lineTitle', { line, route: '' }).replace(/\s+/g, ' ').trim();
-  return `${words.charAt(0).toUpperCase()}${words.slice(1)} – ${siteName}`;
+  return `${words.charAt(0).toLocaleUpperCase(language)}${words.slice(1)} – ${siteName}`;
 }
 
 /** The title of the page with these details open, from what the server said of them last. */
@@ -3798,7 +3798,7 @@ const detailsTitle = ({ type, data }) => (type === 'trip' ? tripTitle(data) : ty
 function tripTitle({ line: name, mode, to }) {
   const line = lineSaid(name, mode);
   const words = t('address.tripTitle', { line, to });
-  return `${words.charAt(0).toUpperCase()}${words.slice(1)} – ${siteName}`;
+  return `${words.charAt(0).toLocaleUpperCase(language)}${words.slice(1)} – ${siteName}`;
 }
 
 // (the address the page was sent for: the title the server gave it says more than this script knows, a line's ends, and is kept while the page is there;

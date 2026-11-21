@@ -7,11 +7,11 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import { test } from 'node:test';
 import vm from 'node:vm';
-import { ATTRIBUTES, LANGUAGES, READMES, dayOf, dayStartOf, formatNumber, formatTime, formatWhen, languageToOffer, loadLanguage, pageTexts, pickLanguage, sentInAnother, setTimeZone, t, textsOf } from '../public/i18n.js';
+import { ATTRIBUTES, LANGUAGES, READMES, dayOf, dayStartOf, formatNumber, formatTime, formatWhen, languageToOffer, loadLanguage, pageTexts, pickLanguage, sentInAnother, setTimeZone, t, textsIn, textsOf } from '../public/i18n.js';
 import { serviceDayStart, setTimeZone as setServerZone } from '../server/lib/time.js';
 import en from '../public/locales/en.js';
 import { tomorrowAt as nextDayAt } from '../public/panel.js';
-import { PAGE_INLINE, PAGE_MODULES } from '../server/lib/page.js';
+import { PAGE_INLINE, PAGE_MODULES, languageFor } from '../server/lib/page.js';
 import { MODES } from '../server/lib/timetable.js';
 
 const publicDir = new URL('../public/', import.meta.url);
@@ -489,10 +489,13 @@ test('the header card shows at once where the page came as this visitor gets it'
   const shown = (situation) => firstScript(situation).controls === 'shown';
   // the language of the page is the visitor's: picked as i18n.js picks it
   const browsers = [[], ['xx'], ['de-DE', 'en'], ['en-US'], ['xx-XX', 'de-AT', 'en'], ['EN-gb', 'de'], ['fr', 'en', 'de']];
-  for (const lang of codes) {
+  // (of the languages three, whatever there are: the situations grow with the cube of their number)
+  const some = ['de', 'en', 'fr'];
+  assert.ok(some.every((code) => codes.includes(code)));
+  for (const lang of some) {
     for (const browser of browsers) {
-      for (const stored of [null, ...codes, 'xx']) {
-        for (const asked of [null, ...codes, 'xx', '']) {
+      for (const stored of [null, ...some, 'xx']) {
+        for (const asked of [null, ...some, 'xx', '']) {
           const situation = { lang, browser, stored: stored === null ? {} : { 'netnou.lang': stored }, search: asked === null ? '' : `?lang=${asked}` };
           assert.equal(shown(situation), pickLanguage(stored, browser, asked, lang) === lang, JSON.stringify(situation));
         }
@@ -668,6 +671,30 @@ test('the language is the stored choice, else the one the address asks for, else
   assert.equal(pickLanguage(null, []), 'en');
 });
 
+test('a browser that names a language by a second or older code gets it', () => {
+  // (Norwegian Bokmål as Norwegian: no-NO, as browsers in Norway mostly ask)
+  assert.equal(pickLanguage(null, ['no-NO', 'en']), 'nb');
+  assert.equal(pickLanguage(null, ['nb-NO']), 'nb');
+  // (the others where their language is one of the page)
+  const codes = LANGUAGES.map(([code]) => code);
+  for (const [second, code] of [['tl', 'fil'], ['iw', 'he'], ['in', 'id']]) assert.equal(pickLanguage(null, [`${second}-XX`]), codes.includes(code) ? code : 'en');
+  assert.equal(languageFor('no,en;q=0.5', 'de'), 'nb');
+});
+
+// The server writes pages in every language with one t(), whose own plural
+// rules and numbers are those of the page it runs in (English on the server).
+test('texts of another language than the page\'s take that language\'s plural forms and numbers', () => {
+  const stops = { one: '{count} остановка', few: '{count} остановки', many: '{count} остановок', other: '{count} остановки' };
+  const ru = textsIn('ru', { 'address.stops': stops });
+  assert.equal(t('address.stops', { count: 3 }, ru), '3 остановки');
+  assert.equal(t('address.stops', { count: 5 }, ru), '5 остановок');
+  assert.equal(t('address.stops', { count: 21 }, ru), '21 остановка');
+  assert.equal(t('address.stops', { count: 1234 }, ru), `${new Intl.NumberFormat('ru').format(1234)} остановки`);
+  // (texts not marked with their language: by the rules of the page, as before)
+  assert.equal(t('address.stops', { count: 3 }, { 'address.stops': stops }), '3 остановки');
+  assert.equal(t('address.stops', { count: 5 }, { 'address.stops': stops }), '5 остановки');
+});
+
 // ?lang=de is how a search engine, whose browser speaks English, reads the page in German.
 test('an address that asks for a language gets it, unless the visitor chose one themselves', () => {
   assert.equal(pickLanguage(null, ['en-US'], 'de'), 'de');
@@ -691,7 +718,7 @@ test('the page offers the browser\'s language where the address asks for another
   assert.equal(languageToOffer('xx', ['de-DE'], 'en'), 'de'); // stored by another version of the page
   assert.equal(languageToOffer(null, ['de-DE'], null), null);
   assert.equal(languageToOffer(null, ['de-DE'], 'xx'), null);
-  assert.equal(languageToOffer(null, ['fr-FR'], 'de'), null);
+  assert.equal(languageToOffer(null, ['xx-XX'], 'de'), null);
   assert.equal(languageToOffer(null, [], 'de'), null);
   // (in the language it offers, whatever the page is in)
   await loadLanguage('en', []);
