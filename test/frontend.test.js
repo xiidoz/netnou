@@ -10,6 +10,7 @@ import vm from 'node:vm';
 import { ATTRIBUTES, LANGUAGES, READMES, dayOf, dayStartOf, formatNumber, formatTime, formatWhen, languageToOffer, loadLanguage, pageTexts, pickLanguage, sentInAnother, setTimeZone, t, textsIn, textsOf } from '../public/i18n.js';
 import { serviceDayStart, setTimeZone as setServerZone } from '../server/lib/time.js';
 import en from '../public/locales/en.js';
+import { languageFound, languageOrder, nameAlone, secondName } from '../public/languages.js';
 import { tomorrowAt as nextDayAt } from '../public/panel.js';
 import { PAGE_INLINE, PAGE_MODULES, languageFor } from '../server/lib/page.js';
 import { MODES } from '../server/lib/timetable.js';
@@ -681,6 +682,51 @@ test('a browser that names a language by a second or older code gets it', () => 
   assert.equal(languageFor('no,en;q=0.5', 'de'), 'nb');
 });
 
+// The list of languages behind the gear (#392): the visitor's first, then the
+// others in one order whatever the page's language, each findable by any of
+// its names.
+test('the list of languages puts yours first, then the others in the order of their own names', () => {
+  const codes = ['bs', 'de', 'en', 'fr', 'nb', 'el', 'ru'];
+  assert.deepEqual(languageOrder('el', ['en-US', 'de', 'xx'], codes), { yours: ['el', 'en', 'de'], more: ['bs', 'fr', 'nb', 'ru'] });
+  // (a browser that names Norwegian by no, and the language in use first even where the browser asks for it later)
+  assert.deepEqual(languageOrder('de', ['no-NO', 'de'], codes), { yours: ['de', 'nb'], more: ['bs', 'en', 'fr', 'el', 'ru'] });
+  assert.deepEqual(languageOrder('en', [], codes).yours, ['en']);
+  // the order of the others is that of LANGUAGES, the same in every language of the page
+  assert.deepEqual(languageOrder('en', []).more, LANGUAGES.map(([code]) => code).filter((code) => code !== 'en'));
+});
+
+test('a row says a language\'s name in the page\'s language below its own, as a name standing alone, where that differs', () => {
+  assert.equal(secondName('de', 'Deutsch', 'en'), 'German');
+  assert.equal(secondName('de', 'Deutsch', 'fr'), 'Allemand');
+  assert.equal(secondName('en', 'English', 'en'), null);
+  assert.equal(secondName('de', 'Deutsch', 'de'), null);
+  assert.equal(nameAlone('el', 'fr'), 'Grec');
+});
+
+test('the search finds a language by its own name, its name in the page\'s, the browser\'s or English, its code or a common spelling, without accents', () => {
+  const found = (code, own, typed, context = { page: 'en', preferred: ['en-US'] }) => languageFound(code, own, typed, context);
+  // the owner's example: with the page in English, Deutsch and German both find German
+  assert.ok(found('de', 'Deutsch', 'Deutsch'));
+  assert.ok(found('de', 'Deutsch', 'germ'));
+  assert.ok(!found('fr', 'Français', 'germ'));
+  // (in the browser's languages besides: a page in Greek, a browser in French)
+  assert.ok(found('de', 'Deutsch', 'allemand', { page: 'el', preferred: ['fr-FR'] }));
+  assert.ok(!found('de', 'Deutsch', 'allemand', { page: 'el', preferred: ['ru'] }));
+  // (in English on every page, the code and its second codes, common spellings, accents and capitals as they come)
+  assert.ok(found('el', 'Ελληνικά', 'greek', { page: 'ru', preferred: ['ru'] }));
+  assert.ok(found('nb', 'Norsk', 'no'));
+  assert.ok(found('sr', 'Српски', 'srpski'));
+  assert.ok(found('el', 'Ελληνικά', 'ellinika'));
+  assert.ok(found('es', 'Español', 'ESPANOL'));
+  assert.ok(found('cs', 'Čeština', 'cestina'));
+  // (the start of any word, and of the whole name for what is typed with a space)
+  assert.ok(found('id', 'Bahasa Indonesia', 'indo'));
+  assert.ok(found('id', 'Bahasa Indonesia', 'bahasa ind'));
+  assert.ok(!found('de', 'Deutsch', 'eutsch'));
+  // nothing typed finds all
+  assert.ok(found('fr', 'Français', '  '));
+});
+
 // The server writes pages in every language with one t(), whose own plural
 // rules and numbers are those of the page it runs in (English on the server).
 test('texts of another language than the page\'s take that language\'s plural forms and numbers', () => {
@@ -895,7 +941,7 @@ test('without a connection the card says it, and the map goes on with what it ha
   // open line's own vehicles whatever is chosen)
   assert.match(app, /const kinds = \(\) => selection\?\.type === 'line' \|\| \[\.\.\.chipCounts\]\.some\(\(\[mode, node\]\) => state\.enabled\.has\(mode\) && !node\.parentElement\.hidden\);\s*const lost = state\.lost && \(panel\.hidden \|\| Boolean\(selection\?\.failing\)\) && state\.board === null && !state\.display && tip\.hidden && offer\.hidden && kinds\(\);/);
   // the one tip waits for a later landing at a stop
-  assert.match(app, /OFFERING \|\| connectionLost\(\)\) return;/);
+  assert.match(app, /OFFERING \|\| UNDO \|\| connectionLost\(\)\) return;/);
 });
 
 test('what gets the keyboard focus in the details is in sight: clear of the timetable heading, which waits at the foot only where there is room, in a sheet risen as far as it needs, never on credits under it', () => {

@@ -58,6 +58,7 @@ export const PAGE_MODULES = [
   'favourites.js',
   'held.js',
   'choice.js',
+  'languages.js',
   'vendor/material-design-icons/icons.js',
   'vendor/maplibre-gl/maplibre-gl.mjs',
   'vendor/maplibre-gl/maplibre-gl-shared.mjs',
