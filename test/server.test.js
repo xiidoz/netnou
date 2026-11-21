@@ -644,8 +644,16 @@ test('the page says what and where the instance is before any script runs', asyn
   const askedEnglish = await asking('/?lang=en', 'de-DE,de;q=0.9');
   assert.match(askedEnglish.body.toString(), /<html lang="en"[ >]/);
   assert.equal(askedEnglish.headers.vary, 'Accept-Encoding');
-  // (the main language's page is at the plain address, #287)
-  assert.equal((await asking('/?lang=de', 'en-US,en;q=0.9')).status, 301);
+  // (the main language's page is at the plain address, #287, where that shows it in the main language: to a browser that
+  // asks for it, and to a search engine, which names none; another browser keeps the address's language, #391)
+  const moved = await asking('/?lang=de', 'de-DE,de;q=0.9');
+  assert.deepEqual([moved.status, moved.headers.vary], [301, 'Accept-Language']);
+  assert.equal((await request('/?lang=de')).status, 301);
+  for (const languages of ['en-US,en;q=0.9', 'xx']) {
+    const kept = await asking('/?lang=de&display=fixed', languages);
+    assert.equal(kept.status, 200, languages);
+    assert.match(kept.body.toString(), /<html lang="de"[ >]/);
+  }
   assert.equal(english.headers.vary, 'Accept-Encoding');
   assert.equal((await request('/?lang=en', { headers: { 'If-None-Match': english.headers.etag } })).headers.vary, 'Accept-Encoding');
 
