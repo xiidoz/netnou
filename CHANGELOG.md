@@ -8,7 +8,7 @@ This file is written by
 messages when a release is made. Do not edit it by hand; see
 [Releases](CONTRIBUTING.md#releases).
 
-## [0.30.0](https://github.com/xiidoz/netnou/compare/v0.29.0...v0.30.0) (2026-11-21) – The European Languages Release
+## [0.30.0](https://github.com/xiidoz/netnou/compare/v0.29.0...v0.30.0) – The European Languages Release
 
 Riders can now read the page in 35 languages of Europe, German and English among them. The installed app keeps only the texts of the languages a rider's browser uses, so new versions no longer bring every language with them. Line descriptions in search engines and link previews also write a stretch of non-running days within one month correctly.
 
@@ -23,7 +23,7 @@ Riders can now read the page in 35 languages of Europe, German and English among
 
 * **server:** a stretch of days in one month writes its first day with the dot of the date ([#386](https://github.com/xiidoz/netnou/issues/386)) ([094bf36](https://github.com/xiidoz/netnou/commit/094bf36b1c41bda3cd9bc2bbac3b4f85ca8d7b6f))
 
-## [0.29.0](https://github.com/xiidoz/netnou/compare/v0.28.0...v0.29.0) (2026-11-20) – The Offline Release
+## [0.29.0](https://github.com/xiidoz/netnou/compare/v0.28.0...v0.29.0) – The Offline Release
 
 Riders without a connection keep what they had: started offline, the page shows what was open and streets seen before within seconds, and search finds stops and lines. A stop holds two hours of departures, and the page catches up between tunnels. The note gives the data's time and day, known delays stay grey, and no banner covers the map.
 
@@ -45,14 +45,14 @@ Riders without a connection keep what they had: started offline, the page shows 
 * **page:** offline, the note gives the time of the data and known delays stay grey ([#368](https://github.com/xiidoz/netnou/issues/368)) ([bdccb47](https://github.com/xiidoz/netnou/commit/bdccb4718a087c096973c24eaf31490ac8c3fed2)), closes [#361](https://github.com/xiidoz/netnou/issues/361)
 * **page:** without a connection the card says so, and no banner covers the map ([#383](https://github.com/xiidoz/netnou/issues/383)) ([a136082](https://github.com/xiidoz/netnou/commit/a136082af0c97611a6dc0df9f220f21bc2a38252)), closes [#382](https://github.com/xiidoz/netnou/issues/382)
 
-## [0.28.0](https://github.com/xiidoz/netnou/compare/v0.27.3...v0.28.0) (2026-11-16)
+## [0.28.0](https://github.com/xiidoz/netnou/compare/v0.27.3...v0.28.0)
 
 
 ### Features
 
 * **timetable:** a bus the feed gives as a tram or U-Bahn is a bus, with an (i) that says so ([#359](https://github.com/xiidoz/netnou/issues/359)) ([7022a3d](https://github.com/xiidoz/netnou/commit/7022a3dc5b2cc18d9a51e5c15f65d0624ce951b9)), closes [#358](https://github.com/xiidoz/netnou/issues/358)
 
-## [0.27.3](https://github.com/xiidoz/netnou/compare/v0.27.2...v0.27.3) (2026-11-15)
+## [0.27.3](https://github.com/xiidoz/netnou/compare/v0.27.2...v0.27.3)
 
 
 ### Bug Fixes
@@ -60,7 +60,7 @@ Riders without a connection keep what they had: started offline, the page shows 
 * **page:** an upright wall board shows whole destinations, and says which lines it shows ([#355](https://github.com/xiidoz/netnou/issues/355)) ([5e0fcc5](https://github.com/xiidoz/netnou/commit/5e0fcc541618426938f6198e5188490a29855b33)), closes [#352](https://github.com/xiidoz/netnou/issues/352)
 * **page:** the map shows its keys while it has the keyboard, and a first Tab leads there ([#357](https://github.com/xiidoz/netnou/issues/357)) ([86d3231](https://github.com/xiidoz/netnou/commit/86d3231a1fd80cf6299117278ebaad845331cffd))
 
-## [0.27.2](https://github.com/xiidoz/netnou/compare/v0.27.1...v0.27.2) (2026-11-15)
+## [0.27.2](https://github.com/xiidoz/netnou/compare/v0.27.1...v0.27.2)
 
 
 ### Bug Fixes
@@ -69,14 +69,14 @@ Riders without a connection keep what they had: started offline, the page shows 
 * **page:** on a touch screen every control takes a finger over 44 px ([#351](https://github.com/xiidoz/netnou/issues/351)) ([d4b2b25](https://github.com/xiidoz/netnou/commit/d4b2b258ce0d3b19cba0c04d0fab66a7acc69aad))
 * **page:** the filter names each line by its badge, and a phone board shows whole destinations ([#350](https://github.com/xiidoz/netnou/issues/350)) ([fca0f0a](https://github.com/xiidoz/netnou/commit/fca0f0a760b6585ad8da3507aa0a90ee6469be90))
 
-## [0.27.1](https://github.com/xiidoz/netnou/compare/v0.27.0...v0.27.1) (2026-11-14)
+## [0.27.1](https://github.com/xiidoz/netnou/compare/v0.27.0...v0.27.1)
 
 
 ### Bug Fixes
 
 * **page:** on a phone the sheet's grip takes every tap, and all of its top edge drags it ([#348](https://github.com/xiidoz/netnou/issues/348)) ([01ba44e](https://github.com/xiidoz/netnou/commit/01ba44e28c9c4719563431f23c483812f02247cd))
 
-## [0.27.0](https://github.com/xiidoz/netnou/compare/v0.26.3...v0.27.0) (2026-11-14)
+## [0.27.0](https://github.com/xiidoz/netnou/compare/v0.26.3...v0.27.0)
 
 
 ### Features
@@ -89,7 +89,7 @@ Riders without a connection keep what they had: started offline, the page shows 
 * **page:** the filter names a whole line chosen by the address, and unticks its directions ([#343](https://github.com/xiidoz/netnou/issues/343)) ([efcbda4](https://github.com/xiidoz/netnou/commit/efcbda4d8e56aea043e11a142d723ca2ca5d2eee))
 * **timetable:** a last trip written as 0:36 ends the hours of its day, not begins them ([#346](https://github.com/xiidoz/netnou/issues/346)) ([57aea42](https://github.com/xiidoz/netnou/commit/57aea420d888fcc677ea7de99fbc4c4e6b05e334)), closes [#345](https://github.com/xiidoz/netnou/issues/345)
 
-## [0.26.3](https://github.com/xiidoz/netnou/compare/v0.26.2...v0.26.3) (2026-11-11)
+## [0.26.3](https://github.com/xiidoz/netnou/compare/v0.26.2...v0.26.3)
 
 
 ### Bug Fixes
@@ -98,7 +98,7 @@ Riders without a connection keep what they had: started offline, the page shows 
 * **page:** say "no delay data" at once when the realtime feed the server has is old ([#340](https://github.com/xiidoz/netnou/issues/340)) ([28cc330](https://github.com/xiidoz/netnou/commit/28cc3303fb47d55234eadacffe7f0408e4bdb33e))
 * **page:** the map's crosshair opens what it aims at; a line and the help work at 200 % ([#338](https://github.com/xiidoz/netnou/issues/338)) ([b721cc8](https://github.com/xiidoz/netnou/commit/b721cc858c6113fd8f1137615b3892dacac29c6a))
 
-## [0.26.2](https://github.com/xiidoz/netnou/compare/v0.26.1...v0.26.2) (2026-11-10)
+## [0.26.2](https://github.com/xiidoz/netnou/compare/v0.26.1...v0.26.2)
 
 
 ### Bug Fixes
@@ -106,7 +106,7 @@ Riders without a connection keep what they had: started offline, the page shows 
 * **page:** offline, delays go grey, then the timetable alone, and Back shows what it held ([#334](https://github.com/xiidoz/netnou/issues/334)) ([c7f4b0e](https://github.com/xiidoz/netnou/commit/c7f4b0e4410185aa8fa4ce11700db392c406c3ca))
 * **page:** the map shows the keyboard focus, Escape goes back to where it came from ([#337](https://github.com/xiidoz/netnou/issues/337)) ([eb77b5f](https://github.com/xiidoz/netnou/commit/eb77b5f0c638520ae64bacec834db8401e0bf153))
 
-## [0.26.1](https://github.com/xiidoz/netnou/compare/v0.26.0...v0.26.1) (2026-11-08)
+## [0.26.1](https://github.com/xiidoz/netnou/compare/v0.26.0...v0.26.1)
 
 
 ### Bug Fixes
@@ -114,7 +114,7 @@ Riders without a connection keep what they had: started offline, the page shows 
 * **page:** departures that have left go by themselves, and a lost connection says so ([#330](https://github.com/xiidoz/netnou/issues/330)) ([a155d57](https://github.com/xiidoz/netnou/commit/a155d57cc1cbdde1a8caf7bd947d6f1a9d3bbee2))
 * **page:** keyboard focus in the details stays in sight, and skips the credits under them ([#332](https://github.com/xiidoz/netnou/issues/332)) ([717fe3f](https://github.com/xiidoz/netnou/commit/717fe3f78c913737d8c5727f58b4e5c2ac6ed2f9))
 
-## [0.26.0](https://github.com/xiidoz/netnou/compare/v0.25.1...v0.26.0) (2026-11-07)
+## [0.26.0](https://github.com/xiidoz/netnou/compare/v0.25.1...v0.26.0)
 
 
 ### Features
@@ -133,14 +133,14 @@ Riders without a connection keep what they had: started offline, the page shows 
 * **page:** the filter checks the directions chosen instead of crossing out all others ([#323](https://github.com/xiidoz/netnou/issues/323)) ([2fbd947](https://github.com/xiidoz/netnou/commit/2fbd947235a03cff30fd5abece3deef8bc54f017))
 * **page:** wider details on a wide screen, how-often lines kept whole, headings in order ([#324](https://github.com/xiidoz/netnou/issues/324)) ([0952a95](https://github.com/xiidoz/netnou/commit/0952a9524318a1c8cb533e87b43617521e62248b))
 
-## [0.25.1](https://github.com/xiidoz/netnou/compare/v0.25.0...v0.25.1) (2026-11-06)
+## [0.25.1](https://github.com/xiidoz/netnou/compare/v0.25.0...v0.25.1)
 
 
 ### Bug Fixes
 
 * **timetable:** a line's towns end with the town it ends in, its "bis" where it goes ([#315](https://github.com/xiidoz/netnou/issues/315)) ([013b65e](https://github.com/xiidoz/netnou/commit/013b65e90670c7c82b76e71f91a515ecaf55680f))
 
-## [0.25.0](https://github.com/xiidoz/netnou/compare/v0.24.0...v0.25.0) (2026-11-06)
+## [0.25.0](https://github.com/xiidoz/netnou/compare/v0.24.0...v0.25.0)
 
 
 ### Features
@@ -153,7 +153,7 @@ Riders without a connection keep what they had: started offline, the page shows 
 * **timetable:** a bus every 40 minutes is every 40 minutes also in the hours it leaves once ([#311](https://github.com/xiidoz/netnou/issues/311)) ([265f65e](https://github.com/xiidoz/netnou/commit/265f65e213493c6fc08663e6d45a4a22f32058cd))
 * **timetable:** one to three departures an hour are counted, never "spätestens alle N Min." ([#314](https://github.com/xiidoz/netnou/issues/314)) ([387ee81](https://github.com/xiidoz/netnou/commit/387ee81e238c43dda20019d0fdcb6ea4b099074a))
 
-## [0.24.0](https://github.com/xiidoz/netnou/compare/v0.23.1...v0.24.0) (2026-11-05)
+## [0.24.0](https://github.com/xiidoz/netnou/compare/v0.23.1...v0.24.0)
 
 
 ### Features
@@ -165,14 +165,14 @@ Riders without a connection keep what they had: started offline, the page shows 
 
 * **map:** the lines in a bubble of vehicles stay centred where a favourite's name is shown ([#308](https://github.com/xiidoz/netnou/issues/308)) ([0a3be0c](https://github.com/xiidoz/netnou/commit/0a3be0c33b0705a8b41412931a2e2cfd830335ea))
 
-## [0.23.1](https://github.com/xiidoz/netnou/compare/v0.23.0...v0.23.1) (2026-11-05)
+## [0.23.1](https://github.com/xiidoz/netnou/compare/v0.23.0...v0.23.1)
 
 
 ### Bug Fixes
 
 * **timetable:** an operator is named without the code a feed writes before its name ([#306](https://github.com/xiidoz/netnou/issues/306)) ([aa39959](https://github.com/xiidoz/netnou/commit/aa399590400d57800c21b2d09efafc20e3c37bc9)), closes [#305](https://github.com/xiidoz/netnou/issues/305)
 
-## [0.23.0](https://github.com/xiidoz/netnou/compare/v0.22.2...v0.23.0) (2026-11-05)
+## [0.23.0](https://github.com/xiidoz/netnou/compare/v0.22.2...v0.23.0)
 
 
 ### ⚠ BREAKING CHANGES
@@ -192,7 +192,7 @@ Riders without a connection keep what they had: started offline, the page shows 
 
 * **timetable:** a line named U and a number is a U-Bahn, also where the feed says tram ([#304](https://github.com/xiidoz/netnou/issues/304)) ([4e3603c](https://github.com/xiidoz/netnou/commit/4e3603c9158ec44222d4c1d7d2a7ceb3d5d19273))
 
-## [0.22.2](https://github.com/xiidoz/netnou/compare/v0.22.1...v0.22.2) (2026-11-01)
+## [0.22.2](https://github.com/xiidoz/netnou/compare/v0.22.1...v0.22.2)
 
 
 ### Bug Fixes
@@ -200,14 +200,14 @@ Riders without a connection keep what they had: started offline, the page shows 
 * **map:** a place whose icon the map's style lacks gets the style's plain circle, no warning ([#293](https://github.com/xiidoz/netnou/issues/293)) ([7651621](https://github.com/xiidoz/netnou/commit/76516216dcbaeaa8a458bd9b5379f90c7ced80a9))
 * **page:** a folded card is its title row alone, and a trip names its delay data once ([#292](https://github.com/xiidoz/netnou/issues/292)) ([b65c276](https://github.com/xiidoz/netnou/commit/b65c27619bdf9bd3aca331d0ea0bb363de985077))
 
-## [0.22.1](https://github.com/xiidoz/netnou/compare/v0.22.0...v0.22.1) (2026-11-01)
+## [0.22.1](https://github.com/xiidoz/netnou/compare/v0.22.0...v0.22.1)
 
 
 ### Bug Fixes
 
 * **page:** the keyboard reaches the details first and the map last, and a row's ring is whole ([#290](https://github.com/xiidoz/netnou/issues/290)) ([a9c8704](https://github.com/xiidoz/netnou/commit/a9c8704ed65590e68f3fe8a97fabeda28a7a4cdd))
 
-## [0.22.0](https://github.com/xiidoz/netnou/compare/v0.21.0...v0.22.0) (2026-11-01)
+## [0.22.0](https://github.com/xiidoz/netnou/compare/v0.21.0...v0.22.0)
 
 
 ### Features
@@ -233,7 +233,7 @@ Riders without a connection keep what they had: started offline, the page shows 
 
 * **page:** the map draws as often as its fastest vehicle in view moves half a screen pixel ([#283](https://github.com/xiidoz/netnou/issues/283)) ([de4f58c](https://github.com/xiidoz/netnou/commit/de4f58cef741872f3d94f51c99b9f88e31f59812))
 
-## [0.21.0](https://github.com/xiidoz/netnou/compare/v0.20.1...v0.21.0) (2026-10-24)
+## [0.21.0](https://github.com/xiidoz/netnou/compare/v0.20.1...v0.21.0)
 
 
 ### Features
@@ -245,7 +245,7 @@ Riders without a connection keep what they had: started offline, the page shows 
 
 * **page:** a g or an Ü in the two lines of a row is no longer cut off ([#268](https://github.com/xiidoz/netnou/issues/268)) ([e8b91ce](https://github.com/xiidoz/netnou/commit/e8b91ceacf71de914e093f251427b477552cc21e))
 
-## [0.20.1](https://github.com/xiidoz/netnou/compare/v0.20.0...v0.20.1) (2026-10-24)
+## [0.20.1](https://github.com/xiidoz/netnou/compare/v0.20.0...v0.20.1)
 
 
 ### Bug Fixes
@@ -253,7 +253,7 @@ Riders without a connection keep what they had: started offline, the page shows 
 * **page:** the line beside a branch stays drawn under the pointer ([#265](https://github.com/xiidoz/netnou/issues/265)) ([8584df6](https://github.com/xiidoz/netnou/commit/8584df60e25cd669637b76c804823943169f38d1))
 * **page:** the stops of a selected trip or line are the map's own marks, in a ring of its colour ([#267](https://github.com/xiidoz/netnou/issues/267)) ([c380dad](https://github.com/xiidoz/netnou/commit/c380dadf5228b2b6c0b2f37813f4da0db719f5e2))
 
-## [0.20.0](https://github.com/xiidoz/netnou/compare/v0.19.0...v0.20.0) (2026-10-24)
+## [0.20.0](https://github.com/xiidoz/netnou/compare/v0.19.0...v0.20.0)
 
 
 ### Features
@@ -264,7 +264,7 @@ Riders without a connection keep what they had: started offline, the page shows 
 * **page:** stop and line pages carry their details as sent, with dates in the sitemap ([#258](https://github.com/xiidoz/netnou/issues/258)) ([8b25eef](https://github.com/xiidoz/netnou/commit/8b25eefab077e1bcb361ac8692498e2553b97c7c))
 * **page:** the stops of a line in each direction, with its vehicles along them as on the map ([#261](https://github.com/xiidoz/netnou/issues/261)) ([217a856](https://github.com/xiidoz/netnou/commit/217a85689650c45688c3e8f5509665a35a81687b))
 
-## [0.19.0](https://github.com/xiidoz/netnou/compare/v0.18.0...v0.19.0) (2026-10-22)
+## [0.19.0](https://github.com/xiidoz/netnou/compare/v0.18.0...v0.19.0)
 
 
 ### Features
@@ -278,7 +278,7 @@ Riders without a connection keep what they had: started offline, the page shows 
 * **page:** the town below a stop whose name does not say it, in a trip through several towns ([#251](https://github.com/xiidoz/netnou/issues/251)) ([7c0866b](https://github.com/xiidoz/netnou/commit/7c0866bd63189af8bf02abd1020ddeb8da90c778)), closes [#246](https://github.com/xiidoz/netnou/issues/246)
 * **routes:** trains on the tracks of trams and narrow gauge where theirs do not lead ([#249](https://github.com/xiidoz/netnou/issues/249)) ([382d9f9](https://github.com/xiidoz/netnou/commit/382d9f9d4dd68ecde282e70412aaab42df384487)), closes [#248](https://github.com/xiidoz/netnou/issues/248)
 
-## [0.18.0](https://github.com/xiidoz/netnou/compare/v0.17.1...v0.18.0) (2026-10-20)
+## [0.18.0](https://github.com/xiidoz/netnou/compare/v0.17.1...v0.18.0)
 
 
 ### Features
@@ -290,14 +290,14 @@ Riders without a connection keep what they had: started offline, the page shows 
 
 * **routes:** trains do not turn back at a switch between two stops ([#244](https://github.com/xiidoz/netnou/issues/244)) ([3cb747f](https://github.com/xiidoz/netnou/commit/3cb747f87e24e9e83b35aaacd941b0105d11ec6c)), closes [#243](https://github.com/xiidoz/netnou/issues/243)
 
-## [0.17.1](https://github.com/xiidoz/netnou/compare/v0.17.0...v0.17.1) (2026-10-19)
+## [0.17.1](https://github.com/xiidoz/netnou/compare/v0.17.0...v0.17.1)
 
 
 ### Bug Fixes
 
 * **page:** no tooltip on a stop whose name is on the map ([#239](https://github.com/xiidoz/netnou/issues/239)) ([6d05ea7](https://github.com/xiidoz/netnou/commit/6d05ea7f2f7c5927a8cfbee249dd96a551b0eab1))
 
-## [0.17.0](https://github.com/xiidoz/netnou/compare/v0.16.1...v0.17.0) (2026-10-19)
+## [0.17.0](https://github.com/xiidoz/netnou/compare/v0.16.1...v0.17.0)
 
 
 ### Features
@@ -320,7 +320,7 @@ Riders without a connection keep what they had: started offline, the page shows 
 * **timetable:** destinations and stop names without the line-break marks of signs ([#237](https://github.com/xiidoz/netnou/issues/237)) ([ee84626](https://github.com/xiidoz/netnou/commit/ee8462679545f8a499bcbd58473f076a9343308d)), closes [#223](https://github.com/xiidoz/netnou/issues/223)
 * **timetable:** the destination of a trip as the operator gives it at each stop ([#231](https://github.com/xiidoz/netnou/issues/231)) ([f312dac](https://github.com/xiidoz/netnou/commit/f312dacfe9b8f0e7c39be1cae86adf3161695a5b)), closes [#225](https://github.com/xiidoz/netnou/issues/225)
 
-## [0.16.1](https://github.com/xiidoz/netnou/compare/v0.16.0...v0.16.1) (2026-10-18)
+## [0.16.1](https://github.com/xiidoz/netnou/compare/v0.16.0...v0.16.1)
 
 
 ### Bug Fixes
@@ -337,21 +337,21 @@ Riders without a connection keep what they had: started offline, the page shows 
 * **server:** leave out a compression the client refuses with q=0 ([#206](https://github.com/xiidoz/netnou/issues/206)) ([1d4cb4e](https://github.com/xiidoz/netnou/commit/1d4cb4eaa7b64b70674dd55a36523002c27a8331)), closes [#199](https://github.com/xiidoz/netnou/issues/199)
 * **timetable:** show where a night line runs after midnight as well ([#210](https://github.com/xiidoz/netnou/issues/210)) ([1ddd78e](https://github.com/xiidoz/netnou/commit/1ddd78e2dd47860899ff3c8efb07e92c52c42c69)), closes [#189](https://github.com/xiidoz/netnou/issues/189)
 
-## [0.16.0](https://github.com/xiidoz/netnou/compare/v0.15.2...v0.16.0) (2026-10-18)
+## [0.16.0](https://github.com/xiidoz/netnou/compare/v0.15.2...v0.16.0)
 
 
 ### Features
 
 * **page:** up to four stops on one board, each in a block of its own or in one list ([#185](https://github.com/xiidoz/netnou/issues/185)) ([7e5210f](https://github.com/xiidoz/netnou/commit/7e5210f92e0212b8f430ca5d71e0f6342b0feb52)), closes [#163](https://github.com/xiidoz/netnou/issues/163)
 
-## [0.15.2](https://github.com/xiidoz/netnou/compare/v0.15.1...v0.15.2) (2026-10-17)
+## [0.15.2](https://github.com/xiidoz/netnou/compare/v0.15.1...v0.15.2)
 
 
 ### Bug Fixes
 
 * **page:** name the icons by addresses that change with them, and answer /favicon.ico ([#183](https://github.com/xiidoz/netnou/issues/183)) ([8a09cc7](https://github.com/xiidoz/netnou/commit/8a09cc706f18e08c86700f82a44da5407209f400))
 
-## [0.15.1](https://github.com/xiidoz/netnou/compare/v0.15.0...v0.15.1) (2026-10-17)
+## [0.15.1](https://github.com/xiidoz/netnou/compare/v0.15.0...v0.15.1)
 
 
 ### Bug Fixes
@@ -363,7 +363,7 @@ Riders without a connection keep what they had: started offline, the page shows 
 
 * **page:** stop asking for a frame at every refresh while nothing on the page changes ([#181](https://github.com/xiidoz/netnou/issues/181)) ([9e5fe3f](https://github.com/xiidoz/netnou/commit/9e5fe3f3c95388c994a8c74b393ea5177235d272))
 
-## [0.15.0](https://github.com/xiidoz/netnou/compare/v0.14.0...v0.15.0) (2026-10-17)
+## [0.15.0](https://github.com/xiidoz/netnou/compare/v0.14.0...v0.15.0)
 
 
 ### Features
@@ -383,7 +383,7 @@ Riders without a connection keep what they had: started offline, the page shows 
 * **page:** draw the vehicles only as often as the zoom needs ([#175](https://github.com/xiidoz/netnou/issues/175)) ([50bae10](https://github.com/xiidoz/netnou/commit/50bae10a78b1bc93b012acd8766a8f196d7ca8d0))
 * **page:** paint the header card before the scripts have arrived ([#176](https://github.com/xiidoz/netnou/issues/176)) ([1965a36](https://github.com/xiidoz/netnou/commit/1965a36fcbbf5a91962adcb17918abe14b0b563b))
 
-## [0.14.0](https://github.com/xiidoz/netnou/compare/v0.13.0...v0.14.0) (2026-10-16)
+## [0.14.0](https://github.com/xiidoz/netnou/compare/v0.13.0...v0.14.0)
 
 
 ### Features
@@ -399,21 +399,21 @@ Riders without a connection keep what they had: started offline, the page shows 
 
 * **page:** keep the open stop or line in the address while the controls are hidden ([#166](https://github.com/xiidoz/netnou/issues/166)) ([6b35934](https://github.com/xiidoz/netnou/commit/6b35934c628cb29d5acd876dc286922b48824d04))
 
-## [0.13.0](https://github.com/xiidoz/netnou/compare/v0.12.0...v0.13.0) (2026-10-16)
+## [0.13.0](https://github.com/xiidoz/netnou/compare/v0.12.0...v0.13.0)
 
 
 ### Features
 
 * **server:** count a stop or a line opened in the page as a visit of its address ([#159](https://github.com/xiidoz/netnou/issues/159)) ([d87a525](https://github.com/xiidoz/netnou/commit/d87a5256b2701ef5c9faca54108d5c56d27b9e2b)), closes [#158](https://github.com/xiidoz/netnou/issues/158)
 
-## [0.12.0](https://github.com/xiidoz/netnou/compare/v0.11.0...v0.12.0) (2026-10-16)
+## [0.12.0](https://github.com/xiidoz/netnou/compare/v0.11.0...v0.12.0)
 
 
 ### Features
 
 * **server:** report visits to an analytics service the operator names ([#156](https://github.com/xiidoz/netnou/issues/156)) ([0d94780](https://github.com/xiidoz/netnou/commit/0d94780c6d8a6faa3668c7df2547df90d0795e90)), closes [#114](https://github.com/xiidoz/netnou/issues/114)
 
-## [0.11.0](https://github.com/xiidoz/netnou/compare/v0.10.0...v0.11.0) (2026-10-15)
+## [0.11.0](https://github.com/xiidoz/netnou/compare/v0.10.0...v0.11.0)
 
 
 ### Features
@@ -430,7 +430,7 @@ Riders without a connection keep what they had: started offline, the page shows 
 * **page:** fit a line opened on a phone between the card and the details ([#150](https://github.com/xiidoz/netnou/issues/150)) ([fb05523](https://github.com/xiidoz/netnou/commit/fb055235f56344c9f622fc8e913e866d33505423))
 * **timetable:** make lines of one name in places apart lines of their own ([#153](https://github.com/xiidoz/netnou/issues/153)) ([0d5049f](https://github.com/xiidoz/netnou/commit/0d5049fef9690f6f25d320eb43b050d61198d493)), closes [#152](https://github.com/xiidoz/netnou/issues/152)
 
-## [0.10.0](https://github.com/xiidoz/netnou/compare/v0.9.0...v0.10.0) (2026-10-14)
+## [0.10.0](https://github.com/xiidoz/netnou/compare/v0.9.0...v0.10.0)
 
 
 ### Features
@@ -445,7 +445,7 @@ Riders without a connection keep what they had: started offline, the page shows 
 * **map:** fade the half row of folded chips out down to where it is cut ([#142](https://github.com/xiidoz/netnou/issues/142)) ([a6d1808](https://github.com/xiidoz/netnou/commit/a6d1808f08012d284a5429a71749e6c4a68de742))
 * **routes:** let the U-Bahn and trams run on each other's tracks and on the light rail ([#143](https://github.com/xiidoz/netnou/issues/143)) ([f113b6b](https://github.com/xiidoz/netnou/commit/f113b6b8cb68da62f54f5bd98ab0c1ec37def4af)), closes [#128](https://github.com/xiidoz/netnou/issues/128)
 
-## [0.9.0](https://github.com/xiidoz/netnou/compare/v0.8.0...v0.9.0) (2026-10-14)
+## [0.9.0](https://github.com/xiidoz/netnou/compare/v0.8.0...v0.9.0)
 
 
 ### ⚠ BREAKING CHANGES
@@ -480,7 +480,7 @@ Riders without a connection keep what they had: started offline, the page shows 
 * **search:** load a smaller list of stops and search it without holding up the page ([#122](https://github.com/xiidoz/netnou/issues/122)) ([27ffb1d](https://github.com/xiidoz/netnou/commit/27ffb1de07d29a40b961d9bbfd5ef25961694e55))
 * **timetable:** store each stop sequence and each set of running times once ([#110](https://github.com/xiidoz/netnou/issues/110)) ([9a48ebf](https://github.com/xiidoz/netnou/commit/9a48ebfe30c90fc74b3d5b98fe29e5cf3da34bac)), closes [#101](https://github.com/xiidoz/netnou/issues/101)
 
-## [0.8.0](https://github.com/xiidoz/netnou/compare/v0.7.0...v0.8.0) (2026-10-12)
+## [0.8.0](https://github.com/xiidoz/netnou/compare/v0.7.0...v0.8.0)
 
 
 ### ⚠ BREAKING CHANGES
@@ -491,14 +491,14 @@ Riders without a connection keep what they had: started offline, the page shows 
 
 * **settings:** put NETNOU_ in front of every setting ([#107](https://github.com/xiidoz/netnou/issues/107)) ([3920068](https://github.com/xiidoz/netnou/commit/3920068cab95de42da67bbed2cb1e893bb99a0e5)), closes [#98](https://github.com/xiidoz/netnou/issues/98)
 
-## [0.7.0](https://github.com/xiidoz/netnou/compare/v0.6.3...v0.7.0) (2026-10-11)
+## [0.7.0](https://github.com/xiidoz/netnou/compare/v0.6.3...v0.7.0)
 
 
 ### Features
 
 * **settings:** let an operator set the title and description of the page ([#99](https://github.com/xiidoz/netnou/issues/99)) ([28b7f19](https://github.com/xiidoz/netnou/commit/28b7f19ae7a1830d1aa4550dcca7268c1aac1dfe))
 
-## [0.6.3](https://github.com/xiidoz/netnou/compare/v0.6.2...v0.6.3) (2026-10-11)
+## [0.6.3](https://github.com/xiidoz/netnou/compare/v0.6.2...v0.6.3)
 
 
 ### Performance Improvements
@@ -509,21 +509,21 @@ Riders without a connection keep what they had: started offline, the page shows 
 * **page:** show the header card before the scripts have run ([#96](https://github.com/xiidoz/netnou/issues/96)) ([ce172b9](https://github.com/xiidoz/netnou/commit/ce172b916fe508eca7dc2541d6327096f86f386f)), closes [#90](https://github.com/xiidoz/netnou/issues/90)
 * **server:** send the files of the page compressed with Brotli ([#94](https://github.com/xiidoz/netnou/issues/94)) ([7b1dd9a](https://github.com/xiidoz/netnou/commit/7b1dd9a7542099a335e28abf28e834d6aa523f66))
 
-## [0.6.2](https://github.com/xiidoz/netnou/compare/v0.6.1...v0.6.2) (2026-10-09)
+## [0.6.2](https://github.com/xiidoz/netnou/compare/v0.6.1...v0.6.2)
 
 
 ### Bug Fixes
 
 * **page:** tell previews of links how large the operator's picture is ([#84](https://github.com/xiidoz/netnou/issues/84)) ([074ebcc](https://github.com/xiidoz/netnou/commit/074ebcc2792c48246fd4cf43ffd43140eb9ae6db))
 
-## [0.6.1](https://github.com/xiidoz/netnou/compare/v0.6.0...v0.6.1) (2026-10-09)
+## [0.6.1](https://github.com/xiidoz/netnou/compare/v0.6.0...v0.6.1)
 
 
 ### Bug Fixes
 
 * **page:** open the operator's links to pages on the same host in the same tab ([#82](https://github.com/xiidoz/netnou/issues/82)) ([5a2cb81](https://github.com/xiidoz/netnou/commit/5a2cb818c27798c205e8e3e89bc2c6627e0bbbca))
 
-## [0.6.0](https://github.com/xiidoz/netnou/compare/v0.5.1...v0.6.0) (2026-10-08)
+## [0.6.0](https://github.com/xiidoz/netnou/compare/v0.5.1...v0.6.0)
 
 
 ### Features
@@ -531,28 +531,28 @@ Riders without a connection keep what they had: started offline, the page shows 
 * **page:** hide the controls, go full screen, or run as a display on a wall ([#80](https://github.com/xiidoz/netnou/issues/80)) ([c64dbb3](https://github.com/xiidoz/netnou/commit/c64dbb3198e47ec92f3cc516ba0f01b1aaaaf7c8)), closes [#70](https://github.com/xiidoz/netnou/issues/70)
 * **settings:** let a visitor hide the delay flags on the vehicles ([#78](https://github.com/xiidoz/netnou/issues/78)) ([fbb55a9](https://github.com/xiidoz/netnou/commit/fbb55a9507adabcc8f020198ebe0efd0b388324c)), closes [#74](https://github.com/xiidoz/netnou/issues/74)
 
-## [0.5.1](https://github.com/xiidoz/netnou/compare/v0.5.0...v0.5.1) (2026-10-08)
+## [0.5.1](https://github.com/xiidoz/netnou/compare/v0.5.0...v0.5.1)
 
 
 ### Bug Fixes
 
 * **routes:** no long way round to a stop where the map data ends at the border ([#76](https://github.com/xiidoz/netnou/issues/76)) ([e29b0e3](https://github.com/xiidoz/netnou/commit/e29b0e3842575abba47f922700803e47837fb052)), closes [#75](https://github.com/xiidoz/netnou/issues/75)
 
-## [0.5.0](https://github.com/xiidoz/netnou/compare/v0.4.1...v0.5.0) (2026-10-07)
+## [0.5.0](https://github.com/xiidoz/netnou/compare/v0.4.1...v0.5.0)
 
 
 ### Features
 
 * **map:** flag every vehicle that is early or late, from a single minute ([#72](https://github.com/xiidoz/netnou/issues/72)) ([366ea61](https://github.com/xiidoz/netnou/commit/366ea61380b4e7787591d592407dee2c11ea8cf0)), closes [#71](https://github.com/xiidoz/netnou/issues/71)
 
-## [0.4.1](https://github.com/xiidoz/netnou/compare/v0.4.0...v0.4.1) (2026-10-07)
+## [0.4.1](https://github.com/xiidoz/netnou/compare/v0.4.0...v0.4.1)
 
 
 ### Bug Fixes
 
 * **realtime:** keep the portions of a coupled train together when their delays differ ([#67](https://github.com/xiidoz/netnou/issues/67)) ([cdbc638](https://github.com/xiidoz/netnou/commit/cdbc638b019578b29131049047cecfaef05add90)), closes [#66](https://github.com/xiidoz/netnou/issues/66)
 
-## [0.4.0](https://github.com/xiidoz/netnou/compare/v0.3.0...v0.4.0) (2026-10-07)
+## [0.4.0](https://github.com/xiidoz/netnou/compare/v0.3.0...v0.4.0)
 
 
 ### Features
@@ -575,7 +575,7 @@ Riders without a connection keep what they had: started offline, the page shows 
 * **map:** take the tooltip away once a vehicle is chosen or the map moves ([#62](https://github.com/xiidoz/netnou/issues/62)) ([00a1fd1](https://github.com/xiidoz/netnou/commit/00a1fd1b571c893b4f8cae099712a0457dc94423))
 * **page:** show the settings as a small box at the gear and align the status line with the card ([#57](https://github.com/xiidoz/netnou/issues/57)) ([21f0505](https://github.com/xiidoz/netnou/commit/21f0505440972f460bc6aebcda79cf9452be19d3))
 
-## [0.3.0](https://github.com/xiidoz/netnou/compare/v0.2.0...v0.3.0) (2026-10-06)
+## [0.3.0](https://github.com/xiidoz/netnou/compare/v0.2.0...v0.3.0)
 
 
 ### Features
@@ -591,7 +591,7 @@ Riders without a connection keep what they had: started offline, the page shows 
 * **page:** keep the way back to a line in view ([#29](https://github.com/xiidoz/netnou/issues/29)) ([a80593c](https://github.com/xiidoz/netnou/commit/a80593cb7f4663aecf8c9d61894072c50a4c3814))
 * **page:** take the buttons' icons from Material Design Icons ([#28](https://github.com/xiidoz/netnou/issues/28)) ([f2d936f](https://github.com/xiidoz/netnou/commit/f2d936fd8dbb2971fa3595d6453c534f8177b1a0))
 
-## [0.2.0](https://github.com/xiidoz/netnou/compare/v0.1.0...v0.2.0) (2026-10-05)
+## [0.2.0](https://github.com/xiidoz/netnou/compare/v0.1.0...v0.2.0)
 
 
 ### ⚠ BREAKING CHANGES
@@ -609,7 +609,7 @@ Riders without a connection keep what they had: started offline, the page shows 
 * **page:** show on small screens that the row of filters goes on ([#20](https://github.com/xiidoz/netnou/issues/20)) ([a4fe5c9](https://github.com/xiidoz/netnou/commit/a4fe5c9880833dc2356b394bdaf4b6a088ffee82)), closes [#6](https://github.com/xiidoz/netnou/issues/6)
 * **realtime:** wait for a busy feed server instead of giving up after 10 s ([#16](https://github.com/xiidoz/netnou/issues/16)) ([fb76406](https://github.com/xiidoz/netnou/commit/fb76406c1561bea922ed80cebe9feb470f3e410d)), closes [#5](https://github.com/xiidoz/netnou/issues/5)
 
-## 0.1.0 (2026-10-04)
+## 0.1.0
 
 
 ### Features

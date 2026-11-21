@@ -367,13 +367,17 @@ and the same in the changelog, in the heading of its section with the
 sentences under it:
 
 ```markdown
-## [0.29.0](https://github.com/xiidoz/netnou/compare/v0.28.0...v0.29.0) (2026-11-18) – The Offline Release
+## [0.29.0](https://github.com/xiidoz/netnou/compare/v0.28.0...v0.29.0) – The Offline Release
 
 Riders who lose the connection on a train keep what they had open: …
 
 
 ### Features
 ```
+
+The heading has no date, though release-please writes the day of the release
+pull request into it: the workflow takes it off. GitHub shows when a release
+was published, and git when the changelog changed.
 
 - Where the repository has the secret `ANTHROPIC_API_KEY`, a key of the
   Claude API, the workflow asks Claude for them each time release-please
@@ -382,17 +386,24 @@ Riders who lose the connection on a train keep what they had open: …
   the name the release had before, to keep if it still fits. The answer is
   committed to the release pull request as `chore(main): name release X.Y.Z`
   (`tools/release-notes.mjs` reads and writes it). Without the secret, as in
-  a fork, nothing is asked and nothing changes.
-- They are read before the release is made, in the release pull request,
-  and can be changed there: edit the section in its `CHANGELOG.md` (GitHub's
-  editor will do) and commit to its branch. The workflow leaves a section
-  that has a name alone. When a merge adds to the notes, release-please
-  writes the section anew without them, and Claude is asked again, given
-  the name it had.
+  a fork, nothing is asked, and only the date goes.
+- They are read before the release is made, in the description of the
+  release pull request: the workflow writes it to show the release as it
+  will be published, its title and then its notes. They can be changed in
+  the pull request: edit the section in its `CHANGELOG.md` (GitHub's editor
+  will do) and commit to its branch, not in the description, which is
+  written anew from the section after every push to `main` (start the
+  workflow by hand to see a change there at once). The workflow leaves a
+  section that has a name alone. When a merge adds to the notes,
+  release-please writes the section anew without them, and Claude is asked
+  again, given the name it had.
+- release-please writes its pull request anew whenever the description is
+  not the one it would write itself. So the description shown keeps
+  release-please's own at its end, in a comment that does not show, and the
+  workflow puts it back before it runs release-please.
 - Merging the release pull request publishes the release with the name in
   its title and the section of the changelog, sentences included, as its
-  notes. A release without a name is published as release-please makes it,
-  "vX.Y.Z".
+  notes. A release without a name is published as "vX.Y.Z".
 
 ### Deploying what was built
 
