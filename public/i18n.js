@@ -2,11 +2,11 @@
 // without a build step: one module per language in locales/, of which only the
 // one in use is loaded (plus English, which fills any gaps).
 //
-// Adding a language takes three steps; test/frontend.test.js fails if one of
+// Adding a language takes two steps; test/frontend.test.js fails if one of
 // them is forgotten or a text is missing:
 //   1. copy locales/en.js to locales/<code>.js and translate the values,
-//   2. add it to LANGUAGES below,
-//   3. add the file to SHELL in sw.js, so that the installed app starts offline with it.
+//   2. add it to LANGUAGES below.
+// The installed app keeps the texts of the languages a browser uses (sw.js).
 
 import en from './locales/en.js';
 

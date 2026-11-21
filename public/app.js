@@ -7674,8 +7674,9 @@ function init() {
   // Makes the page installable as an app and lets it start offline (see sw.js).
   navigator.serviceWorker?.register('sw.js').catch((err) => console.warn('service worker not registered:', err));
   // (the page tells it which version it is, at the start and when another one takes it over, as after the first visit: its files come
-  // from that version, see sw.js, also where the service worker could not tell it from the page as it came)
-  const sayVersion = () => navigator.serviceWorker.controller?.postMessage({ pageVersion: runningVersion });
+  // from that version, see sw.js, also where the service worker could not tell it from the page as it came; and which language it is
+  // in, whose texts the service worker keeps for a start without a connection)
+  const sayVersion = () => navigator.serviceWorker.controller?.postMessage({ pageVersion: runningVersion, language });
   if (navigator.serviceWorker) {
     sayVersion();
     navigator.serviceWorker.addEventListener('controllerchange', sayVersion);

@@ -216,8 +216,9 @@ test('the page knows the version of its files as it was sent, and compares it wi
   const app = withoutComments(read('app.js'));
   assert.match(app, /let runningVersion = document\.querySelector\('meta\[name="netnou-page-version"\]'\)\?\.content \?\? null;/);
   assert.match(app, /const versionOf = \(about\) => about\.pageVersion \?\? null;/);
-  // (and tells the service worker, at the start and when another one takes the page over: sw.js takes its files from that version)
-  assert.match(app, /const sayVersion = \(\) => navigator\.serviceWorker\.controller\?\.postMessage\(\{ pageVersion: runningVersion \}\);\s*if \(navigator\.serviceWorker\) \{\s*sayVersion\(\);\s*navigator\.serviceWorker\.addEventListener\('controllerchange', sayVersion\);/);
+  // (and tells the service worker, at the start and when another one takes the page over: sw.js takes its files from that version, and
+  // keeps the texts of the language it says)
+  assert.match(app, /const sayVersion = \(\) => navigator\.serviceWorker\.controller\?\.postMessage\(\{ pageVersion: runningVersion, language \}\);\s*if \(navigator\.serviceWorker\) \{\s*sayVersion\(\);\s*navigator\.serviceWorker\.addEventListener\('controllerchange', sayVersion\);/);
 });
 
 // The page is sent in the language its browser asks for, and says so (Vary). A
@@ -252,11 +253,12 @@ test('the scripts the page starts with are the ones the server names', () => {
   assert.deepEqual([...found].sort(), PAGE_MODULES.toSorted());
 });
 
-test('a language is a file in locales/, an entry in LANGUAGES and one in the shell of the service worker', () => {
+test('a language is a file in locales/ and an entry in LANGUAGES; of them, the shell of the service worker has English', () => {
   const files = fs.readdirSync(new URL('locales/', publicDir)).map((name) => name.replace(/\.js$/, ''));
-  const precached = shell.filter((file) => file.startsWith('locales/')).map((file) => file.slice('locales/'.length, -'.js'.length));
+  const precached = shell.filter((file) => file.startsWith('locales/'));
   assert.deepEqual(files.sort(), codes.toSorted(), 'the files in public/locales and LANGUAGES in i18n.js differ');
-  assert.deepEqual(precached.sort(), codes.toSorted(), 'SHELL in sw.js and LANGUAGES in i18n.js differ');
+  // (the others it keeps as a browser uses them: sw.js, LANGUAGE_FILE)
+  assert.deepEqual(precached, ['locales/en.js'], 'SHELL in sw.js has the texts of English, which fill any gaps, and no other language');
   assert.ok(codes.includes('en'), 'English is the fallback');
   for (const [code, name] of LANGUAGES) {
     // pickLanguage compares with the primary subtag of the browser's languages
