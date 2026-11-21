@@ -23,7 +23,7 @@ test('what the page says about itself: its main language and the address of the 
   // German, as the default area and its feed are, and no address: nothing in the page then needs one
   assert.deepEqual([loadConfig({}).language, loadConfig({}).publicUrl], ['de', null]);
   assert.equal(loadConfig({ NETNOU_LANGUAGE: ' EN ' }).language, 'en');
-  assert.throws(() => loadConfig({ NETNOU_LANGUAGE: 'fr' }), /^Error: NETNOU_LANGUAGE must be one of the languages of the page: de, en \(got "fr"\)$/);
+  assert.throws(() => loadConfig({ NETNOU_LANGUAGE: 'xx' }), (err) => err.message === `NETNOU_LANGUAGE must be one of the languages of the page: ${LANGUAGES.map(([code]) => code).join(', ')} (got "xx")`);
 
   // always with a slash at its end, with a path if the instance is under one
   for (const [given, taken] of [['https://karte.example.org', 'https://karte.example.org/'], ['https://karte.example.org/', 'https://karte.example.org/'],

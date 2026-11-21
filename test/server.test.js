@@ -672,7 +672,7 @@ test('the page says what and where the instance is before any script runs', asyn
   assert.equal(robots.body.toString(), `User-agent: *\nAllow: /\n\nSitemap: ${address}sitemap.xml\n`);
   const sitemap = await request('/sitemap.xml');
   assert.deepEqual([sitemap.status, sitemap.headers['content-type']], [200, 'application/xml; charset=utf-8']);
-  assert.deepEqual([...sitemap.body.toString().matchAll(/<loc>([^<]*)<\/loc>/g)].map(([, loc]) => loc), [address, `${address}?lang=en`, `${address}stop/alpha`, `${address}stop/beta`, `${address}line/testbetrieb/subway/u1`, `${address}line/testbetrieb/longdistance/ice-5`]);
+  assert.deepEqual([...sitemap.body.toString().matchAll(/<loc>([^<]*)<\/loc>/g)].map(([, loc]) => loc), [address, ...LANGUAGES.filter(([code]) => code !== 'de').map(([code]) => `${address}?lang=${code}`), `${address}stop/alpha`, `${address}stop/beta`, `${address}line/testbetrieb/subway/u1`, `${address}line/testbetrieb/longdistance/ice-5`]);
 
   // data may be read by a search engine that runs the page, but is not for its results
   for (const pathname of ['/api/area', '/api/status', '/api/vehicles', '/api/search', '/api/stations', '/api/nothing']) {

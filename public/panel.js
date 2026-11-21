@@ -560,12 +560,14 @@ export const hourText = (epoch, context) => hourParts(epoch, context, true).join
 export function hoursText(from, to, context) {
   const [a, aRest] = hourParts(from, context);
   const [b, bRest] = hourParts(to, context, true);
-  // (what both say after the hour once: " Uhr", and " AM" within one half of the day; a time, "20:00", in full)
-  const once = aRest === bRest && !aRest.startsWith(':') && (!/[ap]\.?\s?m\b/i.test(aRest) || to - from < 12 * 3600);
+  // (what both say after the hour once: " Uhr", and " AM" within one half of the day; a time, "20:00" or Danish "20.00", in full)
+  const once = aRest === bRest && !/^\D\d/.test(aRest) && (!/[ap]\.?\s?m\b/i.test(aRest) || to - from < 12 * 3600);
   return once ? `${a}–${b}${bRest}` : `${a}${aRest}–${b}${bRest}`;
 }
 
-const firstUp = (text) => text.charAt(0).toUpperCase() + text.slice(1);
+// (the first letter of a text as a capital, or small, by the rules of its language: Turkish "ilk" is "İlk", "İlk" is "ilk")
+const firstUp = (text, lang) => text.charAt(0).toLocaleUpperCase(lang) + text.slice(1);
+const firstDown = (text, lang) => text.charAt(0).toLocaleLowerCase(lang) + text.slice(1);
 
 // (a short part of a line kept whole where the line breaks, "letzte Fahrt 01:04" not after "letzte")
 const whole = (text) => text.replace(/ /g, '\u00a0');
@@ -598,11 +600,11 @@ export function dayHolds(date, last, context) {
  * of the service day; before the first, the first; after the last, that
  * none comes any more.
  * @param day { first, last, runs } of the service day (facts.js), null where nothing runs that day
- * @param context { t, time, hour, now }
+ * @param context { t, time, hour, now, lang }: lang is the language of the texts, for their capitals
  * @param stop the stop these are of, which the line then names first, or null where it is the stop shown
  */
 export function todayText(day, context, stop = null) {
-  const { t, time, now } = context;
+  const { t, time, now, lang } = context;
   const run = day && day.first !== null && now >= day.first && now <= day.last ? day.runs.find(({ from, to }) => from <= now && now < to) : null;
   const said = !day || day.first === null ? t('facts.noneToday')
     : now > day.last ? t('facts.overToday')
@@ -612,7 +614,7 @@ export function todayText(day, context, stop = null) {
         whole(t('facts.last', { time: time(day.last) })),
       ].filter(Boolean).join('\u00a0· ');
   // (where the figures are of, where that is not the stop shown: a line's last trip at its busiest stop is not that at the next)
-  return firstUp(stop ? t('facts.fromStop', { stop, said: said.charAt(0).toLowerCase() + said.slice(1) }) : said);
+  return firstUp(stop ? t('facts.fromStop', { stop, said: firstDown(said, lang) }) : said, lang);
 }
 
 /**
@@ -1105,9 +1107,8 @@ function vehicleSign(line, v, context, arrow = true) {
  * (`stale`, see "a connection lost" in app.js): the note says so then.
  */
 export function vehicleName(line, v, context) {
-  const { t, stale = false } = context;
-  const said = lineSaid(line.name, line.mode, context);
-  const named = `${said.charAt(0).toUpperCase()}${said.slice(1)}`;
+  const { t, stale = false, lang } = context;
+  const named = firstUp(lineSaid(line.name, line.mode, context), lang);
   return [v.to ? `${named} ${t('line.to', { destination: v.to })}` : named, v.next ? `${t('trip.next')} ${v.next}` : null, stale ? null : delayText(v.delay)].filter(Boolean).join(', ');
 }
 

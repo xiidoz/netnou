@@ -610,8 +610,8 @@ export class Addresses {
     // (where it goes most of the time, both ways)
     const route = [...headsigns].sort((a, b) => b[1] - a[1]).slice(0, 2).map(([headsign]) => headsign).join(' – ');
     return {
-      title: firstUp(t('address.lineTitle', { line, route }, texts).replace(/\s+/g, ' ')),
-      description: firstUp(this.lineDescription(i, line, language, texts, now)),
+      title: firstUp(t('address.lineTitle', { line, route }, texts).replace(/\s+/g, ' '), language),
+      description: firstUp(this.lineDescription(i, line, language, texts, now), language),
       heading: line,
       sub: agency,
     };
@@ -662,8 +662,8 @@ export class Addresses {
     const day = new Intl.DateTimeFormat(language, { day: 'numeric', month: 'long', timeZone: timeZone() }).format(leaves);
     const from = tt.stops.name[tt.stopsOf(trip)[0]];
     return {
-      title: firstUp(t('address.tripTitle', { line, to }, texts)),
-      description: firstUp(t('address.tripDescription', { line, to, from, time, day }, texts)),
+      title: firstUp(t('address.tripTitle', { line, to }, texts), language),
+      description: firstUp(t('address.tripDescription', { line, to, from, time, day }, texts), language),
       heading: line,
       sub: t('line.to', { destination: to }, texts),
       unlisted: true,
@@ -696,20 +696,29 @@ function stretchesOf(dates, from) {
   return stretches;
 }
 
-/** A stretch of days as a sentence says it: "4. November", "4. bis 6. November", "30. November bis 2. Dezember" (English: "4 to 6 November"). */
-function datesText(dates, language, texts) {
+/**
+ * A stretch of days as a sentence says it: "4. November", "4. bis 6. November",
+ * "30. November bis 2. Dezember" (English: "4 to 6 November"). The month once
+ * only where the language writes the day before it; where it writes the month
+ * first (Hungarian "november 4."), each day with its month.
+ */
+export function datesText(dates, language, texts) {
   const at = (date) => new Date(Date.UTC(+date.slice(0, 4), +date.slice(4, 6) - 1, +date.slice(6, 8), 12));
   // (the day before the month, as both languages write it in a sentence)
   const locale = language === 'en' ? 'en-GB' : language;
   const full = new Intl.DateTimeFormat(locale, { day: 'numeric', month: 'long', timeZone: 'UTC' });
-  const day = new Intl.DateTimeFormat(locale, { day: 'numeric', timeZone: 'UTC' });
   const [first, last] = [dates[0], dates.at(-1)];
   if (first === last) return full.format(at(first));
-  const sameMonth = first.slice(0, 6) === last.slice(0, 6);
-  return t('address.dates', { from: (sameMonth ? day : full).format(at(first)), to: full.format(at(last)) }, texts);
+  // (the first day alone as the full date writes it, its dot kept: "4." of "4. November", "4" of "4 November")
+  const parts = full.formatToParts(at(first));
+  const dayAt = parts.findIndex(({ type }) => type === 'day');
+  const once = first.slice(0, 6) === last.slice(0, 6) && dayAt < parts.findIndex(({ type }) => type === 'month');
+  const day = parts[dayAt].value + (/^\.\s*$/.test(parts[dayAt + 1]?.value ?? '') ? '.' : '');
+  return t('address.dates', { from: once ? day : full.format(at(first)), to: full.format(at(last)) }, texts);
 }
 
-const firstUp = (text) => text.charAt(0).toUpperCase() + text.slice(1);
+// (by the rules of the language: Turkish "ilk" is "İlk")
+const firstUp = (text, language) => text.charAt(0).toLocaleUpperCase(language) + text.slice(1);
 
 /**
  * The title of a stop of that name, as its page has it (stationWords), in the
