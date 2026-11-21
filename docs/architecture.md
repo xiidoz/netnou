@@ -1126,7 +1126,13 @@ otherwise a server would load a file written by older code:
   from where it took the others, also after the browser has stopped the
   service worker meanwhile, and after a newer version has taken over, which
   keeps the files of each version that a page still open is of. A page the
-  service worker did not start, as at the first visit, tells it its version. A
+  service worker did not start, as at the first visit, tells it its version. Of
+  the texts of the languages (`locales/`), a version keeps English, which
+  fills any gaps, and those this browser has used: as the page fetches them,
+  as a page it did not start says which one it is in, and, for a new version,
+  those kept with the versions before it. So a start without a connection is
+  in the visitor's language, and a new version does not bring every
+  language's texts. A
   page that the network sends too late for its start is kept for the next one
   where it is of the kept version; of a newer one, it has the browser look for
   the service worker that keeps that. Each instance of an origin keeps its

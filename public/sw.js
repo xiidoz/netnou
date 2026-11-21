@@ -44,9 +44,10 @@ const STARTS = 5;
 // How long the network's page may come after that, in ms, to be kept for the next start.
 const LATE_MS = 60_000;
 // What the page needs to start. test/frontend.test.js checks that the files
-// exist and that every language of i18n.js is among them. The style sheets
-// and the first script come within the page (PAGE_INLINE in
-// server/lib/page.js) and are not files of their own here.
+// exist. The style sheets and the first script come within the page
+// (PAGE_INLINE in server/lib/page.js) and are not files of their own here.
+// Of the languages, English is here, which fills any gaps; the others are
+// kept as a browser uses them (LANGUAGE_FILE).
 const SHELL = [
   './',
   'address.js',
@@ -61,7 +62,6 @@ const SHELL = [
   'search.js',
   'search-worker.js',
   'stops.js',
-  'locales/de.js',
   'locales/en.js',
   'favicon.svg',
   'manifest.webmanifest',
@@ -71,6 +71,13 @@ const SHELL = [
   'vendor/maplibre-gl/maplibre-gl-worker.mjs',
   'vendor/material-design-icons/icons.js',
 ];
+
+// The texts of a language (public/locales/): of those, a version keeps the ones
+// this browser has used, so that the page starts offline in its language
+// without every language's texts coming with each new version. They are kept
+// as the page asks for them, and as it says which one it is in; a new version
+// takes those of the versions before it along.
+const LANGUAGE_FILE = /^locales\/[a-z]{2,3}\.js$/;
 
 // (the page as kept: one, whatever the address of the start asked for besides, and in whatever language it came)
 const PAGE = new URL('./', scope).href;
@@ -345,9 +352,34 @@ async function keepListed(urls) {
 
 // ---------- the life of the worker ----------
 
+/** The texts of the languages kept with the other versions of this instance: those this browser has used. */
+async function languagesUsed() {
+  const used = new Set();
+  for (const name of await caches.keys()) {
+    if (!name.startsWith(CACHE_PREFIX) || name === CACHE) continue;
+    for (const request of await (await caches.open(name)).keys()) {
+      const path = new URL(request.url).pathname.slice(scope.pathname.length);
+      if (LANGUAGE_FILE.test(path) && !SHELL.includes(path)) used.add(path);
+    }
+  }
+  return [...used];
+}
+
+/**
+ * Keeps the texts of a language with this version where they are not yet:
+ * a language this version may not have any longer is no reason to fail.
+ */
+async function keepLanguage(path, cache) {
+  if (await cache.match(new URL(path, scope).href)) return;
+  const answer = await fetch(new URL(path, scope).href).catch(() => null);
+  if (answer?.ok) await cache.put(new URL(path, scope).href, answer);
+  else answer?.body?.cancel().catch(() => {});
+}
+
 self.addEventListener('install', (event) => {
   event.waitUntil((async () => {
     const cache = await caches.open(CACHE);
+    const used = await languagesUsed();
     await cache.addAll(SHELL);
     // (a version deployed between this file and the others: not kept as this one, the browser's next check gets that one)
     const version = await versionOf(await cache.match(PAGE));
@@ -355,6 +387,7 @@ self.addEventListener('install', (event) => {
       await caches.delete(CACHE);
       throw new Error(`the page is of version ${version}, this service worker of ${VERSION}`);
     }
+    await Promise.all(used.map((path) => keepLanguage(path, cache)));
     // (let go of meanwhile by the worker in charge, which did not know of this one yet: the browser's next check tries again)
     if (!(await caches.has(CACHE))) throw new Error(`the files of version ${VERSION} are gone`);
     await self.skipWaiting();
@@ -366,10 +399,14 @@ self.addEventListener('activate', (event) => {
 });
 
 // A page that this worker did not start, as at the first visit or one that
-// was open before it, says which version it is (app.js).
+// was open before it, says which version it is (app.js), and which language
+// it is in: at the first visit it fetched that one's texts before this worker
+// was there to keep them.
 self.addEventListener('message', (event) => {
   const version = event.data?.pageVersion;
   if (typeof version === 'string' && event.source?.id) event.waitUntil(note(event.source.id, version));
+  const language = `locales/${event.data?.language}.js`;
+  if (version === VERSION && LANGUAGE_FILE.test(language)) event.waitUntil(caches.open(CACHE).then((cache) => keepLanguage(language, cache)).catch(() => {}));
   // (and which files of the map it fetched, #366)
   if (Array.isArray(event.data?.mapFiles)) event.waitUntil(keepListed(event.data.mapFiles).catch(() => {}));
 });
@@ -433,6 +470,22 @@ async function keep(version, response, path, url) {
   if (named !== null && named !== VERSION) self.registration.update().catch(() => {});
 }
 
+/**
+ * A file of a version from the network: where it is the texts of a language
+ * for this version, they are kept with it as well (LANGUAGE_FILE).
+ */
+function fetchLanguage(event, version) {
+  const { request } = event;
+  const network = fetch(request);
+  const path = new URL(request.url).pathname.slice(scope.pathname.length);
+  if (version !== VERSION || !LANGUAGE_FILE.test(path)) return network;
+  // (copied as it comes, before the page reads it)
+  event.waitUntil(network.then((answer) => (answer.ok ? answer.clone() : null)).then(async (copy) => {
+    if (copy) await (await caches.open(CACHE)).put(request.url, copy);
+  }).catch(() => {}));
+  return network;
+}
+
 /** A file of the page: from the version of the page or worker that asks for it. */
 async function file(event) {
   const { request } = event;
@@ -440,7 +493,7 @@ async function file(event) {
   // (a worker that a page starts is of the page's version)
   if (version && ['worker', 'sharedworker'].includes(request.destination)) event.waitUntil(note(event.resultingClientId, version));
   // (of a version kept here: its file, without asking the network; of a newer one: the network's alone, never another version's)
-  if (version) return (await keptOf(version, request)) ?? fetch(request);
+  if (version) return (await keptOf(version, request)) ?? fetchLanguage(event, version);
   // (of a page or worker that this worker does not know: the network, as long as a start waits for it, else the file kept)
   const network = fetch(request);
   const first = await Promise.race([network.catch(() => null), sleep(await startLimit())]);
@@ -464,8 +517,8 @@ self.addEventListener('fetch', (event) => {
     event.respondWith(start(event, path, url));
     return;
   }
-  // Of this origin only the shell is kept. It may serve more than this app's
+  // Of this origin only the shell is kept, and the texts of the languages used. It may serve more than this app's
   // files: its live data (api/) and even the map's tiles (NETNOU_TILE_URL of
   // the server), of which there is no end.
-  if (SHELL.includes(path)) event.respondWith(file(event));
+  if (SHELL.includes(path) || LANGUAGE_FILE.test(path)) event.respondWith(file(event));
 });

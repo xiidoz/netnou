@@ -45,7 +45,7 @@ the next visit.
 
 ## Adding a language
 
-Three steps, here for Dutch (`nl`):
+Two steps, here for Dutch (`nl`):
 
 1. Copy `public/locales/en.js` to `public/locales/nl.js` and translate the
    values. Keep the keys as they are. The three `offer.` texts offer the
@@ -60,9 +60,6 @@ Three steps, here for Dutch (`nl`):
      ['nl', 'Nederlands'],
    ];
    ```
-
-3. Add `'locales/nl.js'` to `SHELL` in `public/sw.js`, so that the installed
-   app can start offline in that language.
 
 Then run `npm test`. `test/frontend.test.js` fails if one of the steps was
 forgotten or if the new file does not fit the English one, and says what is
