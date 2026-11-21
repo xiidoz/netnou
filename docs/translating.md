@@ -1,6 +1,6 @@
 # Translating
 
-The page is available in 35 languages, those of `LANGUAGES` in
+The page is available in 50 languages, those of `LANGUAGES` in
 `public/i18n.js`. Each language is one file in
 `public/locales/`, and adding a language needs no build step and no change to
 the server.

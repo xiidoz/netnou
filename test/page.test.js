@@ -150,7 +150,7 @@ test('the page names its address and its versions in other languages', () => {
   // the version in the main language is the plain address, as is the one for whoever names none (#287)
   const each = (main) => [...LANGUAGES.map(([code]) => [code, code === main ? URL_ : `${URL_}?lang=${code}`]), ['x-default', URL_]];
   assert.deepEqual(versions, each('de'));
-  assert.deepEqual(versions.slice(4, 7), [['de', URL_], ['et', `${URL_}?lang=et`], ['en', `${URL_}?lang=en`]]);
+  assert.deepEqual(versions.filter(([code]) => ['de', 'en'].includes(code)), [['de', URL_], ['en', `${URL_}?lang=en`]]);
   // (asked for in it by the address all the same, which the server sends on to the plain one, it names that one)
   assert.equal(tag(renderPage(html, { ...german, asked: 'de' }), /<link rel="canonical" href="([^"]*)"/), URL_);
   // at an instance in English, the other way round

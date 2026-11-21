@@ -7,7 +7,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import { test } from 'node:test';
 import vm from 'node:vm';
-import { ATTRIBUTES, LANGUAGES, READMES, dayOf, dayStartOf, formatNumber, formatTime, formatWhen, formatsFrom, languageToOffer, loadLanguage, pageTexts, pickLanguage, sentInAnother, setTimeZone, t, textsIn, textsOf } from '../public/i18n.js';
+import { ATTRIBUTES, LANGUAGES, READMES, dayOf, dayStartOf, formatNumber, formatTime, formatWhen, formatsFrom, languageToOffer, loadLanguage, latinDigits, pageTexts, pickLanguage, sentInAnother, setTimeZone, t, textsIn, textsOf } from '../public/i18n.js';
 import { serviceDayStart, setTimeZone as setServerZone } from '../server/lib/time.js';
 import en from '../public/locales/en.js';
 import { languageFound, languageOrder, nameAlone, nameIn, secondName } from '../public/languages.js';
@@ -781,6 +781,17 @@ test('the search finds a language by its own name, its name in the page\'s, the 
   assert.ok(!found('de', 'Deutsch', 'eutsch'));
   // nothing typed finds all
   assert.ok(found('fr', 'Français', '  '));
+});
+
+// Line numbers, platforms, delays and the signs have the digits 0–9; a time
+// or a count beside them has them too, in every language.
+test('numbers and times are written with the digits 0–9 in every language', () => {
+  assert.equal(latinDigits('pt-PT'), 'pt-PT-u-nu-latn');
+  assert.equal(latinDigits('not a tag!'), 'not a tag!');
+  // (Bengali and Marathi would write their own digits: "১:৩৬ PM")
+  for (const code of ['bn', 'mr']) assert.match(new Intl.DateTimeFormat(latinDigits(code), { timeStyle: 'short', timeZone: 'UTC' }).format(Date.UTC(2026, 0, 1, 13, 36)), /^1:36\sPM$/);
+  const mr = textsIn('mr', { 'address.stops': { one: '{count} थांबा', other: '{count} थांबे' } });
+  assert.equal(t('address.stops', { count: 1234 }, mr), '1,234 थांबे');
 });
 
 // The server writes pages in every language with one t(), whose own plural
