@@ -11,7 +11,7 @@ import { t as translate } from '../public/i18n.js';
 import de from '../public/locales/de.js';
 import en from '../public/locales/en.js';
 import { dayHolds, daysText, hourLines, hoursText, hourText, lineHead, lineLists, lineTimetable, oftenText, stopToday, todayText as todayTextOf, toHtml } from '../public/panel.js';
-import { Addresses } from '../server/lib/addresses.js';
+import { Addresses, datesText } from '../server/lib/addresses.js';
 import { Area } from '../server/lib/area.js';
 import { readDataset, writeDataset } from '../server/lib/dataset.js';
 import { facts, hourly, inDay, oneWord, spanOf, stretchOf, townsOfWay, wordedAlike } from '../server/lib/facts.js';
@@ -261,6 +261,16 @@ test('a line\'s description says what holds on every working day of the coming f
   assert.equal(addresses.lineWords(lineNumber('77'), 'de', de, now).description, 'Bus 77: werktags außer 12. November, 1 Fahrt je Richtung zwischen 7:12 und 7:30 Uhr. 2 Haltestellen, live auf der Karte.');
   // several days apart: "4. bis 6. November und 18. November"; more than three stretches: on some working days
   assert.match(addresses.lineWords(tram, 'de', de, at('20261113', '08:00')).description, /^Tram 5: werktags von/);
+});
+
+test('a stretch of days names its month once where the language writes the day first, else with each day', () => {
+  // (the first day with its dot, as the date writes it: not "4 bis 6. November")
+  assert.equal(datesText(['20261104', '20261105', '20261106'], 'de', de), '4. bis 6. November');
+  assert.equal(datesText(['20261130', '20261201', '20261202'], 'de', de), '30. November bis 2. Dezember');
+  assert.equal(datesText(['20261104', '20261106'], 'en', en), '4 to 6 November');
+  assert.equal(datesText(['20261104'], 'en', en), '4 November');
+  // (a language that writes the month first, as Hungarian: "november 4. – november 6.", not "4. – november 6.")
+  assert.equal(datesText(['20261104', '20261106'], 'hu', { 'address.dates': '{from} – {to}' }), 'november 4. – november 6.');
 });
 
 test('a stop: what leaves it today, each line each way how often there, the towns its lines go to; the sitemap lists the stops something leaves in a week', () => {
