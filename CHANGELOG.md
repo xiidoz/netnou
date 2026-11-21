@@ -8,7 +8,9 @@ This file is written by
 messages when a release is made. Do not edit it by hand; see
 [Releases](CONTRIBUTING.md#releases).
 
-## [0.30.0](https://github.com/xiidoz/netnou/compare/v0.29.0...v0.30.0) (2026-11-21)
+## [0.30.0](https://github.com/xiidoz/netnou/compare/v0.29.0...v0.30.0) (2026-11-21) – The European Languages Release
+
+Riders can now read the page in 35 languages of Europe, German and English among them. The installed app keeps only the texts of the languages a rider's browser uses, so new versions no longer bring every language with them. Line descriptions in search engines and link previews also write a stretch of non-running days within one month correctly.
 
 
 ### Features
