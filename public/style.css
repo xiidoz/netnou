@@ -1399,12 +1399,12 @@ body:has(> .map-keys:not([hidden], .gave-way)) :is(#tip, #offer, #map-note) { vi
    places the buttons have; each says what is next to it. */
 .settings-open, .search-open, .search-close, .chips-more span, .segmented button, .wall-start,
 .view-switch button, .choice-open, .choice-clear, .panel-back, .maplibregl-ctrl-group button,
-.offer-close, .offer-switch, .offer-never { position: relative; }
+.offer-close, .offer-switch, .offer-never, .language-open { position: relative; }
 .settings-open::after, .search-open::after, .search-close::after, .close::after, .share::after, .board-toggle::after, .heart::after,
 .chips-more span::after, .segmented button::after, .wall-start::after, .view-switch button::after,
 .choice-open::after, .choice-clear::after, .panel-back::before, .panel-back::after,
 .maplibregl-ctrl-group button::after, .maplibregl-ctrl-attrib-button::after,
-.offer-close::after, .offer-switch::after, .offer-never::after { content: ""; position: absolute; }
+.offer-close::after, .offer-switch::after, .offer-never::after, .language-open::after { content: ""; position: absolute; }
 /* (the round buttons of the title row: the gear and the lens; above them the edge of the screen, below them the field of the search or the line that positions are calculated) */
 .settings-open::after, .search-open::after { inset: -11px -7px -3px; }
 /* (over the room the search field takes for a finger, which begins 2 px above the field: see below) */
@@ -1419,6 +1419,8 @@ body:has(> .map-keys:not([hidden], .gave-way)) :is(#tip, #offer, #map-note) { vi
 .offer-switch::after, .offer-never::after { left: 0; right: 0; top: calc(50% - 22px); height: 44px; }
 /* (the switches of the settings and the button below them, with what they are called between them) */
 .segmented button::after, .wall-start::after { left: 0; right: 0; top: calc(50% - 22px); height: 44px; }
+/* (the row of the language, as high as a finger needs where it has one line) */
+.language-open::after { left: 0; right: 0; top: min(0px, calc(50% - 22px)); bottom: min(0px, calc(50% - 22px)); }
 /* (the way back: below it the name or the badge of a trip; above it the bar of the sheet, which keeps its stroke in the middle for a finger) */
 .panel-back::after { left: 0; right: 0; top: 0; bottom: -6px; }
 .panel-back::before { left: 0; top: -16px; width: min(100%, calc(50vw - 40px)); height: 16px; }
@@ -1447,8 +1449,6 @@ body:has(> .map-keys:not([hidden], .gave-way)) :is(#tip, #offer, #map-note) { vi
 .search-sign { z-index: 3; }
 /* (the list of the languages: a border that cannot be seen around what is drawn of it, which stays as it was, from the
    name above it, which opens it as well, to the gap before the next setting; its ring around what is drawn) */
-.language { margin: -8px; padding: 6px 7px; border: 8px solid transparent; border-radius: 16px; background-clip: padding-box; box-shadow: inset 0 0 0 1px var(--border); }
-.language:focus-visible { outline-offset: -6px; }
 /* (at the foot of a board: the button for another stop over the gaps above and below it, and the two its question has, 6 px apart) */
 .board-add, .board-add-menu button { position: relative; }
 .board-add::after, .board-add-menu button::after { content: ""; position: absolute; inset: -5px 0; }
@@ -1658,9 +1658,10 @@ body:has(> .map-keys:not([hidden], .gave-way)) :is(#tip, #offer, #map-note) { vi
 .languages .dialog-body { flex: 1; min-height: 0; display: flex; flex-direction: column; overflow: hidden; padding-bottom: 0; }
 .languages h2 { display: flex; align-items: center; gap: 8px; }
 .languages-search { position: relative; margin: 12px 0 8px; color: var(--text-muted); }
-.languages-search .search-sign { inset-inline-start: 9px; left: auto; }
+.languages-search .search-sign { left: auto; inset-inline-start: 9px; }
 .languages-search input {
   width: 100%;
+  min-height: 44px;
   padding: 9px 12px 9px 36px;
   padding-inline: 36px 12px;
   border: 1px solid var(--border);
@@ -1671,15 +1672,16 @@ body:has(> .map-keys:not([hidden], .gave-way)) :is(#tip, #offer, #map-note) { vi
 }
 .languages-search input::placeholder { color: var(--text-muted); opacity: 1; }
 .languages-search input:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
-.languages-list { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; margin: 0 -18px; padding: 0 18px 18px; }
-.languages-list .rows-head { padding: 14px 0 4px; }
+.languages-list { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; margin: 0 -18px; padding: 0 12px 18px; }
+.languages-list .rows-head { padding: 14px 8px 4px; }
+.languages-none { padding-inline: 8px; }
 .language-row {
   display: flex;
   align-items: center;
   gap: 8px;
   width: 100%;
   min-height: 48px;
-  padding: 6px 2px;
+  padding: 6px 8px;
   border: 0;
   border-bottom: 1px solid var(--border);
   background: none;

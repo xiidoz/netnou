@@ -335,9 +335,12 @@ const UNDO = takeUndo();
 
 function takeUndo() {
   try {
-    const undo = JSON.parse(localStorage.getItem(LANGUAGE_UNDO));
-    localStorage.removeItem(LANGUAGE_UNDO);
-    return undo?.to === language && undo.texts && undo.origin ? undo : null;
+    // (for the tab that chose, which keeps it over the reload)
+    const undo = JSON.parse(sessionStorage.getItem(LANGUAGE_UNDO));
+    sessionStorage.removeItem(LANGUAGE_UNDO);
+    const known = (code) => LANGUAGES.some(([own]) => own === code);
+    const texts = ['now', 'back', 'loading', 'offline', 'close'];
+    return undo?.to === language && known(undo.back) && (undo.origin?.stored === null || known(undo.origin?.stored)) && texts.every((key) => typeof undo.texts?.[key] === 'string') ? undo : null;
   } catch {
     return null; // nothing kept, or storage blocked
   }
@@ -3316,8 +3319,11 @@ const offer = $('offer');
 const OFFERED = languageToOffer();
 const OFFERING = Boolean(OFFERED) && !OPENED_AS_DISPLAY && loadSetting('offerLanguage', true) !== false;
 let offerMade = false;
-// (the way back while its bubble is up: a choice made then goes back to where this one began)
+// (the way back while its bubble is up)
 let undoShown = null;
+// (where a chain of choices began: one made after another in this visit goes back to where the first began, also once
+// a tap or a drag elsewhere has put the bubble away; its ✕, Escape and Back end the chain)
+let chainOrigin = UNDO?.origin ?? null;
 
 async function offerLanguage() {
   if (offerMade || (!OFFERING && !UNDO) || (state.board !== null && !UNDO)) return;
@@ -3353,16 +3359,23 @@ function showOffer(code, text, switchText, neverText, closeText) {
 /** The direction of a language's script: Arabic, Persian, Urdu, Hebrew and Yiddish right to left. */
 const textDirection = (code) => (['ar', 'fa', 'he', 'ur', 'yi'].includes(code) ? 'rtl' : 'ltr');
 
-const hideOffer = () => {
+function hideOffer() {
+  // (the keyboard where it can go on: the bubble had it as the first stop of the page)
+  if (offer.contains(document.activeElement)) settingsButton.focus();
   offer.hidden = true;
   undoShown = null;
-};
+}
+/** Puts the bubble away for good: its ✕ and Escape, which end a chain of choices as well. */
+function dismissOffer() {
+  chainOrigin = null;
+  hideOffer();
+}
 $('offer-switch').addEventListener('click', () => (undoShown ? goBack(undoShown) : chooseLanguage(OFFERED, true)));
 $('offer-never').addEventListener('click', () => {
   saveSetting('offerLanguage', false);
   hideOffer();
 });
-$('offer-close').addEventListener('click', hideOffer);
+$('offer-close').addEventListener('click', dismissOffer);
 // (as it begins, a tap or a drag of the map or the sheet: what it was for happens all the same)
 document.addEventListener('pointerdown', (event) => offer.hidden || offer.contains(event.target) || hideOffer(), true);
 document.addEventListener('keydown', (event) => {
@@ -3372,7 +3385,7 @@ document.addEventListener('keydown', (event) => {
   if (under && !offer.contains(document.activeElement)) return;
   // (the bubble is on top: Escape is for it, not for what is under it; where the sheet has it out of sight, for that as well)
   if (offer.style.visibility !== 'hidden') event.stopPropagation();
-  hideOffer();
+  dismissOffer();
 }, true);
 
 /** The way back after a choice: the language there was before it, its texts loaded first, as a choice does. */
@@ -3380,10 +3393,13 @@ async function goBack(undo) {
   const slow = setTimeout(() => { $('offer-text').textContent = undo.texts.loading; }, SLOW_MS);
   const loaded = await withinTry(textsOf(undo.back));
   clearTimeout(slow);
+  // (put away meanwhile: nothing happens)
+  if (offer.hidden || undoShown !== undo) return;
   if (!loaded) {
     $('offer-text').textContent = undo.texts.offline;
     return;
   }
+  chainOrigin = null;
   keepLanguage(undo.origin.stored);
   loadAgain();
 }
@@ -3400,7 +3416,8 @@ function loadAgain(asked = null) {
   const query = new URLSearchParams(location.search);
   if (asked) query.set('lang', asked);
   else query.delete('lang');
-  history.replaceState(history.state, '', `${location.pathname}${query.size ? `?${query}` : ''}${location.hash}`);
+  const search = query.toString();
+  history.replaceState(history.state, '', `${location.pathname}${search ? `?${search}` : ''}${location.hash}`);
   location.reload();
 }
 
@@ -3459,6 +3476,8 @@ const settingsButton = $('settings-open');
 function showSettings(open) {
   settings.hidden = !open;
   settingsButton.setAttribute('aria-expanded', String(open));
+  // (the way back after a choice waits for the settings to close, see offerLanguage)
+  if (!open && UNDO) offerLanguage();
 }
 settingsButton.addEventListener('click', () => showSettings(settings.hidden));
 // (as it begins, and before anything else hears of it: the map keeps some of what happens on it to itself)
@@ -3496,12 +3515,17 @@ function showLanguageRow() {
   const said = first && !browserCodes().includes(language) ? nameAlone(language, first) : null;
   const also = $('language-also');
   also.hidden = !said || said === name.textContent;
-  also.textContent = said ?? '';
+  // (nothing for the row's name to read where it is hidden)
+  also.textContent = also.hidden ? '' : said;
   if (said) also.lang = first;
 }
 
 closesByClick(languagesDialog, $('languages-close'));
-languageOpen.addEventListener('click', (event) => openLanguages(['touch', 'pen'].includes(event.pointerType)));
+// (by touch or by mouse and keys, from the pointer that began the tap: a click is not a pointer event in every browser)
+let languagesOpenedBy = '';
+languageOpen.addEventListener('pointerdown', (event) => { languagesOpenedBy = event.pointerType; });
+languageOpen.addEventListener('keydown', () => { languagesOpenedBy = ''; });
+languageOpen.addEventListener('click', () => openLanguages(['touch', 'pen'].includes(languagesOpenedBy)));
 languagesDialog.addEventListener('close', () => {
   choosing = null;
   if (!settings.hidden) languageOpen.focus({ preventScroll: true });
@@ -3563,16 +3587,18 @@ function languageRow(code) {
   const names = el('span', { class: 'names' }, [el('bdi', { class: 'own', id: `language-own-${code}`, dir: 'auto', text: own })]);
   if (other) names.append(el('span', { class: 'other', id: `language-other-${code}`, lang: language, text: other }));
   // (where the browser keeps nothing, a language the address asks for holds only as far as the address goes)
-  if (current && fromAddress() && !storageWorks()) names.append(el('span', { class: 'other', text: t('languages.notKept') }));
+  const notKept = current && fromAddress() && !storageWorks();
+  if (notKept) names.append(el('span', { class: 'other', id: 'language-not-kept', lang: language, text: t('languages.notKept') }));
   const row = el('button', { type: 'button', class: 'language-row', lang: code, data: { code }, 'aria-labelledby': `language-own-${code}` }, [names]);
-  if (other) row.setAttribute('aria-describedby', `language-other-${code}`);
+  const described = [other ? `language-other-${code}` : null, notKept ? 'language-not-kept' : null].filter(Boolean);
+  if (described.length) row.setAttribute('aria-describedby', described.join(' '));
   if (current) {
     row.setAttribute('aria-current', 'true');
     const mark = icon(mdiCheck);
     mark.classList.add('check');
     row.append(mark);
   }
-  row.addEventListener('click', () => chooseFromList(code, row));
+  row.addEventListener('click', () => chooseFromList(code));
   return row;
 }
 
@@ -3614,9 +3640,10 @@ let choosing = null;
  * no language like it, the way back goes with it: the bubble on the next
  * start, in the language it leads to, loaded with this one.
  */
-async function chooseFromList(code, row) {
+async function chooseFromList(code) {
   if (code === language) {
-    if (fromAddress()) keepLanguage(code);
+    // (kept where the address alone asked for it: the offer of the browser's language is then answered too)
+    if (fromAddress() && keepLanguage(code)) offerMade = true;
     languagesDialog.close();
     return;
   }
@@ -3625,14 +3652,15 @@ async function chooseFromList(code, row) {
   const say = (text) => {
     if (choosing !== ticket) return;
     for (const note of languagesList.querySelectorAll('.row-state')) note.remove();
-    row.querySelector('.names').append(el('span', { class: 'other row-state', text }));
+    // (on the row as it is now: typing meanwhile draws the list anew)
+    languagesList.querySelector(`.language-row[data-code="${code}"] .names`)?.append(el('span', { class: 'other row-state', lang: language, text }));
     $('languages-count').textContent = text;
   };
   for (const note of languagesList.querySelectorAll('.row-state')) note.remove();
   const slow = setTimeout(() => say(t('panel.loading')), SLOW_MS);
   const kept = storageWorks();
-  // (from where this choice begins: one made while the bubble of an earlier one is up goes back to where that began)
-  const origin = undoShown?.origin ?? { stored: storedLanguage() };
+  // (from where this choice begins: one made after another in this visit goes back to where the first began)
+  const origin = chainOrigin ?? { stored: storedLanguage() };
   const back = origin.stored ?? browserLanguage();
   const offerBack = kept && !browserCodes().includes(code) && code !== back;
   const loaded = await withinTry(Promise.all([textsOf(code), offerBack ? textsOf(back) : null]));
@@ -3643,8 +3671,8 @@ async function chooseFromList(code, row) {
     return;
   }
   if (!kept) {
-    // (the browser keeps nothing: the language in the address, as far as it goes)
-    loadAgain(code);
+    // (the browser keeps nothing: the language in the address, as far as it goes; the browser's own without one)
+    loadAgain(code === browserLanguage() ? null : code);
     return;
   }
   if (offerBack) {
@@ -3662,7 +3690,7 @@ async function chooseFromList(code, row) {
       },
     };
     try {
-      localStorage.setItem(LANGUAGE_UNDO, JSON.stringify(undo));
+      sessionStorage.setItem(LANGUAGE_UNDO, JSON.stringify(undo));
     } catch {
       // (kept a moment ago; without it, the language all the same)
     }
@@ -6556,6 +6584,9 @@ sheetHandle.addEventListener('click', () => {
 
 // On a wide screen the details are a card at the side, as high as they are by themselves.
 narrowScreen.addEventListener('change', () => setSheetHeight(null));
+
+// (the way back after a choice waits for a dialog to close, see offerLanguage)
+for (const dialog of [aboutDialog, notesDialog, choiceDialog, languagesDialog]) dialog.addEventListener('close', () => UNDO && offerLanguage());
 
 // A dialog is a sheet on a narrow screen as well: its bar and its heading
 // drag it down, and let go of far enough down it closes.

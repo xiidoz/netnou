@@ -719,6 +719,8 @@ test('the search finds a language by its own name, its name in the page\'s, the 
   assert.ok(found('el', 'Ελληνικά', 'ellinika'));
   assert.ok(found('es', 'Español', 'ESPANOL'));
   assert.ok(found('cs', 'Čeština', 'cestina'));
+  assert.ok(found('es', 'Español', 'castellano'));
+  assert.ok(found('nl', 'Nederlands', 'vlaams'));
   // (the start of any word, and of the whole name for what is typed with a space)
   assert.ok(found('id', 'Bahasa Indonesia', 'indo'));
   assert.ok(found('id', 'Bahasa Indonesia', 'bahasa ind'));
