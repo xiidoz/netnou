@@ -110,7 +110,10 @@ out of curiosity stays to watch.
 - **The map's colours:** each kind of transport its own colour, each delay
   its own; white letters on all of them.
 - **Icons** show what the page does, in a simplified form (a vehicle on its
-  route, a delay), rather than letters or borrowed symbols.
+  route, a delay), rather than letters or borrowed symbols. One exception:
+  the list of languages (#392) and the offer of a language carry 文A, the
+  common sign of a language menu, as the gear stands for the settings and
+  the lens for the search.
 
 ## Evidence on Hand
 

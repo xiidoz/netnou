@@ -207,6 +207,22 @@ export default {
   'offer.text': 'This page is also available in English.',
   'offer.switch': 'Switch to English',
   'offer.never': 'Don’t ask again',
+  // The list of languages (#392), behind the first row of the settings: its search, the headings over the visitor's
+  // languages and the others, and what it says where the search finds none; how many are left, for a screen reader.
+  'languages.search': 'Search for a language',
+  'languages.yours': 'Your languages',
+  'languages.more': 'More languages',
+  'languages.none': 'Not in the list.',
+  'languages.count': { one: '{count} language', other: '{count} languages' },
+  // on the row of a language chosen without a connection, and in the bubble below
+  'languages.offline': 'No connection right now',
+  // under the language in use where the browser keeps nothing a page stores (all its site data blocked)
+  'languages.notKept': 'Not kept in this browser',
+  // After a language was chosen that the browser asks for none like: the bubble with the way back, written in the
+  // language it leads back to. {language} is a language's name in that language as the browser gives it ("Greek",
+  // "grec", "Griechisch"): build the sentence so that the name needs no ending of its own.
+  'languages.now': 'This page is now in {language}.',
+  'languages.back': 'Back to {language}',
 
   'panel.label': 'Details',
   'panel.close': 'Close',

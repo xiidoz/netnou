@@ -16,8 +16,21 @@ the server.
    `no` gets Norwegian Bokmål (`nb`).
 4. Otherwise English.
 
-Changing the language in the page reloads it, from the address without
-`?lang=…`.
+A visitor changes the language behind the gear: the first row of the
+settings names the language in use by its own name (and, where the browser
+asks for no language like it, by its name in the browser's too) and opens
+the list of all. The list puts the visitor's languages first and the others
+in the order of `LANGUAGES`, each with its name in the page's language below
+(from the browser's `Intl.DisplayNames`, so nothing to translate), and its
+search finds a language by its own name, its name in the page's language, in
+the browser's languages or in English, its code, or a spelling of
+`ALIASES` in `public/languages.js`.
+
+A choice loads the language's texts first, then the page again in it, from
+the address without `?lang=…`. Choosing the language the browser would get
+anyway forgets the choice, so that the page follows the browser again. Where
+the browser asks for no language like the one chosen, the page then offers
+the way back in a bubble, in the language it leads back to.
 
 The server sends the page in that language from the start. A browser names
 the languages of its user with every request (`Accept-Language`), and the

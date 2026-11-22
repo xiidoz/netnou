@@ -43,6 +43,7 @@
        so its texts come from there and not from data-i18n. -->
   <div class="tip offer" id="offer" hidden>
     <div class="offer-head">
+      <span class="offer-sign" data-icon="mdiTranslate"></span>
       <p id="offer-text" role="status"></p>
       <button type="button" class="offer-close" id="offer-close" aria-label="Close" title="Close" data-icon="mdiClose"></button>
     </div>
@@ -95,8 +96,15 @@
          mode" in app.js). -->
     <div class="bubble" id="settings" role="group" aria-label="Settings" data-i18n-aria-label="settings.title" hidden>
       <div class="setting">
-        <label for="language" data-i18n="language.label">Language</label>
-        <select class="language" id="language"></select>
+        <span id="language-label" data-i18n="language.label">Language</span>
+        <!-- The language in use by its own name, and where the browser asks for
+             none like it, its name in the browser's (app.js, "the list of
+             languages"): it opens the list. -->
+        <button type="button" class="language-open" id="language-open" aria-haspopup="dialog" aria-labelledby="language-label language-name language-also">
+          <span class="language-sign" data-icon="mdiTranslate"></span>
+          <span class="language-names"><bdi id="language-name"></bdi><span id="language-also" hidden></span></span>
+          <span class="language-arrow" data-icon="mdiChevronRight"></span>
+        </button>
       </div>
       <div class="setting" role="group" aria-labelledby="theme-label">
         <span id="theme-label" data-i18n="theme.label">Appearance</span>
@@ -262,6 +270,23 @@
       <h2 id="choice-title" data-i18n="choice.title">Which departures?</h2>
       <p data-i18n="choice.hint">Tap directions to show only those.</p>
       <div id="choice-list" class="choice-list"></div>
+    </div>
+  </dialog>
+
+  <!-- The list of languages (#392), opened from the settings: on a phone a
+       sheet as tall as the screen, its search at the top (app.js, "the list
+       of languages"). -->
+  <dialog class="dialog languages" id="languages" aria-labelledby="languages-title">
+    <div class="handle" id="languages-handle"></div>
+    <button type="button" class="close" id="languages-close" aria-label="Close" data-i18n-aria-label="panel.close" title="Close" data-i18n-title="panel.close" data-icon="mdiClose"></button>
+    <div class="dialog-body">
+      <h2 id="languages-title"><span class="language-sign" data-icon="mdiTranslate"></span><span data-i18n="language.label">Language</span></h2>
+      <div class="languages-search">
+        <span class="search-sign" data-icon="mdiMagnify"></span>
+        <input type="text" id="languages-search" autocomplete="off" spellcheck="false" enterkeyhint="search" aria-controls="languages-list" placeholder="Search for a language" data-i18n-placeholder="languages.search" aria-label="Search for a language" data-i18n-aria-label="languages.search">
+      </div>
+      <div class="languages-list" id="languages-list"></div>
+      <p class="spoken" id="languages-count" role="status"></p>
     </div>
   </dialog>
 
