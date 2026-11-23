@@ -3,7 +3,7 @@
 // page, so that the tests run it as it is (test/frontend.test.js); app.js
 // draws the list.
 
-import { LANGUAGES, primaryCode, secondCodes } from './i18n.js';
+import { LANGUAGES, languageNames, primaryCode, secondCodes } from './i18n.js';
 import { fold } from './stops.js';
 
 // Other names a language is found by besides those the browser knows
@@ -37,9 +37,14 @@ export const ALIASES = {
   zh: ['zhongwen', 'putonghua', 'mandarin'],
 };
 
-/** The name of a language in another one, as the browser has it, or null where it has none. */
+/**
+ * The name of a language in another one, as the browser has it, or null where
+ * it has none. Where the browser does not have that other language at all it
+ * would answer in a third one: then from that language's file, once loaded.
+ */
 export function nameIn(code, language) {
   try {
+    if (!Intl.DisplayNames.supportedLocalesOf([language]).length) return languageNames(language)?.[code] ?? null;
     return new Intl.DisplayNames([language], { type: 'language', fallback: 'none' }).of(code) ?? null;
   } catch {
     return null; // a language Intl does not know

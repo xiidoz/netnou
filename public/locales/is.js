@@ -320,3 +320,16 @@ export default {
   'address.kind.cable': 'kláfur og einteinungur',
   'address.kind.other': 'leið',
 };
+
+// What a browser without formats of this language needs (see tools/build-locale-formats.mjs, which writes this).
+export const formats = {
+  time: '{HH}:{mm}',
+  hour: '{HH}',
+  date: '{d}. {month}',
+  weekdays: ['sunnudagur', 'mánudagur', 'þriðjudagur', 'miðvikudagur', 'fimmtudagur', 'föstudagur', 'laugardagur'],
+  days: ['sun.', 'mán.', 'þri.', 'mið.', 'fim.', 'fös.', 'lau.'],
+  months: ['janúar', 'febrúar', 'mars', 'apríl', 'maí', 'júní', 'júlí', 'ágúst', 'september', 'október', 'nóvember', 'desember'],
+  list: [' og ', ' og '],
+  number: { group: '.', decimal: ',', from: 4, minus: '-' },
+  names: { bs: 'bosníska', ca: 'katalónska', cs: 'tékkneska', da: 'danska', de: 'þýska', et: 'eistneska', en: 'enska', es: 'spænska', fr: 'franska', ga: 'írska', hr: 'króatíska', is: 'íslenska', it: 'ítalska', lv: 'lettneska', lt: 'litháíska', hu: 'ungverska', mt: 'maltneska', nl: 'hollenska', nb: 'norskt bókmál', pl: 'pólska', pt: 'portúgalska', ro: 'rúmenska', sq: 'albanska', sk: 'slóvakíska', sl: 'slóvenska', fi: 'finnska', sv: 'sænska', tr: 'tyrkneska', el: 'gríska', be: 'hvítrússneska', bg: 'búlgarska', mk: 'makedónska', ru: 'rússneska', sr: 'serbneska', uk: 'úkraínska' },
+};

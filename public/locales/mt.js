@@ -319,3 +319,16 @@ export default {
   'address.kind.cable': 'funikular u monorail',
   'address.kind.other': 'linja',
 };
+
+// What a browser without formats of this language needs (see tools/build-locale-formats.mjs, which writes this).
+export const formats = {
+  time: '{HH}:{mm}',
+  hour: '{HH}',
+  date: '{d} ta’ {month}',
+  weekdays: ['Il-Ħadd', 'It-Tnejn', 'It-Tlieta', 'L-Erbgħa', 'Il-Ħamis', 'Il-Ġimgħa', 'Is-Sibt'],
+  days: ['Ħad', 'Tne', 'Tli', 'Erb', 'Ħam', 'Ġim', 'Sib'],
+  months: ['Jannar', 'Frar', 'Marzu', 'April', 'Mejju', 'Ġunju', 'Lulju', 'Awwissu', 'Settembru', 'Ottubru', 'Novembru', 'Diċembru'],
+  list: [' u ', ', u '],
+  number: { group: ',', decimal: '.', from: 4, minus: '-' },
+  names: { bs: 'Bożnijaku', ca: 'Katalan', cs: 'Ċek', da: 'Daniż', de: 'Ġermaniż', et: 'Estonjan', en: 'Ingliż', es: 'Spanjol', fr: 'Franċiż', ga: 'Irlandiż', hr: 'Kroat', is: 'Iżlandiż', it: 'Taljan', lv: 'Latvjan', lt: 'Litwan', hu: 'Ungeriż', mt: 'Malti', nl: 'Olandiż', nb: 'Bokmal Norveġiż', pl: 'Pollakk', pt: 'Portugiż', ro: 'Rumen', sq: 'Albaniż', sk: 'Slovakk', sl: 'Sloven', fi: 'Finlandiż', sv: 'Żvediż', tr: 'Tork', el: 'Grieg', be: 'Belarussu', bg: 'Bulgaru', mk: 'Maċedonjan', ru: 'Russu', sr: 'Serb', uk: 'Ukren' },
+};

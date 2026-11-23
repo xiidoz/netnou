@@ -21,7 +21,8 @@ settings names the language in use by its own name (and, where the browser
 asks for no language like it, by its name in the browser's too) and opens
 the list of all. The list puts the visitor's languages first and the others
 in the order of `LANGUAGES`, each with its name in the page's language below
-(from the browser's `Intl.DisplayNames`, so nothing to translate), and its
+(from the browser's `Intl.DisplayNames`, so nothing to translate; see
+[Languages a browser has no formats for](#languages-a-browser-has-no-formats-for)), and its
 search finds a language by its own name, its name in the page's language, in
 the browser's languages or in English, its code, or a spelling of
 `ALIASES` in `public/languages.js`.
@@ -79,6 +80,25 @@ Two steps, here for Dutch (`nl`):
 Then run `npm test`. `test/frontend.test.js` fails if one of the steps was
 forgotten or if the new file does not fit the English one, and says what is
 wrong.
+
+### Languages a browser has no formats for
+
+Times, days, months, lists, numbers and the names of languages come from the
+browser (`Intl`). Chrome leaves out the formats of a few languages (Belarusian,
+Hausa, Icelandic, Irish, Kurdish, Macedonian, Maltese, Albanian) and would write
+them in another language: "6 PM" and "Monday" on a page in Icelandic. The
+files of these languages therefore end in `export const formats`, which the
+page uses only where the browser has no formats of its own. It is taken from
+the Unicode data in Node and not translated by hand:
+
+```sh
+node tools/build-locale-formats.mjs
+```
+
+Run it after adding a language, since each of these files names all the
+languages; `npm test` says so where it is due. A new language that Chrome
+lacks too goes into `WITHOUT_FORMATS` in that tool and in
+`test/frontend.test.js`.
 
 ## Rules for a locale file
 

@@ -319,3 +319,16 @@ export default {
   'address.kind.cable': 'carr cábla agus aonráille',
   'address.kind.other': 'líne',
 };
+
+// What a browser without formats of this language needs (see tools/build-locale-formats.mjs, which writes this).
+export const formats = {
+  time: '{HH}:{mm}',
+  hour: '{HH}',
+  date: '{d} {month}',
+  weekdays: ['Dé Domhnaigh', 'Dé Luain', 'Dé Máirt', 'Dé Céadaoin', 'Déardaoin', 'Dé hAoine', 'Dé Sathairn'],
+  days: ['Domh', 'Luan', 'Máirt', 'Céad', 'Déar', 'Aoine', 'Sath'],
+  months: ['Eanáir', 'Feabhra', 'Márta', 'Aibreán', 'Bealtaine', 'Meitheamh', 'Iúil', 'Lúnasa', 'Meán Fómhair', 'Deireadh Fómhair', 'Samhain', 'Nollaig'],
+  list: [' agus ', ' agus '],
+  number: { group: ',', decimal: '.', from: 4, minus: '-' },
+  names: { bs: 'Boisnis', ca: 'Catalóinis', cs: 'Seicis', da: 'Danmhairgis', de: 'Gearmáinis', et: 'Eastóinis', en: 'Béarla', es: 'Spáinnis', fr: 'Fraincis', ga: 'Gaeilge', hr: 'Cróitis', is: 'Íoslainnis', it: 'Iodáilis', lv: 'Laitvis', lt: 'Liotuáinis', hu: 'Ungáiris', mt: 'Máltais', nl: 'Ollainnis', nb: 'Bocmál', pl: 'Polainnis', pt: 'Portaingéilis', ro: 'Rómáinis', sq: 'Albáinis', sk: 'Slóvaicis', sl: 'Slóivéinis', fi: 'Fionlainnis', sv: 'Sualainnis', tr: 'Tuircis', el: 'Gréigis', be: 'Bealarúisis', bg: 'Bulgáiris', mk: 'Macadóinis', ru: 'Rúisis', sr: 'Seirbis', uk: 'Úcráinis' },
+};
