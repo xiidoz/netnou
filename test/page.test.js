@@ -308,14 +308,15 @@ test('the page names what it fetches at its start, and where its map comes from'
 });
 
 test('the operator\'s links stand at the foot of the header card, and nothing does without any', () => {
-  const links = [{ text: 'Über', href: '/ueber' }, { text: 'Impressum & Kontakt', href: 'https://example.org/impressum?a=1&b=2' }];
+  const links = [{ text: 'Über', href: '/ueber' }, { text: 'Impressum & Kontakt', href: 'https://example.org/impressum?a=1&b=2' }, { text: 'Feedback', href: 'mailto:feedback@example.org?subject=Feedback' }];
   const page = renderPage(html, { ...german, links });
   const nav = /<nav class="links" id="links"([^>]*)>(.*?)<\/nav>/s.exec(page);
   assert.ok(!/\shidden/.test(nav[1]), 'the row is shown');
   assert.ok(nav[1].includes(` aria-label="${de['links.label']}"`));
-  // a page on the same host takes the place of the map, one elsewhere opens in a new tab
+  // a page on the same host takes the place of the map, one elsewhere opens in a new tab, an email address in none
   assert.equal(nav[2], '<a href="/ueber">Über</a>'
-    + '<a href="https://example.org/impressum?a=1&#38;b=2" target="_blank" rel="noopener">Impressum &#38; Kontakt</a>');
+    + '<a href="https://example.org/impressum?a=1&#38;b=2" target="_blank" rel="noopener">Impressum &#38; Kontakt</a>'
+    + '<a href="mailto:feedback@example.org?subject=Feedback">Feedback</a>');
   // inside the card, after everything else in it
   assert.ok(page.indexOf('id="links"') > page.indexOf('id="about-line"') && page.indexOf('id="links"') < page.indexOf('</header>'));
 

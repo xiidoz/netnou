@@ -68,10 +68,11 @@ test('what the page says about itself: its main language and the address of the 
   // links of the operator's own: none by default, else a text and an address each
   assert.deepEqual(loadConfig({}).links, []);
   assert.deepEqual(loadConfig({ NETNOU_LINKS: ' , ' }).links, []);
-  assert.deepEqual(loadConfig({ NETNOU_LINKS: 'Über=/ueber, Impressum = https://example.org/impressum?x=1 ,Datenschutz=/datenschutz/' }).links, [
+  assert.deepEqual(loadConfig({ NETNOU_LINKS: 'Über=/ueber, Impressum = https://example.org/impressum?x=1 ,Datenschutz=/datenschutz/, Feedback=mailto:feedback@example.org?subject=Feedback%20zur%20Karte' }).links, [
     { text: 'Über', href: '/ueber' }, { text: 'Impressum', href: 'https://example.org/impressum?x=1' }, { text: 'Datenschutz', href: '/datenschutz/' },
+    { text: 'Feedback', href: 'mailto:feedback@example.org?subject=Feedback%20zur%20Karte' },
   ]);
-  for (const wrong of ['Impressum', '=/impressum', 'Impressum=', 'Impressum=impressum.html', 'Impressum=//example.org/', 'Impressum=javascript:alert(1)', 'Impressum=mailto:a@example.org', 'Über=/ueber, Impressum']) {
+  for (const wrong of ['Impressum', '=/impressum', 'Impressum=', 'Impressum=impressum.html', 'Impressum=//example.org/', 'Impressum=javascript:alert(1)', 'Feedback=mailto:', 'Feedback=mailto:example.org', 'Feedback=mailto:a@b@example.org', 'Feedback=mailto:a@example.org?subject=zur Karte', 'Über=/ueber, Impressum']) {
     assert.throws(() => loadConfig({ NETNOU_LINKS: wrong }), /^Error: NETNOU_LINKS must be links as "Text=address", separated by commas, .+ \(not understood: ".+"\)$/, wrong);
   }
 

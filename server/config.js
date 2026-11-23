@@ -70,7 +70,8 @@ function pageAddress(value) {
 
 /**
  * The operator's links as NETNOU_LINKS gives them: "Text=address, Text=address".
- * An address is a full http(s) one or a path on the same host ("/imprint").
+ * An address is a full http(s) one, a path on the same host ("/imprint") or an
+ * email address as mailto: ("mailto:feedback@example.org?subject=Feedback").
  * @returns [{ text, href }], or the part that is not understood as { wrong }
  */
 function operatorLinks(value) {
@@ -80,7 +81,8 @@ function operatorLinks(value) {
     const text = part.slice(0, Math.max(at, 0)).trim();
     const href = part.slice(at + 1).trim();
     const path = /^\/(?!\/)\S*$/.test(href);
-    if (!text || !(path || (isHttpUrl(href) && !/\s/.test(href)))) return { wrong: part };
+    const mail = /^mailto:[^\s@?]+@[^\s@?]+(\?\S*)?$/i.test(href);
+    if (!text || !(path || mail || (isHttpUrl(href) && !/\s/.test(href)))) return { wrong: part };
     links.push({ text, href });
   }
   return links;
@@ -314,7 +316,7 @@ export function loadConfig(env = process.env) {
 
   const links = operatorLinks(text('NETNOU_LINKS'));
   if (links.wrong !== undefined) {
-    throw new Error(`NETNOU_LINKS must be links as "Text=address", separated by commas, each address an http(s) URL or a path that starts with "/" (not understood: "${links.wrong}")`);
+    throw new Error(`NETNOU_LINKS must be links as "Text=address", separated by commas, each address an http(s) URL, a path that starts with "/" or a mailto: address (not understood: "${links.wrong}")`);
   }
 
   // Other sites that may show the page in a frame of their own, as a dashboard
