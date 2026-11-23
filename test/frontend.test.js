@@ -7,10 +7,10 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import { test } from 'node:test';
 import vm from 'node:vm';
-import { ATTRIBUTES, LANGUAGES, READMES, dayOf, dayStartOf, formatNumber, formatTime, formatWhen, languageToOffer, loadLanguage, pageTexts, pickLanguage, sentInAnother, setTimeZone, t, textsIn, textsOf } from '../public/i18n.js';
+import { ATTRIBUTES, LANGUAGES, READMES, dayOf, dayStartOf, formatNumber, formatTime, formatWhen, formatsFrom, languageToOffer, loadLanguage, pageTexts, pickLanguage, sentInAnother, setTimeZone, t, textsIn, textsOf } from '../public/i18n.js';
 import { serviceDayStart, setTimeZone as setServerZone } from '../server/lib/time.js';
 import en from '../public/locales/en.js';
-import { languageFound, languageOrder, nameAlone, secondName } from '../public/languages.js';
+import { languageFound, languageOrder, nameAlone, nameIn, secondName } from '../public/languages.js';
 import { tomorrowAt as nextDayAt } from '../public/panel.js';
 import { PAGE_INLINE, PAGE_MODULES, languageFor } from '../server/lib/page.js';
 import { MODES } from '../server/lib/timetable.js';
@@ -313,6 +313,60 @@ test('every language has the texts of English, with the same placeholders and it
         assert.deepEqual(placeholders(text).filter((name) => !known.includes(name)), [], `${code}: placeholders of ${key}.${form}`);
       }
     }
+  }
+});
+
+// Chrome has these languages' texts but no formats of them: Intl there would
+// write their times, days and lists in another language. Node has them all,
+// so what their files bring is held against it here.
+const WITHOUT_FORMATS = ['be', 'ga', 'ha', 'is', 'ku', 'mk', 'mt', 'sq'].filter((code) => LANGUAGES.some(([own]) => own === code));
+
+test('a language a browser has no formats for brings them in its file, and they say what Intl says', async () => {
+  const timeZone = 'Europe/Berlin';
+  const moments = [
+    ...Array.from({ length: 48 }, (_, half) => Date.UTC(2026, 2, 28, 12, half * 30)), // (over the change to summer time)
+    ...Array.from({ length: 12 }, (_, month) => [1, 9, 23, 28].map((day) => Date.UTC(2026, month, day, 11, 7))).flat(),
+  ];
+  for (const code of WITHOUT_FORMATS) {
+    const { formats } = await import(new URL(`locales/${code}.js`, publicDir));
+    assert.ok(formats, `${code}: run tools/build-locale-formats.mjs`);
+    const own = formatsFrom(formats, timeZone);
+    const intl = {
+      time: new Intl.DateTimeFormat(code, { timeStyle: 'short', timeZone }),
+      hour: new Intl.DateTimeFormat(code, { hour: 'numeric', timeZone }),
+      weekday: new Intl.DateTimeFormat(code, { weekday: 'short', timeZone }),
+      fullWeekday: new Intl.DateTimeFormat(code, { weekday: 'long', timeZone }),
+      date: new Intl.DateTimeFormat(code, { day: 'numeric', month: 'long', timeZone }),
+    };
+    for (const [kind, format] of Object.entries(intl)) for (const ms of moments) assert.equal(own[kind].format(ms), format.format(ms), `${code} ${kind} ${new Date(ms).toISOString()}`);
+    const number = new Intl.NumberFormat(code);
+    for (const value of [0, 7, 999, 1000, 1234, 9999, 10000, 12345.5, 1234567, 0.125, -5]) assert.equal(own.number.format(value), number.format(value), `${code} ${value}`);
+    const list = new Intl.ListFormat(code, { type: 'conjunction' });
+    for (const words of [['A'], ['A', 'B'], ['A', 'B', 'C'], ['A', 'B', 'C', 'D']]) assert.equal(own.list.format(words), list.format(words), `${code} ${words}`);
+    const names = new Intl.DisplayNames([code], { type: 'language', fallback: 'none' });
+    for (const [other] of LANGUAGES) assert.equal(formats.names[other], names.of(other), `${code}: the name of ${other}; run tools/build-locale-formats.mjs`);
+  }
+});
+
+test('where the browser lacks a language, the page writes its times and names from the language\'s file', async () => {
+  const { supportedLocalesOf: times } = Intl.DateTimeFormat;
+  const { supportedLocalesOf: names } = Intl.DisplayNames;
+  const lacking = (tags) => [tags].flat().filter((tag) => !tag.startsWith('is'));
+  Intl.DateTimeFormat.supportedLocalesOf = lacking;
+  Intl.DisplayNames.supportedLocalesOf = lacking;
+  try {
+    assert.equal(nameIn('de', 'is'), null, 'not before its file is there');
+    await loadLanguage('is', ['is-IS'], null, null);
+    setTimeZone('Europe/Berlin');
+    assert.equal(formatTime(Date.UTC(2026, 10, 23, 12, 36) / 1000), '13:36');
+    assert.equal(formatNumber(12345.5), '12.345,5');
+    assert.equal(nameIn('de', 'is'), 'þýska');
+    assert.equal(secondName('de', 'Deutsch', 'is'), 'Þýska');
+    assert.ok(languageFound('de', 'Deutsch', 'þýsk', { page: 'is' }));
+  } finally {
+    Intl.DateTimeFormat.supportedLocalesOf = times;
+    Intl.DisplayNames.supportedLocalesOf = names;
+    await loadLanguage('en', ['en'], null, null);
   }
 });
 

@@ -319,3 +319,17 @@ export default {
   'address.kind.cable': 'teleferik dhe monorail',
   'address.kind.other': 'linja',
 };
+
+// What a browser without formats of this language needs (see tools/build-locale-formats.mjs, which writes this).
+export const formats = {
+  time: '{h}:{mm} {a}',
+  hour: '{h} {a}',
+  periods: ['p.d.', 'm.d.'],
+  date: '{d} {month}',
+  weekdays: ['e diel', 'e hënë', 'e martë', 'e mërkurë', 'e enjte', 'e premte', 'e shtunë'],
+  days: ['die', 'hën', 'mar', 'mër', 'enj', 'pre', 'sht'],
+  months: ['janar', 'shkurt', 'mars', 'prill', 'maj', 'qershor', 'korrik', 'gusht', 'shtator', 'tetor', 'nëntor', 'dhjetor'],
+  list: [' dhe ', ' dhe '],
+  number: { group: '\u00a0', decimal: ',', from: 5, minus: '-' },
+  names: { bs: 'boshnjakisht', ca: 'katalonisht', cs: 'çekisht', da: 'danisht', de: 'gjermanisht', et: 'estonisht', en: 'anglisht', es: 'spanjisht', fr: 'frëngjisht', ga: 'irlandisht', hr: 'kroatisht', is: 'islandisht', it: 'italisht', lv: 'letonisht', lt: 'lituanisht', hu: 'hungarisht', mt: 'maltisht', nl: 'holandisht', nb: 'norvegjishte letrare', pl: 'polonisht', pt: 'portugalisht', ro: 'rumanisht', sq: 'shqip', sk: 'sllovakisht', sl: 'sllovenisht', fi: 'finlandisht', sv: 'suedisht', tr: 'turqisht', el: 'greqisht', be: 'bjellorusisht', bg: 'bullgarisht', mk: 'maqedonisht', ru: 'rusisht', sr: 'serbisht', uk: 'ukrainisht' },
+};

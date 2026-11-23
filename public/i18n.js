@@ -102,19 +102,72 @@ let fullWeekdayFormat;
 let dateFormat;
 let partsFormat;
 let listFormat;
+// What the language's file brings for a browser without formats of that language (see formatsFrom), or null.
+let ownFormats = null;
+// The names of the languages in those of such languages as have been loaded (see languageNames).
+const namesIn = new Map();
+
+/**
+ * Times, days, months, lists and numbers of a language from its file
+ * (`formats`, written by tools/build-locale-formats.mjs), for a browser that
+ * has none of its own: Chrome leaves out a few languages, and Intl would then
+ * write them in another one ("6 PM" and "Monday" on a page in Icelandic). They
+ * say what Intl says where it has the language (test/frontend.test.js).
+ * @returns the formatters, each with format() as Intl's
+ */
+export function formatsFrom(data, zone) {
+  const fields = new Intl.DateTimeFormat('en-US', { timeZone: zone, hourCycle: 'h23', year: 'numeric', month: 'numeric', day: 'numeric', hour: 'numeric', minute: 'numeric' });
+  const at = (ms) => Object.fromEntries(fields.formatToParts(ms).filter(({ type }) => type !== 'literal').map(({ type, value }) => [type, Number(value)]));
+  const two = (value) => String(value).padStart(2, '0');
+  const clock = (pattern, { hour, minute }) => pattern.replace(/\{(HH|H|h|mm|a)\}/g, (_, token) => ({ HH: two(hour), H: hour, h: hour % 12 || 12, mm: two(minute), a: data.periods?.[hour < 12 ? 0 : 1] })[token]);
+  const dayOfWeek = ({ year, month, day }) => new Date(Date.UTC(year, month - 1, day)).getUTCDay();
+  const plain = new Intl.NumberFormat('en-US', { useGrouping: false, maximumFractionDigits: 3 });
+  const { group, decimal, from, minus } = data.number;
+  return {
+    number: {
+      format(value) {
+        const [whole, fraction] = plain.format(Math.abs(value)).split('.');
+        const grouped = whole.length < from ? whole : whole.replace(/\B(?=(\d{3})+$)/g, group);
+        return `${value < 0 ? minus : ''}${grouped}${fraction ? decimal + fraction : ''}`;
+      },
+    },
+    time: { format: (ms) => clock(data.time, at(ms)) },
+    hour: { format: (ms) => clock(data.hour, at(ms)) },
+    weekday: { format: (ms) => data.days[dayOfWeek(at(ms))] },
+    fullWeekday: { format: (ms) => data.weekdays[dayOfWeek(at(ms))] },
+    date: {
+      format(ms) {
+        const { day, month } = at(ms);
+        return data.date.replace('{d}', day).replace('{month}', data.months[month - 1]);
+      },
+    },
+    list: {
+      format(items) {
+        const words = [...items];
+        if (words.length < 2) return words[0] ?? '';
+        if (words.length === 2) return words.join(data.list[0]);
+        return `${words.slice(0, -1).join(', ')}${data.list[1]}${words.at(-1)}`;
+      },
+    },
+  };
+}
+
+/** The names of the languages in one the browser has no formats for, where its file has been loaded; else null. */
+export const languageNames = (code) => namesIn.get(primary(code)) ?? null;
 
 function setFormats() {
-  numberFormat = new Intl.NumberFormat(locale);
+  const own = ownFormats && !Intl.DateTimeFormat.supportedLocalesOf([locale]).length ? formatsFrom(ownFormats, timeZone) : null;
+  numberFormat = own?.number ?? new Intl.NumberFormat(locale);
   pluralRules = new Intl.PluralRules(locale);
-  timeFormat = new Intl.DateTimeFormat(locale, { timeStyle: 'short', timeZone });
+  timeFormat = own?.time ?? new Intl.DateTimeFormat(locale, { timeStyle: 'short', timeZone });
   dayFormat = new Intl.DateTimeFormat('en-CA', { year: 'numeric', month: '2-digit', day: '2-digit', timeZone });
-  hourFormat = new Intl.DateTimeFormat(locale, { hour: 'numeric', timeZone });
-  weekdayFormat = new Intl.DateTimeFormat(locale, { weekday: 'short', timeZone });
-  fullWeekdayFormat = new Intl.DateTimeFormat(locale, { weekday: 'long', timeZone });
+  hourFormat = own?.hour ?? new Intl.DateTimeFormat(locale, { hour: 'numeric', timeZone });
+  weekdayFormat = own?.weekday ?? new Intl.DateTimeFormat(locale, { weekday: 'short', timeZone });
+  fullWeekdayFormat = own?.fullWeekday ?? new Intl.DateTimeFormat(locale, { weekday: 'long', timeZone });
   // (the day and the month in words, as the server writes a line's dates; the order of the visitor's region, as the time)
-  dateFormat = new Intl.DateTimeFormat(locale, { day: 'numeric', month: 'long', timeZone });
+  dateFormat = own?.date ?? new Intl.DateTimeFormat(locale, { day: 'numeric', month: 'long', timeZone });
   partsFormat = new Intl.DateTimeFormat('en-US', { timeZone, hourCycle: 'h23', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' });
-  listFormat = new Intl.ListFormat(locale, { type: 'conjunction' });
+  listFormat = own?.list ?? new Intl.ListFormat(locale, { type: 'conjunction' });
 }
 setFormats();
 
@@ -153,9 +206,13 @@ export async function loadLanguage(stored = storedLanguage(), preferred = naviga
   language = pickLanguage(stored, preferred, asked, sent);
   chosen = language === stored;
   messages = en;
+  ownFormats = null;
   if (language !== FALLBACK) {
     try {
-      messages = (await import(`./locales/${language}.js`)).default;
+      const file = await import(`./locales/${language}.js`);
+      messages = file.default;
+      ownFormats = file.formats ?? null;
+      if (ownFormats) namesIn.set(language, ownFormats.names);
     } catch (err) {
       console.warn(`language ${language} not loaded:`, err);
       language = FALLBACK;
@@ -200,7 +257,10 @@ function rulesOf(code) {
 
 /** The texts of a language, for t(): to say something in it on a page in another one. */
 export async function textsOf(code) {
-  return code === FALLBACK ? en : textsIn(code, (await import(`./locales/${code}.js`)).default);
+  if (code === FALLBACK) return en;
+  const file = await import(`./locales/${code}.js`);
+  if (file.formats) namesIn.set(code, file.formats.names);
+  return textsIn(code, file.default);
 }
 
 /**

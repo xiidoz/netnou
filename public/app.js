@@ -7205,7 +7205,7 @@ function blockHeading(block, index, tag, controls, total) {
     return el('span', { class: 'stop' }, [letters.slice(0, -1).join(''), el('span', { class: 'end' }, [letters.at(-1), minus])]);
   });
   const heading = el(tag, { class: 'board-heading' }, parts);
-  if (block.length > 1 || controls) heading.setAttribute('aria-label', new Intl.ListFormat(language, { type: 'conjunction' }).format(names));
+  if (block.length > 1 || controls) heading.setAttribute('aria-label', formatList(names));
   return heading;
 }
 
