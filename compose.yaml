@@ -80,6 +80,11 @@ services:
       # such as a test instance next to the real one. Without an address an
       # instance is not listed anyway.
       # NETNOU_SEARCH_ENGINES: "off"
+      # On a large instance, the pages the sitemap leads search engines to, and
+      # those that name their other languages (docs/configuration.md, "Being
+      # found").
+      # NETNOU_SEARCH_PAGES: "home,lines"
+      # NETNOU_SEARCH_LANGUAGES: "home"
       # No daily question to GitHub whether there is a newer release, and no
       # marker in the page when there is one.
       # NETNOU_UPDATE_CHECK: "off"

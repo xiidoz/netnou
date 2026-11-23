@@ -238,6 +238,12 @@ const addressIn = (publicUrl, language) => (language ? `${publicUrl}?lang=${lang
  */
 const versions = (publicUrl, main) => [...LANGUAGE_CODES.map((code) => [code, addressIn(publicUrl, code === main ? null : code)]), ['x-default', publicUrl]];
 
+// The kinds of page an operator can lead search engines to (#398).
+export const SEARCH_KINDS = ['home', 'lines', 'stops'];
+
+/** The kind of page at an address, as SEARCH_KINDS names it: no path is the home page; null for any other, such as a trip. */
+const searchKind = (path) => (!path ? 'home' : path.startsWith('stop/') ? 'stops' : path.startsWith('line/') ? 'lines' : null);
+
 /**
  * index.html as it is sent.
  * @param html the file
@@ -260,6 +266,8 @@ const versions = (publicUrl, main) => [...LANGUAGE_CODES.map((code) => [code, ad
  *   null: then all that needs a full address is left out
  * @param listed whether search engines may list the page; if not, it asks
  *   them not to and leaves out what is there for them alone
+ * @param searchLanguages the kinds of page (SEARCH_KINDS) that name their
+ *   versions in the other languages (NETNOU_SEARCH_LANGUAGES, #398)
  * @param styleUrl the style of the map, null with raster tiles
  * @param mapOrigins the servers the map comes from, as the
  *   Content-Security-Policy names them
@@ -284,7 +292,7 @@ const versions = (publicUrl, main) => [...LANGUAGE_CODES.map((code) => [code, ad
  * @param version of the page's files (pageVersion), for the page to know;
  *   null names none
  */
-export function renderPage(html, { language, main, asked, texts, siteName, areaName, siteTitle = null, siteDescription = null, links = [], preview = null, previewSize = null, publicUrl, listed, styleUrl = null, mapOrigins = [], kinds = null, nearby = [], address = null, inline = null, fileVersions = {}, version = null }) {
+export function renderPage(html, { language, main, asked, texts, siteName, areaName, siteTitle = null, siteDescription = null, links = [], preview = null, previewSize = null, publicUrl, listed, searchLanguages = SEARCH_KINDS, styleUrl = null, mapOrigins = [], kinds = null, nearby = [], address = null, inline = null, fileVersions = {}, version = null }) {
   const worded = pageTexts(areaName, texts, siteName);
   const named = Boolean(address?.title);
   const title = named ? addressTitle(address.title, siteName) : siteTitle ?? worded.title;
@@ -371,10 +379,9 @@ export function renderPage(html, { language, main, asked, texts, siteName, areaN
     const own = publicUrl + (named ? address.path : '');
     const canonical = escapeHtml(addressIn(own, asked === main ? null : asked));
     if (listed && (!address || named) && !address?.unlisted) {
-      tags.push(
-        `<link rel="canonical" href="${canonical}">`,
-        ...versions(own, main).map(([code, href]) => `<link rel="alternate" hreflang="${code}" href="${escapeHtml(href)}">`),
-      );
+      tags.push(`<link rel="canonical" href="${canonical}">`);
+      // (a kind of page that names no other language still has them, at their ?lang= addresses)
+      if (searchLanguages.includes(searchKind(named ? address.path : null))) tags.push(...versions(own, main).map(([code, href]) => `<link rel="alternate" hreflang="${code}" href="${escapeHtml(href)}">`));
     }
     tags.push(`<meta property="og:url" content="${canonical}">`);
     if (preview) {
@@ -535,30 +542,57 @@ export function robotsTxt(sitemapAt) {
 export const SITEMAP_MAX = 50_000;
 
 /**
- * The sitemap of an instance: the addresses of the page, each with the
- * others as its versions in other languages, and those of its stops and
- * lines (#37). Up to `max` addresses are one file, sitemap.xml. More are
- * cut into files of that many, sitemap-1.xml on, which sitemap.xml then
- * lists: those of the default area are one file, the 270,000 of all of
- * Germany six. Each address has the date of the timetable it was made from
- * (#254), where that is known: what a stop or a line lists comes from it.
+ * The sitemap of an instance: the kinds of page it leads search engines to
+ * (#37, #398), each address on its own. A page's versions in other languages
+ * are addresses of their own too, for the kinds that `languages` names; which
+ * address is which language the pages say themselves (hreflang), and 36 lines
+ * of it under every address would take a large instance past the 50 MB a
+ * search engine reads. First the home page, then the plain addresses, then
+ * the other languages of the stops and lines. Up to `max` addresses are one
+ * file, sitemap.xml. More are cut into files of that many, sitemap-1.xml on,
+ * which sitemap.xml then lists. Each address has the date of the timetable it
+ * was made from (#254), where that is known: what a stop or a line lists
+ * comes from it.
  * @param paths the addresses of the stops and lines, from where the instance is
  * @param lastmod that date, YYYY-MM-DD, or null
  * @param main the main language of the instance, whose page has the plain address (see versions)
+ * @param pages the kinds of page to list (NETNOU_SEARCH_PAGES)
+ * @param languages the kinds listed in every language as well
  * @returns the files: sitemap.xml, then sitemap-1.xml on if there are more
  */
-export function sitemapFiles(publicUrl, paths = [], max = SITEMAP_MAX, lastmod = null, main = null) {
+export function sitemapFiles(publicUrl, paths = [], max = SITEMAP_MAX, lastmod = null, main = null, { pages = SEARCH_KINDS, languages = ['home'] } = {}) {
   const escapeXml = (text) => text.replace(/[&<>"']/g, (char) => `&#${char.charCodeAt(0)};`);
-  const all = versions(publicUrl, main);
-  const links = all.map(([code, href]) => `    <xhtml:link rel="alternate" hreflang="${code}" href="${escapeXml(href)}"/>`).join('\n');
-  // (each address of the page once, the plain one first: it is the address people pass on)
   const dated = lastmod ? `<lastmod>${lastmod}</lastmod>` : '';
-  const urls = [...new Set([all.at(-1), ...all.slice(0, -1)].map(([, href]) => href))].map((href) => `  <url>\n    <loc>${escapeXml(href)}</loc>${dated ? `\n    ${dated}` : ''}\n${links}\n  </url>`);
-  for (const path of paths) urls.push(`  <url><loc>${escapeXml(publicUrl + path)}</loc>${dated}</url>`);
+  const entry = (href) => `  <url><loc>${href}</loc>${dated}</url>`;
+  const others = LANGUAGE_CODES.filter((code) => code !== main);
+  const listed = paths.filter((path) => pages.includes(searchKind(path)));
+  function* entries() {
+    const home = escapeXml(publicUrl);
+    if (pages.includes('home')) {
+      yield entry(home);
+      if (languages.includes('home')) for (const code of others) yield entry(`${home}?lang=${code}`);
+    }
+    for (const path of listed) yield entry(escapeXml(publicUrl + path));
+    for (const path of listed) {
+      if (!languages.includes(searchKind(path))) continue;
+      const plain = escapeXml(publicUrl + path);
+      for (const code of others) yield entry(`${plain}?lang=${code}`);
+    }
+  }
   const head = '<?xml version="1.0" encoding="UTF-8"?>\n';
-  const urlset = (listed) => `${head}<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:xhtml="http://www.w3.org/1999/xhtml">\n${listed.join('\n')}\n</urlset>\n`;
-  if (urls.length <= max) return [urlset(urls)];
-  const parts = Array.from({ length: Math.ceil(urls.length / max) }, (_, i) => urlset(urls.slice(i * max, (i + 1) * max)));
+  const urlset = (urls) => `${head}<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${urls.join('\n')}\n</urlset>\n`;
+  // (file by file: the lines of all of Germany in every language are close to a million addresses)
+  const parts = [];
+  let part = [];
+  for (const url of entries()) {
+    if (part.length === max) {
+      parts.push(urlset(part));
+      part = [];
+    }
+    part.push(url);
+  }
+  parts.push(urlset(part));
+  if (parts.length === 1) return parts;
   const files = parts.map((_, i) => `  <sitemap><loc>${escapeXml(`${publicUrl}sitemap-${i + 1}.xml`)}</loc></sitemap>`);
   return [`${head}<sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${files.join('\n')}\n</sitemapindex>\n`, ...parts];
 }
