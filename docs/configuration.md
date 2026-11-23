@@ -72,6 +72,8 @@ needs `NETNOU_PORT` set to the same number.
 | `NETNOU_LANGUAGE` | `de` | a language of the page, by its code in `LANGUAGES` of `public/i18n.js`: `de`, `en`, `fr` … | the main language of the instance: the page is sent in it to whoever asks without naming a language, as search engines do, and in it the page has the plain address, without `?lang=`. Visitors get the language of their browser, see [Being found](#being-found) |
 | `NETNOU_PUBLIC_URL` | – | http(s) URL | the address under which visitors reach the instance, e.g. `https://transit.example.org/`, see [Being found](#being-found) |
 | `NETNOU_SEARCH_ENGINES` | `on` if `NETNOU_PUBLIC_URL` is set, otherwise `off` | `on` or `off` | whether search engines may list the instance, see [Being found](#being-found) |
+| `NETNOU_SEARCH_PAGES` | `home,lines,stops` | a list of `home`, `lines`, `stops` | the pages the sitemap lists, see [Being found](#being-found) |
+| `NETNOU_SEARCH_LANGUAGES` | every page names its other languages; the sitemap has those of the home page | a list of `home`, `lines`, `stops`, or `none` | the pages that name their versions in the other languages, in the page and in the sitemap, see [Being found](#being-found) |
 | `NETNOU_VIEW` | Nürnberg, Fürth and Erlangen, for Germany the whole country; the whole area for a custom one | `south,west,north,east` | map section on a visitor's first visit; afterwards the browser remembers the last one |
 | `NETNOU_TIMEZONE` | `Europe/Berlin` | IANA time zone | the zone the times of the feed are in; times in the page are shown in it |
 | `NETNOU_FEED_URL` | `https://download.gtfs.de/germany/free/latest.zip` | http(s) URL | the GTFS timetable (zip) |
@@ -376,6 +378,44 @@ two compete in the results, with the same content. An instance that is not
 listed asks for that with every answer (`X-Robots-Tag: noindex`) and in
 the page, has no sitemap, and leaves out what is in the page for search
 engines alone. A link to it still shows a preview.
+
+What search engines are led to can be narrowed, which matters on a large
+instance: a search engine visits a new site only so often, and what it fetches
+of a few hundred thousand pages is not necessarily what you would want it to
+find first. Two settings, each a list of the kinds of page `home`, `lines` and
+`stops`:
+
+- **`NETNOU_SEARCH_PAGES`** is what the sitemap lists.
+- **`NETNOU_SEARCH_LANGUAGES`** is what names its versions in the other
+  languages: in the page (`hreflang`) and, where the sitemap lists the page, in
+  the sitemap, as addresses of their own. `none` is no other language anywhere.
+
+```sh
+# nothing set: the sitemap has every page, the home page in every language,
+# and every page names its other languages
+
+# the sitemap leads to the lines, and only the home page names its other languages
+NETNOU_SEARCH_PAGES=home,lines
+NETNOU_SEARCH_LANGUAGES=home
+
+# the lines in every language
+NETNOU_SEARCH_PAGES=home,lines
+NETNOU_SEARCH_LANGUAGES=home,lines
+```
+
+A kind you name in `NETNOU_SEARCH_LANGUAGES` is in the sitemap once per
+language, and the server holds the sitemap in memory. For all of Germany in 35
+languages, the lines are about 920,000 addresses in 19 files and 113 MB;
+`home,lines,stops` is close to ten million addresses and over a gigabyte, which
+is why it is not what happens when nothing is set.
+
+Every page stays there for visitors, in every language. A page the sitemap does
+not list can still be found through the links of other pages (a line lists its
+stops, a stop its lines) and keeps its canonical address. A page whose kind
+names no other language has no `hreflang`, and its `?lang=` addresses still
+work; as the links within a page lead to plain addresses, a search engine
+reaches its other languages only through `hreflang` and the sitemap. With
+`NETNOU_SEARCH_ENGINES=off` neither setting matters.
 
 `/robots.txt` lets search engines read everything, also on an instance that
 is not listed: one that may not read a page never sees that it is asked not

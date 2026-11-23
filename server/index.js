@@ -239,7 +239,7 @@ function pageLanguage(req, url) {
 /** index.html as it is sent (renderPage), in a language: the page itself, or at the address of a stop or a line. */
 function pageBody(language, asked, address = null) {
   const file = path.join(config.publicDir, 'index.html');
-  return Buffer.from(renderPage(fs.readFileSync(file, 'utf8'), { language, main: config.language, asked, texts: texts[language], siteName: config.siteName, areaName: config.areaName, siteTitle: config.siteTitle[language], siteDescription: config.siteDescription[language], links: config.links, preview: own.preview, previewSize, publicUrl: config.publicUrl, listed: config.searchEngines, styleUrl: config.styleUrl, mapOrigins: config.mapOrigins, kinds: timetable?.kinds ?? null, nearby: nearbySent(), address, inline: pageInline().inline, fileVersions, version: shell().version }));
+  return Buffer.from(renderPage(fs.readFileSync(file, 'utf8'), { language, main: config.language, asked, texts: texts[language], siteName: config.siteName, areaName: config.areaName, siteTitle: config.siteTitle[language], siteDescription: config.siteDescription[language], links: config.links, preview: own.preview, previewSize, publicUrl: config.publicUrl, listed: config.searchEngines, searchLanguages: config.searchLanguages, styleUrl: config.styleUrl, mapOrigins: config.mapOrigins, kinds: timetable?.kinds ?? null, nearby: nearbySent(), address, inline: pageInline().inline, fileVersions, version: shell().version }));
 }
 
 const etagOf = (body) => `"${crypto.createHash('sha1').update(body).digest('hex').slice(0, 16)}"`;
@@ -533,7 +533,7 @@ function serveSitemap(req, res, part) {
   const day = localDate(Date.now() / 1000);
   if (sitemaps.of !== timetable || sitemaps.day !== day) {
     const paths = timetable ? addressesNow().paths(facts(timetable).leavingWithin(day)) : [];
-    sitemaps = { of: timetable, day, files: sitemapFiles(sitemapAt, paths, undefined, timetableDate(), config.language).map((xml) => keep(Buffer.from(xml))) };
+    sitemaps = { of: timetable, day, files: sitemapFiles(sitemapAt, paths, undefined, timetableDate(), config.language, { pages: config.searchPages, languages: config.sitemapLanguages }).map((xml) => keep(Buffer.from(xml))) };
   }
   const kept = sitemaps.files[part];
   if (!kept) return send(req, res, 404, MIME['.txt'], Buffer.from('not found\n'), { 'Cache-Control': 'no-cache' });
