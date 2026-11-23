@@ -68,7 +68,7 @@ needs `NETNOU_PORT` set to the same number.
 | `NETNOU_SITE_DESCRIPTION` | the page's own, in each of its languages | text, or texts by language | what the page says about itself in a search result and in a preview of a link, in words of your own |
 | `NETNOU_AREA_NAME` | `Großraum Nürnberg (VGN)`, for Germany `Deutschland`; empty for a custom area | text | shown next to the title of the page, and what search engines find the instance by, see [Being found](#being-found) |
 | `NETNOU_BRAND_DIR` | – (`/brand` in the image) | path | a folder with icons and a preview picture of your own, see [Icons of your own](#icons-of-your-own) |
-| `NETNOU_LINKS` | – | `Text=address`, separated by commas | links of the operator at the foot of the header card, see [Links of your own](#links-of-your-own) |
+| `NETNOU_LINKS` | – | `Text=address`, separated by commas | links of the operator at the foot of the header card, to pages or an email address, see [Links of your own](#links-of-your-own) |
 | `NETNOU_LANGUAGE` | `de` | a language of the page, by its code in `LANGUAGES` of `public/i18n.js`: `de`, `en`, `fr` … | the main language of the instance: the page is sent in it to whoever asks without naming a language, as search engines do, and in it the page has the plain address, without `?lang=`. Visitors get the language of their browser, see [Being found](#being-found) |
 | `NETNOU_PUBLIC_URL` | – | http(s) URL | the address under which visitors reach the instance, e.g. `https://transit.example.org/`, see [Being found](#being-found) |
 | `NETNOU_SEARCH_ENGINES` | `on` if `NETNOU_PUBLIC_URL` is set, otherwise `off` | `on` or `off` | whether search engines may list the instance, see [Being found](#being-found) |
@@ -436,25 +436,29 @@ The colours of the page are not yours to set: they stay as they are.
 ## Links of your own
 
 Who runs the instance, how it treats personal data, what it is about, how to
-support it: these are the operator's to say, on pages of the operator's own.
-`NETNOU_LINKS` puts links to them at the foot of the header card, where they are in
-view without opening anything, on a phone as well.
+support it, where to write to: these are the operator's to say, on pages of
+the operator's own or by email. `NETNOU_LINKS` puts links to them at the foot
+of the header card, where they are in view without opening anything, on a
+phone as well.
 
 ```sh
-NETNOU_LINKS="Über=/ueber, Impressum=/impressum, Datenschutz=https://example.org/datenschutz"
+NETNOU_LINKS="Über=/ueber, Impressum=/impressum, Datenschutz=https://example.org/datenschutz, Feedback=mailto:feedback@example.org"
 ```
 
 - Each link is a text, an equals sign and an address; links are separated
   by commas. So neither a text nor an address can contain a comma.
-- An address is a full `http(s)` address, or a path on the same host that
-  starts with a slash. The second is for pages that live next to the
-  instance, for example on a site of your own at the root of the host while
-  the instance is under a path.
+- An address is a full `http(s)` address, a path on the same host that
+  starts with a slash, or an email address as `mailto:`. A path is for
+  pages that live next to the instance, for example on a site of your own at
+  the root of the host while the instance is under a path. An email address
+  opens the visitor's mail program and may carry a subject
+  (`mailto:feedback@example.org?subject=Feedback`, spaces as `%20`).
 - The texts are shown as they are, in one language.
 - A link with a full address opens in a new tab, so that the map stays where
   it is. A link to a path on the same host opens in the same tab: such a page
   belongs to the same site, and a link from it back to the map leads to the
-  map as the visitor left it, not to a second one.
+  map as the visitor left it, not to a second one. An email address opens no
+  tab.
 
 The pages themselves are not part of Netnou. Without `NETNOU_LINKS` nothing is
 shown.
