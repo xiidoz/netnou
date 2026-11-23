@@ -282,8 +282,12 @@ into it what the instance is:
   that language and the one for whoever names none (`hreflang="x-default"`);
   the other languages have `?lang=<code>`, and `?lang=` with the main
   language sends the browser to the plain address (301), with the rest of
-  the address kept. The page's own script keeps to the language the page
-  was sent in, unless the visitor chose another in the settings.
+  the address kept, wherever the plain address shows the page in the main
+  language too: to a search engine, which names no language, and to a
+  browser that asks for it. A browser that asks for another language keeps
+  the main language's `?lang=`, as a wall screen set up in it does. The
+  page's own script keeps to the language the page was sent in, unless the
+  visitor chose another in the settings.
 - **`NETNOU_PUBLIC_URL`** is the address of the instance as visitors type it, with
   the path if it lives under one (`https://example.org/netnou/`). With it
   the page names its canonical address, its versions in the other languages

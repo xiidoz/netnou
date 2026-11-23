@@ -129,7 +129,7 @@ Page (`public/`):
 | `search.js` | finding stops, lines and towns by name: matching and order, the favourites first, without the page around it |
 | `nearby.js` | the stations the search suggests near the map before anything is typed (#257): stations close together as one place, the biggest places near the map or the busiest towns in view; for the page and the server |
 | `search-worker.js` | the thread that loads the list of stops, lines and towns and searches it |
-| `i18n.js`, `locales/` | texts in the visitor's language, see [translating.md](translating.md) |
+| `i18n.js`, `locales/`, `languages.js` | texts in the visitor's language, and the list of languages behind the gear (#392); see [translating.md](translating.md) |
 | `first.js` | what is settled before the page is drawn: light or dark, by the visitor's choice or else the scheme of the device, whether the header card shows at once and in which language, and where the instance is (the base of the page) |
 | `sw.js`, `manifest.webmanifest`, `icons/` | installable app and offline start |
 | `vendor/maplibre-gl/` | the map library, vendored, see [its README](../public/vendor/maplibre-gl/README.md) |

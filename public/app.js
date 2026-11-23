@@ -9,7 +9,8 @@
 // lines, stops and operators, and the notes of the feed.
 
 import { parseAddress, stopPathAt, wordsOf } from './address.js';
-import { APP_NAME, READMES, chooseLanguage, dayOf, dayStartOf, formatHour, formatList, formatNumber, formatTime, formatWeekday, formatWhen, languagePicker, languageToOffer, loadLanguage, pageTexts, sentInAnother, setTimeZone, t, textsOf, translatePage } from './i18n.js';
+import { APP_NAME, LANGUAGES, READMES, browserLanguage, chooseLanguage, dayOf, dayStartOf, formatHour, formatList, formatNumber, formatTime, formatWeekday, formatWhen, fromAddress, keepLanguage, languageToOffer, loadLanguage, pageTexts, primaryCode, sentInAnother, setTimeZone, storageWorks, storedLanguage, t, textsOf, translatePage } from './i18n.js';
+import { languageFound, languageOrder, nameAlone, nameIn, secondName } from './languages.js';
 import { FAVOURITE_NAME_ZOOM, HEART_MIDDLE, PLACES_ZOOM, RAIL_MODES, heartMark, joiningLines, mergePlaces, namePrecedence, namedAt, placeNames, stopMark, townToShow, townsAlong, withoutStyleStops } from './stops.js';
 import { favouritesFrom, isFavourite, lineFavourite, metres, sameStop, stopFavourite, stopNamedAt, withChoice, withFavourite } from './favourites.js';
 import { choiceValue, chosenWays, readChoice, shownKeys, toggled } from './choice.js';
@@ -327,6 +328,24 @@ function keepFavourites() {
 // then this changes nothing in it.)
 const language = await loadLanguage();
 translatePage();
+// (the way back from a language just chosen in the list, which the choice left for this start: the bubble after a pick,
+// see "the offer of a language"; read once)
+const LANGUAGE_UNDO = 'netnou.languageUndo';
+const UNDO = takeUndo();
+
+function takeUndo() {
+  try {
+    // (for the tab that chose, which keeps it over the reload)
+    const kept = sessionStorage.getItem(LANGUAGE_UNDO);
+    sessionStorage.removeItem(LANGUAGE_UNDO);
+    const undo = JSON.parse(kept);
+    const known = (code) => LANGUAGES.some(([own]) => own === code);
+    const texts = ['now', 'back', 'loading', 'offline', 'close'];
+    return undo?.to === language && known(undo.back) && (undo.origin?.stored === null || known(undo.origin?.stored)) && texts.every((key) => typeof undo.texts?.[key] === 'string') ? undo : null;
+  } catch {
+    return null; // nothing kept, or storage blocked
+  }
+}
 
 // ---------- state ----------
 
@@ -3027,7 +3046,7 @@ function watchChipRow(row, back, on) {
 }
 
 function buildControls() {
-  languagePicker($('language'));
+  showLanguageRow();
 
   // The chips are in the page as it comes, each switched on (index.html):
   // the card can show before this has run. Here they get what they do.
@@ -3173,7 +3192,7 @@ let tipWaiting = false; // offered before the map had its buttons, and given onc
 
 function offerTip() {
   // (not while the connection is lost: it says that the map shows the vehicle, #382; at a later landing at a stop)
-  if (ASKED || state.display || state.board !== null || state.adding || state.banner || state.note || OFFERING || connectionLost()) return;
+  if (ASKED || state.display || state.board !== null || state.adding || state.banner || state.note || OFFERING || UNDO || connectionLost()) return;
   if (aboutDialog.open || notesDialog.open || choiceDialog.open || settingsButton.getAttribute('aria-expanded') === 'true') return;
   if (loadSetting('tipped', false) === true) return;
   // (not before the map has its buttons: it goes beside them, see placeBubble; a page sent with its stop is drawn before)
@@ -3288,49 +3307,123 @@ addEventListener('resize', () => tip.hidden || hideTip());
 // one a search engine found) that is not the one the visitor's browser asks
 // for (#287). Once what the address names is open, a bubble in the browser's
 // language offers to switch to it, which is choosing it in the settings. Its
-// ✕, a tap elsewhere or Escape put it away for the visit; "Don't ask again"
-// for good. Not in a display or on a board, not while a dialog or the
-// settings are up, and not where a language was chosen in the settings. It
-// waits for an answer: no timer, and the keyboard reaches its buttons first
-// (index.html). Once a visit.
+// ✕, a tap or a drag elsewhere or Escape put it away for the visit; "Don't
+// ask again" for good (not offered where the browser keeps nothing). Not in a
+// display or on a board, not while a dialog or the settings are up, and not
+// where a language was chosen in the settings. It waits for an answer: no
+// timer, and the keyboard reaches its buttons first (index.html). Once a visit.
+//
+// The same bubble is the way back after a language chosen in the list (#392)
+// that the browser asks for none like: in the language the way back leads to,
+// which the choice loaded and left for this start (UNDO), and on a board too.
 const offer = $('offer');
 const OFFERED = languageToOffer();
 const OFFERING = Boolean(OFFERED) && !OPENED_AS_DISPLAY && loadSetting('offerLanguage', true) !== false;
 let offerMade = false;
+// (the way back while its bubble is up)
+let undoShown = null;
+// (where a chain of choices began: one made after another in this visit goes back to where the first began, also once
+// a tap or a drag elsewhere has put the bubble away; its ✕, Escape and Back end the chain)
+let chainOrigin = UNDO?.origin ?? null;
 
 async function offerLanguage() {
-  if (!OFFERING || offerMade || state.board !== null) return;
-  if (aboutDialog.open || notesDialog.open || choiceDialog.open || settingsButton.getAttribute('aria-expanded') === 'true') return;
+  if (offerMade || (!OFFERING && !UNDO) || (state.board !== null && !UNDO)) return;
+  if (aboutDialog.open || notesDialog.open || choiceDialog.open || languagesDialog.open || settingsButton.getAttribute('aria-expanded') === 'true') return;
   offerMade = true;
+  if (UNDO) {
+    showOffer(UNDO.back, UNDO.texts.now, UNDO.texts.back, null, UNDO.texts.close);
+    undoShown = UNDO;
+    return;
+  }
   const texts = await textsOf(OFFERED).catch(() => null);
   if (!texts) return;
-  offer.lang = OFFERED;
-  $('offer-switch').textContent = t('offer.switch', {}, texts);
-  $('offer-never').textContent = t('offer.never', {}, texts);
-  for (const attribute of ['aria-label', 'title']) $('offer-close').setAttribute(attribute, t('panel.close', {}, texts));
+  showOffer(OFFERED, t('offer.text', {}, texts), t('offer.switch', {}, texts), storageWorks() ? t('offer.never', {}, texts) : null, t('panel.close', {}, texts));
+}
+
+/** The bubble, in a language: what it says, its button, "Don't ask again" (or null for none) and the name of its ✕. */
+function showOffer(code, text, switchText, neverText, closeText) {
+  offer.lang = code;
+  offer.dir = textDirection(code);
+  $('offer-switch').textContent = switchText;
+  $('offer-never').textContent = neverText ?? '';
+  $('offer-never').hidden = !neverText;
+  for (const attribute of ['aria-label', 'title']) $('offer-close').setAttribute(attribute, closeText);
   offer.hidden = false;
   // (after it is there, so that a screen reader reads it out)
-  $('offer-text').textContent = t('offer.text', {}, texts);
+  $('offer-text').textContent = text;
   placeBubble(offer);
   // (it moves with the sheet, and with the window)
   new ResizeObserver(() => offer.hidden || placeBubble(offer)).observe(panel);
   addEventListener('resize', () => offer.hidden || placeBubble(offer));
 }
 
-const hideOffer = () => { offer.hidden = true; };
-$('offer-switch').addEventListener('click', () => chooseLanguage(OFFERED, true));
+/** The direction of a language's script: Arabic, Persian, Urdu, Hebrew and Yiddish right to left. */
+const textDirection = (code) => (['ar', 'fa', 'he', 'ur', 'yi'].includes(code) ? 'rtl' : 'ltr');
+
+function hideOffer() {
+  // (the keyboard where it can go on: the bubble had it as the first stop of the page)
+  if (offer.contains(document.activeElement)) settingsButton.focus();
+  offer.hidden = true;
+  undoShown = null;
+}
+/** Puts the bubble away for good: its ✕ and Escape, which end a chain of choices as well. */
+function dismissOffer() {
+  chainOrigin = null;
+  hideOffer();
+}
+$('offer-switch').addEventListener('click', () => (undoShown ? goBack(undoShown) : chooseLanguage(OFFERED, true)));
 $('offer-never').addEventListener('click', () => {
   saveSetting('offerLanguage', false);
   hideOffer();
 });
-$('offer-close').addEventListener('click', hideOffer);
-document.addEventListener('click', (event) => offer.hidden || offer.contains(event.target) || hideOffer(), true);
+$('offer-close').addEventListener('click', dismissOffer);
+// (as it begins, a tap or a drag of the map or the sheet: what it was for happens all the same)
+document.addEventListener('pointerdown', (event) => offer.hidden || offer.contains(event.target) || hideOffer(), true);
 document.addEventListener('keydown', (event) => {
   if (offer.hidden || event.key !== 'Escape') return;
-  // (the bubble is on top: Escape is for it, not for what is under it; where the sheet has it out of sight, for that as well)
-  if (offer.style.visibility !== 'hidden') event.stopPropagation();
-  hideOffer();
+  // (an Escape meant for a dialog or the settings goes there, unless the bubble has the keyboard)
+  const under = aboutDialog.open || notesDialog.open || choiceDialog.open || languagesDialog.open || !settings.hidden;
+  if (under && !offer.contains(document.activeElement)) return;
+  // (out of sight, under a sheet risen high or the keys of the map: Escape is for what is seen, and the bubble stays for
+  // when there is room for it again)
+  if (getComputedStyle(offer).visibility === 'hidden') return;
+  // (the bubble is on top: Escape is for it, not for what is under it)
+  event.stopPropagation();
+  dismissOffer();
 }, true);
+
+/** The way back after a choice: the language there was before it, its texts loaded first, as a choice does. */
+async function goBack(undo) {
+  const slow = setTimeout(() => { $('offer-text').textContent = undo.texts.loading; }, SLOW_MS);
+  const loaded = await withinTry(textsOf(undo.back));
+  clearTimeout(slow);
+  // (put away meanwhile: nothing happens)
+  if (offer.hidden || undoShown !== undo) return;
+  if (!loaded) {
+    $('offer-text').textContent = undo.texts.offline;
+    return;
+  }
+  chainOrigin = null;
+  keepLanguage(undo.origin.stored);
+  loadAgain();
+}
+
+/** What a promise comes to within the time the page tries (TRY_MS), or null where it fails or takes longer. */
+const withinTry = (promise) => Promise.race([promise, new Promise((resolve) => setTimeout(resolve, TRY_MS, null))]).catch(() => null);
+
+/**
+ * Loads the page again at its address, without a language asked for there:
+ * in the language kept in the browser, else the browser's. The step in the
+ * history keeps what it holds (the way back, the view of a stop).
+ */
+function loadAgain(asked = null) {
+  const query = new URLSearchParams(location.search);
+  if (asked) query.set('lang', asked);
+  else query.delete('lang');
+  const search = query.toString();
+  history.replaceState(history.state, '', `${location.pathname}${search ? `?${search}` : ''}${location.hash}`);
+  location.reload();
+}
 
 // ---------- how it works ----------
 
@@ -3387,12 +3480,232 @@ const settingsButton = $('settings-open');
 function showSettings(open) {
   settings.hidden = !open;
   settingsButton.setAttribute('aria-expanded', String(open));
+  // (the way back after a choice waits for the settings to close, see offerLanguage)
+  if (!open && UNDO) offerLanguage();
 }
 settingsButton.addEventListener('click', () => showSettings(settings.hidden));
 // (as it begins, and before anything else hears of it: the map keeps some of what happens on it to itself)
 document.addEventListener('pointerdown', (event) => {
-  if (!settings.hidden && !settings.contains(event.target) && !settingsButton.contains(event.target)) showSettings(false);
+  // (not for the list of languages, which opens over them and goes back to them)
+  if (!settings.hidden && !settings.contains(event.target) && !settingsButton.contains(event.target) && !languagesDialog.contains(event.target)) showSettings(false);
 }, true);
+
+// ---------- the list of languages ----------
+
+// The first row of the settings names the language in use by its own name,
+// and where the browser asks for no language like it, by its name in the
+// browser's too: whoever picked a language they cannot read finds the way
+// back behind the gear (#392). It opens the list of all: "Your languages"
+// first, then the others in the order of their own names (languages.js),
+// each with its name in the page's language below, and a search that finds
+// a language by any of its names. A choice loads the language's texts before
+// the page loads again in it, and leaves the way back for the next start
+// where the browser asks for no language like it (the offer of a language).
+const languagesDialog = $('languages');
+const languageOpen = $('language-open');
+const languagesSearch = $('languages-search');
+const languagesList = $('languages-list');
+const OWN_NAMES = new Map(LANGUAGES);
+// (after a pause in typing, a screen reader hears how many languages are left)
+const LANGUAGES_COUNT_MS = 600;
+// (the codes of all the browser's languages, whether the page has them or not)
+const browserCodes = () => (navigator.languages ?? []).map(primaryCode);
+
+function showLanguageRow() {
+  const name = $('language-name');
+  name.textContent = OWN_NAMES.get(language) ?? language;
+  name.lang = language;
+  const first = browserCodes()[0];
+  const said = first && !browserCodes().includes(language) ? nameAlone(language, first) : null;
+  const also = $('language-also');
+  also.hidden = !said || said === name.textContent;
+  // (nothing for the row's name to read where it is hidden)
+  also.textContent = also.hidden ? '' : said;
+  if (said) also.lang = first;
+}
+
+closesByClick(languagesDialog, $('languages-close'));
+// (by touch or by mouse and keys, from the pointer that began the tap: a click is not a pointer event in every browser)
+let languagesOpenedBy = '';
+languageOpen.addEventListener('pointerdown', (event) => { languagesOpenedBy = event.pointerType; });
+languageOpen.addEventListener('keydown', () => { languagesOpenedBy = ''; });
+languageOpen.addEventListener('click', () => openLanguages(['touch', 'pen'].includes(languagesOpenedBy)));
+languagesDialog.addEventListener('close', () => {
+  choosing = null;
+  if (!settings.hidden) languageOpen.focus({ preventScroll: true });
+});
+
+/** Opens the list: by touch on the language in use, which keeps the phone's keyboard down; else on the search. */
+function openLanguages(byTouch) {
+  languagesSearch.value = '';
+  renderLanguages();
+  fitLanguages();
+  languagesDialog.showModal();
+  const current = languagesList.querySelector('[aria-current="true"]');
+  if (byTouch && current) focusRow(current);
+  else languagesSearch.focus();
+  languagesList.scrollTop = 0;
+}
+
+// On a phone the list is a sheet as tall as the screen; while the keyboard is up, it ends above it.
+function fitLanguages() {
+  const view = window.visualViewport;
+  const covered = view && narrowScreen.matches ? Math.max(0, innerHeight - view.height - view.offsetTop) : 0;
+  languagesDialog.style.setProperty('--keyboard', `${Math.round(covered)}px`);
+}
+window.visualViewport?.addEventListener('resize', () => languagesDialog.open && fitLanguages());
+
+let countTimer;
+function renderLanguages() {
+  const typed = languagesSearch.value;
+  const preferred = navigator.languages ?? [];
+  const { yours, more } = languageOrder(language, preferred);
+  const searching = typed.trim() !== '';
+  const found = (code) => languageFound(code, OWN_NAMES.get(code), typed, { page: language, preferred });
+  // (headings only where the first group holds more than the language in use; while searching, the languages found in that order)
+  const groups = searching ? [[null, [...yours, ...more].filter(found)]] : yours.length > 1 ? [[t('languages.yours'), yours], [t('languages.more'), more]] : [[null, [...yours, ...more]]];
+  const focused = languagesList.contains(document.activeElement) ? document.activeElement.dataset.code : null;
+  const nodes = [];
+  for (const [heading, codes] of groups) {
+    if (heading) nodes.push(el('h3', { class: 'rows-head', text: heading }));
+    nodes.push(...codes.map(languageRow));
+  }
+  const rows = nodes.filter((node) => node.classList.contains('language-row'));
+  if (!rows.length) nodes.push(el('p', { class: 'languages-none', text: t('languages.none') }));
+  languagesList.replaceChildren(...nodes);
+  // (one stop for Tab: the row in use, or the one that had the keyboard)
+  const keep = rows.find((row) => row.dataset.code === focused);
+  for (const row of rows) row.tabIndex = -1;
+  const stop = keep ?? rows.find((row) => row.getAttribute('aria-current') === 'true') ?? rows[0];
+  if (stop) stop.tabIndex = 0;
+  keep?.focus({ preventScroll: true });
+  clearTimeout(countTimer);
+  countTimer = setTimeout(() => { $('languages-count').textContent = searching ? t('languages.count', { count: rows.length }) : ''; }, LANGUAGES_COUNT_MS);
+}
+
+/** A row: the language's own name, read in its own language, and below it its name in the page's; the one in use checked. */
+function languageRow(code) {
+  const own = OWN_NAMES.get(code);
+  const other = secondName(code, own, language);
+  const current = code === language;
+  const names = el('span', { class: 'names' }, [el('bdi', { class: 'own', id: `language-own-${code}`, dir: 'auto', text: own })]);
+  if (other) names.append(el('span', { class: 'other', id: `language-other-${code}`, lang: language, text: other }));
+  // (where the browser keeps nothing, a language the address asks for holds only as far as the address goes)
+  const notKept = current && fromAddress() && !storageWorks();
+  if (notKept) names.append(el('span', { class: 'other', id: 'language-not-kept', lang: language, text: t('languages.notKept') }));
+  const row = el('button', { type: 'button', class: 'language-row', lang: code, data: { code }, 'aria-labelledby': `language-own-${code}` }, [names]);
+  const described = [other ? `language-other-${code}` : null, notKept ? 'language-not-kept' : null].filter(Boolean);
+  if (described.length) row.setAttribute('aria-describedby', described.join(' '));
+  if (current) {
+    row.setAttribute('aria-current', 'true');
+    const mark = icon(mdiCheck);
+    mark.classList.add('check');
+    row.append(mark);
+  }
+  row.addEventListener('click', () => chooseFromList(code));
+  return row;
+}
+
+function focusRow(row) {
+  for (const other of languagesList.querySelectorAll('.language-row')) other.tabIndex = other === row ? 0 : -1;
+  row.focus();
+  row.scrollIntoView({ block: 'nearest' });
+}
+
+languagesSearch.addEventListener('input', renderLanguages);
+languagesSearch.addEventListener('keydown', (event) => {
+  const rows = [...languagesList.querySelectorAll('.language-row')];
+  if (!rows.length || !['ArrowDown', 'Enter'].includes(event.key)) return;
+  event.preventDefault();
+  // (Enter chooses only the one language left: else it goes to the first found, and a second Enter chooses that)
+  if (event.key === 'Enter' && rows.length === 1) rows[0].click();
+  else focusRow(rows[0]);
+});
+languagesList.addEventListener('keydown', (event) => {
+  const rows = [...languagesList.querySelectorAll('.language-row')];
+  const at = rows.indexOf(document.activeElement);
+  const step = { ArrowDown: at + 1, ArrowUp: at - 1, Home: 0, End: rows.length - 1 }[event.key];
+  if (at < 0 || step === undefined) return;
+  event.preventDefault();
+  if (step < 0) languagesSearch.focus();
+  else focusRow(rows.at(Math.min(step, rows.length - 1)));
+});
+
+// (the choice under way: a later tap takes its place, and closing the list ends it)
+let choosing = null;
+
+/**
+ * Chooses a language from the list. The one in use closes the list, and is
+ * kept where it came only from the address. Another one: its texts loaded
+ * first, after a second with "Loading …" on its row, and without an answer
+ * in time "No connection right now", and nothing changes. Then it is kept,
+ * or where it is the browser's own the choice goes (the page follows the
+ * browser again), and the page loads again in it. Where the browser asks for
+ * no language like it, the way back goes with it: the bubble on the next
+ * start, in the language it leads to, loaded with this one.
+ */
+async function chooseFromList(code) {
+  if (code === language) {
+    // (kept where the address alone asked for it: the offer of the browser's language is then answered too)
+    if (fromAddress() && keepLanguage(code)) {
+      offerMade = true;
+      // (and an offer already up goes: it asks what has just been answered)
+      if (!undoShown) hideOffer();
+    }
+    languagesDialog.close();
+    return;
+  }
+  const ticket = {};
+  choosing = ticket;
+  const say = (text) => {
+    if (choosing !== ticket) return;
+    for (const note of languagesList.querySelectorAll('.row-state')) note.remove();
+    // (on the row as it is now: typing meanwhile draws the list anew)
+    languagesList.querySelector(`.language-row[data-code="${code}"] .names`)?.append(el('span', { class: 'other row-state', lang: language, text }));
+    $('languages-count').textContent = text;
+  };
+  for (const note of languagesList.querySelectorAll('.row-state')) note.remove();
+  const slow = setTimeout(() => say(t('panel.loading')), SLOW_MS);
+  const kept = storageWorks();
+  // (from where this choice begins: one made after another in this visit goes back to where the first began)
+  const origin = chainOrigin ?? { stored: storedLanguage() };
+  const back = origin.stored ?? browserLanguage();
+  const offerBack = kept && !browserCodes().includes(code) && code !== back;
+  const loaded = await withinTry(Promise.all([textsOf(code), offerBack ? textsOf(back) : null]));
+  clearTimeout(slow);
+  if (choosing !== ticket || !languagesDialog.open) return;
+  if (!loaded) {
+    say(t('languages.offline'));
+    return;
+  }
+  if (!kept) {
+    // (the browser keeps nothing: the language in the address, as far as it goes; the browser's own without one)
+    loadAgain(code === browserLanguage() ? null : code);
+    return;
+  }
+  if (offerBack) {
+    const texts = loaded[1];
+    const undo = {
+      to: code,
+      origin,
+      back,
+      texts: {
+        now: t('languages.now', { language: nameIn(code, back) ?? OWN_NAMES.get(code) }, texts),
+        back: t('languages.back', { language: nameIn(back, back) ?? OWN_NAMES.get(back) }, texts),
+        loading: t('panel.loading', {}, texts),
+        offline: t('languages.offline', {}, texts),
+        close: t('panel.close', {}, texts),
+      },
+    };
+    try {
+      sessionStorage.setItem(LANGUAGE_UNDO, JSON.stringify(undo));
+    } catch {
+      // (kept a moment ago; without it, the language all the same)
+    }
+  }
+  keepLanguage(code === browserLanguage() ? null : code);
+  loadAgain();
+}
 
 // Light, dark or as the device has it: chosen in the settings, kept in the browser.
 {
@@ -3744,7 +4057,7 @@ $('panel-close').addEventListener('click', closePanel);
 document.addEventListener('keydown', (event) => {
   if (event.key !== 'Escape') return;
   // Escape closes what is on top: a dialog lies over all else and closes by itself, then the settings, then the details.
-  if (aboutDialog.open || notesDialog.open || choiceDialog.open) return;
+  if (aboutDialog.open || notesDialog.open || choiceDialog.open || languagesDialog.open) return;
   if (!settings.hidden) {
     showSettings(false);
     settingsButton.focus();
@@ -6280,9 +6593,12 @@ sheetHandle.addEventListener('click', () => {
 // On a wide screen the details are a card at the side, as high as they are by themselves.
 narrowScreen.addEventListener('change', () => setSheetHeight(null));
 
+// (the way back after a choice waits for a dialog to close, see offerLanguage)
+for (const dialog of [aboutDialog, notesDialog, choiceDialog, languagesDialog]) dialog.addEventListener('close', () => UNDO && offerLanguage());
+
 // A dialog is a sheet on a narrow screen as well: its bar and its heading
 // drag it down, and let go of far enough down it closes.
-for (const [dialog, ...parts] of [[aboutDialog, $('about-handle'), $('about-title')], [notesDialog, $('notes-handle'), $('notes-title')], [choiceDialog, $('choice-handle'), $('choice-title')]]) {
+for (const [dialog, ...parts] of [[aboutDialog, $('about-handle'), $('about-title')], [notesDialog, $('notes-handle'), $('notes-title')], [choiceDialog, $('choice-handle'), $('choice-title')], [languagesDialog, $('languages-handle'), $('languages-title')]]) {
   let drag = null;
   const shift = (px) => { dialog.style.transform = px ? `translateY(${Math.round(px)}px)` : ''; };
   const begin = (event) => {

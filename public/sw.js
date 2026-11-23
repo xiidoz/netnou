@@ -57,6 +57,7 @@ const SHELL = [
   'favourites.js',
   'held.js',
   'i18n.js',
+  'languages.js',
   'nearby.js',
   'panel.js',
   'search.js',

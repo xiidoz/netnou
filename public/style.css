@@ -274,16 +274,26 @@ button { font: inherit; color: inherit; }
   text-align: left;
   cursor: pointer;
 }
-.language {
-  padding: 5px 6px;
+/* The language in use: a row that opens the list of languages (#392), with the sign of a language, its own name, where
+   the browser asks for no language like it its name in the browser's below, and an arrow (mirrored right to left). */
+.language-open {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 6px 6px 8px;
   border: 1px solid var(--border);
   border-radius: 8px;
   background: var(--bg);
   color: var(--text);
   font: inherit;
+  text-align: start;
   cursor: pointer;
 }
-.language:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.language-open:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.language-sign, .language-arrow { display: inline-flex; color: var(--text-muted); }
+.language-names { flex: 1; min-width: 0; display: grid; }
+#language-also { color: var(--text-muted); font-size: 12px; }
+.language-arrow:dir(rtl) { transform: scaleX(-1); }
 
 /* ---------- search ---------- */
 
@@ -1255,7 +1265,8 @@ body:has(> .map-keys:not([hidden], .gave-way)) :is(#tip, #offer, #map-note) { vi
 /* The offer of the browser's language (#287), in the look of the tip: its
    line beside an ✕, below them the switch, filled, and the end of the offer,
    quieter. In the bubble's colours, the rings of the keyboard as well. */
-.offer { text-align: left; padding: 12px 12px 10px 14px; }
+.offer { text-align: start; padding: 12px 12px 10px 14px; }
+.offer-sign { display: inline-flex; padding-top: 3px; }
 .offer-head { display: flex; align-items: flex-start; gap: 10px; margin-bottom: 8px; }
 .offer-head p { flex: 1; margin: 0; padding-top: 4px; }
 .offer-close {
@@ -1388,12 +1399,12 @@ body:has(> .map-keys:not([hidden], .gave-way)) :is(#tip, #offer, #map-note) { vi
    places the buttons have; each says what is next to it. */
 .settings-open, .search-open, .search-close, .chips-more span, .segmented button, .wall-start,
 .view-switch button, .choice-open, .choice-clear, .panel-back, .maplibregl-ctrl-group button,
-.offer-close, .offer-switch, .offer-never { position: relative; }
+.offer-close, .offer-switch, .offer-never, .language-open { position: relative; }
 .settings-open::after, .search-open::after, .search-close::after, .close::after, .share::after, .board-toggle::after, .heart::after,
 .chips-more span::after, .segmented button::after, .wall-start::after, .view-switch button::after,
 .choice-open::after, .choice-clear::after, .panel-back::before, .panel-back::after,
 .maplibregl-ctrl-group button::after, .maplibregl-ctrl-attrib-button::after,
-.offer-close::after, .offer-switch::after, .offer-never::after { content: ""; position: absolute; }
+.offer-close::after, .offer-switch::after, .offer-never::after, .language-open::after { content: ""; position: absolute; }
 /* (the round buttons of the title row: the gear and the lens; above them the edge of the screen, below them the field of the search or the line that positions are calculated) */
 .settings-open::after, .search-open::after { inset: -11px -7px -3px; }
 /* (over the room the search field takes for a finger, which begins 2 px above the field: see below) */
@@ -1408,6 +1419,8 @@ body:has(> .map-keys:not([hidden], .gave-way)) :is(#tip, #offer, #map-note) { vi
 .offer-switch::after, .offer-never::after { left: 0; right: 0; top: calc(50% - 22px); height: 44px; }
 /* (the switches of the settings and the button below them, with what they are called between them) */
 .segmented button::after, .wall-start::after { left: 0; right: 0; top: calc(50% - 22px); height: 44px; }
+/* (the row of the language, as high as a finger needs where it has one line) */
+.language-open::after { left: 0; right: 0; top: min(0px, calc(50% - 22px)); bottom: min(0px, calc(50% - 22px)); }
 /* (the way back: below it the name or the badge of a trip; above it the bar of the sheet, which keeps its stroke in the middle for a finger) */
 .panel-back::after { left: 0; right: 0; top: 0; bottom: -6px; }
 .panel-back::before { left: 0; top: -16px; width: min(100%, calc(50vw - 40px)); height: 16px; }
@@ -1434,10 +1447,6 @@ body:has(> .map-keys:not([hidden], .gave-way)) :is(#tip, #offer, #map-note) { vi
 .search input, .search-close { position: relative; z-index: 2; }
 /* (and the lens in the field over the field, which a finger goes through) */
 .search-sign { z-index: 3; }
-/* (the list of the languages: a border that cannot be seen around what is drawn of it, which stays as it was, from the
-   name above it, which opens it as well, to the gap before the next setting; its ring around what is drawn) */
-.language { margin: -8px; padding: 6px 7px; border: 8px solid transparent; border-radius: 16px; background-clip: padding-box; box-shadow: inset 0 0 0 1px var(--border); }
-.language:focus-visible { outline-offset: -6px; }
 /* (at the foot of a board: the button for another stop over the gaps above and below it, and the two its question has, 6 px apart) */
 .board-add, .board-add-menu button { position: relative; }
 .board-add::after, .board-add-menu button::after { content: ""; position: absolute; inset: -5px 0; }
@@ -1638,6 +1647,55 @@ body:has(> .map-keys:not([hidden], .gave-way)) :is(#tip, #offer, #map-note) { vi
   }
   .dialog .dialog-body { padding-top: 2px; }
   .banner { bottom: auto; top: 50%; }
+}
+
+/* ---------- the list of languages (#392) ---------- */
+
+/* As tall as it can be, the same whatever the search leaves, its search at the top and only the list moving. */
+.dialog.languages { height: min(640px, calc(100% - 2 * var(--gap) - var(--safe-top) - var(--safe-bottom))); }
+.languages .dialog-body { flex: 1; min-height: 0; display: flex; flex-direction: column; overflow: hidden; padding-bottom: 0; }
+.languages h2 { display: flex; align-items: center; gap: 8px; }
+.languages-search { position: relative; margin: 12px 0 8px; color: var(--text-muted); }
+.languages-search .search-sign { left: auto; inset-inline-start: 9px; }
+.languages-search input {
+  width: 100%;
+  min-height: 44px;
+  padding: 9px 12px 9px 36px;
+  padding-inline: 36px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg);
+  color: var(--text);
+  font: inherit;
+}
+.languages-search input::placeholder { color: var(--text-muted); opacity: 1; }
+.languages-search input:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.languages-list { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; margin: 0 -18px; padding: 0 18px 18px; }
+.languages-list .rows-head { padding: 14px 8px 4px; }
+.language-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 48px;
+  padding: 6px 8px;
+  border: 0;
+  border-bottom: 1px solid var(--border);
+  background: none;
+  color: var(--text);
+  font: inherit;
+  font-size: 15px;
+  text-align: start;
+  cursor: pointer;
+}
+.language-row .names { flex: 1; min-width: 0; display: grid; gap: 1px; }
+.language-row .other { color: var(--text-muted); font-size: 12.5px; }
+.language-row .check { color: var(--accent); }
+.language-row:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; border-radius: 6px; }
+.languages-none { padding: 14px 8px; color: var(--text-muted); }
+@media (max-width: 720px) {
+  /* on a phone as tall as the screen, and while its keyboard is up, above it (fitLanguages in app.js) */
+  .dialog.languages { height: calc(100% - var(--safe-top) - 24px - var(--keyboard, 0px)); max-height: none; bottom: var(--keyboard, 0px); }
 }
 
 /* ---------- the board of a stop (#81) ---------- */

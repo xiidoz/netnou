@@ -484,9 +484,9 @@ function cleanPath(pathname) {
  * from where the instance is, by an address from where the browser is: an
  * instance may be at a path of its own behind a proxy.
  */
-function moved(res, from, to) {
+function moved(res, from, to, headers = {}) {
   // (relative, as the public address of the instance may have a path of its own; the top of it is ./)
-  res.writeHead(301, { ...SECURITY_HEADERS, Location: `${'../'.repeat(from.split('/').length - 2)}${to.slice(1) || './'}`, 'Cache-Control': 'no-cache' });
+  res.writeHead(301, { ...SECURITY_HEADERS, Location: `${'../'.repeat(from.split('/').length - 2)}${to.slice(1) || './'}`, 'Cache-Control': 'no-cache', ...headers });
   res.end();
 }
 
@@ -967,9 +967,15 @@ const server = http.createServer((req, res) => {
     if (url.pathname.startsWith('/api/')) return handleApi(req, res, url);
     // The page in the main language has one address, the plain one (#287): an
     // address that asks for it by ?lang= sends the browser there, with the
-    // rest of what it asks as it was written.
+    // rest of what it asks as it was written – where the plain address shows
+    // it in that language all the same, as to a search engine, which names no
+    // language. A browser that asks for another one keeps the language its
+    // address asks for: a wall screen set up in the main language (#391), a
+    // choice in a browser that keeps none (#392).
     const page = url.pathname === '/' || url.pathname === '/index.html' || /^\/(stop|line|trip)\//i.test(url.pathname);
-    if (page && url.searchParams.get('lang') === config.language) return moved(res, url.pathname, `${url.pathname}${withoutLanguage(url.search)}`);
+    if (page && url.searchParams.get('lang') === config.language && languageFor(req.headers['accept-language'], config.language) === config.language) {
+      return moved(res, url.pathname, `${url.pathname}${withoutLanguage(url.search)}`, { Vary: 'Accept-Language' });
+    }
     if (url.pathname === '/' || url.pathname === '/index.html') return servePage(req, res, url);
     if (url.pathname === '/manifest.webmanifest') return serveManifest(req, res);
     if (url.pathname === '/sw.js') return serveServiceWorker(req, res);

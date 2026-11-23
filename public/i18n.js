@@ -74,6 +74,10 @@ const primary = (tag) => {
   const code = tag.toLowerCase().split('-')[0];
   return SAME[code] ?? code;
 };
+/** The code of the language a tag names, as LANGUAGES has it: de of de-AT, nb of no. */
+export const primaryCode = primary;
+/** The other codes a browser may name a language by (SAME): no for nb. */
+export const secondCodes = (code) => Object.keys(SAME).filter((other) => SAME[other] === code);
 
 // The language the server wrote the page in, as <html lang> says before
 // translatePage puts the visitor's there: picked by the browser's languages
@@ -114,7 +118,7 @@ function setFormats() {
 }
 setFormats();
 
-function storedLanguage() {
+export function storedLanguage() {
   try {
     return localStorage.getItem(STORAGE_KEY);
   } catch {
@@ -334,15 +338,33 @@ export function translatePage() {
   }
 }
 
-/** Fills the language picker. Choosing a language keeps it and loads the page again in it (chooseLanguage). */
-export function languagePicker(select) {
-  for (const [code, name] of LANGUAGES) {
-    const option = new Option(name, code, false, code === language);
-    option.lang = code;
-    select.append(option);
+/** The language the page is in (loadLanguage). */
+export const currentLanguage = () => language;
+
+/** Whether the page is in it because the address asks for it (?lang=), with no language kept in the browser. */
+export const fromAddress = () => !chosen && askedLanguage() === language;
+
+/** The language the page shows without a choice, at its plain address: the first of the browser's that exists here, else English. */
+export const browserLanguage = (preferred = navigator.languages ?? []) => pickLanguage(null, preferred);
+
+/** Whether the browser keeps what the page stores (not where all site data is blocked). */
+export function storageWorks() {
+  try {
+    localStorage.setItem('netnou.test', '1');
+    localStorage.removeItem('netnou.test');
+    return true;
+  } catch {
+    return false;
   }
-  select.addEventListener('change', () => {
-    // (where the choice cannot be kept: show what is in use)
-    if (!chooseLanguage(select.value)) select.value = language;
-  });
+}
+
+/** Keeps a language as chosen, or none (null): then the page follows the browser again. Whether it could. */
+export function keepLanguage(code) {
+  try {
+    if (code) localStorage.setItem(STORAGE_KEY, code);
+    else localStorage.removeItem(STORAGE_KEY);
+    return true;
+  } catch {
+    return false;
+  }
 }
