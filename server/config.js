@@ -7,6 +7,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { APP_NAME, LANGUAGES } from '../public/i18n.js';
 import { Area, agencyKey, scopeId } from './lib/area.js';
+import { SEARCH_KINDS } from './lib/page.js';
 import { visitsPattern } from './lib/visits.js';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -245,6 +246,19 @@ export function loadConfig(env = process.env) {
     return raw === '' ? fallback : raw === 'on';
   }
 
+  // A list of kinds of page (NETNOU_SEARCH_PAGES, NETNOU_SEARCH_LANGUAGES), in
+  // their own order; null if the setting is not there.
+  function searchKinds(name, { none = false } = {}) {
+    const raw = text(name).toLowerCase();
+    if (raw === '') return null;
+    if (none && raw === 'none') return [];
+    const named = raw.split(',').map((kind) => kind.trim());
+    if (!named.every((kind) => SEARCH_KINDS.includes(kind))) {
+      throw invalid(name, `a list of ${SEARCH_KINDS.map((kind) => `"${kind}"`).join(', ')}${none ? ', or "none"' : ''}`);
+    }
+    return SEARCH_KINDS.filter((kind) => named.includes(kind));
+  }
+
   function box(name) {
     const parts = parseBox(text(name));
     const [south, west, north, east] = parts ?? [];
@@ -312,6 +326,7 @@ export function loadConfig(env = process.env) {
   const language = text('NETNOU_LANGUAGE').toLowerCase() || 'de';
   if (!LANGUAGE_CODES.includes(language)) throw invalid('NETNOU_LANGUAGE', `one of the languages of the page: ${LANGUAGE_CODES.join(', ')}`);
   const publicUrl = text('NETNOU_PUBLIC_URL') ? pageAddress(text('NETNOU_PUBLIC_URL')) : null;
+  const languagesNamed = searchKinds('NETNOU_SEARCH_LANGUAGES', { none: true });
   if (text('NETNOU_PUBLIC_URL') && !publicUrl) throw invalid('NETNOU_PUBLIC_URL', 'the http(s) address of the page, without a query, e.g. https://transit.example.org/');
 
   const links = operatorLinks(text('NETNOU_LINKS'));
@@ -420,6 +435,15 @@ export function loadConfig(env = process.env) {
     // instances are private or for trying things out, and whoever names the
     // address wants to be found.
     searchEngines: onOff('NETNOU_SEARCH_ENGINES', Boolean(publicUrl)),
+    // The kinds of page the sitemap lists, and those that name their versions
+    // in the other languages (#398): in the page, and where the sitemap lists
+    // the page, there as well. Unless the operator names them, the sitemap
+    // has the other languages of the home page only: every stop and line in
+    // every language would be close to ten million addresses in all of
+    // Germany, over a gigabyte for the server to hold.
+    searchPages: searchKinds('NETNOU_SEARCH_PAGES') ?? SEARCH_KINDS,
+    searchLanguages: languagesNamed ?? SEARCH_KINDS,
+    sitemapLanguages: languagesNamed ?? ['home'],
 
     // Where visits of the page are reported, and how: the patterns of the
     // request to an analytics service (lib/visits.js), or null for none.

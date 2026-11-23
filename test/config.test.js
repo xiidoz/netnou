@@ -83,6 +83,21 @@ test('what the page says about itself: its main language and the address of the 
   assert.equal(loadConfig({ NETNOU_SEARCH_ENGINES: 'ON' }).searchEngines, true);
   assert.equal(loadConfig({ NETNOU_SEARCH_ENGINES: 'off' }).searchEngines, false);
   assert.throws(() => loadConfig({ NETNOU_SEARCH_ENGINES: 'no' }), /^Error: NETNOU_SEARCH_ENGINES must be "on" or "off" \(got "no"\)$/);
+
+  // Which pages they are led to, and in which languages (#398). By default all
+  // pages, each naming its other languages; the sitemap has those of the home page.
+  const kinds = (env) => { const { searchPages, searchLanguages, sitemapLanguages } = loadConfig(env); return { searchPages, searchLanguages, sitemapLanguages }; };
+  assert.deepEqual(kinds({}), { searchPages: ['home', 'lines', 'stops'], searchLanguages: ['home', 'lines', 'stops'], sitemapLanguages: ['home'] });
+  assert.deepEqual(kinds({ NETNOU_SEARCH_PAGES: 'home,lines', NETNOU_SEARCH_LANGUAGES: 'home' }), { searchPages: ['home', 'lines'], searchLanguages: ['home'], sitemapLanguages: ['home'] });
+  assert.deepEqual(kinds({ NETNOU_SEARCH_PAGES: ' Stops , HOME,stops', NETNOU_SEARCH_LANGUAGES: 'lines,home' }), { searchPages: ['home', 'stops'], searchLanguages: ['home', 'lines'], sitemapLanguages: ['home', 'lines'] });
+  assert.deepEqual(kinds({ NETNOU_SEARCH_LANGUAGES: 'None' }), { searchPages: ['home', 'lines', 'stops'], searchLanguages: [], sitemapLanguages: [] });
+  for (const wrong of ['trips', 'home,trips', 'home,', ',', 'none']) {
+    assert.throws(() => loadConfig({ NETNOU_SEARCH_PAGES: wrong }), /^Error: NETNOU_SEARCH_PAGES must be a list of "home", "lines", "stops" \(got "/, wrong);
+  }
+  for (const wrong of ['trips', 'none,home', 'home,', ',']) {
+    assert.throws(() => loadConfig({ NETNOU_SEARCH_LANGUAGES: wrong }), /^Error: NETNOU_SEARCH_LANGUAGES must be a list of "home", "lines", "stops", or "none" \(got "/, wrong);
+  }
+
   for (const wrong of ['karte.example.org', 'ftp://example.org/', 'https://example.org/?lang=de', 'https://example.org/#map', 'https://user:secret@example.org/']) {
     assert.throws(() => loadConfig({ NETNOU_PUBLIC_URL: wrong }), /^Error: NETNOU_PUBLIC_URL must be the http\(s\) address of the page, without a query, /, wrong);
   }
