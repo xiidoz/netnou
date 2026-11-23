@@ -50,7 +50,7 @@ delay put it. It can be a little ahead of or behind its marker.
 ![The departures of Nürnberg Hauptbahnhof as a board beside the map, on a wide screen](docs/pictures/board.webp)
 
 The vehicles can also be coloured by their delay, the map can show your own
-location (it stays in your browser), and the page speaks 50 languages and
+location (it stays in your browser), and the page speaks 54 languages and
 installs as an app.
 
 ## Something wrong?
@@ -131,7 +131,7 @@ of Germany are in [docs/deployment.md](docs/deployment.md#requirements).
   tells of each one: no script in the page, no cookie
   ([Counting visits](docs/configuration.md#counting-visits)).
 - An open JSON API for other clients ([docs/api.md](docs/api.md)).
-- 50 languages, chosen per visitor; a further language is one file
+- 54 languages, chosen per visitor; a further language is one file
   ([docs/translating.md](docs/translating.md)).
 
 ## Take part

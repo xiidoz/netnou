@@ -6,7 +6,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { t as translate } from '../public/i18n.js';
 import en from '../public/locales/en.js';
-import { badge, stopRing, stopSaid, stopSign, tallMark, vehicleSpot, choiceChip, clockOf, delayClass, delayFlag, delayText, departureLists, departuresSub, h, lineHead, lineLists, lineStops, panelHead, stopHeading, toHtml, trackAt, vehicleLabel, departuresShown, heldDepartures, nextOfWay } from '../public/panel.js';
+import { badge, hoursText, stopRing, stopSaid, stopSign, tallMark, vehicleSpot, choiceChip, clockOf, delayClass, delayFlag, delayText, departureLists, departuresSub, h, lineHead, lineLists, lineStops, panelHead, stopHeading, toHtml, trackAt, vehicleLabel, departuresShown, heldDepartures, nextOfWay } from '../public/panel.js';
 
 const NOW = Date.parse('2026-10-23T10:00:00Z') / 1000;
 // (times of day and dates in UTC, so that the test reads the same anywhere)
@@ -329,6 +329,10 @@ test('the stops of a line in one direction, with its vehicles along them as the 
   // on time to the minute: no flag; without delays coming in, no question mark
   assert.ok(out.includes('data-trip="c" role="button" tabindex="0" aria-label="U1 to Depot, next stop Depot, ±0" data-mode="subway"><rect class="hit" x="-18" y="-18" width="36" height="36" rx="18"></rect><circle r="11"></circle><text y="4.0" font-size="11">U1</text><rect class="ring" x="-19" y="-21" width="38.0" height="42" rx="10"></rect></g>'));
   assert.ok(!html(lineStops(line, drawing())).includes('<g class="flag none"'));
+  // (right to left the line runs at the other edge of the box the vehicles are drawn in, and the flag is on the side of the names)
+  const mirrored = html(lineStops({ ...line, ways: [{ ...line.ways[0], vehicles: [vehicle('m', { delay: 120, from: 0, until: 0, come: 0 })] }] }, { ...drawing(), lang: 'ar', live: true }));
+  assert.match(mirrored, /<g class="line-vehicle" transform="translate\(70\.0 /);
+  assert.match(mirrored, /<g class="flag [a-z]+" transform="translate\(-/);
   // coloured by delay as the map can be, or with the flags switched off: no flags
   const byDelay = html(lineStops(line, { ...drawing(), live: true, colorBy: 'delay' }));
   assert.ok(byDelay.includes('data-mode="subway" data-delay="minor"') && !byDelay.includes('class="flag'));
@@ -407,4 +411,20 @@ test('a vehicle carries the first word of its line on its disc, and its delay as
   assert.deepEqual(['U1', 'ICE 25', 'Bus 123', 'ABCDEF', ' '].map(vehicleLabel), ['U1', 'ICE', 'Bus', 'ABCD', '?']);
   assert.deepEqual([[-90, false], [20, false], [150, false], [400, false], [null, false], [null, true]].map(([delay, live]) => delayFlag(delay, live)),
     [{ text: '−1', color: 'early' }, null, { text: '+3', color: 'major' }, { text: '+7', color: 'severe' }, null, { text: '?', color: 'none' }]);
+});
+
+test('hours in a language read right to left keep the half of the day, and the digits of a 24-hour clock their order', () => {
+  const at = (hour) => Date.UTC(2026, 10, 23, hour) / 1000;
+  const clock = (lang) => {
+    const hour = new Intl.DateTimeFormat(`${lang}-u-ca-gregory-nu-latn`, { hour: 'numeric', timeZone: 'UTC' });
+    const time = new Intl.DateTimeFormat(`${lang}-u-ca-gregory-nu-latn`, { timeStyle: 'short', timeZone: 'UTC' });
+    return { lang, hour: (epoch) => hour.format(epoch * 1000), time: (epoch) => time.format(epoch * 1000) };
+  };
+  const arabic = clock('ar');
+  const rest = (epoch) => arabic.hour(epoch).replace(/^\d+/, '');
+  assert.notEqual(rest(at(8)), rest(at(20)));
+  // (within one half of the day it is said once, each number whole; across the two, with each)
+  assert.equal(hoursText(at(8), at(10), arabic), `\u2067\u20688\u2069–\u206810\u2069${rest(at(10))}\u2069`);
+  assert.equal(hoursText(at(5), at(20), arabic), `\u2067\u20685${rest(at(5))}\u2069–\u20688${rest(at(20))}\u2069\u2069`);
+  assert.equal(hoursText(at(5), at(20), clock('he')), '\u20665:00–20:00\u2069');
 });

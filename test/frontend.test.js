@@ -7,7 +7,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import { test } from 'node:test';
 import vm from 'node:vm';
-import { ATTRIBUTES, LANGUAGES, READMES, dayOf, dayStartOf, formatNumber, formatTime, formatWhen, formatsFrom, languageToOffer, loadLanguage, latinDigits, pageTexts, pickLanguage, sentInAnother, setTimeZone, t, textsIn, textsOf } from '../public/i18n.js';
+import { ATTRIBUTES, commaOf, dayOf, dayStartOf, formatNumber, formatsFrom, formatTime, formatWhen, isolatedEach, LANGUAGES, languageToOffer, listedIn, loadLanguage, pageTexts, pickLanguage, plainLocale, READMES, RIGHT_TO_LEFT_CODES, sentInAnother, setTimeZone, t, textDirection, textsIn, textsOf, timeRange, withoutIsolates, withPlainMarks } from '../public/i18n.js';
 import { serviceDayStart, setTimeZone as setServerZone } from '../server/lib/time.js';
 import en from '../public/locales/en.js';
 import { languageFound, languageOrder, nameAlone, nameIn, secondName } from '../public/languages.js';
@@ -43,8 +43,8 @@ const arrayIn = (source, name) => new RegExp(`const ${name} = \\[([^\\]]*)\\]`).
  * @param dark     whether the device has the dark scheme
  * @param blocked  whether the browser refuses to keep or tell anything
  */
-function firstScript({ lang = 'en', search = '', stored = {}, browser = [], dark = false, blocked = false } = {}) {
-  const root = { lang, dataset: { languages: codes.join(' ') } };
+function firstRoot({ lang = 'en', search = '', stored = {}, browser = [], dark = false, blocked = false } = {}) {
+  const root = { lang, dir: textDirection(lang), dataset: { languages: codes.join(' '), rtl: RIGHT_TO_LEFT_CODES.join(' ') } };
   const getItem = (key) => {
     if (blocked) throw new Error('blocked');
     return stored[key] ?? null;
@@ -53,8 +53,9 @@ function firstScript({ lang = 'en', search = '', stored = {}, browser = [], dark
   const context = { document, location: { search }, navigator: { languages: browser }, localStorage: { getItem }, matchMedia: () => ({ matches: dark }), URL, URLSearchParams };
   context.window = context;
   vm.runInNewContext(read('first.js'), context);
-  return root.dataset;
+  return root;
 }
+const firstScript = (options) => firstRoot(options).dataset;
 
 test("a board's narrow row has the same rules by the board's width and by its width in its type (style.css)", () => {
   const css = read('style.css');
@@ -316,6 +317,8 @@ test('every language has the texts of English, with the same placeholders and it
   }
 });
 
+const localeSource = (code) => fs.readFileSync(new URL(`locales/${code}.js`, publicDir), 'utf8');
+
 // Chrome has these languages' texts but no formats of them: Intl there would
 // write their times, days and lists in another language. Node has them all,
 // so what their files bring is held against it here.
@@ -368,6 +371,23 @@ test('where the browser lacks a language, the page writes its times and names fr
     Intl.DisplayNames.supportedLocalesOf = names;
     await loadLanguage('en', ['en'], null, null);
   }
+});
+
+test('right to left, each item of a list is isolated, and titles and previews carry no direction marks', () => {
+  assert.deepEqual(isolatedEach(['A', 'B'], 'de'), ['A', 'B']);
+  assert.deepEqual(isolatedEach(['Fürth', 'Erlangen'], 'ar'), ['\u2068Fürth\u2069', '\u2068Erlangen\u2069']);
+  assert.equal(withoutIsolates('\u2067\u2068Fürth\u2069، \u2068Erlangen\u2069\u2069'), 'Fürth، Erlangen');
+  // (what leaves the page: plain marks only, a Latin value closed so that its full stop stays, a comma not joining two)
+  assert.equal(withPlainMarks('\u2068Bauernfeindstr.\u2069 مباشر'), '\u200f\u200eBauernfeindstr.\u200e\u200f مباشر');
+  assert.equal(withPlainMarks('\u2068U1\u2069، \u2068U2\u2069'), '\u200f\u200eU1\u200e\u200f، \u200eU2\u200e\u200f');
+  assert.equal(withPlainMarks('\u2068العربية\u2069'), '\u200f\u200fالعربية\u200f');
+  assert.equal(withPlainMarks('Nürnberg Hbf.'), 'Nürnberg Hbf.');
+  // (a list by its parts: Hebrew's "and" takes the hyphen before Latin letters only)
+  const hebrew = new Intl.ListFormat('he', { type: 'conjunction' });
+  assert.equal(withoutIsolates(listedIn(hebrew, ['חיפה', 'תל אביב'], 'he')), hebrew.format(['חיפה', 'תל אביב']));
+  assert.equal(listedIn(hebrew, ['A', 'B'], 'de'), hebrew.format(['A', 'B']));
+  // (a line's hours in the texts have no clock of their own: an isolated hour beside ":00" read "00:6")
+  for (const code of ['ar', 'he', 'ur', 'fa']) assert.ok(!localeSource(code).includes('{from}:00'), code);
 });
 
 test('every key in use has a text and every text is in use', () => {
@@ -594,11 +614,11 @@ test('the header card shows at once where the page came as this visitor gets it'
 test('the script takes a title and a description of the operator\'s own for the visitor\'s language', () => {
   const app = withoutComments(read('app.js'));
   assert.match(app, /pageTitle = area\.siteTitle\[language\] \?\? page\.title;/);
-  assert.match(app, /querySelector\('meta\[name="description"\]'\)\.content = area\.siteDescription\[language\] \?\? page\.description;/);
+  assert.match(app, /querySelector\('meta\[name="description"\]'\)\.content = withPlainMarks\(area\.siteDescription\[language\] \?\? page\.description\);/);
   // (and nowhere else does it set either: the title is that, or the one of the stop, the line or the trip whose address the page
   // is at, #37, also where the page opened them with the answer it was sent with before it knew this, #333; the page's own
   // where its address names nothing now, #362)
-  assert.deepEqual(app.match(/document\.title = [^;]+;/g), ['document.title = title ?? pageTitle;', 'document.title = pageTitle;', 'document.title = here() && open?.data && !open.left && open.path === here() ? detailsTitle(open) : pageTitle;']);
+  assert.deepEqual(app.match(/document\.title = [^;]+;/g), ['document.title = withPlainMarks(title ?? pageTitle);', 'document.title = withPlainMarks(pageTitle);', 'document.title = withPlainMarks(here() && open?.data && !open.left && open.path === here() ? detailsTitle(open) : pageTitle);']);
   assert.equal(app.match(/meta\[name="description"\]/g).length, 1);
 });
 
@@ -786,12 +806,68 @@ test('the search finds a language by its own name, its name in the page\'s, the 
 // Line numbers, platforms, delays and the signs have the digits 0–9; a time
 // or a count beside them has them too, in every language.
 test('numbers and times are written with the digits 0–9 in every language', () => {
-  assert.equal(latinDigits('pt-PT'), 'pt-PT-u-nu-latn');
-  assert.equal(latinDigits('not a tag!'), 'not a tag!');
+  assert.equal(plainLocale('pt-PT'), 'pt-PT-u-ca-gregory-nu-latn');
+  assert.equal(plainLocale('not a tag!'), 'not a tag!');
   // (Bengali and Marathi would write their own digits: "১:৩৬ PM")
-  for (const code of ['bn', 'mr']) assert.match(new Intl.DateTimeFormat(latinDigits(code), { timeStyle: 'short', timeZone: 'UTC' }).format(Date.UTC(2026, 0, 1, 13, 36)), /^1:36\sPM$/);
+  for (const code of ['bn', 'mr']) assert.match(new Intl.DateTimeFormat(plainLocale(code), { timeStyle: 'short', timeZone: 'UTC' }).format(Date.UTC(2026, 0, 1, 13, 36)), /^1:36\sPM$/);
   const mr = textsIn('mr', { 'address.stops': { one: '{count} थांबा', other: '{count} थांबे' } });
   assert.equal(t('address.stops', { count: 1234 }, mr), '1,234 थांबे');
+});
+
+// Right to left (docs/translating.md): what is filled into a sentence stays
+// whole, by the language of the texts and only there.
+test('a value in a text written right to left is isolated, and in any other text left as it is', () => {
+  const ar = textsIn('ar', { from: 'من {stop} الساعة {time}', count: { other: '{count} خطوط' } });
+  const de = textsIn('de', { from: 'Ab {stop} um {time}' });
+  assert.equal(t('from', { stop: 'Halle (Saale) Hbf', time: '13:39' }, ar), 'من \u2068Halle (Saale) Hbf\u2069 الساعة \u206813:39\u2069');
+  assert.equal(t('count', { count: 12 }, ar), '\u206812\u2069 خطوط');
+  assert.equal(t('from', { stop: 'Halle (Saale) Hbf', time: '13:39' }, de), 'Ab Halle (Saale) Hbf um 13:39');
+  // (a placeholder without a value stays as it was)
+  assert.equal(t('from', {}, ar), 'من {stop} الساعة {time}');
+  assert.equal(withoutIsolates(t('count', { count: 12 }, ar)), '12 خطوط');
+  // (a value that is itself made of values alone has no letter to tell its direction by: it stays right to left)
+  const pair = textsIn('ar', { pair: '{day}، {time}', when: 'منذ {at}' });
+  assert.equal(t('when', { at: t('pair', { day: 'Mo', time: '13:37' }, pair) }, pair), 'منذ \u2067\u2068Mo\u2069، \u206813:37\u2069\u2069');
+});
+
+test('the files of the languages hold no marks of direction: t() and the page set them', async () => {
+  for (const code of RIGHT_TO_LEFT_CODES) {
+    const { default: texts } = await import(new URL(`locales/${code}.js`, publicDir));
+    assert.equal(textDirection(code), 'rtl', code);
+    for (const [key, text] of Object.entries(texts)) assert.doesNotMatch(JSON.stringify(text), /[\u200e\u200f\u202a-\u202e\u2066-\u2069]/, `${code} ${key}`);
+  }
+  for (const code of codes.filter((one) => !RIGHT_TO_LEFT_CODES.includes(one))) assert.equal(textDirection(code), 'ltr', code);
+});
+
+test('lists the code joins take the comma of the language, and ranges of times stay readable', () => {
+  for (const code of ['ar', 'fa', 'ur']) assert.equal(commaOf(code), '، ');
+  for (const code of ['he', 'de', 'en', undefined]) assert.equal(commaOf(code), ', ');
+  assert.equal(timeRange('05:13', '23:40', 'de'), '05:13–23:40');
+  // (digits, and a Latin AM or PM, left to right as a whole; the letters of the language read from the right, each end whole)
+  assert.equal(timeRange('05:13', '23:40', 'he'), '\u206605:13–23:40\u2069');
+  assert.equal(timeRange('4:51 AM', '0:57 AM', 'ur'), '\u20664:51 AM–0:57 AM\u2069');
+  assert.equal(timeRange('5', '7', 'ur', ' AM'), '\u20665–7 AM\u2069');
+  assert.equal(timeRange('4:51 ص', '12:57 ص', 'ar'), '\u2067\u20684:51 ص\u2069–\u206812:57 ص\u2069\u2069');
+  assert.equal(timeRange('5', '7', 'ar', ' م'), '\u2067\u20685\u2069–\u20687\u2069 م\u2069');
+});
+
+test('first.js puts the direction of the language on before the first paint, from what the server says', () => {
+  // (a language chosen in the page, which the server did not send it in: either way round)
+  assert.equal(firstRoot({ lang: 'de', stored: { 'netnou.lang': 'ar' } }).dir, 'rtl');
+  assert.equal(firstRoot({ lang: 'ar', stored: { 'netnou.lang': 'de' } }).dir, 'ltr');
+  assert.equal(firstRoot({ lang: 'en', search: '?lang=he' }).dir, 'rtl');
+  // (as it came where the language is that of the page)
+  assert.equal(firstRoot({ lang: 'fa' }).dir, 'rtl');
+  assert.equal(firstRoot({ lang: 'de' }).dir, 'ltr');
+  assert.doesNotMatch(read('first.js'), /'ar'|'he'|'fa'|'ur'/, 'first.js holds no list of its own');
+});
+
+test('the map does not mirror: it stays left to right in a page that is, and the page says so once', () => {
+  assert.match(read('index.html'), /<div id="map" dir="ltr"/);
+  // (what the logical rules cannot say is in the one block at the end of the style sheet)
+  const css = read('style.css');
+  assert.ok(css.indexOf(':root[dir="rtl"] .delay { direction: ltr;') > css.indexOf('---------- right to left ----------'));
+  assert.match(css, /:root\[dir="rtl"\]\[data-board=""\] #map \{ right: 0; left: var\(--board\); \}/);
 });
 
 // The server writes pages in every language with one t(), whose own plural
@@ -1088,7 +1164,7 @@ test('the map with the keyboard has its crosshair in the middle of its free part
   assert.match(app, /if \(panel\.classList\.contains\('dragging'\) \|\| \$\('controls'\)\.classList\.contains\('dragging'\)\) return;/);
   // (on a wide screen too low for the map beside the card or below it, the strip below the card, clear of the details and the
   // map's buttons; the card is left as the visitor has it)
-  assert.match(app, /const padding = \{ top: Math\.max\(card\.bottom, bubble\?\.bottom \?\? 0\) \+ margin, bottom: viewSize\.y - bottom \+ margin, left: margin, right: viewSize\.x - right \+ margin \};/);
+  assert.match(app, /const padding = \{ top: Math\.max\(card\.bottom, bubble\?\.bottom \?\? 0\) \+ margin, bottom: viewSize\.y - bottom \+ margin, left: left \+ margin, right: viewSize\.x - right \+ margin \};/);
   // (the arrows go from mark to mark where one lies ahead within a step, in the way of the key; else the map's own step)
   assert.match(app, /if \(along < 6 \|\| along > STEP_PX \|\| across > 0\.58 \* along\) continue;/);
   // (a key held down, and the dots of a far view, travel as without the crosshair)

@@ -20,7 +20,7 @@
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
-import { LANGUAGES, latinDigits, pageTexts, pickLanguage, t } from '../../public/i18n.js';
+import { LANGUAGES, listedIn, pageTexts, pickLanguage, plainLocale, RIGHT_TO_LEFT_CODES, t, textDirection, withPlainMarks } from '../../public/i18n.js';
 import * as shapes from '../../public/vendor/material-design-icons/icons.js';
 import { choiceChip, departureLists, departuresSub, h, lineHead, lineLists, lineStops, lineTimetable, panelHead, stopHeading, stopToday, toHtml } from '../../public/panel.js';
 import { serviceDayStart } from './time.js';
@@ -305,8 +305,9 @@ export function renderPage(html, { language, main, asked, texts, siteName, areaN
     if (!pattern.test(page)) throw new Error(`index.html: nothing matches ${pattern}`);
     page = page.replace(pattern, replacement);
   };
-  // (which languages there are: first.js picks the visitor's among them, and sees whether it is that of the page)
-  put(/<html lang="[^"]*">/, () => `<html lang="${language}" data-languages="${LANGUAGE_CODES.join(' ')}">`);
+  // (which languages there are, and which of them read right to left: first.js picks the visitor's among them, sees
+  // whether it is that of the page, and lays the page out for it)
+  put(/<html lang="[^"]*">/, () => `<html lang="${language}" dir="${textDirection(language)}" data-languages="${LANGUAGE_CODES.join(' ')}" data-rtl="${RIGHT_TO_LEFT_CODES.join(' ')}">`);
   // The style sheets and the first script within the page, so that a browser
   // paints it as soon as it has arrived, without a request for each of them
   // first; the answer allows them by their hashes (securityPolicy). As they
@@ -320,9 +321,9 @@ export function renderPage(html, { language, main, asked, texts, siteName, areaN
   if (version) put(/<meta charset="utf-8">\n/, (start) => `${start}  <meta name="netnou-page-version" content="${escapeHtml(version)}">\n`);
   // (at an address, the page's own files are as many steps up as the address is deep)
   if (address) put(/<meta charset="utf-8">\n/, (start) => `${start}  <base href="${'../'.repeat(address.depth)}">\n`);
-  put(/<title>[^<]*<\/title>/, () => `<title>${escapeHtml(title)}</title>`);
+  put(/<title>[^<]*<\/title>/, () => `<title>${escapeHtml(withPlainMarks(title))}</title>`);
   // (a description of the operator's own, or of what an address names, stands as it is: without the mark by which the script would put the page's in its place)
-  put(/(<meta name="description" content=")[^"]*"( data-i18n-content="page\.description")/, (_, start, mark) => `${start}${escapeHtml(description)}"${siteDescription === null && !named ? mark : ''}`);
+  put(/(<meta name="description" content=")[^"]*"( data-i18n-content="page\.description")/, (_, start, mark) => `${start}${escapeHtml(withPlainMarks(description))}"${siteDescription === null && !named ? mark : ''}`);
   put(/(<meta name="apple-mobile-web-app-title" content=")[^"]*"/, (_, start) => `${start}${escapeHtml(siteName)}"`);
   // (the main heading of the page, except at an address: there it is the name of what that names, in its details, #254)
   put(/<h1>[^<]*<\/h1>/, () => (named ? `<div class="site-name">${escapeHtml(siteName)}</div>` : `<h1>${escapeHtml(siteName)}</h1>`));
@@ -368,8 +369,8 @@ export function renderPage(html, { language, main, asked, texts, siteName, areaN
   const tags = [
     '<meta property="og:type" content="website">',
     `<meta property="og:site_name" content="${escapeHtml(siteName)}">`,
-    `<meta property="og:title" content="${escapeHtml(title)}">`,
-    `<meta property="og:description" content="${escapeHtml(description)}">`,
+    `<meta property="og:title" content="${escapeHtml(withPlainMarks(title))}">`,
+    `<meta property="og:description" content="${escapeHtml(withPlainMarks(description))}">`,
     // (a picture of the operator's own is a wide one and shown large; the icon is not)
     `<meta name="twitter:card" content="${preview && publicUrl ? 'summary_large_image' : 'summary'}">`,
   ];
@@ -492,13 +493,13 @@ export function renderManifest(json, { language, texts, siteName, areaName, site
  * @returns { head, body } as HTML
  */
 export function panelHtml(kind, data, { language, texts, timeZone, now, fixed = false }) {
-  const time = new Intl.DateTimeFormat(latinDigits(language), { timeStyle: 'short', timeZone });
+  const time = new Intl.DateTimeFormat(plainLocale(language), { timeStyle: 'short', timeZone });
   const day = new Intl.DateTimeFormat('en-CA', { year: 'numeric', month: '2-digit', day: '2-digit', timeZone });
   // (whole hours, days of the week and lists, for what the timetable says beyond the minute: #289)
-  const hour = new Intl.DateTimeFormat(latinDigits(language), { hour: 'numeric', timeZone });
-  const weekday = new Intl.DateTimeFormat(latinDigits(language), { weekday: 'short', timeZone });
+  const hour = new Intl.DateTimeFormat(plainLocale(language), { hour: 'numeric', timeZone });
+  const weekday = new Intl.DateTimeFormat(plainLocale(language), { weekday: 'short', timeZone });
   const list = new Intl.ListFormat(language, { type: 'conjunction' });
-  const drawing = { t: (key, params) => t(key, params, texts), lang: language, time: (epoch) => time.format(epoch * 1000), day: (epoch) => day.format(epoch * 1000), hour: (epoch) => hour.format(epoch * 1000), weekday: (epoch) => weekday.format(epoch * 1000), list: (words) => list.format(words), dayStart: serviceDayStart, now, times: 'both' };
+  const drawing = { t: (key, params) => t(key, params, texts), lang: language, time: (epoch) => time.format(epoch * 1000), day: (epoch) => day.format(epoch * 1000), hour: (epoch) => hour.format(epoch * 1000), weekday: (epoch) => weekday.format(epoch * 1000), list: (words) => listedIn(list, words, language), dayStart: serviceDayStart, now, times: 'both' };
   // (a stop's delays come in where one of its departures has one: the others then have the map's question mark)
   const live = kind === 'stop' && data.departures.some((d) => d.delay !== null && d.delay !== undefined);
   const [head, body] = kind === 'stop'

@@ -119,7 +119,7 @@ test('the page comes with its texts in its language and its icons drawn', () => 
   // the marks stay: the script puts in the texts of a visitor with another language by them
   assert.equal(page.match(/\sdata-i18n(-[a-z-]+)?=/g).length, html.match(/\sdata-i18n(-[a-z-]+)?=/g).length);
   // which languages there are, for the script that picks the visitor's before the page is drawn
-  assert.ok(page.includes(`<html lang="de" data-languages="${LANGUAGE_CODES.join(' ')}">`));
+  assert.ok(page.includes(`<html lang="de" dir="ltr" data-languages="${LANGUAGE_CODES.join(' ')}" data-rtl="ar fa he ur">`));
 
   // in English the texts are those of the file
   assert.deepEqual(markedTexts(renderPage(html, { ...german, language: 'en', texts: en, areaName: '' })), markedTexts(html));

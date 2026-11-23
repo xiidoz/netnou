@@ -8,7 +8,7 @@
 
 import fs from 'node:fs';
 import { linePath, slug, stopName, stopPath, stopPathAt, tripPath } from '../../public/address.js';
-import { latinDigits, t } from '../../public/i18n.js';
+import { commaOf, isolatedEach, listedIn, plainLocale, t } from '../../public/i18n.js';
 import { townToShow } from '../../public/stops.js';
 import { facts } from './facts.js';
 import { addDays, localClock, localDate, serviceDayStart, timeZone, weekday } from './time.js';
@@ -584,10 +584,10 @@ export class Addresses {
     // the lines in groups of their kind, the kinds in the order in which their busiest line comes
     const groups = new Map();
     for (const { name, mode } of named) groups.set(mode, [...(groups.get(mode) ?? []), name]);
-    const parts = [...groups].map(([mode, names]) => labelled(names.sort(byName).join(', '), names[0], mode, texts));
+    const parts = [...groups].map(([mode, names]) => labelled(isolatedEach(names.sort(byName), language).join(commaOf(language)), names[0], mode, texts));
     // then the other kinds that call there, as the chips have them in order
     const others = MODES.filter((mode) => mode !== 'other' && !groups.has(mode) && lines.some((line) => line.mode === mode));
-    const words = others.length ? t('address.more', { lines: parts.join(', '), kinds: listed(others.map((mode) => t(`address.kind.${mode}`, {}, texts)), language) }, texts) : parts.join(', ');
+    const words = others.length ? t('address.more', { lines: isolatedEach(parts, language).join(commaOf(language)), kinds: listed(others.map((mode) => t(`address.kind.${mode}`, {}, texts)), language) }, texts) : isolatedEach(parts, language).join(commaOf(language));
     return {
       title: stopTitle(stop, texts, town),
       description: lines.length ? t('address.stopDescription', { stop: said, lines: words }, texts) : t('address.stopDescriptionNone', { stop: said }, texts),
@@ -658,8 +658,8 @@ export class Addresses {
     const line = labelled(name, name, tt.routeModes[route], texts);
     const to = tt.headsign(trip);
     const leaves = (serviceDayStart(date) + tt.schedDep(trip, 0)) * 1000;
-    const time = new Intl.DateTimeFormat(latinDigits(language), { timeStyle: 'short', timeZone: timeZone() }).format(leaves);
-    const day = new Intl.DateTimeFormat(latinDigits(language), { day: 'numeric', month: 'long', timeZone: timeZone() }).format(leaves);
+    const time = new Intl.DateTimeFormat(plainLocale(language), { timeStyle: 'short', timeZone: timeZone() }).format(leaves);
+    const day = new Intl.DateTimeFormat(plainLocale(language), { day: 'numeric', month: 'long', timeZone: timeZone() }).format(leaves);
     const from = tt.stops.name[tt.stopsOf(trip)[0]];
     return {
       title: firstUp(t('address.tripTitle', { line, to }, texts), language),
@@ -675,7 +675,7 @@ export class Addresses {
 const labelled = (words, first, mode, texts) => (/^\d/.test(first) ? `${t(`address.kind.${mode}`, {}, texts)} ${words}` : words);
 
 /** Words in a list as the language writes one: "a, b und c". */
-const listed = (words, language) => new Intl.ListFormat(language, { type: 'conjunction' }).format(words);
+const listed = (words, language) => listedIn(new Intl.ListFormat(language, { type: 'conjunction' }), words, language);
 
 /**
  * Working days (yyyymmdd, in order) in stretches of days one after the
@@ -706,7 +706,7 @@ export function datesText(dates, language, texts) {
   const at = (date) => new Date(Date.UTC(+date.slice(0, 4), +date.slice(4, 6) - 1, +date.slice(6, 8), 12));
   // (the day before the month, as both languages write it in a sentence)
   const locale = language === 'en' ? 'en-GB' : language;
-  const full = new Intl.DateTimeFormat(latinDigits(locale), { day: 'numeric', month: 'long', timeZone: 'UTC' });
+  const full = new Intl.DateTimeFormat(plainLocale(locale), { day: 'numeric', month: 'long', timeZone: 'UTC' });
   const [first, last] = [dates[0], dates.at(-1)];
   if (first === last) return full.format(at(first));
   // (the first day alone as the full date writes it, its dot kept: "4." of "4. November", "4" of "4 November")

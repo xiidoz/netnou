@@ -10,7 +10,7 @@ import { after, before, test } from 'node:test';
 import { t as translate } from '../public/i18n.js';
 import de from '../public/locales/de.js';
 import en from '../public/locales/en.js';
-import { dayHolds, daysText, hourLines, hoursText, hourText, lineHead, lineLists, lineTimetable, oftenText, stopToday, todayText as todayTextOf, toHtml } from '../public/panel.js';
+import { dayHolds, daysText, hourLabel, hourLines, hoursText, hourText, lineHead, lineLists, lineTimetable, oftenText, stopToday, todayText as todayTextOf, toHtml } from '../public/panel.js';
 import { Addresses, datesText } from '../server/lib/addresses.js';
 import { Area } from '../server/lib/area.js';
 import { readDataset, writeDataset } from '../server/lib/dataset.js';
@@ -318,6 +318,22 @@ test('whole hours as a clock says them, a stretch of them, midnight at its end a
   assert.equal(hoursText(at(day, '20:00'), at(day, '24:00'), de24), '20–24 Uhr');
   assert.equal(hoursText(at(day, '05:00'), at(day, '07:00'), en12), '5–7 AM');
   assert.equal(hoursText(at(day, '11:00'), at(day, '13:00'), en12), '11 AM–1 PM');
+  // (a clock whose half of the day is not in Latin letters: the hours of a timetable would say "2" for both 2 o'clocks)
+  for (const [code, am, pm] of [['el', 'π.μ.', 'μ.μ.'], ['sq', 'p.d.', 'm.d.']]) {
+    const clock = drawing(code, en, at(day, '12:00'));
+    const plain = (text) => text.replace(/\s/g, ' ');
+    assert.equal(plain(hoursText(at(day, '05:00'), at(day, '07:00'), clock)), `5–7 ${am}`);
+    assert.equal(plain(hoursText(at(day, '11:00'), at(day, '13:00'), clock)), `11 ${am}–1 ${pm}`);
+    assert.equal(plain(hourLabel(at(day, '08:00'), clock)), `8 ${am}`);
+    assert.equal(plain(hourLabel(at(day, '14:00'), clock)), `2 ${pm}`);
+    // (the evening before the clocks go forward: twelve hours on it is afternoon again)
+    assert.equal(plain(hourLabel(Date.UTC(2027, 2, 27, 22) / 1000, clock)), `11 ${pm}`);
+  }
+  // (nor does a 24-hour clock where the clocks change by half an hour)
+  const lordHowe = { hour: (e) => new Intl.DateTimeFormat('en-GB', { hour: 'numeric', timeZone: 'Australia/Lord_Howe' }).format(e * 1000), time: (e) => new Intl.DateTimeFormat('en-GB', { timeStyle: 'short', timeZone: 'Australia/Lord_Howe' }).format(e * 1000) };
+  for (let e = Date.UTC(2027, 3, 2) / 1000; e < Date.UTC(2027, 3, 5) / 1000; e += 1800) assert.ok(!hourLabel(e, lordHowe).includes(':'), String(e));
+  // (a clock of 24 hours says none, in a language with a word after the hour as well)
+  assert.equal(hourLabel(at(day, '14:00'), de24), '14');
   assert.equal(hoursText(at(day, '20:00'), at(day, '24:00'), en12), '8 PM–12 AM');
   // (not one AM for both ends of a stretch from the morning to midnight)
   assert.equal(hoursText(at(day, '05:00'), at(day, '24:00'), en12), '5 AM–12 AM');
