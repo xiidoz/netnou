@@ -553,6 +553,16 @@ function hourParts(epoch, { hour, time }, end = false) {
   return [end && digits === '0' && !/[ap]\.?\s?m\b/i.test(rest) ? '24' : digits, rest];
 }
 
+/**
+ * Whether what stands after an hour says the half of the day: "AM", Greek
+ * "π.μ.", Arabic "ص". Told by what it says twelve hours on or back, where a
+ * word like "Uhr" stays the same; both ways, as a change of the clocks can
+ * bring the same half twelve hours on.
+ */
+const saysHalf = (rest, epoch, context) => /[ap]\.?\s?m\b/i.test(rest) || [12, -12].some((hours) => withoutMinutes(hourParts(epoch + hours * 3600, context)[1]) !== withoutMinutes(rest));
+// (":00" where a clock has no word after the hour: where the clocks change by half an hour it can say ":30" twelve hours on)
+const withoutMinutes = (rest) => rest.replace(/^\D\d+/, '');
+
 /** A whole hour as a clock says it (hourParts). */
 export const hourText = (epoch, context) => hourParts(epoch, context, true).join('');
 
@@ -672,9 +682,9 @@ export function hourLines(group, now, today) {
 }
 
 /** The hour of a line of hours as the timetable at a stop writes it: "8", "0"; with the half of the day where the clock has one, "8 AM". */
-function hourLabel(epoch, context) {
+export function hourLabel(epoch, context) {
   const [digits, rest] = hourParts(epoch, context);
-  return /[ap]\.?\s?m\b/i.test(rest) ? `${digits}${rest}` : digits;
+  return saysHalf(rest, epoch, context) ? `${digits}${rest}` : digits;
 }
 
 /**
