@@ -8,7 +8,7 @@ This file is written by
 messages when a release is made. Do not edit it by hand; see
 [Releases](CONTRIBUTING.md#releases).
 
-## [0.31.0](https://github.com/xiidoz/netnou/compare/v0.30.0...v0.31.0) – The Right-to-Left Release
+## [0.31.0](https://github.com/xiidoz/netnou/compare/v0.30.0...v0.31.0) – The World Languages Release
 
 The page now speaks 54 languages, four right to left, and riders find theirs by any name, even in a script they cannot read. Times and days follow the page's language in Chrome too, timetables tell morning from afternoon, and wall screens keep their language. Operators can choose pages and languages for search engines, and give an email address.
 
