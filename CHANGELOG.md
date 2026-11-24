@@ -8,6 +8,27 @@ This file is written by
 messages when a release is made. Do not edit it by hand; see
 [Releases](CONTRIBUTING.md#releases).
 
+## [0.31.0](https://github.com/xiidoz/netnou/compare/v0.30.0...v0.31.0) – The World Languages Release
+
+The page now speaks 54 languages, four right to left, and riders find theirs by any name, even in a script they cannot read. Times and days follow the page's language in Chrome too, timetables tell morning from afternoon, and wall screens keep their language. Operators can choose pages and languages for search engines, and give an email address.
+
+
+### Features
+
+* **i18n:** the page in 15 languages of the world, 50 in all ([#390](https://github.com/xiidoz/netnou/issues/390)) ([fb51499](https://github.com/xiidoz/netnou/commit/fb5149908d322f1652f42cb651bad529bc5c5644)), closes [#384](https://github.com/xiidoz/netnou/issues/384)
+* **i18n:** the page in Arabic, Hebrew, Persian and Urdu, read right to left ([#403](https://github.com/xiidoz/netnou/issues/403)) ([3d16c17](https://github.com/xiidoz/netnou/commit/3d16c174f237944f1a146dc54d29a849779b4865))
+* **settings:** a list of the languages that finds one by any of its names ([#394](https://github.com/xiidoz/netnou/issues/394)) ([ad95f33](https://github.com/xiidoz/netnou/commit/ad95f33748e5b6b032028ca7f5e03b65535562d2))
+* **settings:** choose which pages search engines are led to, and in which languages ([#400](https://github.com/xiidoz/netnou/issues/400)) ([804c091](https://github.com/xiidoz/netnou/commit/804c091b287fa095794f51af0344248f2a8aa3d3)), closes [#398](https://github.com/xiidoz/netnou/issues/398)
+* **settings:** let an operator's link be an email address ([#397](https://github.com/xiidoz/netnou/issues/397)) ([f6faa0f](https://github.com/xiidoz/netnou/commit/f6faa0fc031bbade117c42b45cbb445c4fcf70f7))
+
+
+### Bug Fixes
+
+* **i18n:** times, days and language names where Chrome has no formats of a language ([#399](https://github.com/xiidoz/netnou/issues/399)) ([0845fea](https://github.com/xiidoz/netnou/commit/0845fea897b7320469498ddd353601d034996e9a))
+* **page:** the row of chips takes every tap, on its arrows and on the chips beside them ([#401](https://github.com/xiidoz/netnou/issues/401)) ([ac339a2](https://github.com/xiidoz/netnou/commit/ac339a29c2db53cf715132e0b2d37291879871f0))
+* **server:** the main language's ?lang= goes to the plain address only where that shows it too ([#393](https://github.com/xiidoz/netnou/issues/393)) ([58778be](https://github.com/xiidoz/netnou/commit/58778be79fbcda2d44c68ec9da58efa96a5621d7)), closes [#391](https://github.com/xiidoz/netnou/issues/391)
+* **timetable:** the hours say the half of the day in every 12-hour language ([#402](https://github.com/xiidoz/netnou/issues/402)) ([1f25253](https://github.com/xiidoz/netnou/commit/1f252537721415f4d6f60178736d36ad4ccf06a7))
+
 ## [0.30.0](https://github.com/xiidoz/netnou/compare/v0.29.0...v0.30.0) – The European Languages Release
 
 Riders can now read the page in 35 languages of Europe, German and English among them. The installed app keeps only the texts of the languages a rider's browser uses, so new versions no longer bring every language with them. Line descriptions in search engines and link previews also write a stretch of non-running days within one month correctly.
