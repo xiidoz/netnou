@@ -182,8 +182,10 @@ jobs:
       # The section of the release in the pull request's CHANGELOG.md loses the
       # day release-please writes in its heading. Where it has no name, Claude
       # is asked for one and for a few sentences, from the list and the first
-      # paragraph of each listed pull request's description
-      # (tools/release-notes.mjs). What changed is committed to the pull
+      # paragraph of each listed pull request's description, and the names of
+      # the releases before it, which its name must not repeat
+      # (tools/release-notes.mjs); a section whose name repeats one is asked
+      # for anew. What changed is committed to the pull
       # request. release-please compares only the description of its pull
       # request, so it keeps the commit until a merge adds to the notes; then
       # it writes the pull request anew, and Claude is asked again, with the
@@ -224,7 +226,7 @@ jobs:
             done
             previous=$(jq -c -s '.[0] // null' "$RUNNER_TEMP/previous.json" 2>/dev/null || echo null)
             jq -n --arg version "$version" --argjson release "$release" --argjson pulls "$pulls" --argjson previous "$previous" \
-              '{version: $version, section: $release.section, pulls: $pulls, previous: $previous}' \
+              '{version: $version, section: $release.section, pulls: $pulls, previous: $previous, earlier: $release.earlier}' \
               | node tools/release-notes.mjs request > "$RUNNER_TEMP/request.json" || return 1
             # (fallbacks: should the model decline, another one answers in the same call)
             if ! curl --silent --show-error --max-time 600 https://api.anthropic.com/v1/messages \
@@ -236,13 +238,17 @@ jobs:
               echo "::warning title=Release not named::The Claude API could not be reached."
               return 1
             fi
-            if ! node tools/release-notes.mjs answer < "$RUNNER_TEMP/response.json" > "$RUNNER_TEMP/claude.json" 2> "$RUNNER_TEMP/why.txt"; then
+            if ! node tools/release-notes.mjs answer "$changelog" "$version" < "$RUNNER_TEMP/response.json" > "$RUNNER_TEMP/claude.json" 2> "$RUNNER_TEMP/why.txt"; then
               echo "::warning title=Release not named::No name from Claude: $(cat "$RUNNER_TEMP/why.txt")"
               return 1
             fi
             mv "$RUNNER_TEMP/claude.json" "$RUNNER_TEMP/answer.json"
           }
-          if [ -n "$(jq -r .name <<< "$release")" ]; then
+          repeats=$(jq -r '.repeats // ""' <<< "$release")
+          if [ -n "$repeats" ]; then
+            echo "Pull request #$number calls the release \"$(jq -r .name <<< "$release")\", which repeats the name of an earlier release, \"$repeats\"."
+          fi
+          if [ -n "$(jq -r .name <<< "$release")" ] && [ -z "$repeats" ]; then
             echo "Pull request #$number calls the release \"$(jq -r .name <<< "$release")\"."
           elif [ -z "$ANTHROPIC_API_KEY" ]; then
             echo "No secret ANTHROPIC_API_KEY: the release is not given a name."

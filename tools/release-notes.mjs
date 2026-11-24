@@ -17,10 +17,12 @@
 // with this script:
 //
 //   node tools/release-notes.mjs read <CHANGELOG.md> <version>
-//     prints {name, text, date, section, pulls} as JSON: the name and the
-//     sentences ("" where there are none), the day in the heading ("" where
-//     there is none), the whole section as it is published (its heading
-//     without the day), and the numbers of the pull requests it lists
+//     prints {name, text, date, section, pulls, earlier, repeats} as JSON: the
+//     name and the sentences ("" where there are none), the day in the
+//     heading ("" where there is none), the whole section as it is published
+//     (its heading without the day), the numbers of the pull requests it
+//     lists, the {version, name, text} of the named releases before it, newest
+//     first, and the name of the one its own name repeats ("" where none)
 //   node tools/release-notes.mjs write <CHANGELOG.md> <version>   < {name, text}
 //     puts the name and the sentences into the section, in place of any there,
 //     and takes the day off its heading
@@ -32,12 +34,13 @@
 //     its own; a description release-please wrote is printed as it is
 //   node tools/release-notes.mjs excerpt   < description
 //     prints the first paragraph of a pull request's description
-//   node tools/release-notes.mjs request   < {version, section, pulls, previous}
+//   node tools/release-notes.mjs request   < {version, section, pulls, previous, earlier}
 //     prints the request to the Claude API that asks for a name and sentences:
 //     pulls is [{number, about}], previous the {name, text} the release had
-//     before its last changes, if any
-//   node tools/release-notes.mjs answer   < the API's response
-//     prints the {name, text} it holds, or fails saying why there is none
+//     before its last changes, if any, earlier the releases before it (read)
+//   node tools/release-notes.mjs answer [<CHANGELOG.md> <version>]   < the API's response
+//     prints the {name, text} it holds, or fails saying why there is none;
+//     given the changelog, also where the name repeats that of an earlier release
 
 import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
@@ -81,7 +84,40 @@ export function readRelease(changelog, version) {
     const number = /^\* .*?\(\[#(\d+)\]/.exec(line)?.[1];
     if (number && !pulls.includes(Number(number))) pulls.push(Number(number));
   }
-  return { name, text, date, section, pulls };
+  const earlier = earlierReleases(lines, where);
+  return { name, text, date, section, pulls, earlier, repeats: repeated(name, earlier)?.name ?? '' };
+}
+
+// How many of the named releases before a version Claude is shown, newest first.
+const EARLIER = 10;
+
+// The named releases below a section in the changelog, which are older: {version, name, text}.
+function earlierReleases(lines, where) {
+  const earlier = [];
+  for (let i = where.end; i < lines.length && earlier.length < EARLIER; i++) {
+    const [, , version, , named = ''] = HEADING.exec(lines[i]) ?? [];
+    if (!version || !named.trim()) continue;
+    const end = lines.findIndex((line, j) => j > i && HEADING.test(line));
+    const text = lines.slice(i + 1, textEnd(lines, { start: i, end: end < 0 ? lines.length : end })).join('\n').trim();
+    earlier.push({ version, name: named.trim(), text });
+  }
+  return earlier;
+}
+
+// The words of a name that say what the release is about, each without a
+// plural "s": "The European Languages Release" says "european" and "language".
+const wordsOf = (name) => new Set(name.toLowerCase().split(/[^\p{L}\p{N}]+/u).filter((word) => word && !['the', 'release', 'a', 'an', 'and', 'of'].includes(word)).map((word) => (word.length > 3 ? word.replace(/s$/, '') : word)));
+
+// The earlier release whose name a name repeats: all its words are words of
+// that name ("The Language Release" after "The European Languages Release"),
+// which says nothing new. Null where it repeats none.
+export function repeated(name, earlier = []) {
+  if (!name) return null;
+  const words = wordsOf(name);
+  return earlier.find((release) => {
+    const before = wordsOf(release.name);
+    return [...words].every((word) => before.has(word));
+  }) ?? null;
 }
 
 export function writeRelease(changelog, version, { name = '', text = '' }) {
@@ -178,7 +214,9 @@ The name has the form "The … Release", with one to three plain words for what 
 
 The sentences: one to three, together at most 60 words, in plain English. Begin with what most of the release is about, and say what riders (or operators) can now do or what now works better for them, in the present tense. Speak of riders and operators, not "you" or "we". Say only what the list and the descriptions of its pull requests say. No praise words ("exciting", "seamless", "powerful"), no numbers of issues or pull requests, no names of files, functions or settings unless the change is a setting.
 
-If the release had a name before its last changes were added and that name still fits, keep it exactly, and keep what still holds of its sentences.`;
+The name is one no earlier release has had, and not one that says what an earlier name says with a word changed or left out: after "The European Languages Release", "The Language Release" says nothing new. Name what is new in this release.
+
+If the release had a name before its last changes were added and that name still fits, keep it exactly, and keep what still holds of its sentences; but not a name that repeats an earlier release's.`;
 
 const SCHEMA = {
   type: 'object',
@@ -190,7 +228,7 @@ const SCHEMA = {
   additionalProperties: false,
 };
 
-export function buildRequest({ version, section, pulls = [], previous = null }) {
+export function buildRequest({ version, section, pulls = [], previous = null, earlier = [] }) {
   const parts = [`Version ${version}. Its list of changes, as it will stand in the changelog:\n\n${section}`];
   const about = pulls.filter(pull => pull.about);
   if (about.length) {
@@ -198,6 +236,9 @@ export function buildRequest({ version, section, pulls = [], previous = null }) 
   }
   if (previous?.name || previous?.text) {
     parts.push(`Before its last changes were added, the release was called "${previous.name}", with these sentences:\n\n${previous.text}`);
+  }
+  if (earlier.length) {
+    parts.push(`The releases before it, newest first, whose names this one's must not repeat:\n\n${earlier.map((release) => `${release.version}: "${release.name}"${release.text ? ` – ${release.text.replace(/\s+/g, ' ')}` : ''}`).join('\n\n')}`);
   }
   return {
     model: MODEL,
@@ -211,8 +252,8 @@ export function buildRequest({ version, section, pulls = [], previous = null }) 
 }
 
 // The name and the sentences from the API's response, or an error that says
-// why there are none.
-export function readAnswer(response) {
+// why there are none: also where the name repeats that of an earlier release.
+export function readAnswer(response, earlier = []) {
   if (response?.type === 'error') throw new Error(`the API answered with an error: ${response.error?.type}: ${response.error?.message}`);
   if (response?.stop_reason !== 'end_turn') throw new Error(`the answer stopped with "${response?.stop_reason}"`);
   const json = response.content.filter(block => block.type === 'text').map(block => block.text).join('');
@@ -226,6 +267,8 @@ export function readAnswer(response) {
   const text = String(answer.text ?? '').replace(/\s+/g, ' ').trim();
   if (!name || name.length > 60) throw new Error(`the name does not fit: "${name}"`);
   if (!text || text.length > 600) throw new Error(`the sentences do not fit (${text.length} characters)`);
+  const before = repeated(name, earlier);
+  if (before) throw new Error(`the name "${name}" repeats that of release ${before.version}, "${before.name}"`);
   return { name, text };
 }
 
@@ -251,9 +294,10 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
     } else if (command === 'request') {
       console.log(JSON.stringify(buildRequest(JSON.parse(stdin()))));
     } else if (command === 'answer') {
-      console.log(JSON.stringify(readAnswer(JSON.parse(stdin()))));
+      const earlier = file ? readRelease(fs.readFileSync(file, 'utf8'), version)?.earlier ?? [] : [];
+      console.log(JSON.stringify(readAnswer(JSON.parse(stdin()), earlier)));
     } else {
-      console.error('usage: node tools/release-notes.mjs read|write|describe <CHANGELOG.md> <version> | original | excerpt | request | answer');
+      console.error('usage: node tools/release-notes.mjs read|write|describe <CHANGELOG.md> <version> | original | excerpt | request | answer [<CHANGELOG.md> <version>]');
       process.exit(2);
     }
   } catch (error) {
