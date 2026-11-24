@@ -8,7 +8,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { test } from 'node:test';
-import { MODEL, buildRequest, describeRelease, firstParagraph, originalDescription, readAnswer, readRelease, writeRelease } from '../tools/release-notes.mjs';
+import { MODEL, buildRequest, describeRelease, firstParagraph, originalDescription, readAnswer, readRelease, repeated, writeRelease } from '../tools/release-notes.mjs';
 
 const COMPARE = 'https://github.com/xiidoz/netnou/compare';
 const COMMIT = 'https://github.com/xiidoz/netnou/commit';
@@ -214,6 +214,67 @@ test('an answer is taken only whole and in shape', () => {
   assert.throws(() => readAnswer(response(JSON.stringify({ name: 'The Offline Release', text: 'x'.repeat(601) }))), /sentences do not fit/);
 });
 
+// Released before, with their names, as the changelog holds them.
+const NAMED = `# Changelog
+
+## [0.31.0](${COMPARE}/v0.30.0...v0.31.0) – The Language Release
+
+
+### Features
+
+* **i18n:** the page in Arabic, Hebrew, Persian and Urdu ([#403](${ISSUES}/403)) ([3d16c17](${COMMIT}/3d16c17))
+
+## [0.30.0](${COMPARE}/v0.29.0...v0.30.0) – The European Languages Release
+
+Riders can read the page in 35 languages.
+
+
+### Features
+
+* **i18n:** 35 languages ([#387](${ISSUES}/387)) ([fcfb00b](${COMMIT}/fcfb00b))
+
+## [0.29.1](${COMPARE}/v0.29.0...v0.29.1)
+
+## [0.29.0](${COMPARE}/v0.28.0...v0.29.0) – The Offline Release
+
+Riders keep what they had open.
+
+
+### Features
+
+* **page:** offline ([#371](${ISSUES}/371)) ([13a54f0](${COMMIT}/13a54f0))
+`;
+
+test('a release knows the names before it, and a name that says no more than one of them repeats it', () => {
+  const release = readRelease(NAMED, '0.31.0');
+  assert.deepEqual(release.earlier, [
+    { version: '0.30.0', name: 'The European Languages Release', text: 'Riders can read the page in 35 languages.' },
+    { version: '0.29.0', name: 'The Offline Release', text: 'Riders keep what they had open.' },
+  ]);
+  assert.equal(release.repeats, 'The European Languages Release');
+  // (only those below it: a release is not repeated by those after it)
+  assert.deepEqual(readRelease(NAMED, '0.30.0').earlier.map((r) => r.version), ['0.29.0']);
+  assert.equal(readRelease(NAMED, '0.30.0').repeats, '');
+  // the words of an earlier name, in any order, plural or not, capitals or not
+  assert.equal(repeated('The Language Release', release.earlier)?.version, '0.30.0');
+  assert.equal(repeated('the european language release', release.earlier)?.version, '0.30.0');
+  assert.equal(repeated('The Offline Release', release.earlier)?.version, '0.29.0');
+  assert.equal(repeated('The Right-to-Left Release', release.earlier), null);
+  assert.equal(repeated('The World Languages Release', release.earlier), null);
+  assert.equal(repeated('The Offline Map Release', release.earlier), null);
+  assert.equal(repeated('', release.earlier), null);
+
+  // Claude is shown them, told why, and an answer that repeats one is turned down
+  const request = buildRequest({ version: '0.31.0', section: release.section, earlier: release.earlier });
+  assert.ok(request.messages[0].content.includes('0.30.0: "The European Languages Release" – Riders can read the page in 35 languages.'));
+  assert.ok(request.messages[0].content.includes('0.29.0: "The Offline Release"'));
+  assert.match(request.system, /no earlier release has had/);
+  const response = (name) => ({ type: 'message', stop_reason: 'end_turn', content: [{ type: 'text', text: JSON.stringify({ name, text: 'Riders read it from the right.' }) }] });
+  assert.throws(() => readAnswer(response('The Language Release'), release.earlier), /repeats that of release 0\.30\.0, "The European Languages Release"/);
+  assert.equal(readAnswer(response('The Right-to-Left Release'), release.earlier).name, 'The Right-to-Left Release');
+  assert.equal(readAnswer(response('The Language Release')).name, 'The Language Release', 'without the changelog nothing to compare');
+});
+
 test('the script reads and writes CHANGELOG.md as the workflow calls it', () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'netnou-release-notes-'));
   try {
@@ -232,6 +293,11 @@ test('the script reads and writes CHANGELOG.md as the workflow calls it', () => 
     assert.equal(execFileSync(process.execPath, [script, 'original'], { input: DESCRIPTION, encoding: 'utf8' }), DESCRIPTION);
     assert.equal(execFileSync(process.execPath, [script, 'excerpt'], { input: 'First.\n\nSecond.', encoding: 'utf8' }), 'First.\n');
     assert.throws(() => execFileSync(process.execPath, [script, 'read', file, '0.1.0'], { stdio: 'pipe' }));
+    // the answer, checked against the names before it in the changelog given
+    fs.writeFileSync(file, NAMED);
+    const answer = (name) => JSON.stringify({ type: 'message', stop_reason: 'end_turn', content: [{ type: 'text', text: JSON.stringify({ name, text: 'Riders read it from the right.' }) }] });
+    assert.throws(() => execFileSync(process.execPath, [script, 'answer', file, '0.31.0'], { input: answer('The Language Release'), stdio: 'pipe' }));
+    assert.equal(JSON.parse(execFileSync(process.execPath, [script, 'answer', file, '0.31.0'], { input: answer('The Right-to-Left Release'), encoding: 'utf8' })).name, 'The Right-to-Left Release');
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
   }

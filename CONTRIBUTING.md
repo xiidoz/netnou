@@ -382,8 +382,13 @@ was published, and git when the changelog changed.
 - Where the repository has the secret `ANTHROPIC_API_KEY`, a key of the
   Claude API, the workflow asks Claude for them each time release-please
   opens the release pull request or writes it anew. Claude is given the list
-  and the first paragraph of the description of each pull request in it, and
-  the name the release had before, to keep if it still fits. The answer is
+  and the first paragraph of the description of each pull request in it, the
+  name the release had before, to keep if it still fits, and the names and
+  sentences of the last ten named releases. Its name must say what is new: a
+  name whose words are all words of an earlier one ("The Language Release"
+  after "The European Languages Release") is turned down, and a release
+  pull request whose name repeats one in this way is asked for a new one at
+  the next push to `main`. The answer is
   committed to the release pull request as `chore(main): name release X.Y.Z`
   (`tools/release-notes.mjs` reads and writes it). Without the secret, as in
   a fork, nothing is asked, and only the date goes.
