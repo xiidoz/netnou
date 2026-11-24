@@ -3022,6 +3022,35 @@ $('search-close').addEventListener('click', cancelSearch);
 const chipCounts = new Map();
 
 /**
+ * A swipe that begins on an arrow of the row of chips moves the row all the
+ * same: the arrows lie over it but are not in it, so the browser would not. A
+ * tap stays a tap.
+ */
+function swipeFromArrow(arrow, row) {
+  let swipe = null;
+  arrow.addEventListener('pointerdown', (event) => {
+    swipe = event.pointerType === 'touch' ? { id: event.pointerId, x: event.clientX, left: row.scrollLeft, moved: false } : null;
+  });
+  arrow.addEventListener('pointermove', (event) => {
+    // (that finger alone: a mouse passing over the arrow afterwards moves nothing)
+    if (!swipe || event.pointerId !== swipe.id) return;
+    const by = swipe.x - event.clientX;
+    if (!swipe.moved && Math.abs(by) < 8) return;
+    swipe.moved = true;
+    const wanted = swipe.left + by;
+    row.scrollTo({ left: wanted, behavior: 'instant' });
+    // (past the end the row stays there, and the way back begins where the finger is now)
+    if (Math.abs(row.scrollLeft - wanted) > 1) Object.assign(swipe, { x: event.clientX, left: row.scrollLeft });
+  });
+  arrow.addEventListener('pointercancel', () => { swipe = null; });
+  // (the click that may end a swipe is not a tap on the arrow)
+  arrow.addEventListener('click', (event) => {
+    if (swipe?.moved) event.stopImmediatePropagation();
+    swipe = null;
+  }, true);
+}
+
+/**
  * Shows where the row of chips goes on. On a narrow screen it is one row that
  * scrolls sideways (style.css): each of the two arrows is there while chips
  * are out of sight on its side, and moves the row that way.
@@ -3035,10 +3064,15 @@ function watchChipRow(row, back, on) {
   back.addEventListener('click', () => move(-1));
   on.addEventListener('click', () => move(1));
   row.addEventListener('scroll', update, { passive: true });
-  // A chip that gets the focus is to be seen whole and clear of the arrows
-  // (the scroll-padding of the row); left to themselves, browsers are content
-  // with a part of it.
-  row.addEventListener('focusin', (event) => event.target.scrollIntoView({ block: 'nearest', inline: 'nearest' }));
+  swipeFromArrow(back, row);
+  swipeFromArrow(on, row);
+  // A chip that gets the keyboard's focus is to be seen whole and clear of the
+  // arrows (the scroll-padding of the row); left to themselves, browsers are
+  // content with a part of it. Not one that a finger or the mouse is on: it
+  // would move away between press and release, and the tap would miss it.
+  row.addEventListener('focusin', (event) => {
+    if (event.target.matches(':focus-visible')) event.target.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+  });
   // The row gets wider or narrower with the window, what is in it with the numbers on the chips.
   const sizes = new ResizeObserver(update);
   for (const node of [row, ...row.children]) sizes.observe(node);
