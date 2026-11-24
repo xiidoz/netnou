@@ -1,6 +1,6 @@
 # Translating
 
-The page is available in 50 languages, those of `LANGUAGES` in
+The page is available in 54 languages, those of `LANGUAGES` in
 `public/i18n.js`. Each language is one file in
 `public/locales/`, and adding a language needs no build step and no change to
 the server.
@@ -146,6 +146,38 @@ visitor's where that is another.
 The test also fails when a key is no longer used anywhere, and when `app.js`
 contains text for visitors that does not go through `t()`.
 
+### A language written right to left
+
+Arabic, Hebrew, Persian and Urdu are read right to left. One more step for such
+a language: add its code to `RIGHT_TO_LEFT` in `public/i18n.js`, and to
+`ARABIC_COMMA` there where it writes the comma as "،". The server then writes
+`dir="rtl"` on the page and tells `first.js` which languages read that way, so
+that a language chosen in the page has its direction before the first paint.
+
+The texts are written as they are read, with **no marks of direction** in them
+(`npm test` refuses them). `t()` isolates every value it fills in (U+2068 …
+U+2069), so that a Latin stop name with brackets, a time or a number stays
+whole in the sentence; it does so by the language of the texts, and not at all
+in a left-to-right language.
+
+What the page does with it:
+
+- **Everything that reads is mirrored**, by the logical rules of `style.css`
+  (`margin-inline-start`, `inset-inline-end`, `text-align: start`). A new rule
+  for something that reads should be written that way, and with `--safe-start`
+  and `--safe-end` for the edges of the screen. What logical rules cannot say
+  is in the block "right to left" at the end of the file.
+- **The map is not.** North stays north: `#map` is `dir="ltr"`, its canvas, its
+  controls and its credits are as in any other language, and its buttons stay
+  bottom right. So the details lie on the left on a wide screen, the header
+  card on the right, and what the script places by measuring knows that
+  (`rightToLeft()` in `public/i18n.js`).
+- **Numbers read left to right**: a delay is `+2`, a sum `13:39+2`, a range of
+  times `05:13–23:40`. A range with the language's own letters in it, as Arabic
+  has for AM and PM, is read from the right, each end whole (`timeRange`).
+- **Signs that point are mirrored** (chevrons, the way back, the arrow towards
+  a direction); those that do not (gear, lens, heart, share, ✕, 文A) stay.
+
 ## What is not translated
 
 - **Data from the feeds:** names of stops, lines and operators, and the notes
@@ -160,8 +192,6 @@ contains text for visitors that does not go through `t()`.
   (`NETNOU_LANGUAGE`), for everybody who installs it.
 - **Log lines, error messages and API texts of the server.** They are for
   operators and are in English.
-
-Right-to-left languages are not prepared: the page sets no text direction.
 
 ## Trying it locally
 

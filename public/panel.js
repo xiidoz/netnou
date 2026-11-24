@@ -11,6 +11,7 @@
 // Without the page around it, so that it runs on the server and in the tests
 // as it is (test/panel.test.js).
 
+import { commaOf, isolatedEach, textDirection, timeRange } from './i18n.js';
 import { HEART_MIDDLE, heartMark, stopMark, townToShow, townsAlong } from './stops.js';
 import { mdiAlert, mdiChevronRight, mdiChevronUp, mdiClose, mdiFilterVariant, mdiHeart, mdiInformationOutline } from './vendor/material-design-icons/icons.js';
 
@@ -426,7 +427,7 @@ export function lineLists(board, context) {
   context.lost ? whenBack(context) : null,
   // (the towns its lines go to, the nearest first)
   towns.length ? h('p', { class: 'lines-towns' }, towns.length === 1 && !board.towns.more ? t('facts.townsOne', { town: towns[0] })
-    : board.towns.more ? t('facts.townsMore', { towns: towns.join(', '), count: board.towns.more }) : t('facts.towns', { towns: context.list(towns) })) : null,
+    : board.towns.more ? t('facts.townsMore', { towns: isolatedEach(towns, context.lang).join(commaOf(context.lang)), count: board.towns.more }) : t('facts.towns', { towns: context.list(towns) })) : null,
   ].filter(Boolean);
 }
 
@@ -448,7 +449,7 @@ export function choiceChip(chosen, context) {
     : chosen.length === 1 ? [h('span', { class: 'only' }, t('choice.only')), lineBadge(chosen[0].line, chosen[0].mode, context, chosen[0].both), h('span', {}, chosen[0].name)]
       : [h('span', {}, t('choice.several', { count: chosen.length }))];
   // (a line named by a number said with its kind, as a tram 4 and a bus 4 may go to the same place)
-  const label = chosen.length ? `${t('choice.only')} ${chosen.map((direction) => `${lineSaid(direction.line, direction.mode, context)} ${direction.name}`).join(', ')}` : t('choice.filter');
+  const label = chosen.length ? `${t('choice.only')} ${chosen.map((direction) => `${lineSaid(direction.line, direction.mode, context)} ${direction.name}`).join(commaOf(context.lang))}` : t('choice.filter');
   return h('span', { class: `choice${chosen.length ? ' chosen' : ''}` },
     h('button', { type: 'button', class: 'choice-open', 'aria-label': label, 'aria-haspopup': 'dialog', title: t('choice.title') }, iconOf(mdiFilterVariant), parts),
     chosen.length ? h('button', { type: 'button', class: 'choice-clear', 'aria-label': t('choice.clear'), title: t('choice.clear') }, iconOf(mdiClose)) : null,
@@ -568,11 +569,12 @@ export const hourText = (epoch, context) => hourParts(epoch, context, true).join
 
 /** A stretch of whole hours: "5–7 Uhr", "20–24 Uhr", "11 AM–1 PM". */
 export function hoursText(from, to, context) {
+  const { lang } = context;
   const [a, aRest] = hourParts(from, context);
   const [b, bRest] = hourParts(to, context, true);
   // (what both say after the hour once: " Uhr", and " AM" within one half of the day; a time, "20:00" or Danish "20.00", in full)
-  const once = aRest === bRest && !/^\D\d/.test(aRest) && (!/[ap]\.?\s?m\b/i.test(aRest) || to - from < 12 * 3600);
-  return once ? `${a}–${b}${bRest}` : `${a}${aRest}–${b}${bRest}`;
+  const once = aRest === bRest && !/^\D\d/.test(aRest) && (!saysHalf(aRest, from, context) || to - from < 12 * 3600);
+  return once ? timeRange(a, b, lang, bRest) : timeRange(`${a}${aRest}`, `${b}${bRest}`, lang);
 }
 
 // (the first letter of a text as a capital, or small, by the rules of its language: Turkish "ilk" is "İlk", "İlk" is "ilk")
@@ -643,7 +645,12 @@ export function stopToday(today, context) {
 }
 
 /** The days of a week as their timetable groups them: "Mo, Fr", "Di–Do", Monday first, a run of three or more as a range. */
-export function daysText(dates, { weekday }) {
+export function daysText(dates, { weekday, lang }) {
+  return dayParts(dates, weekday).join(commaOf(lang));
+}
+
+/** The parts of daysText, each of which stays on one line. */
+function dayParts(dates, weekday) {
   // (noon of each day in the area, whose weekday it is; dates as yyyymmdd)
   const days = dates.map((date) => {
     const noon = Date.UTC(+date.slice(0, 4), +date.slice(4, 6) - 1, +date.slice(6, 8), 12) / 1000;
@@ -657,7 +664,7 @@ export function daysText(dates, { weekday }) {
     else for (let j = k; j <= end; j++) parts.push(days[j].name);
     k = end + 1;
   }
-  return parts.join(', ');
+  return parts;
 }
 
 /**
@@ -725,9 +732,9 @@ export function lineTimetable(facts, context, way = 0, open = new Set(), mode = 
   // (the kind of day today is, marked so: the rider need not work out that Wednesday is "Mo–Fr")
   const head = (group, folds) => [
     // (each part of the days on one line: "Mo, Di–" never breaks before "Do")
-    h('span', { class: 'when' }, daysText(group.dates, context).split(', ').map((part, k) => [k ? ', ' : null, h('span', { class: 'part' }, part)]), group.dates.includes(today) ? h('span', { class: 'today' }, t('facts.todayMark')) : null),
+    h('span', { class: 'when' }, dayParts(group.dates, context.weekday).map((part, k) => [k ? commaOf(context.lang) : null, h('span', { class: 'part' }, part)]), group.dates.includes(today) ? h('span', { class: 'today' }, t('facts.todayMark')) : null),
     h('span', { class: 'said' },
-      h('span', { class: 'span' }, group.first === null ? t('facts.noTrips') : `${time(group.first)}–${time(group.last)}`),
+      h('span', { class: 'span' }, group.first === null ? t('facts.noTrips') : timeRange(time(group.first), time(group.last), context.lang)),
       group.first === null ? null : h('span', { class: 'often' }, often(group))),
     folds ? iconOf(mdiChevronUp) : null,
   ];
@@ -869,9 +876,9 @@ export function stopRing(modes, own, favourite, key) {
  * its mark shows by colour, but for the line's own, and that it is a
  * favourite, as the search says it (#325).
  */
-export function stopSaid(modes, own, favourite, { t, list }) {
+export function stopSaid(modes, own, favourite, { t, list, lang }) {
   const others = kindsOf(modes, own).filter((kind) => kind !== kindOf(own)).map((kind) => t(`mode.${kind}`));
-  return [others.length ? list(others) : null, favourite ? t('search.favourite') : null].filter(Boolean).map((part) => `, ${part}`).join('');
+  return [others.length ? list(others) : null, favourite ? t('search.favourite') : null].filter(Boolean).map((part) => `${commaOf(lang)}${part}`).join('');
 }
 
 // (how far up from halfway a vehicle between two stops is drawn: its disc reaches 11 px up, its arrowhead 17 px down)
@@ -905,7 +912,8 @@ export function vehicleSpot(track, now) {
 export const STOP_ROW = 32;
 export const NOTED_ROW = 44;
 const STOPS_TOP = 6;
-// Where its line runs, from the left of the list, and that of a branch.
+// Where its line runs, from the side the list begins at (the right where it is
+// read right to left), and that of a branch.
 // (that of a trip at the same place, style.css; a branch far enough out for the pills of both)
 const LINE_X = 30;
 const BRANCH_X = LINE_X + 28;
@@ -913,6 +921,8 @@ const BRANCH_X = LINE_X + 28;
 // arrowhead from the edge of the disc at ±0.6 rad to 6 px beyond, pointing
 // down the list, the way it goes.
 export const VEHICLE_R = 11;
+// How wide what the vehicles are drawn in is: the line of the list, a branch beside it and the flags (style.css).
+export const LINE_CANVAS_PX = 100;
 const point = (a, r) => `${(Math.cos(a) * r).toFixed(2)},${(Math.sin(a) * r).toFixed(2)}`;
 const ARROW_DOWN = `M${point(Math.PI / 2, VEHICLE_R + 6)}L${point(Math.PI / 2 + 0.6, VEHICLE_R)}L${point(Math.PI / 2 - 0.6, VEHICLE_R)}Z`;
 
@@ -991,12 +1001,12 @@ export function lineStops(line, context, way = 0) {
   // (the rows one after the other, and the middle of each, where the vehicles between them are placed)
   let y = STOPS_TOP;
   const row = (stop, town, note, className) => {
-    const below = [town, note].filter(Boolean).join(' · ');
+    const below = isolatedEach([town, note].filter(Boolean), context.lang).join(' · ');
     const favourite = context.favourite?.(stop) ?? false;
     const tall = !below && tallMark(stop.modes, line.mode);
     // (the stop the line was opened from, chosen: its ring, which a screen reader hears of)
     const chosen = context.chosen?.(stop) ?? false;
-    const said = `${stopSaid(stop.modes, line.mode, favourite, context)}${chosen ? `, ${t('stop.chosen')}` : ''}`;
+    const said = `${stopSaid(stop.modes, line.mode, favourite, context)}${chosen ? `${commaOf(context.lang)}${t('stop.chosen')}` : ''}`;
     const height = below || tall || context.touch ? NOTED_ROW : STOP_ROW;
     const middle = y + height / 2;
     y += height;
@@ -1089,6 +1099,9 @@ function vehicleSign(line, v, context, arrow = true) {
   // (no flag where the colour says the delay, nor where the visitor switched them off, as on the map)
   const flag = colorBy === 'mode' && flags ? delayFlag(v.delay, live) : null;
   const width = flag ? (flag.text === '?' ? 12 : flag.text.length * 5.4 + 6) : 0;
+  // (at the shoulder towards the names: on the left of a rail on the right)
+  const mirrored = textDirection(context.lang) === 'rtl';
+  const reach = Math.max(19, VEHICLE_R * 0.55 + width + 3);
   const attrs = {
     'data-trip': v.id,
     'aria-label': vehicleName(line, v, context),
@@ -1099,11 +1112,11 @@ function vehicleSign(line, v, context, arrow = true) {
     arrow ? h('path', { d: ARROW_DOWN }) : null,
     h('circle', { r: VEHICLE_R }),
     h('text', { y: (font * 0.36).toFixed(1), 'font-size': font }, label),
-    flag ? h('g', { class: `flag ${flag.color}`, transform: `translate(${VEHICLE_R * 0.55} ${-VEHICLE_R - 5})` },
+    flag ? h('g', { class: `flag ${flag.color}`, transform: `translate(${mirrored ? (-VEHICLE_R * 0.55 - width).toFixed(2) : VEHICLE_R * 0.55} ${-VEHICLE_R - 5})` },
       h('rect', { width: width.toFixed(1), height: 12, rx: 4 }),
       h('text', { x: (width / 2).toFixed(1), y: 9 }, flag.text)) : null,
     // (the ring of the keyboard focus, last, round all of it: its arrowhead and its flag inside)
-    h('rect', { class: 'ring', x: -19, y: -21, width: (19 + Math.max(19, VEHICLE_R * 0.55 + width + 3)).toFixed(1), height: 42, rx: 10 }),
+    h('rect', { class: 'ring', x: mirrored ? (-reach).toFixed(1) : -19, y: -21, width: (19 + reach).toFixed(1), height: 42, rx: 10 }),
   ];
   return { attrs, parts };
 }
@@ -1119,13 +1132,15 @@ function vehicleSign(line, v, context, arrow = true) {
 export function vehicleName(line, v, context) {
   const { t, stale = false, lang } = context;
   const named = firstUp(lineSaid(line.name, line.mode, context), lang);
-  return [v.to ? `${named} ${t('line.to', { destination: v.to })}` : named, v.next ? `${t('trip.next')} ${v.next}` : null, stale ? null : delayText(v.delay)].filter(Boolean).join(', ');
+  return [v.to ? `${named} ${t('line.to', { destination: v.to })}` : named, v.next ? `${t('trip.next')} ${v.next}` : null, stale ? null : delayText(v.delay)].filter(Boolean).join(commaOf(lang));
 }
 
 /** A vehicle on the line of the stops (lineStops) in its place, as the page sent has it: a button drawn there, with its track in px. */
 function lineVehicle(line, v, { x, y, standing }, context, track = []) {
   const { attrs, parts } = vehicleSign(line, v, context, !standing);
-  return h('g', { class: 'line-vehicle', transform: `translate(${x.toFixed(1)} ${y.toFixed(1)})`, 'data-trip': v.id, role: 'button', tabindex: '0', ...attrs, 'data-track': track.length ? track.join(',') : null },
+  // (right to left its box of LINE_CANVAS_PX stands at the right edge of the list, style.css)
+  const across = textDirection(context.lang) === 'rtl' ? LINE_CANVAS_PX - x : x;
+  return h('g', { class: 'line-vehicle', transform: `translate(${across.toFixed(1)} ${y.toFixed(1)})`, 'data-trip': v.id, role: 'button', tabindex: '0', ...attrs, 'data-track': track.length ? track.join(',') : null },
     h('rect', { class: 'hit', x: -18, y: -18, width: 36, height: 36, rx: 18 }), parts);
 }
 

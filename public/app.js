@@ -9,13 +9,13 @@
 // lines, stops and operators, and the notes of the feed.
 
 import { parseAddress, stopPathAt, wordsOf } from './address.js';
-import { APP_NAME, LANGUAGES, READMES, browserLanguage, chooseLanguage, dayOf, dayStartOf, formatHour, formatList, formatNumber, formatTime, formatWeekday, formatWhen, fromAddress, keepLanguage, languageToOffer, loadLanguage, pageTexts, primaryCode, sentInAnother, setTimeZone, storageWorks, storedLanguage, t, textsOf, translatePage } from './i18n.js';
+import { APP_NAME, browserLanguage, chooseLanguage, commaOf, dayOf, dayStartOf, formatHour, formatList, formatNumber, formatTime, formatWeekday, formatWhen, fromAddress, isolatedEach, keepLanguage, LANGUAGES, languageToOffer, loadLanguage, pageTexts, primaryCode, READMES, rightToLeft, sentInAnother, setTimeZone, storageWorks, storedLanguage, t, textDirection, textsOf, towards, translatePage, withoutIsolates, withPlainMarks } from './i18n.js';
 import { languageFound, languageOrder, nameAlone, nameIn, secondName } from './languages.js';
 import { FAVOURITE_NAME_ZOOM, HEART_MIDDLE, PLACES_ZOOM, RAIL_MODES, heartMark, joiningLines, mergePlaces, namePrecedence, namedAt, placeNames, stopMark, townToShow, townsAlong, withoutStyleStops } from './stops.js';
 import { favouritesFrom, isFavourite, lineFavourite, metres, sameStop, stopFavourite, stopNamedAt, withChoice, withFavourite } from './favourites.js';
 import { choiceValue, chosenWays, readChoice, shownKeys, toggled } from './choice.js';
 import { HELD, heldArea, heldDetails, heldLast, heldPaths, holdArea, holdDetails, holdLast } from './held.js';
-import { DELAY_MAJOR_S, DELAY_MINOR_S, DELAY_SEVERE_S, MINUTES_MAX, NOTE_CHARS, badge as badgeOf, choiceChip as choiceChipOf, clockOf, delayCell as delayCellOf, delayClass, delayNode as delayNodeOf, delaySum as delaySumOf, unknownDelay as unknownDelayOf, delayFlag, delayText, departureLists, departureRow as departureRowOf, departuresShown, heldDepartures, nextOfWay, departuresSub as departuresSubOf, leavesAt, lineBadge, kindInfo, lineHead, lineLists, listedText, lineSaid as lineSaidOf, lineStops, lineTimetable, leftAlready, GONE_S, whenBack, minutesNode as minutesNodeOf, twoKinds, vehicleSpot, VEHICLE_R, panelHead as panelHeadOf, stopHeading, stopRing, stopSaid, stopSign, stopToday, tallMark, tomorrowAt as tomorrowAtOf, untilText as untilTextOf, vehicleLabel, vehicleName, warningSign as warningSignOf, warns } from './panel.js';
+import { DELAY_MAJOR_S, DELAY_MINOR_S, DELAY_SEVERE_S, LINE_CANVAS_PX, MINUTES_MAX, NOTE_CHARS, badge as badgeOf, choiceChip as choiceChipOf, clockOf, delayCell as delayCellOf, delayClass, delayNode as delayNodeOf, delaySum as delaySumOf, unknownDelay as unknownDelayOf, delayFlag, delayText, departureLists, departureRow as departureRowOf, departuresShown, heldDepartures, nextOfWay, departuresSub as departuresSubOf, leavesAt, lineBadge, kindInfo, lineHead, lineLists, listedText, lineSaid as lineSaidOf, lineStops, lineTimetable, leftAlready, GONE_S, whenBack, minutesNode as minutesNodeOf, twoKinds, vehicleSpot, VEHICLE_R, panelHead as panelHeadOf, stopHeading, stopRing, stopSaid, stopSign, stopToday, tallMark, tomorrowAt as tomorrowAtOf, untilText as untilTextOf, vehicleLabel, vehicleName, warningSign as warningSignOf, warns } from './panel.js';
 import { BOARD_MAX, BOARD_SHARE, BOARD_STOPS, boardBlocks, boardQuery, boardShare, displayQuery, ledBy, readBoard, readDisplay, readStops } from './display.js';
 import { mdiArrowCollapse, mdiArrowExpand, mdiCheck, mdiChevronLeft, mdiChevronRight, mdiCityVariantOutline, mdiFullscreen, mdiFullscreenExit, mdiHeart, mdiHeartOutline, mdiMinusCircleOutline, mdiPlus } from './vendor/material-design-icons/icons.js';
 import { AttributionControl, MapLibreMap, NavigationControl } from './vendor/maplibre-gl/maplibre-gl.mjs';
@@ -328,6 +328,8 @@ function keepFavourites() {
 // then this changes nothing in it.)
 const language = await loadLanguage();
 translatePage();
+// (right to left, what is typed into a search goes by its own letters, for the caret and the selection too)
+if (textDirection(language) === 'rtl') for (const field of ['search-field', 'languages-search']) document.getElementById(field).dir = 'auto';
 // (the way back from a language just chosen in the list, which the choice left for this start: the bubble after a pick,
 // see "the offer of a language"; read once)
 const LANGUAGE_UNDO = 'netnou.languageUndo';
@@ -753,9 +755,11 @@ function flagOf(v, live) {
 }
 
 /** The flag of a vehicle at x, y: its width. */
-function drawFlag(x, y, flag, c = ctx) {
+function drawFlag(at, y, flag, c = ctx, mirrored = false) {
   c.font = '700 9px system-ui, sans-serif';
   const w = flag.text === '?' ? 12 : c.measureText(flag.text).width + 6;
+  // (mirrored: at the other shoulder of its disc, as on a rail on the right, towards the names of the stops)
+  const x = mirrored ? at - 2 * VEHICLE_R * 0.55 - w : at;
   c.fillStyle = flag.color;
   roundedBox(x, y, w, 12, 4, c);
   c.fill();
@@ -1780,7 +1784,6 @@ let framePending = false;
 // Over each is a button that cannot be seen, for a tap, the keyboard and a
 // screen reader; the ring of the keyboard focus is drawn on the canvas.
 let lastLineMove = 0;
-const LINE_CANVAS_PX = 100; // its width: the line of the list, a branch beside it and the flags
 const lineTracks = new WeakMap(); // a vehicle's button → its track, read once: [time, x, y, …]
 const lineCanvas = () => (panel.hidden ? null : panelBody.querySelector('canvas.line-canvas'));
 
@@ -1798,6 +1801,8 @@ function drawLineVehicles(paper) {
   const dpr = paper.width / LINE_CANVAS_PX;
   c.setTransform(dpr, 0, 0, dpr, 0, 0);
   c.clearRect(0, 0, LINE_CANVAS_PX, paper.height / dpr);
+  // (a canvas writes in the direction of the page it is in: a flag says +2 there too)
+  c.direction = 'ltr';
   c.textAlign = 'center';
   c.textBaseline = 'middle';
   const live = delaysLive();
@@ -1808,6 +1813,7 @@ function drawLineVehicles(paper) {
   // (the stop the list was opened from: its ring over a vehicle there, which it rings, and under one going by)
   const chosen = paper.parentNode.dataset.chosen?.split(',').map(Number);
   let atChosen = false;
+  const mirrored = rightToLeft();
   for (const node of paper.parentNode.querySelectorAll('.line-vehicle')) {
     if (!lineTracks.has(node)) lineTracks.set(node, node.dataset.track ? node.dataset.track.split(',').map(Number) : [0, ...node.dataset.at.split(',').map(Number)]);
     // (one whose known way has ended, its trip over, is not there any more: see "a connection lost")
@@ -1816,7 +1822,10 @@ function drawLineVehicles(paper) {
     if (ended && node === document.activeElement) panel.focus({ preventScroll: true });
     node.hidden = ended;
     if (ended) continue;
-    const { x, y, standing } = vehicleSpot(track, at);
+    const spot = vehicleSpot(track, at);
+    const { y, standing } = spot;
+    // (a track counts from the side the list begins at: right to left, from the right edge of this canvas)
+    const x = mirrored ? LINE_CANVAS_PX - spot.x : spot.x;
     // (its button where it is: one that cannot be seen may well go by whole pixels)
     node.style.transform = `translate(${x.toFixed(1)}px, ${y.toFixed(1)}px)`;
     const v = { mode: node.dataset.mode, delay: node.dataset.late === undefined ? null : Number(node.dataset.late), label: node.dataset.label };
@@ -1826,8 +1835,8 @@ function drawLineVehicles(paper) {
     if (!standing) drawArrow(x, y, VEHICLE_R, Math.PI / 2, c);
     drawDisc(x, y, VEHICLE_R, v, true, c);
     const flag = node.dataset.flag === 'none' ? null : flagOf(v, live);
-    const width = flag ? drawFlag(x + VEHICLE_R * 0.55, y - VEHICLE_R - 5, flag, c) : 0;
-    const there = chosen !== undefined && Math.abs(x - chosen[0]) < 0.05 && Math.abs(y - chosen[1]) < 0.05;
+    const width = flag ? drawFlag(x + VEHICLE_R * 0.55, y - VEHICLE_R - 5, flag, c, mirrored) : 0;
+    const there = chosen !== undefined && Math.abs(spot.x - chosen[0]) < 0.05 && Math.abs(y - chosen[1]) < 0.05;
     if (node.matches(':focus-visible')) focused = { x, y, width, there };
     else if (there) atChosen = true;
   }
@@ -1835,7 +1844,8 @@ function drawLineVehicles(paper) {
   paper.closest('.line-body')?.querySelector('.stop-ring')?.classList.toggle('over', atChosen && !focused?.there);
   // the ring of the keyboard focus last, over all of them: round the whole of its vehicle, its flag inside
   if (focused) {
-    roundedBox(focused.x - 19, focused.y - 21, 19 + Math.max(19, VEHICLE_R * 0.55 + focused.width + 3), 42, 10, c);
+    const reach = Math.max(19, VEHICLE_R * 0.55 + focused.width + 3);
+    roundedBox(mirrored ? focused.x - reach : focused.x - 19, focused.y - 21, 19 + reach, 42, 10, c);
     c.strokeStyle = colors.accent;
     c.lineWidth = 2;
     c.stroke();
@@ -1896,10 +1906,10 @@ const tooltip = $('tooltip');
 
 function vehicleSummary(v) {
   // (in the smallest form a vehicle comes without where it goes)
-  const parts = [v.to ? `${v.line} → ${v.to}` : v.line];
+  const parts = [v.to ? towards(v.to, v.line) : v.line];
   if (v.delay === null) parts.push(t('delay.none'));
   else parts.push(Math.round(v.delay / 60) === 0 ? t('delay.onTime') : t('delay.minutes', { delay: delayText(v.delay) }));
-  return parts.join(' · ');
+  return isolatedEach(parts, language).join(' · ');
 }
 
 // The tooltip names what the pointer hovers over. A finger does not hover
@@ -2106,7 +2116,9 @@ function crossRoom() {
     const covered = !free.fits || viewSize.y - padding.top - padding.bottom < CROSS_PX;
     return { padding, covered };
   }
-  if (free.fits && (!bubble || bubble.right < viewSize.x - free.padding.right - (viewSize.x - free.padding.left - free.padding.right) / 2 - CROSS_PX)) {
+  // (the settings beside the card, on the side of the map's middle: clear of the crosshair there)
+  const middle = free.padding.left + (viewSize.x - free.padding.left - free.padding.right) / 2;
+  if (free.fits && (!bubble || (rightToLeft() ? bubble.left > middle + CROSS_PX : bubble.right < middle - CROSS_PX))) {
     const padding = aboveKeys(free.padding);
     if (viewSize.y - padding.top - padding.bottom >= CROSS_PX) return { padding, covered: false };
   }
@@ -2115,13 +2127,16 @@ function crossRoom() {
   const over = !panel.hidden && state.board === null;
   const buttons = [...map.getContainer().querySelectorAll('.maplibregl-ctrl-bottom-right > .maplibregl-ctrl-group')]
     .map((group) => group.getBoundingClientRect()).filter((box) => box.width > 0);
-  const right = Math.min(over ? panel.getBoundingClientRect().left : viewSize.x, ...buttons.map((box) => box.left));
+  // (the details on the side they lie on: right to left that of the map's left edge, its buttons on the right all the same)
+  const details = over ? panel.getBoundingClientRect() : null;
+  const left = details && rightToLeft() ? details.right : 0;
+  const right = Math.min(details && !rightToLeft() ? details.left : viewSize.x, ...buttons.map((box) => box.left));
   const credits = map.getContainer().querySelector('.maplibregl-ctrl-attrib')?.getBoundingClientRect();
   const bottom = Math.min(credits && credits.width > 0 && credits.left < right ? credits.top : viewSize.y, keys ?? Infinity);
-  const padding = { top: Math.max(card.bottom, bubble?.bottom ?? 0) + margin, bottom: viewSize.y - bottom + margin, left: margin, right: viewSize.x - right + margin };
+  const padding = { top: Math.max(card.bottom, bubble?.bottom ?? 0) + margin, bottom: viewSize.y - bottom + margin, left: left + margin, right: viewSize.x - right + margin };
   const width = viewSize.x - padding.left - padding.right;
   const height = viewSize.y - padding.top - padding.bottom;
-  if (width >= CROSS_PX && height >= CROSS_PX) return { padding, covered: false, edges: { top: padding.top - margin, bottom, left: 0, right } };
+  if (width >= CROSS_PX && height >= CROSS_PX) return { padding, covered: false, edges: { top: padding.top - margin, bottom, left, right } };
   return { padding: width > 0 && height > 0 ? padding : free.padding, covered: true };
 }
 // (how big the crosshair is, style.css)
@@ -2867,7 +2882,7 @@ function listResults(towns, lines, stops, note = '', nearby = []) {
     // Below its name the town it is in, where the name does not say that: in small print, as a line has who runs it.
     // (what the dots say, for a screen reader: they say it by colour)
     const kinds = stop.modes.map((mode) => t(`mode.${mode}`));
-    return option(() => chooseStop(stop), { class: stop.town ? 'in-town' : '', title: kinds.join(', ') }, [el('span', { class: 'dots' }, dots), nameInTown(stop.name, stop.town), el('span', { class: 'spoken', text: `, ${formatList(kinds)}` }), ...heart(stop)]);
+    return option(() => chooseStop(stop), { class: stop.town ? 'in-town' : '', title: kinds.join(commaOf(language)) }, [el('span', { class: 'dots' }, dots), nameInTown(stop.name, stop.town), el('span', { class: 'spoken', text: `${commaOf(language)}${formatList(kinds)}` }), ...heart(stop)]);
   };
   const stopRows = stops.map(stopRow);
   const nearbyRows = nearby.map(stopRow);
@@ -3057,10 +3072,12 @@ function swipeFromArrow(arrow, row) {
  */
 function watchChipRow(row, back, on) {
   const update = () => {
-    back.hidden = row.scrollLeft < 1;
-    on.hidden = row.scrollLeft + row.clientWidth > row.scrollWidth - 1;
+    // (right to left a row scrolls from 0 down to below zero)
+    const along = Math.abs(row.scrollLeft);
+    back.hidden = along < 1;
+    on.hidden = along + row.clientWidth > row.scrollWidth - 1;
   };
-  const move = (direction) => row.scrollBy({ left: direction * row.clientWidth * 0.7 });
+  const move = (direction) => row.scrollBy({ left: direction * row.clientWidth * 0.7 * (rightToLeft() ? -1 : 1) });
   back.addEventListener('click', () => move(-1));
   on.addEventListener('click', () => move(1));
   row.addEventListener('scroll', update, { passive: true });
@@ -3275,24 +3292,27 @@ function placeBubble(bubble, { settled = false } = {}) {
     if (sheetTop - bubble.offsetHeight - 10 < $('controls').getBoundingClientRect().bottom + 10) bubble.style.visibility = 'hidden';
   } else {
     // (in the middle of the map the details leave, beside its buttons there)
-    besideMapButtons(bubble, details.left);
+    besideMapButtons(bubble, details);
   }
 }
 
 /**
  * A bubble beside the map's buttons in their corner: in the middle of the
  * room they leave, so that none of them is covered while it is up; on a wide
- * screen also left of the details (`edge`). Buttons hidden for want of room
- * leave theirs (clearMapButtons).
+ * screen also clear of the details, which lie on the other side of the map
+ * where the page reads right to left, its buttons staying in their corner.
+ * Buttons hidden for want of room leave theirs (clearMapButtons).
  */
-function besideMapButtons(bubble, edge = Infinity) {
+function besideMapButtons(bubble, details = null) {
   const buttons = [...map.getContainer().querySelectorAll('.maplibregl-ctrl-bottom-right > .maplibregl-ctrl-group')]
     .filter((group) => group.style.visibility !== 'hidden')
     .map((group) => group.getBoundingClientRect()).filter((box) => box.width > 0);
-  if (!buttons.length && edge === Infinity) return;
-  const right = Math.min(edge, ...buttons.map((box) => box.left)) - 10;
-  bubble.style.left = `${(16 + right) / 2}px`;
-  bubble.style.maxWidth = `${right - 16}px`;
+  if (!buttons.length && !details) return;
+  const mirrored = rightToLeft();
+  const left = (details && mirrored ? details.right : 0) + 16;
+  const right = Math.min(details && !mirrored ? details.left : viewSize.x, ...buttons.map((box) => box.left)) - 10;
+  bubble.style.left = `${(left + right) / 2}px`;
+  bubble.style.maxWidth = `${right - left}px`;
 }
 
 // The map without a connection: its vehicles leave it as their known ways
@@ -3390,9 +3410,6 @@ function showOffer(code, text, switchText, neverText, closeText) {
   new ResizeObserver(() => offer.hidden || placeBubble(offer)).observe(panel);
   addEventListener('resize', () => offer.hidden || placeBubble(offer));
 }
-
-/** The direction of a language's script: Arabic, Persian, Urdu, Hebrew and Yiddish right to left. */
-const textDirection = (code) => (['ar', 'fa', 'he', 'ur', 'yi'].includes(code) ? 'rtl' : 'ltr');
 
 function hideOffer() {
   // (the keyboard where it can go on: the bubble had it as the first stop of the page)
@@ -4171,7 +4188,7 @@ const stopPathOf = ({ name, lat, lon }) => stopPathAt(name, Math.round(lat * 1e5
  */
 function showAddress(path, title, from = null, fromStop = null) {
   if (path !== servedAt) {
-    document.title = title ?? pageTitle;
+    document.title = withPlainMarks(title ?? pageTitle);
     servedAt = null;
   }
   if (path === here()) return;
@@ -4378,7 +4395,7 @@ async function openFavouriteStop(stop) {
 /** Says that the address names nothing now, and looks for the name in it. */
 function addressGone(path) {
   state.selection = null;
-  document.title = pageTitle;
+  document.title = withPlainMarks(pageTitle);
   markLost(false);
   $('panel-said').textContent = '';
   askDraw(); // (what was open goes from the map with the next frame)
@@ -5016,7 +5033,7 @@ function sheetName() {
   const { type, data } = state.selection ?? {};
   if (!data) return null;
   const said = (name, mode) => { const words = lineSaid(name, mode); return `${words.charAt(0).toUpperCase()}${words.slice(1)}`; };
-  if (type === 'trip') return `${said(data.line, data.mode)} → ${data.to}`;
+  if (type === 'trip') return towards(data.to, said(data.line, data.mode));
   return type === 'line' ? said(data.name, data.mode) : data.name ?? null;
 }
 
@@ -5267,7 +5284,7 @@ function focusRetry() {
  */
 function failedHead({ type, hint, line, at }) {
   const kind = (mode) => t(`mode.${DRAW_ORDER.includes(mode) ? mode : 'other'}`);
-  if (type === 'trip' && hint) return el('div', { class: 'panel-head' }, [el('h1', {}, [badge(hint.line, hint.mode), el('span', { text: `→ ${hint.to}` })])]);
+  if (type === 'trip' && hint) return el('div', { class: 'panel-head' }, [el('h1', {}, [badge(hint.line, hint.mode), el('span', { text: towards(hint.to) })])]);
   if (type === 'line' && line) return el('div', { class: 'panel-head' }, [el('h1', {}, [badge(line.name, line.mode), el('span', { text: kind(line.mode) })])]);
   const name = hint?.name ?? at?.name;
   if (type === 'station' && name) return toDom(panelHeadOf(stopHeading(name, hint?.town ?? at?.town ?? null)));
@@ -5778,7 +5795,7 @@ panel.addEventListener('pointerleave', hideSaid);
  */
 function notesList(notes, own = [], alert = null) {
   // (the text in a part of its own: that is what a narrow screen cuts where it does not fit)
-  const line = (text, name) => el('li', name ? { class: name } : {}, [el('span', { text })]);
+  const line = (text, name) => el('li', { ...(name ? { class: name } : {}), ...asWritten() }, [el('span', { text })]);
   const warning = (item) => {
     item.classList.add('warning');
     item.querySelector('span').prepend(warningSign());
@@ -5798,13 +5815,19 @@ function notesList(notes, own = [], alert = null) {
   const urgent = notes.filter(warns);
   const ordered = [...urgent, ...notes.filter((note) => !warns(note))];
   const listed = ordered.map((note) => {
-    const item = isLong(note) ? el('li', {}, [noteButton(note.title ?? note.text, [note])]) : line(note.text);
+    const item = isLong(note) ? el('li', asWritten(), [noteButton(note.title ?? note.text, [note])]) : line(note.text);
     return warns(note) ? warning(item) : item;
   });
   if (!first.length && !items.length && !listed.length) return '';
   const list = el('ul', { class: 'notes' }, [...first, ...listed.slice(0, urgent.length), ...items, ...listed.slice(urgent.length)]);
   notesToFit = { list, items: [...first, ...items], listed, notes: ordered };
   return list;
+}
+
+// (what an operator wrote keeps the direction it is written in on a page that reads right to left: a German note reads
+// from the left, its end not cut off and its full stop at its end)
+function asWritten() {
+  return rightToLeft() ? { dir: 'auto' } : {};
 }
 
 let notesToFit = null; // the list notesList() made last, until it is in the page: { list, items, listed, notes }
@@ -5863,8 +5886,9 @@ function fitNotes() {
  * @param listedMode the mode the timetable data gives it, where that is another than the one shown
  */
 function tripSub(mode, rest, listedMode) {
-  if (!listedMode) return el('p', { class: 'sub', text: [mode, rest].filter(Boolean).join(' · ') });
-  const sub = el('p', { class: 'sub' }, [mode, toDom(kindInfo({ modes: [listedMode], partly: false }, drawing())), rest ? ` · ${rest}` : '']);
+  const [kind, ...others] = isolatedEach([mode, ...rest.filter(Boolean)], language);
+  if (!listedMode) return el('p', { class: 'sub', text: [kind, ...others].join(' · ') });
+  const sub = el('p', { class: 'sub' }, [kind, toDom(kindInfo({ modes: [listedMode], partly: false }, drawing())), ...others.map((part) => ` · ${part}`)]);
   armKindInfo(sub, { modes: [listedMode], partly: false });
   return sub;
 }
@@ -5913,7 +5937,7 @@ function showNotes(notes, heading, from) {
     // (the headline of a single note is that of the dialog)
     const parts = [...(note.title !== null && heading ? [el('h3', { text: note.title })] : []), el('p', { text: note.text })];
     if (warns(note)) parts[0].prepend(warningSign());
-    return el('div', { class: 'note-full' }, parts);
+    return el('div', { class: 'note-full', ...asWritten() }, parts);
   }));
   notesFrom = [...panelHead.querySelectorAll('button')].indexOf(from);
   openOnText(notesDialog);
@@ -5949,7 +5973,8 @@ function placeTripVehicle(trip, vehicle, body, stopRows) {
     if (stop.skipped || !row) return;
     const rail = row.querySelector('.rail').getBoundingClientRect();
     const r = row.getBoundingClientRect();
-    const x = Math.round((rail.left + rail.width / 2 - box.left) * 10) / 10;
+    // (counted from the side the list begins at, as a line's tracks are)
+    const x = Math.round((rightToLeft() ? box.right - rail.left - rail.width / 2 : rail.left + rail.width / 2 - box.left) * 10) / 10;
     const y = Math.round((r.top + r.height / 2 - box.top) * 10) / 10;
     const arrives = stop.arr + (stop.arrDelay ?? stop.depDelay ?? 0);
     const leaves = Math.max(arrives, stop.dep + (stop.depDelay ?? stop.arrDelay ?? 0));
@@ -6008,7 +6033,7 @@ function renderTrip(trip, scrollToNext) {
     const favourite = favouriteStop(stop);
     if (!towns[i] && tallMark(stop.modes, trip.mode)) classes.push('tall');
     const chosen = i === chosenAt;
-    const said = `${stopSaid(stop.modes, trip.mode, favourite, drawn)}${isNext ? `, ${t('trip.next')}` : ''}${chosen ? `, ${t('stop.chosen')}` : ''}`;
+    const said = `${stopSaid(stop.modes, trip.mode, favourite, drawn)}${isNext ? `${commaOf(language)}${t('trip.next')}` : ''}${chosen ? `${commaOf(language)}${t('stop.chosen')}` : ''}`;
     const row = el('button', { type: 'button', class: classes.join(' '), data: { station: stop.station, call: i }, onclick: () => select('station', stop.station, { from: sheetName(), hint: { name: stop.name }, call: i }) }, [
       el('span', { class: 'rail' }, [toDom(stopSign(stop.modes, trip.mode, favourite)), ...(chosen ? [toDom(stopRing(stop.modes, trip.mode, favourite, `ring-${i}`))] : [])]),
       el('span', { class: 'time', text: formatTime(leavesAt({ planned, delay })) }),
@@ -6048,8 +6073,8 @@ function renderTrip(trip, scrollToNext) {
   fillPanel(
     [
       el('div', { class: 'panel-head' }, [
-        el('h1', {}, [toLine, el('span', { text: `→ ${to}` })]),
-        tripSub(mode, [trip.agency, othersData || heldShown() ? null : trip.realtime ? t('trip.realtime') : t('trip.scheduleOnly')].filter(Boolean).join(' · '), trip.listedMode),
+        el('h1', {}, [toLine, el('span', { text: towards(to) })]),
+        tripSub(mode, [trip.agency, othersData || heldShown() ? null : trip.realtime ? t('trip.realtime') : t('trip.scheduleOnly')], trip.listedMode),
         notesList(trip.notes, source, trip.cancelled ? t('trip.cancelled') : null),
       ]),
     ],
@@ -6128,14 +6153,17 @@ function freeMap(sheetHeight) {
   // (a sheet given a height is on its way there, gliding: where it comes to rest)
   const sized = panel.classList.contains('sized') && parseFloat(panel.style.height);
   const sheetTop = !over ? viewSize.y : sheetHeight !== undefined ? viewSize.y - sheetHeight : sized ? viewSize.y - sized : Math.min(details.top, viewSize.y * (1 - SHEET_MIDDLE));
-  const right = !over ? margin : viewSize.x - details.left + margin;
+  // (the side of the details, and of the card across from them: right to left the card is on the right)
+  const mirrored = rightToLeft();
+  const beside = !over ? margin : (mirrored ? details.right : viewSize.x - details.left) + margin;
+  const pastCard = (mirrored ? viewSize.x - card.left : card.right) + margin;
   const fits = (room) => room.left + room.right < 0.8 * viewSize.x && room.top + room.bottom < 0.8 * viewSize.y;
   const padding = narrowScreen.matches
     ? { top: card.bottom + margin, bottom: viewSize.y - sheetTop + margin, left: margin, right: margin }
-    : { top: margin, bottom: margin, left: card.right + margin, right };
+    : { top: margin, bottom: margin, left: mirrored ? beside : pastCard, right: mirrored ? pastCard : beside };
   if (fits(padding)) return { padding, fits: true };
   // (a map too narrow beside the card, such as beside a board: below the card then)
-  const below = { top: card.bottom + margin, bottom: margin, left: margin, right };
+  const below = { top: card.bottom + margin, bottom: margin, left: mirrored ? beside : margin, right: mirrored ? margin : beside };
   if (!narrowScreen.matches && fits(below)) return { padding: below, fits: true };
   // (in a window too small for that, better covered in part than not shown)
   return { padding: { top: margin, bottom: margin, left: margin, right: margin }, fits: false };
@@ -6492,10 +6520,14 @@ function clearMapButtons() {
   };
   const moved = { x: 0, y: 0 };
   let out = false;
-  if (!panel.hidden && state.board === null) {
+  // (as far from what they give way to as from the edge of the screen)
+  const gap = Math.max(0, window.innerWidth - at.right);
+  if (rightToLeft() && !narrowScreen.matches) {
+    // (right to left their corner is under the header card, a tall one in a low window, and the details are across the map)
+    const card = $('controls').getBoundingClientRect();
+    if (state.board === null && card.height && card.bottom > at.top && card.left < at.right) moved.x = card.left - gap - at.right;
+  } else if (!panel.hidden && state.board === null) {
     const details = panel.getBoundingClientRect();
-    // (as far from the details as from the edge of the screen)
-    const gap = Math.max(0, window.innerWidth - at.right);
     if (!narrowScreen.matches) {
       if (details.bottom > at.top && details.left < at.right) moved.x = details.left - gap - at.right;
     } else if (details.top < at.bottom) {
@@ -6528,6 +6560,8 @@ const clearing = new ResizeObserver(clearMapButtons);
 clearing.observe(panel);
 // (and their corner: the credits below them fold up once the map is there, which moves the buttons down, #254)
 clearing.observe(map.getContainer().querySelector('.maplibregl-ctrl-bottom-right'));
+// (right to left it is the header card that lies over their corner, as high as it is unfolded)
+if (rightToLeft()) clearing.observe($('controls'));
 map.on('resize', clearMapButtons);
 
 let sheetAtTop = false; // whether the sheet last came to rest at the highest of its heights, up to the card
@@ -6754,7 +6788,9 @@ function renderBoard(board) {
     ...blockRows(block, times, i === 0),
   ]));
   const credits = el('p', { class: 'board-credits' });
-  credits.innerHTML = [escapeHtml(siteName), boardCredits].filter(Boolean).join(' · ');
+  // (right to left each part on its own: the name by its letters, the credits as a sentence of the page, whose sources are Latin)
+  const creditParts = [escapeHtml(siteName), boardCredits].filter(Boolean);
+  credits.innerHTML = (textDirection(language) === 'rtl' ? creditParts.map((part, i) => `<bdi${part === boardCredits && i ? ' dir="rtl"' : ''}>${part}</bdi>`) : creditParts).join(' · ');
   const blocksNode = el('div', { class: `board-blocks${columns > 1 ? ' columns' : ''}` }, sections);
   blocksNode.style.setProperty('--columns', columns);
   fillPanel(
@@ -6800,8 +6836,8 @@ function wallLines(block) {
       badge.setAttribute('aria-hidden', 'true');
       return [' ', el('span', { class: 'board-line' }, [
         badge,
-        ...(some ? [el('span', { 'aria-hidden': 'true' }, [el('span', { class: 'arrow', text: '→' }), placesOf(ways)])] : []),
-        el('span', { class: 'spoken', text: `${said}${i < lines.length - 1 ? ',' : ''}` }),
+        ...(some ? [el('span', { 'aria-hidden': 'true' }, [el('span', { class: 'arrow', text: rightToLeft() ? '←' : '→' }), placesOf(ways)])] : []),
+        el('span', { class: 'spoken', text: `${said}${i < lines.length - 1 ? commaOf(language).trim() : ''}` }),
       ])];
     }),
   ]);
@@ -7232,11 +7268,14 @@ function blockHeading(block, index, tag, controls, total) {
   const parts = block.map((entry, i) => {
     // (after the first, a dot before each name: style.css)
     const name = i ? short[i] : names[i];
-    if (!(controls && total > 1)) return el('span', { class: 'stop', text: name });
+    // (right to left a name that ends in a full stop, "Bauernfeindstr.", keeps it: in the heading the dot between names and
+    // the minus stand on its left)
+    const whole = rightToLeft() && /[^\p{L}\p{N}]$/u.test(name) ? '\u200e' : '';
+    if (!(controls && total > 1)) return el('span', { class: 'stop', text: `${name}${whole}` });
     // (its minus goes with its last letter: it stays on the line of the name it takes away)
     const letters = [...name];
     const minus = control(mdiMinusCircleOutline, t('board.remove', { stop: names[i] }), `remove:${entry.path}`, () => removeBoardStop(entry.path), 'remove');
-    return el('span', { class: 'stop' }, [letters.slice(0, -1).join(''), el('span', { class: 'end' }, [letters.at(-1), minus])]);
+    return el('span', { class: 'stop' }, [letters.slice(0, -1).join(''), el('span', { class: 'end' }, [`${letters.at(-1)}${whole}`, minus])]);
   });
   const heading = el(tag, { class: 'board-heading' }, parts);
   if (block.length > 1 || controls) heading.setAttribute('aria-label', formatList(names));
@@ -7424,7 +7463,9 @@ function endAdding() {
   });
   sheetHandle.addEventListener('pointermove', (event) => {
     if (event.pointerId !== drag) return;
-    const share = boardShare(100 * (upright.matches ? 1 - event.clientY / innerHeight : 1 - event.clientX / innerWidth));
+    // (the board lies on the left of the map where the page reads right to left)
+    const across = rightToLeft() ? event.clientX / innerWidth : 1 - event.clientX / innerWidth;
+    const share = boardShare(100 * (upright.matches ? 1 - event.clientY / innerHeight : across));
     if (share !== state.board) setBoard(share, false);
   });
   const end = (event) => {
@@ -7436,7 +7477,9 @@ function endAdding() {
   sheetHandle.addEventListener('pointerup', end);
   sheetHandle.addEventListener('pointercancel', end);
   sheetHandle.addEventListener('keydown', (event) => {
-    const by = { ArrowLeft: 5, ArrowUp: 5, ArrowRight: -5, ArrowDown: -5 }[event.key];
+    // (the arrow towards the map makes the board larger: to the right where it lies on the left)
+    const towardsMap = rightToLeft() && !upright.matches ? -5 : 5;
+    const by = { ArrowLeft: towardsMap, ArrowUp: 5, ArrowRight: -towardsMap, ArrowDown: -5 }[event.key];
     if (state.board === null || !by) return;
     event.preventDefault();
     const larger = by > 0;
@@ -7538,8 +7581,8 @@ function showArea(area, about) {
   // the instance, now, see takeSent)
   if (!here() || sentInAnother()) {
     const open = state.selection;
-    document.title = here() && open?.data && !open.left && open.path === here() ? detailsTitle(open) : pageTitle;
-    document.querySelector('meta[name="description"]').content = area.siteDescription[language] ?? page.description;
+    document.title = withPlainMarks(here() && open?.data && !open.left && open.path === here() ? detailsTitle(open) : pageTitle);
+    document.querySelector('meta[name="description"]').content = withPlainMarks(area.siteDescription[language] ?? page.description);
   }
 
   const [south, west, north, east] = area.bbox;
@@ -7582,10 +7625,12 @@ function showArea(area, about) {
   // The version goes into one credit with the data: MapLibre puts the credits
   // in the order of their length, and this way the version is always the last
   // thing in the corner, with a marker or without.
-  const data = [`${t('attribution.data')} ${area.attribution.data}`, versionCredit(about)].filter(Boolean).join(' | ');
+  // (the words kept whole among the Latin names of the credits, its colon at their end: the map's corner stays left to right)
+  const dataSaid = rightToLeft() ? `<bdi>${escapeHtml(t('attribution.data'))}</bdi>` : t('attribution.data');
+  const data = [`${dataSaid} ${area.attribution.data}`, versionCredit(about)].filter(Boolean).join(' | ');
   const credits = [area.attribution.map, data].filter(Boolean);
   // (where a board takes all of the screen, it names the data itself: the map is not there)
-  boardCredits = `${t('attribution.data')} ${area.attribution.data}`;
+  boardCredits = `${dataSaid} ${area.attribution.data}`;
   // (the credits first: of the controls in a bottom corner, the one added last is on top; once)
   if (!again) {
     map.addControl(new AttributionControl({ customAttribution: credits }), 'bottom-right');
@@ -8001,7 +8046,7 @@ function init() {
   document.documentElement.style.setProperty('--clock-chars', Math.max(...hours.map((text) => clockOf(text).length)));
   // (and one for the minutes until a departure leaves, up to an hour, and the time of day in their place beyond it)
   const minutes = [t('departures.now'), t('departures.minutes', { count: MINUTES_MAX }), ...hours];
-  document.documentElement.style.setProperty('--minutes-chars', Math.max(...minutes.map((text) => text.length)));
+  document.documentElement.style.setProperty('--minutes-chars', Math.max(...minutes.map((text) => withoutIsolates(text).length)));
   buildControls();
   // (the map measured before anything is put on it: the details of the page's address below are placed by its size, as
   // the one tip above their sheet)

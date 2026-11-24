@@ -59,6 +59,13 @@
   --safe-right: env(safe-area-inset-right, 0px);
   --safe-bottom: env(safe-area-inset-bottom, 0px);
   --safe-left: env(safe-area-inset-left, 0px);
+  /* (the two sides as the page reads: where it begins and where it ends, the other way round right to left) */
+  --safe-start: var(--safe-left);
+  --safe-end: var(--safe-right);
+}
+:root[dir="rtl"] {
+  --safe-start: var(--safe-right);
+  --safe-end: var(--safe-left);
 }
 
 :root[data-theme="dark"] {
@@ -147,7 +154,7 @@ button { font: inherit; color: inherit; }
   /* (above the details: on a narrow screen they may reach up to it, and what hangs at it goes over them) */
   z-index: 1001;
   top: calc(var(--gap) + var(--safe-top));
-  left: calc(var(--gap) + var(--safe-left));
+  inset-inline-start: calc(var(--gap) + var(--safe-start));
   /* (U-Bahn, tram and bus in one row of chips, also with four-digit numbers) */
   width: 360px;
   padding: 12px 14px;
@@ -230,7 +237,7 @@ button { font: inherit; color: inherit; }
   position: absolute;
   z-index: 3;
   top: 46px;
-  right: 6px;
+  inset-inline-end: 6px;
   width: 236px;
   padding: 2px 12px 12px;
   border: 1px solid var(--border);
@@ -243,7 +250,7 @@ button { font: inherit; color: inherit; }
   content: "";
   position: absolute;
   top: -7px;
-  right: 16px;
+  inset-inline-end: 16px;
   width: 12px;
   height: 12px;
   border: solid var(--border);
@@ -255,8 +262,10 @@ button { font: inherit; color: inherit; }
    what the card shows, its top level with the card's and its tip pointing at
    the gear from the left. (On a narrow one the card takes the width.) */
 @media (min-width: 721px) {
-  .bubble { top: 0; right: auto; left: calc(100% + 10px); }
-  .bubble::before { top: 18px; right: auto; left: -7px; border-width: 0 0 1px 1px; }
+  .bubble { top: 0; inset-inline-end: auto; inset-inline-start: calc(100% + 10px); }
+  .bubble::before { top: 18px; inset-inline-end: auto; inset-inline-start: -7px; border-width: 0 0 1px 1px; }
+  /* (its two edges that show, on the side it points to: turned by 45 degrees they are not the mirror of each other) */
+  :root[dir="rtl"] .bubble::before { border-width: 1px 1px 0 0; }
 }
 /* A setting: what it is called, and under it the choice. */
 .setting { display: grid; gap: 4px; margin-top: 10px; }
@@ -271,7 +280,7 @@ button { font: inherit; color: inherit; }
   border-radius: 8px;
   background: var(--bg);
   font-size: 13px;
-  text-align: left;
+  text-align: start;
   cursor: pointer;
 }
 /* The language in use: a row that opens the list of languages (#392), with the sign of a language, its own name, where
@@ -280,7 +289,8 @@ button { font: inherit; color: inherit; }
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 6px 6px 6px 8px;
+  padding-block: 6px;
+  padding-inline: 8px 6px;
   border: 1px solid var(--border);
   border-radius: 8px;
   background: var(--bg);
@@ -293,17 +303,17 @@ button { font: inherit; color: inherit; }
 .language-sign, .language-arrow { display: inline-flex; color: var(--text-muted); }
 .language-names { flex: 1; min-width: 0; display: grid; }
 #language-also { color: var(--text-muted); font-size: 12px; }
-.language-arrow:dir(rtl) { transform: scaleX(-1); }
 
 /* ---------- search ---------- */
 
 .search { position: relative; display: flex; gap: 6px; color: var(--text-muted); }
 /* the lens in the field */
-.search-sign { position: absolute; left: 7px; top: calc(50% - 10px); pointer-events: none; }
+.search-sign { position: absolute; inset-inline-start: 7px; top: calc(50% - 10px); pointer-events: none; }
 .search input {
   flex: 1;
   min-width: 0;
-  padding: 6px 8px 6px 31px;
+  padding-block: 6px;
+  padding-inline: 31px 8px;
   border: 1px solid var(--border);
   border-radius: 8px;
   background: var(--bg);
@@ -361,7 +371,7 @@ button { font: inherit; color: inherit; }
 .panel-head h1 .town { flex-basis: 100%; margin-top: -6px; }
 .search-results .badge { flex: none; }
 /* a favourite has a heart at the end of its row (#245) */
-.search-results .favourite { flex: none; margin-left: auto; color: var(--delay-severe); }
+.search-results .favourite { flex: none; margin-inline-start: auto; color: var(--delay-severe); }
 .search-results .favourite .icon { width: 16px; height: 16px; }
 /* the headings of lines and stops, where both were found */
 .search-heading {
@@ -381,7 +391,7 @@ button { font: inherit; color: inherit; }
    and so what it says begins where their names do. */
 .status {
   margin: 0;
-  padding-left: 8px;
+  padding-inline-start: 8px;
   display: flex;
   align-items: center;
   gap: 6px;
@@ -457,7 +467,8 @@ button { font: inherit; color: inherit; }
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  padding: 4px 9px 4px 7px;
+  padding-block: 4px;
+  padding-inline: 7px 9px;
   border: 1px solid var(--border);
   border-radius: 999px;
   background: var(--bg);
@@ -510,9 +521,9 @@ button { font: inherit; color: inherit; }
   background: var(--bg);
   cursor: pointer;
 }
-.segmented button + button { border-left: 0; }
-.segmented button:first-of-type { border-radius: 8px 0 0 8px; }
-.segmented button:last-of-type { border-radius: 0 8px 8px 0; }
+.segmented button + button { border-inline-start: 0; }
+.segmented button:first-of-type { border-start-start-radius: 8px; border-start-end-radius: 0; border-end-end-radius: 0; border-end-start-radius: 8px; }
+.segmented button:last-of-type { border-start-start-radius: 0; border-start-end-radius: 8px; border-end-end-radius: 8px; border-end-start-radius: 0; }
 .segmented button[aria-pressed="true"] {
   background: var(--accent);
   border-color: var(--accent);
@@ -551,7 +562,7 @@ button { font: inherit; color: inherit; }
 .links a:hover, .links a:focus-visible { color: var(--accent); }
 /* a sample of the grey that lies over the map outside the area */
 .swatch.veil {
-  margin-right: 6px;
+  margin-inline-end: 6px;
   vertical-align: -1px;
   border-radius: 3px;
   background: var(--veil);
@@ -584,7 +595,7 @@ button { font: inherit; color: inherit; }
   position: absolute;
   z-index: 2000;
   top: calc(var(--gap) + var(--safe-top));
-  left: calc(var(--gap) + var(--safe-left));
+  inset-inline-start: calc(var(--gap) + var(--safe-start));
   display: inline-flex;
   align-items: center;
   min-height: 44px;
@@ -612,7 +623,7 @@ button:focus-visible, select:focus-visible, .row:focus-visible, .panel:focus-vis
 
 .panel {
   top: calc(var(--gap) + var(--safe-top));
-  right: calc(var(--gap) + var(--safe-right));
+  inset-inline-end: calc(var(--gap) + var(--safe-end));
   width: 340px;
   max-height: calc(100% - 2 * var(--gap) - 24px - var(--safe-top) - var(--safe-bottom));
   display: flex;
@@ -640,7 +651,7 @@ button:focus-visible, select:focus-visible, .row:focus-visible, .panel:focus-vis
   position: absolute;
   z-index: 2;
   top: 8px;
-  right: 8px;
+  inset-inline-end: 8px;
   width: 32px;
   height: 32px;
   display: grid;
@@ -651,10 +662,10 @@ button:focus-visible, select:focus-visible, .row:focus-visible, .panel:focus-vis
   background: var(--bg-subtle);
   cursor: pointer;
 }
-.share { right: 52px; }
-.board-toggle { right: 96px; }
-.heart { right: 96px; }
-.panel.boardable .heart { right: 140px; }
+.share { inset-inline-end: 52px; }
+.board-toggle { inset-inline-end: 96px; }
+.heart { inset-inline-end: 96px; }
+.panel.boardable .heart { inset-inline-end: 140px; }
 .heart.on { color: var(--delay-severe); }
 /* (what says that the address was copied, where there is nothing to share it with: under the button, for a moment; a
    finger goes through it to what it lies on, the buttons above and the switches below) */
@@ -663,7 +674,7 @@ button:focus-visible, select:focus-visible, .row:focus-visible, .panel:focus-vis
   z-index: 3;
   pointer-events: none;
   top: 46px;
-  right: 52px;
+  inset-inline-end: 52px;
   margin: 0;
   padding: 4px 10px;
   border-radius: 999px;
@@ -672,18 +683,18 @@ button:focus-visible, select:focus-visible, .row:focus-visible, .panel:focus-vis
   font-size: 12.5px;
 }
 /* (what says where a favourite is to be found: under the row of buttons, to its edge) */
-.panel .copied.favourited { right: 8px; }
+.panel .copied.favourited { inset-inline-end: 8px; }
 
-.panel-head { padding: 14px 48px 10px 14px; border-bottom: 1px solid var(--border); }
+.panel-head { padding-block: 14px 10px; padding-inline: 14px 48px; border-bottom: 1px solid var(--border); }
 /* The way back to the details these were opened from, above their name (app.js, "the way back"): it keeps clear of the buttons at the top, and of the name below as far as a finger needs (see "room for a finger"). */
-.panel-back { display: inline-flex; align-items: center; gap: 2px; max-width: calc(100% - 128px); margin: -4px 0 16px -6px; padding: 2px 8px 2px 2px; border: 0; border-radius: 999px; background: none; color: var(--accent); font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; }
+.panel-back { display: inline-flex; align-items: center; gap: 2px; max-width: calc(100% - 128px); margin-block: -4px 16px; margin-inline: -6px 0; padding-block: 2px; padding-inline: 2px 8px; border: 0; border-radius: 999px; background: none; color: var(--accent); font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; }
 .panel-back .icon { flex: none; width: 18px; height: 18px; }
 .panel-back span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .panel-back:hover span { text-decoration: underline; }
 /* (the heading beside the two buttons; what is below it is clear of them) */
-.panel.shareable .panel-head h1, .panel.shareable .panel-head h2 { padding-right: 44px; }
-.panel.favourable .panel-head h1, .panel.favourable .panel-head h2 { padding-right: 88px; }
-.panel.boardable .panel-head h1, .panel.boardable .panel-head h2 { padding-right: 132px; }
+.panel.shareable .panel-head h1, .panel.shareable .panel-head h2 { padding-inline-end: 44px; }
+.panel.favourable .panel-head h1, .panel.favourable .panel-head h2 { padding-inline-end: 88px; }
+.panel.boardable .panel-head h1, .panel.boardable .panel-head h2 { padding-inline-end: 132px; }
 /* the main heading of the page while the details are open (#254); a board has h2 */
 .panel-head h1, .panel-head h2 {
   margin: 0;
@@ -699,9 +710,9 @@ button:focus-visible, select:focus-visible, .row:focus-visible, .panel:focus-vis
    a U-Bahn (#358): in the grey of the line below the name, as big as the
    letters beside it; it opens why. Close to its word, in a name nearer than
    the gap between the parts of the name. */
-.kind-info { position: relative; display: inline-grid; place-items: center; width: 1.15em; height: 1.15em; margin: 0 0.1em 0 0.4em; padding: 0; border: 0; border-radius: 50%; background: none; color: var(--text-muted); vertical-align: -0.22em; cursor: pointer; }
+.kind-info { position: relative; display: inline-grid; place-items: center; width: 1.15em; height: 1.15em; margin-block: 0; margin-inline: 0.4em 0.1em; padding: 0; border: 0; border-radius: 50%; background: none; color: var(--text-muted); vertical-align: -0.22em; cursor: pointer; }
 .kind-info .icon { width: 100%; height: 100%; }
-.panel-head h1 .kind-info { margin: 0 0 0 -2px; }
+.panel-head h1 .kind-info { margin-block: 0; margin-inline: -2px 0; }
 .kind-info:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 @media (hover: hover) {
   .kind-info:hover { color: var(--text); }
@@ -730,12 +741,12 @@ button:focus-visible, select:focus-visible, .row:focus-visible, .panel:focus-vis
 /* (out to the edge the rows below end at, as the notes, so that the switch and the chip fit on one line of a wide
    screen too: they may reach under the buttons in the corner, and are lower than a line below a name is, to be clear
    of them with room between; on a board, whose name is higher than the buttons, as the line below it is there) */
-.panel-head .sub.with-choice { margin: 10px -34px 0 0; }
-.board-head .sub.with-choice { margin: 0.1em 0 0; }
+.panel-head .sub.with-choice { margin-block: 10px 0; margin-inline: 0 -34px; }
+.board-head .sub.with-choice { margin-block: 0.1em 0; margin-inline: 0; }
 .choice { display: inline-flex; align-items: center; max-width: 100%; border: 1px solid var(--border); border-radius: 999px; background: var(--bg); color: var(--text); font-size: 0.96em; }
 .choice.chosen { border-color: var(--text); font-weight: 600; }
-.choice-open { display: inline-flex; align-items: center; gap: 0.35em; min-width: 0; padding: 0.2em 0.7em 0.2em 0.55em; border: 0; border-radius: 999px; background: none; color: inherit; font: inherit; cursor: pointer; }
-.choice.chosen .choice-open { padding-right: 0.15em; }
+.choice-open { display: inline-flex; align-items: center; gap: 0.35em; min-width: 0; padding-block: 0.2em; padding-inline: 0.55em 0.7em; border: 0; border-radius: 999px; background: none; color: inherit; font: inherit; cursor: pointer; }
+.choice.chosen .choice-open { padding-inline-end: 0.15em; }
 .choice-open > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .choice .icon { width: 1.1em; height: 1.1em; }
 /* "Tafel": a chip as "Filter" is, which makes the details of a stop its board, with the sign the board has for going back */
@@ -747,16 +758,16 @@ button:focus-visible, select:focus-visible, .row:focus-visible, .panel:focus-vis
 /* (the focus ring around the whole pill, as the badge of a trip has it: the button is only its larger part) */
 .choice-open:focus-visible { outline: none; }
 .choice:has(.choice-open:focus-visible) { outline: 2px solid var(--accent); outline-offset: 2px; }
-.choice-clear { display: grid; place-items: center; width: 1.9em; height: 1.9em; margin-right: 0.15em; padding: 0; border: 0; border-radius: 50%; background: none; color: var(--text-muted); cursor: pointer; }
+.choice-clear { display: grid; place-items: center; width: 1.9em; height: 1.9em; margin-inline-end: 0.15em; padding: 0; border: 0; border-radius: 50%; background: none; color: var(--text-muted); cursor: pointer; }
 
 /* The switch between the next departures of a stop and all its lines
    (#255): two buttons in one pill, as high as the chip beside it, the one
    shown filled as in the switches of the settings. */
 .view-switch { display: inline-flex; font-size: 0.96em; }
 .view-switch button { padding: 0.2em 0.75em; border: 1px solid var(--border); background: var(--bg); color: var(--text); font: inherit; white-space: nowrap; cursor: pointer; }
-.view-switch button + button { border-left: 0; }
-.view-switch button:first-child { border-radius: 999px 0 0 999px; padding-left: 0.9em; }
-.view-switch button:last-child { border-radius: 0 999px 999px 0; padding-right: 0.9em; }
+.view-switch button + button { border-inline-start: 0; }
+.view-switch button:first-child { border-start-start-radius: 999px; border-start-end-radius: 0; border-end-end-radius: 0; border-end-start-radius: 999px; padding-inline-start: 0.9em; }
+.view-switch button:last-child { border-start-start-radius: 0; border-start-end-radius: 999px; border-end-end-radius: 999px; border-end-start-radius: 0; padding-inline-end: 0.9em; }
 .view-switch button[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--bg); font-weight: 600; }
 .view-switch button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 /* (a focus ring in the head above everything else of the details, the buttons in their corner and what they say among it) */
@@ -776,18 +787,18 @@ button:focus-visible, select:focus-visible, .row:focus-visible, .panel:focus-vis
 .choice-line { display: flex; align-items: center; min-height: 30px; }
 .choice-line > .badge { flex: auto; }
 .choice-ways { display: flex; flex-wrap: wrap; gap: 15px 6px; min-width: 0; }
-.choice-list .chip { white-space: normal; text-align: left; }
+.choice-list .chip { white-space: normal; text-align: start; }
 /* What is chosen has a check mark and the colour of what is chosen on the page; the rest is plain, as a tap
    chooses (renderChoice in app.js): not crossed out as a kind switched off in the legend, which hides it. */
 .choice-list .chip[aria-pressed="false"] { color: var(--text); background: var(--bg); }
 .choice-list .chip[aria-pressed="false"] .name { text-decoration: none; }
 .choice-list .chip[aria-pressed="true"] { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 13%, var(--bg)); box-shadow: inset 0 0 0 1px var(--accent); font-weight: 600; }
-.choice-list .chip .check { display: none; width: 18px; height: 18px; margin: 0 -1px 0 -2px; color: var(--accent); }
+.choice-list .chip .check { display: none; width: 18px; height: 18px; margin-block: 0; margin-inline: -2px -1px; color: var(--accent); }
 .choice-list .chip[aria-pressed="true"] .check { display: block; }
 /* (the notes go out to the edge the rows below end at: the button that closes is above them) */
-.panel-head .notes { margin: 8px -34px 0 0; padding: 0; list-style: none; font-size: 12.5px; color: var(--text-muted); }
-.panel-head .notes li { padding-left: 14px; position: relative; }
-.panel-head .notes li::before { content: "•"; position: absolute; left: 3px; }
+.panel-head .notes { margin-block: 8px 0; margin-inline: 0 -34px; padding: 0; list-style: none; font-size: 12.5px; color: var(--text-muted); }
+.panel-head .notes li { padding-inline-start: 14px; position: relative; }
+.panel-head .notes li::before { content: "•"; position: absolute; inset-inline-start: 3px; }
 /* A note that warns, of what is wrong with a trip or a stop right now, has
    the sign of a warning where the others have their bullet, the one the
    status line has (.status .warn), and is as dark as the text of the page.
@@ -797,15 +808,15 @@ button:focus-visible, select:focus-visible, .row:focus-visible, .panel:focus-vis
    its box free below itself, so the box hangs below that line by as much.
    For the sign the text hangs: its first line begins where a bullet would
    be, the lines after it where the text of the other notes begins. */
-.panel-head .notes .warning { padding-left: 0; color: var(--text); }
+.panel-head .notes .warning { padding-inline-start: 0; color: var(--text); }
 .panel-head .notes .warning::before { content: none; }
-.panel-head .notes .warning span { padding-left: 14px; text-indent: -14px; }
+.panel-head .notes .warning span { padding-inline-start: 14px; text-indent: -14px; }
 .panel-head .notes .warning > span { display: block; }
 .panel-head .notes .warning .sign, .note-full .sign, .row .sign { display: inline-block; width: 0.96em; height: 0.96em; vertical-align: -0.12em; color: var(--delay-major-text); }
-.panel-head .notes .warning .sign { margin-right: 2px; }
+.panel-head .notes .warning .sign { margin-inline-end: 2px; }
 /* That the connection is lost (app.js, "a connection lost"): the first note in the head, and what stands in place of
    details that did not load, with the red dot of the status line in the card (.status .dot), as dark as the text. */
-.panel-head .notes .connection .dot, .panel-empty.lost .dot { display: inline-block; width: 10px; height: 10px; margin-right: 6px; border-radius: 50%; background: var(--delay-severe); vertical-align: -0.02em; }
+.panel-head .notes .connection .dot, .panel-empty.lost .dot { display: inline-block; width: 10px; height: 10px; margin-inline-end: 6px; border-radius: 50%; background: var(--delay-severe); vertical-align: -0.02em; }
 .panel-empty.lost { color: var(--text); text-wrap: pretty; }
 /* Where the details say that the connection is lost, the card does not say it as well (app.js, markLost). */
 :root[data-lost] .status[data-state="error"] { display: none; }
@@ -815,21 +826,21 @@ button:focus-visible, select:focus-visible, .row:focus-visible, .panel:focus-vis
 #panel li.stale .delay { color: var(--text-muted); }
 /* (what the row a trip was opened by said of it, below the head of the trip that did not load, its delay grey as the
    list's would be by then: heldRow in app.js) */
-.held-row { padding: 4px 0 0 14px; border-bottom: 1px solid var(--border); }
+.held-row { padding-block: 4px 0; padding-inline: 14px 0; border-bottom: 1px solid var(--border); }
 .held-row .stale .delay { color: var(--text-muted); }
 .when-back { text-wrap: balance; }
 /* On a screen on a wall, read from a distance, as large as the rows of its board. */
 /* It is never cut: where it does not fit one line, it goes on in a second, broken between its parts only ("Stand
    13:37 · keine Verbindung"), the second line beginning where the text of the first does, after the dot (notesList). */
-.panel-head .notes .connection > span { padding-left: 1.28em; text-indent: -1.28em; white-space: normal; overflow: visible; }
+.panel-head .notes .connection > span { padding-inline-start: 1.28em; text-indent: -1.28em; white-space: normal; overflow: visible; }
 .panel-head .notes .connection .part { display: inline; padding: 0; white-space: nowrap; overflow: visible; }
-.panel-head .notes .connection .dot { width: 0.8em; height: 0.8em; margin-right: 0.48em; }
+.panel-head .notes .connection .dot { width: 0.8em; height: 0.8em; margin-inline-end: 0.48em; }
 /* While the page connects at a start without a connection, the dot of the card's "Verbinde …" (.status .dot): grey,
    not the red of a connection lost, which is not known yet (app.js, "a start without a connection"). */
 .panel-head .notes .connection.connecting .dot { background: var(--delay-none); }
 :root[data-display] .board-head .notes .connection { font-size: 1.6em; }
 :root[data-display] .board-head .notes .connection .dot { width: 0.6em; height: 0.6em; }
-:root[data-display] .board-head .notes .connection > span { padding-left: 1.08em; text-indent: -1.08em; }
+:root[data-display] .board-head .notes .connection > span { padding-inline-start: 1.08em; text-indent: -1.08em; }
 /* "Nochmal versuchen" below it, as the chips of the head are, a finger high. */
 .retry { margin: 0 14px 14px; min-height: 44px; padding: 0 18px; border: 1px solid var(--border); border-radius: 999px; background: var(--bg); color: var(--text); font: inherit; font-weight: 600; cursor: pointer; }
 .retry:hover { background: var(--bg-subtle); }
@@ -848,7 +859,7 @@ button:focus-visible, select:focus-visible, .row:focus-visible, .panel:focus-vis
   padding: 0;
   border: 0;
   background: none;
-  text-align: left;
+  text-align: start;
   cursor: pointer;
 }
 .note span {
@@ -861,7 +872,7 @@ button:focus-visible, select:focus-visible, .row:focus-visible, .panel:focus-vis
   overflow-wrap: anywhere;
 }
 /* (the arrow itself, not the box it is drawn in, ends where the rows below do) */
-.note .icon { width: 16px; height: 16px; margin-right: -4px; }
+.note .icon { width: 16px; height: 16px; margin-inline-end: -4px; }
 .note:hover { color: var(--text); }
 .panel-empty { padding: 14px; color: var(--text-muted); margin: 0; }
 
@@ -897,7 +908,7 @@ button:focus-visible, select:focus-visible, .row:focus-visible, .panel:focus-vis
   width: 100%;
   border: 0;
   background: none;
-  text-align: left;
+  text-align: start;
   cursor: pointer;
 }
 .row:hover { background: var(--bg-subtle); }
@@ -945,25 +956,25 @@ button:focus-visible, select:focus-visible, .row:focus-visible, .panel:focus-vis
 .row.on-line.in-town, .row.on-line.tall { height: 44px; }
 .row.on-line > .name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .on-line .rail { position: relative; align-self: stretch; }
-.on-line .rail::before { content: ""; position: absolute; left: 14.5px; top: 0; bottom: 0; width: 3px; background: var(--rail); opacity: 0.85; }
+.on-line .rail::before { content: ""; position: absolute; inset-inline-start: 14.5px; top: 0; bottom: 0; width: 3px; background: var(--rail); opacity: 0.85; }
 .on-line.first > .row .rail::before { top: 50%; }
 .on-line.last > .row .rail::before { bottom: 50%; }
 /* The line beside a branch, not beside one that is apart from it: in the background of each of its rows, over the colour
    a row has under the pointer, as a row of the line keeps its own (a line beside them would be covered by it). */
 .line-stops .branch-part:not(.apart) .row.on-line { background-image: linear-gradient(color-mix(in srgb, var(--rail) 85%, transparent) 0 0); background-repeat: no-repeat; background-position: 28.5px 0; background-size: 3px 100%; }
 .line-stops .branch { position: relative; }
-.line-stops .branch .row.on-line { padding-left: 42px; }
-.line-stops .branch::before, .line-stops .branch::after { content: ""; position: absolute; box-sizing: border-box; left: 28.5px; width: 31px; height: 34px; border: 0 solid var(--rail); opacity: 0.85; }
+.line-stops .branch .row.on-line { padding-inline-start: 42px; }
+.line-stops .branch::before, .line-stops .branch::after { content: ""; position: absolute; box-sizing: border-box; inset-inline-start: 28.5px; width: 31px; height: 34px; border: 0 solid var(--rail); opacity: 0.85; }
 /* (one that leaves curves off the line above its first stop, one that joins curves into it below its last) */
-.line-stops .leaves > .branch::before { top: -16px; border-width: 3px 3px 0 0; border-top-right-radius: 16px; }
-.line-stops .joins > .branch::after { bottom: -16px; border-width: 0 3px 3px 0; border-bottom-right-radius: 16px; }
+.line-stops .leaves > .branch::before { top: -16px; border-block-start-width: 3px; border-inline-end-width: 3px; border-start-end-radius: 16px; }
+.line-stops .joins > .branch::after { bottom: -16px; border-block-end-width: 3px; border-inline-end-width: 3px; border-end-end-radius: 16px; }
 /* The vehicles on it, as the map draws them (lineVehicle in panel.js): in
    the colour of their kind, or of their delay where the map has them so,
    with white edges and the flag of their delay. */
 svg.line-vehicles { position: absolute; z-index: 2; left: 0; top: 0; width: 100%; overflow: visible; pointer-events: none; }
 /* (in the page, drawn on a canvas over the line of the list as the map draws them, which moves them smoothly in
    every browser, each under a button that cannot be seen; drawLineVehicles in app.js, LINE_CANVAS_PX its width) */
-div.line-vehicles { position: absolute; z-index: 2; left: 0; top: 0; bottom: 0; width: 100px; pointer-events: none; }
+div.line-vehicles { position: absolute; z-index: 2; inset-inline-start: 0; top: 0; bottom: 0; width: 100px; pointer-events: none; }
 canvas.line-canvas { display: block; width: 100%; height: 100%; }
 button.line-vehicle { position: absolute; left: -18px; top: -18px; width: 36px; height: 36px; padding: 0; border: 0; border-radius: 50%; background: none; opacity: 0; pointer-events: auto; }
 .line-vehicle { pointer-events: auto; cursor: pointer; --sign: var(--mode-other); }
@@ -996,7 +1007,7 @@ button.line-vehicle { position: absolute; left: -18px; top: -18px; width: 36px; 
 .line-vehicle:focus-visible .ring { stroke: var(--accent); stroke-width: 2; }
 .rows-head { margin: 0; padding: 10px 14px 0; color: var(--text-muted); font-size: 13px; font-weight: 650; }
 /* (where the next day begins in a list of departures: the word, and a line on to the edge) */
-.day-head { display: flex; align-items: center; gap: 8px; padding-right: 14px; }
+.day-head { display: flex; align-items: center; gap: 8px; padding-inline-end: 14px; }
 .day-head::after { content: ""; flex: 1; border-top: 1px solid var(--border); }
 /* The badge at the top of a trip leads to its line (#147): the sign in it
    says so, and under a mouse a ring. A finger has 44 px of height to hit it,
@@ -1012,9 +1023,9 @@ button.line-vehicle { position: absolute; left: -18px; top: -18px; width: 36px; 
   background: none;
   cursor: pointer;
 }
-.to-line .badge { display: inline-flex; align-items: center; padding-right: 2px; }
+.to-line .badge { display: inline-flex; align-items: center; padding-inline-end: 2px; }
 /* (the shape has room on both sides in its box: closer to the name, as far from the edge as the name is) */
-.to-line .icon { width: 16px; height: 16px; margin: 0 -1px 0 -2px; }
+.to-line .icon { width: 16px; height: 16px; margin-block: 0; margin-inline: -2px -1px; }
 .to-line:focus-visible { outline: none; }
 .to-line:focus-visible .badge { outline: 2px solid var(--accent); outline-offset: 2px; }
 @media (hover: hover) {
@@ -1029,15 +1040,15 @@ button.line-vehicle { position: absolute; left: -18px; top: -18px; width: 36px; 
 .line-rows { list-style: none; margin: 0; padding: 4px 0; display: grid; grid-template-columns: max-content minmax(0, 1fr); }
 .line-rows > li { display: grid; grid-column: 1 / -1; grid-template-columns: subgrid; align-items: start; }
 .line-rows > li + li { margin-top: 4px; }
-.line-rows .to-line { justify-self: start; margin: 0; padding: 6px 10px 6px 14px; color: inherit; text-decoration: none; }
+.line-rows .to-line { justify-self: start; margin: 0; padding-block: 6px; padding-inline: 14px 10px; color: inherit; text-decoration: none; }
 .line-rows ul { list-style: none; margin: 0; padding: 0; min-width: 0; }
-.row.departure.by-line { padding-left: 0; grid-template-columns: minmax(0, 1fr) auto; }
+.row.departure.by-line { padding-inline-start: 0; grid-template-columns: minmax(0, 1fr) auto; }
 .row.by-line .day { color: var(--text-muted); white-space: nowrap; }
 .row.departure.by-line.resting { cursor: default; }
 .row.resting:hover { background: none; }
 .row.resting .later { color: var(--text-muted); font-size: 12.5px; white-space: nowrap; text-decoration: none; }
 /* (below each way of a line, how often it leaves here that way now and its last today; after the lines, the towns they go to: #289) */
-.line-facts { margin: -3px 0 0; padding: 0 14px 6px 0; color: var(--text-muted); font-size: 12.5px; }
+.line-facts { margin: -3px 0 0; padding-block: 0 6px; padding-inline: 0 14px; color: var(--text-muted); font-size: 12.5px; }
 .lines-towns { margin: 0; padding: 8px 14px 14px; color: var(--text-muted); font-size: 13px; }
 
 /* The timetable of a line after its stops (#289): of each kind of day two
@@ -1053,7 +1064,7 @@ button.line-vehicle { position: absolute; left: -18px; top: -18px; width: 36px; 
 .timetable-head.pinned { box-shadow: 0 -6px 12px -8px rgb(0 0 0 / 0.25); }
 /* (where the details are too low for it and a stop beside it with its ring, after the stops: app.js) */
 .timetable-head.loose { position: static; }
-.to-timetable { display: flex; align-items: center; justify-content: space-between; gap: 12px; width: 100%; padding: 10px 14px; border: 0; background: none; color: var(--text); font: inherit; text-align: left; cursor: pointer; }
+.to-timetable { display: flex; align-items: center; justify-content: space-between; gap: 12px; width: 100%; padding: 10px 14px; border: 0; background: none; color: var(--text); font: inherit; text-align: start; cursor: pointer; }
 /* (inside its edge: the details scroll and would cut off a ring outside it at their foot) */
 .to-timetable:focus-visible { outline-offset: -2px; }
 /* the way to it for the keyboard, right after the head of a line (panel.js lineHead): its ring on the heading */
@@ -1087,11 +1098,11 @@ summary.days-head .icon { align-self: center; width: 20px; height: 20px; color: 
 /* (its hours as the timetable at a stop has them, #316: the hour, then the minutes, two digits each, a busy hour on two
    lines split evenly; the hour it is now marked in the line's colour, as the rail of its stops) */
 .timetable-days .hour-lines { list-style: none; margin: 2px 0 8px; padding: 0; display: grid; grid-template-columns: minmax(2.4em, max-content) minmax(0, 1fr); column-gap: 14px; font-size: 13px; line-height: 18px; }
-.timetable-days .hour-lines > li { display: grid; grid-column: 1 / -1; grid-template-columns: subgrid; padding: 2px 4px; border-left: 3px solid transparent; border-radius: 0 4px 4px 0; }
-.timetable-days .hour-lines .hh { text-align: right; font-weight: 650; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.timetable-days .hour-lines > li { display: grid; grid-column: 1 / -1; grid-template-columns: subgrid; padding: 2px 4px; border-inline-start: 3px solid transparent; border-start-start-radius: 0; border-start-end-radius: 4px; border-end-end-radius: 4px; border-end-start-radius: 0; }
+.timetable-days .hour-lines .hh { text-align: end; font-weight: 650; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .timetable-days .hour-lines .mm { min-width: 0; font-variant-numeric: tabular-nums; word-spacing: 0.3em; text-wrap: balance; }
 .timetable-days .hour-lines .mm.none { color: var(--text-muted); }
-.timetable-days .hour-lines > li.now { border-left-color: var(--rail); background: var(--bg-subtle); }
+.timetable-days .hour-lines > li.now { border-inline-start-color: var(--rail); background: var(--bg-subtle); }
 .line-timetable .along { margin-top: 6px; padding-top: 12px; border-top: 1px solid var(--border); color: var(--text-muted); font-size: 13px; }
 .line-timetable .along p { margin: 0; }
 .line-timetable .along p + p { margin-top: 2px; }
@@ -1131,7 +1142,7 @@ summary.days-head .icon { align-self: center; width: 20px; height: 20px; color: 
 .row.stop .rail::before {
   content: "";
   position: absolute;
-  left: 14.5px;
+  inset-inline-start: 14.5px;
   top: -6px;
   bottom: -6px;
   width: 3px;
@@ -1144,7 +1155,7 @@ li:last-child > .row.stop .rail::before { bottom: 50%; }
    (stopSign in panel.js, drawStop in app.js): a white pill, or a white heart
    for a favourite, with a dot for each kind that calls there, the same in
    both themes, as on the map. Those passed and those skipped faded. */
-.rail .stop-sign { position: absolute; left: 16px; top: 50%; z-index: 1; overflow: visible; transform: translate(-50%, -50%); }
+.rail .stop-sign { position: absolute; inset-inline-start: 16px; top: 50%; z-index: 1; overflow: visible; transform: translate(-50%, -50%); }
 .stop-sign .edge { fill: #fff; stroke: var(--stop-edge); stroke-width: 1.5px; stroke-linejoin: round; vector-effect: non-scaling-stroke; }
 .stop-sign circle { fill: var(--mode-other); }
 .stop-sign circle[data-mode="subway"] { fill: var(--mode-subway); }
@@ -1159,7 +1170,7 @@ li:last-child > .row.stop .rail::before { bottom: 50%; }
 /* The ring of the stop a trip or a line was opened from (stopRing in panel.js), as the map's of an open stop: in the
    colours of its kinds on white edges, over its mark, not faded where it is passed. Under a vehicle going by, which
    covers it as it covers a mark; over one at that stop (app.js, drawLineVehicles), which would hide it whole. */
-.rail .stop-ring { position: absolute; left: 16px; top: 50%; z-index: 1; overflow: visible; transform: translate(-50%, -50%); pointer-events: none; }
+.rail .stop-ring { position: absolute; inset-inline-start: 16px; top: 50%; z-index: 1; overflow: visible; transform: translate(-50%, -50%); pointer-events: none; }
 .rail .stop-ring.over { z-index: 3; }
 .stop-ring .edges { fill: #fff; }
 .stop-ring .share { fill: var(--mode-other); }
@@ -1265,7 +1276,7 @@ body:has(> .map-keys:not([hidden], .gave-way)) :is(#tip, #offer, #map-note) { vi
 /* The offer of the browser's language (#287), in the look of the tip: its
    line beside an ✕, below them the switch, filled, and the end of the offer,
    quieter. In the bubble's colours, the rings of the keyboard as well. */
-.offer { text-align: start; padding: 12px 12px 10px 14px; }
+.offer { text-align: start; padding-block: 12px 10px; padding-inline: 14px 12px; }
 .offer-sign { display: inline-flex; padding-top: 3px; }
 .offer-head { display: flex; align-items: flex-start; gap: 10px; margin-bottom: 8px; }
 .offer-head p { flex: 1; margin: 0; padding-top: 4px; }
@@ -1273,7 +1284,8 @@ body:has(> .map-keys:not([hidden], .gave-way)) :is(#tip, #offer, #map-note) { vi
   flex: none;
   width: 32px;
   height: 32px;
-  margin: -4px -6px 0 0;
+  margin-block: -4px 0;
+  margin-inline: 0 -6px;
   display: grid;
   place-items: center;
   padding: 0;
@@ -1360,7 +1372,7 @@ body:has(> .map-keys:not([hidden], .gave-way)) :is(#tip, #offer, #map-note) { vi
    button in its corner. */
 .dialog-body:focus-visible { outline: none; }
 .dialog:has(> .dialog-body:focus-visible)::after { content: ""; position: absolute; inset: 0; z-index: 3; border: 2px solid var(--accent); border-radius: inherit; pointer-events: none; }
-.dialog h2 { margin: 0 36px 2px 0; font-size: 16px; font-weight: 650; }
+.dialog h2 { margin-block: 0 2px; margin-inline: 0 36px; font-size: 16px; font-weight: 650; }
 .dialog h3 { margin: 14px 0 3px; font-size: 14px; font-weight: 650; }
 .dialog p { margin: 0; line-height: 1.45; }
 .dialog a { color: var(--accent); }
@@ -1384,7 +1396,7 @@ body:has(> .map-keys:not([hidden], .gave-way)) :is(#tip, #offer, #map-note) { vi
 .note-full p { white-space: pre-line; overflow-wrap: anywhere; }
 .note-full h3 { margin-top: 0; }
 /* (the sign of a note that warns, before its first words: as in the head of the details) */
-.note-full .sign { margin-right: 6px; }
+.note-full .sign { margin-inline-end: 6px; }
 .note-full + .note-full { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border); }
 
 /* ---------- room for a finger ---------- */
@@ -1409,7 +1421,7 @@ body:has(> .map-keys:not([hidden], .gave-way)) :is(#tip, #offer, #map-note) { vi
 .settings-open::after, .search-open::after { inset: -11px -7px -3px; }
 /* (over the room the search field takes for a finger, which begins 2 px above the field: see below) */
 .settings-open, .search-open { z-index: 2; }
-.search-open { margin-right: 6px; }
+.search-open { margin-inline-end: 6px; }
 .search-close::after { inset: -5px; }
 /* (the buttons in the corner of the details and the sheets, 44 px apart) */
 .close::after, .share::after, .board-toggle::after, .heart::after { inset: -6px; }
@@ -1423,7 +1435,7 @@ body:has(> .map-keys:not([hidden], .gave-way)) :is(#tip, #offer, #map-note) { vi
 .language-open::after { left: 0; right: 0; top: min(0px, calc(50% - 22px)); bottom: min(0px, calc(50% - 22px)); }
 /* (the way back: below it the name or the badge of a trip; above it the bar of the sheet, which keeps its stroke in the middle for a finger) */
 .panel-back::after { left: 0; right: 0; top: 0; bottom: -6px; }
-.panel-back::before { left: 0; top: -16px; width: min(100%, calc(50vw - 40px)); height: 16px; }
+.panel-back::before { inset-inline-start: 0; top: -16px; width: min(100%, calc(50vw - 40px)); height: 16px; }
 /* (the chips of the lines to choose, in rows 15 px apart and 6 px side by side) */
 .choice-list .chip { position: relative; }
 .choice-list .chip::after { content: ""; position: absolute; top: calc(50% - 22px); left: -3px; right: -3px; height: 44px; }
@@ -1487,7 +1499,7 @@ body:has(> .map-keys:not([hidden], .gave-way)) :is(#tip, #offer, #map-note) { vi
 
   .controls {
     width: auto;
-    right: calc(var(--gap) + var(--safe-right));
+    inset-inline-end: calc(var(--gap) + var(--safe-end));
     padding: 9px 12px;
     gap: 7px;
   }
@@ -1521,25 +1533,28 @@ body:has(> .map-keys:not([hidden], .gave-way)) :is(#tip, #offer, #map-note) { vi
     z-index: 1;
     top: 0;
     bottom: 2px;
-    right: 0;
+    inset-inline-end: 0;
     width: 60px;
     display: flex;
     align-items: center;
     justify-content: flex-end;
     padding: 0 6px;
     border: 0;
-    border-radius: 0 12px 12px 0;
+    border-start-start-radius: 0; border-start-end-radius: 12px; border-end-end-radius: 12px; border-end-start-radius: 0;
     background: linear-gradient(to right, transparent, var(--bg) 50%);
     /* Only the round button takes the finger: a swipe that begins on the fade still moves the row. */
     pointer-events: none;
   }
   .chips-more.back {
-    right: auto;
-    left: 0;
+    inset-inline-end: auto;
+    inset-inline-start: 0;
     justify-content: flex-start;
-    border-radius: 12px 0 0 12px;
+    border-start-start-radius: 12px; border-start-end-radius: 0; border-end-end-radius: 0; border-end-start-radius: 12px;
     background: linear-gradient(to left, transparent, var(--bg) 50%);
   }
+  /* (the fade towards the end of the row, whichever side that is on) */
+  :root[dir="rtl"] .chips-more { background: linear-gradient(to left, transparent, var(--bg) 50%); }
+  :root[dir="rtl"] .chips-more.back { background: linear-gradient(to right, transparent, var(--bg) 50%); }
   .chips-more span {
     pointer-events: auto;
     /* (a swipe sideways that begins here moves the row: swipeFromArrow in app.js) */
@@ -1606,21 +1621,21 @@ body:has(> .map-keys:not([hidden], .gave-way)) :is(#tip, #offer, #map-note) { vi
      tapped. Beside it the share button and the heart. They sit below the
      bar, not in it: all of the bar is the stroke's, also where a button is
      under the stroke, as the heart of a stop is on a narrow phone. */
-  .panel .close { top: 22px; right: 12px; }
+  .panel .close { top: 22px; inset-inline-end: 12px; }
   /* (so what is at their top has the whole width) */
-  .panel .panel-head { padding-right: 14px; }
-  .panel .panel-head h1, .panel .panel-head h2 { padding-right: 36px; }
-  .panel .share { top: 22px; right: 56px; }
-  .panel .copied { top: 60px; right: 56px; }
-  .panel.shareable .panel-head h1, .panel.shareable .panel-head h2 { padding-right: 80px; }
+  .panel .panel-head { padding-inline-end: 14px; }
+  .panel .panel-head h1, .panel .panel-head h2 { padding-inline-end: 36px; }
+  .panel .share { top: 22px; inset-inline-end: 56px; }
+  .panel .copied { top: 60px; inset-inline-end: 56px; }
+  .panel.shareable .panel-head h1, .panel.shareable .panel-head h2 { padding-inline-end: 80px; }
   /* (the heart before the share button) */
-  .panel .heart { top: 22px; right: 100px; }
+  .panel .heart { top: 22px; inset-inline-end: 100px; }
   /* (for a stop, the button of its board between them) */
-  .panel .board-toggle { top: 22px; right: 100px; }
-  .panel.boardable .heart { right: 144px; }
-  .panel .copied.favourited { top: 60px; right: 12px; }
-  .panel.favourable .panel-head h1, .panel.favourable .panel-head h2 { padding-right: 124px; }
-  .panel.boardable .panel-head h1, .panel.boardable .panel-head h2 { padding-right: 168px; }
+  .panel .board-toggle { top: 22px; inset-inline-end: 100px; }
+  .panel.boardable .heart { inset-inline-end: 144px; }
+  .panel .copied.favourited { top: 60px; inset-inline-end: 12px; }
+  .panel.favourable .panel-head h1, .panel.favourable .panel-head h2 { padding-inline-end: 124px; }
+  .panel.boardable .panel-head h1, .panel.boardable .panel-head h2 { padding-inline-end: 168px; }
   /* (for a finger, see "room for a finger": the buttons from the foot of the bar down, the chips under them, side by side, from there to the departures; on a board, whose bar is a tab over the map, from the edge of the screen) */
   :root:not([data-board]) .panel :is(.close, .share, .board-toggle, .heart)::after { inset: 0 -6px -12px; }
   :root[data-board] .panel :is(.close, .share, .board-toggle, .heart)::after { inset: -12px -6px 0; }
@@ -1628,13 +1643,13 @@ body:has(> .map-keys:not([hidden], .gave-way)) :is(#tip, #offer, #map-note) { vi
   /* (and where they take two lines, as with directions chosen, the second as far below the first as these areas need) */
   .panel-head .sub.with-choice { row-gap: 20px; }
   /* (the cross that shows all lines again is narrow: its area takes the end of the chip it is in, and half the room beside it) */
-  .panel-head .choice-clear::after { left: -15px; right: -6px; }
-  .panel-head .notes, .panel-head .sub.with-choice { margin-right: 0; }
+  .panel-head .choice-clear::after { inset-inline: -15px -6px; }
+  .panel-head .notes, .panel-head .sub.with-choice { margin-inline-end: 0; }
   /* A sheet has little room: every note is one line there, cut where it does
      not fit. app.js makes a button of what is cut, and keeps all notes to a
      few lines (fitNotes). */
   .panel-head .notes span { display: block; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
-  .dialog h2 { margin-right: 0; }
+  .dialog h2 { margin-inline-end: 0; }
   /* (the name level with the buttons beside it, below the bar) */
   .panel .panel-head { padding-top: 10px; }
   /* "How it works" is a sheet from the bottom too, over the details if they
@@ -1660,11 +1675,11 @@ body:has(> .map-keys:not([hidden], .gave-way)) :is(#tip, #offer, #map-note) { vi
 .languages .dialog-body { flex: 1; min-height: 0; display: flex; flex-direction: column; overflow: hidden; padding-bottom: 0; }
 .languages h2 { display: flex; align-items: center; gap: 8px; }
 .languages-search { position: relative; margin: 12px 0 8px; color: var(--text-muted); }
-.languages-search .search-sign { left: auto; inset-inline-start: 9px; }
+.languages-search .search-sign { inset-inline-start: 9px; }
 .languages-search input {
   width: 100%;
   min-height: 44px;
-  padding: 9px 12px 9px 36px;
+  padding-block: 9px;
   padding-inline: 36px 12px;
   border: 1px solid var(--border);
   border-radius: 8px;
@@ -1712,18 +1727,21 @@ body:has(> .map-keys:not([hidden], .gave-way)) :is(#tip, #offer, #map-note) { vi
    map stays behind it as large as the screen, out of sight, and so does the
    header card. */
 :root[data-board=""] #map { right: var(--board); }
+/* (the map keeps its own left and right, dir="ltr": right to left the board lies on its left) */
+:root[dir="rtl"][data-board=""] #map { right: 0; left: var(--board); }
 :root[data-board="alone"] #map,
 :root[data-board="alone"] .controls { visibility: hidden; }
 :root[data-board] .panel {
   top: 0;
-  right: 0;
+  inset-inline-end: 0;
   bottom: 0;
-  left: auto;
+  inset-inline-start: auto;
   width: var(--board);
   height: auto;
   max-height: none;
-  padding: var(--safe-top) var(--safe-right) var(--safe-bottom) 0;
-  border-left: 1px solid var(--border);
+  padding-block: var(--safe-top) var(--safe-bottom);
+  padding-inline: 0 var(--safe-end);
+  border-inline-start: 1px solid var(--border);
   border-radius: 0;
   box-shadow: none;
   overflow: visible;
@@ -1731,18 +1749,20 @@ body:has(> .map-keys:not([hidden], .gave-way)) :is(#tip, #offer, #map-note) { vi
   /* (its type grows with it, see below; "board" for the narrow row: a board of several stops has columns by that name) */
   container: board / size;
 }
-:root[data-board="alone"] .panel { left: 0; width: auto; padding-left: var(--safe-left); border-left: 0; }
+:root[data-board="alone"] .panel { inset-inline-start: 0; width: auto; padding-inline-start: var(--safe-start); border-inline-start: 0; }
 /* (beside the board the header card is as wide as the map leaves room for) */
-:root[data-board=""] .controls { max-width: calc(100% - var(--board) - 2 * var(--gap) - var(--safe-left)); }
+:root[data-board=""] .controls { max-width: calc(100% - var(--board) - 2 * var(--gap) - var(--safe-start)); }
 @media (orientation: portrait) {
   :root[data-board=""] #map { right: 0; bottom: var(--board); }
+  :root[dir="rtl"][data-board=""] #map { left: 0; }
   :root[data-board=""] .panel {
     top: auto;
-    left: 0;
+    inset-inline-start: 0;
     width: auto;
     height: var(--board);
-    padding: 0 var(--safe-right) var(--safe-bottom) var(--safe-left);
-    border-left: 0;
+    padding-block: 0 var(--safe-bottom);
+    padding-inline: var(--safe-start) var(--safe-end);
+    border-inline-start: 0;
     border-top: 1px solid var(--border);
   }
   :root[data-board=""] .controls { max-width: none; }
@@ -1761,7 +1781,7 @@ body:has(> .map-keys:not([hidden], .gave-way)) :is(#tip, #offer, #map-note) { vi
   position: absolute;
   z-index: 3;
   top: calc(50% - 32px);
-  left: -16px;
+  inset-inline-start: -16px;
   width: 32px;
   height: 64px;
   padding: 0;
@@ -1794,11 +1814,11 @@ body:has(> .map-keys:not([hidden], .gave-way)) :is(#tip, #offer, #map-note) { vi
   border: solid var(--text-muted);
   border-width: 0 1px;
 }
-:root[data-board="alone"] .handle { left: 0; }
+:root[data-board="alone"] .handle { inset-inline-start: 0; }
 @media (orientation: portrait) {
   /* (for a finger 44 px high, half over the map and half over the board, its pill on the edge between them; at the top of a
      board alone it reaches down over the name of the stop, which is no button, its pill where it was) */
-  :root[data-board] .handle { top: -22px; left: calc(50% - 32px); width: 64px; height: 44px; cursor: ns-resize; }
+  :root[data-board] .handle { top: -22px; inset-inline-start: calc(50% - 32px); width: 64px; height: 44px; cursor: ns-resize; }
   :root[data-board] .handle::before { top: 15px; left: 10px; width: 44px; height: 14px; }
   :root[data-board] .handle::after { top: 20px; left: 22px; width: 20px; height: 4px; border-width: 1px 0; }
   :root[data-board="alone"] .handle { top: 0; }
@@ -1816,10 +1836,10 @@ body:has(> .map-keys:not([hidden], .gave-way)) :is(#tip, #offer, #map-note) { vi
 :root[data-board] .panel .close,
 :root[data-board] .panel .share,
 :root[data-board] .panel .board-toggle { top: 8px; width: 32px; height: 32px; }
-:root[data-board] .panel .close { right: calc(8px + var(--safe-right)); }
-:root[data-board] .panel .share { right: calc(52px + var(--safe-right)); }
-:root[data-board] .panel .board-toggle { right: calc(96px + var(--safe-right)); }
-:root[data-board] .panel .copied { top: 46px; right: calc(52px + var(--safe-right)); }
+:root[data-board] .panel .close { inset-inline-end: calc(8px + var(--safe-end)); }
+:root[data-board] .panel .share { inset-inline-end: calc(52px + var(--safe-end)); }
+:root[data-board] .panel .board-toggle { inset-inline-end: calc(96px + var(--safe-end)); }
+:root[data-board] .panel .copied { top: 46px; inset-inline-end: calc(52px + var(--safe-end)); }
 
 /* The type of a board grows with it: a share of its height, or of its width
    where that is less, from a little more than the details have to that of a
@@ -1847,7 +1867,7 @@ body:has(> .map-keys:not([hidden], .gave-way)) :is(#tip, #offer, #map-note) { vi
   padding: 0.6em 0.9em 0.3em;
   border-bottom: 0;
 }
-.panel.boardable .board-head h2 { grid-area: title; font-size: 1.3em; padding-right: 122px; }
+.panel.boardable .board-head h2 { grid-area: title; font-size: 1.3em; padding-inline-end: 122px; }
 .board-head .sub { grid-area: sub; margin: 0.1em 0 0; font-size: max(13px, 0.6em); }
 .board-clock { grid-area: clock; margin: 0; font-size: 1.3em; font-weight: 700; font-variant-numeric: tabular-nums; line-height: 1.15; }
 .board-head .notes { grid-area: notes; margin: 0.4em 0 0; font-size: max(12.5px, 0.55em); }
@@ -1862,11 +1882,11 @@ body:has(> .map-keys:not([hidden], .gave-way)) :is(#tip, #offer, #map-note) { vi
 .board-lines > * { word-spacing: normal; }
 .board-lines .board-line { white-space: nowrap; }
 /* (the arrow close to its badge and its place: its glyph has room of its own, and an entry keeps together against the space between entries) */
-.board-lines .board-line > :not(.badge, .spoken) { margin-left: 0.1em; white-space: normal; }
+.board-lines .board-line > :not(.badge, .spoken) { margin-inline-start: 0.1em; white-space: normal; }
 /* (its own line height, so that badges on two lines of it keep apart) */
 .board-lines .badge { font-size: 1em; line-height: 1.25; }
-.board-lines .arrow { margin-right: 0.1em; }
-:root[data-display="fixed"] .panel.boardable .board-head h2 { padding-right: 0; }
+.board-lines .arrow { margin-inline-end: 0.1em; }
+:root[data-display="fixed"] .panel.boardable .board-head h2 { padding-inline-end: 0; }
 
 /* The departures: one grid for all rows, so that the parts of a row begin
    at the same place in each (subgrid): the line, where it goes, a platform,
@@ -1906,7 +1926,7 @@ body:has(> .map-keys:not([hidden], .gave-way)) :is(#tip, #offer, #map-note) { vi
    column; on a narrow one beside its time, below) */
 .board-rows .delay[data-delay="none"] .planned > span { visibility: hidden; }
 .board-rows .delay[data-delay="none"] .unknown-sign { display: none; }
-.board-rows .sign { display: inline-block; width: 0.96em; height: 0.96em; margin-left: 0.2em; vertical-align: -0.12em; color: var(--delay-major-text); }
+.board-rows .sign { display: inline-block; width: 0.96em; height: 0.96em; margin-inline-start: 0.2em; vertical-align: -0.12em; color: var(--delay-major-text); }
 .board-rows .gone { grid-column: 4 / -1; justify-self: end; color: var(--delay-severe-text); font-size: 0.85em; font-weight: 700; }
 /* A narrow board, and one whose rows are fewer than 21 of their type wide
    (#352): the time and the delay below the minutes, a destination on two
@@ -1935,7 +1955,7 @@ body:has(> .map-keys:not([hidden], .gave-way)) :is(#tip, #offer, #map-note) { vi
   .board-rows.times-both .when > .late,
   .board-rows.times-time .when > .delay,
   .board-rows.times-time .when > .late { grid-row: 2; font-size: max(11.5px, 0.7em); }
-  .board-rows.times-both .when > :not(:empty, .at) { margin-left: 0.35em; }
+  .board-rows.times-both .when > :not(:empty, .at) { margin-inline-start: 0.35em; }
   /* (under the minutes, which say when it leaves, a late one has the sum alone,
      "13:36+1": with the time it leaves before it the column would take the
      destinations' room) */
@@ -1962,7 +1982,7 @@ body:has(> .map-keys:not([hidden], .gave-way)) :is(#tip, #offer, #map-note) { vi
   .board-rows.times-both .when > .late,
   .board-rows.times-time .when > .delay,
   .board-rows.times-time .when > .late { grid-row: 2; font-size: max(11.5px, 0.7em); }
-  .board-rows.times-both .when > :not(:empty, .at) { margin-left: 0.35em; }
+  .board-rows.times-both .when > :not(:empty, .at) { margin-inline-start: 0.35em; }
   .board-rows.times-both li:has(.planned > span) .at { display: none; }
   .board-rows .delay[data-delay="none"] .planned > span { visibility: visible; }
   .board-rows .delay[data-delay="none"] .unknown-sign { display: inline; }
@@ -2004,8 +2024,8 @@ body:has(> .map-keys:not([hidden], .gave-way)) :is(#tip, #offer, #map-note) { vi
 .board-block > .panel-empty { padding-left: 0; padding-right: 0; }
 .board-block > .alone { color: var(--text); font-size: 1em; text-wrap: balance; }
 .panel .board-head.columns { grid-template-areas: "notes clock"; min-height: 32px; }
-.panel.boardable .board-head.columns { padding-right: calc(0.9em + 122px); }
-:root[data-display="fixed"] .panel.boardable .board-head.columns { padding-right: 0.9em; }
+.panel.boardable .board-head.columns { padding-inline-end: calc(0.9em + 122px); }
+:root[data-display="fixed"] .panel.boardable .board-head.columns { padding-inline-end: 0.9em; }
 /* The names of its stops, and with the controls a minus after each and the
    button that adds a stop to its list. */
 .board-heading { display: flex; flex-wrap: wrap; align-items: center; column-gap: 0.2em; }
@@ -2014,7 +2034,7 @@ body:has(> .map-keys:not([hidden], .gave-way)) :is(#tip, #offer, #map-note) { vi
 .board-heading .stop ~ .stop::before { content: "·\00a0"; }
 /* (a minus goes with the last letter of its name: never on a line of its own, or in front of the next name) */
 .board-heading .end { white-space: nowrap; }
-.board-heading .end .board-control { margin-left: 0.2em; vertical-align: middle; }
+.board-heading .end .board-control { margin-inline-start: 0.2em; vertical-align: middle; }
 .board-control {
   flex: none;
   display: inline-grid;
@@ -2052,7 +2072,7 @@ body:has(> .map-keys:not([hidden], .gave-way)) :is(#tip, #offer, #map-note) { vi
 .board-add:hover, .board-add:focus-visible { border-color: var(--accent); }
 /* (what "Weitere Haltestelle" asks: as a list of its own, or together with a stop the board has) */
 .board-add-menu { flex: none; display: grid; gap: 6px; margin: 0 0 0.6em; padding: 8px; border: 1px solid var(--border); border-radius: 12px; background: var(--bg); box-shadow: var(--shadow); font-size: max(13px, 0.6em); }
-.board-add-menu button { padding: 0.45em 0.8em; border: 1px solid var(--border); border-radius: 8px; background: var(--bg); color: var(--text); font: inherit; text-align: left; cursor: pointer; }
+.board-add-menu button { padding: 0.45em 0.8em; border: 1px solid var(--border); border-radius: 8px; background: var(--bg); color: var(--text); font: inherit; text-align: start; cursor: pointer; }
 .board-add-menu button:hover, .board-add-menu button:focus-visible { border-color: var(--accent); }
 /* (a display is read, not operated: drawn anew, the board has none of them, see setDisplay) */
 :root[data-display] .board-control, :root[data-display] :is(.board-add, .board-add-menu) { display: none; }
@@ -2071,3 +2091,57 @@ body:has(> .map-keys:not([hidden], .gave-way)) :is(#tip, #offer, #map-note) { vi
 .board-credits { flex: none; margin: 0; padding: 0.5em 0 0.7em; color: var(--text-muted); font-size: max(11px, 0.36em); }
 .board-credits a { color: inherit; }
 :root:not([data-board="alone"]) .board-credits { display: none; }
+
+/* ---------- right to left ---------- */
+
+/* What reads goes the other way round by the logical rules above; the map does not (#map is dir="ltr"), and its buttons
+   stay in their corner. Here what those rules cannot say. */
+
+/* The signs that point go the way the page reads; those that do not (gear, lens, heart, share, cross) stay. */
+:root[dir="rtl"] :is(.language-arrow, .chips-more span, .panel-back .icon, .to-line .icon) { transform: scaleX(-1); }
+/* (a note keeps the direction it is written in, asWritten in app.js: its arrow goes by that) */
+.note .icon:dir(rtl) { transform: scaleX(-1); }
+
+/* Numbers and what is written with them keep their order: "+2", "13:39+2", 05:13–23:40. */
+:root[dir="rtl"] .delay { direction: ltr; unicode-bidi: isolate; }
+/* (a time by its own first letter: "1:36 PM" stays so in Urdu, "1:36 م" reads from the right in Arabic) */
+:root[dir="rtl"] :is(.row .time, .row .minutes, .board-rows .at, .board-rows .minutes, .board-clock, .platform, .hour-lines .hh) { unicode-bidi: plaintext; }
+:root[dir="rtl"] :is(.row .time, .row .minutes, .platform) { text-align: right; }
+:root[dir="rtl"] .timetable-days .hour-lines .hh { text-align: left; }
+:root[dir="rtl"] .mm { unicode-bidi: isolate; }
+/* (names as they come, in whatever script: each by its own first letter, so that a Latin name keeps its brackets and its
+   full stop; still at the side the list reads from) */
+:root[dir="rtl"] :is(.badge, .row .name, .search-results .name, .search-results .to, .search-results .agency, .in-town .stop, .in-town .town, .board-rows .name, .board-rows .to, .panel-head h1:not(:has(.to-line)), .panel-head h1 > .stop, .panel-back span, .choice-open > span, .view-switch.ways button > span, [id="notes-title"]) { unicode-bidi: plaintext; }
+:root[dir="rtl"] :is(.row .name, .search-results .name, .search-results .to, .search-results .agency, .in-town .stop, .in-town .town, .board-rows .name, .board-rows .to, .panel-back span, .language-row .own, .panel-head h1 > .stop, [id="notes-title"]) { text-align: right; }
+
+/* The keys of the map stay as on the keyboard, the arrow to the left on the left. */
+:root[dir="rtl"] .map-keys .keys { direction: ltr; }
+
+/* What the sign of a warning says is an operator's text, each line in its own direction. */
+:root[dir="rtl"] .tooltip.said { unicode-bidi: plaintext; }
+
+/* The rail on the right: its signs are placed by their middle, a branch's line from the same side. */
+:root[dir="rtl"] .rail :is(.stop-sign, .stop-ring) { transform: translate(50%, -50%); }
+:root[dir="rtl"] .line-stops .branch-part:not(.apart) .row.on-line { background-position: right 28.5px top 0; }
+:root[dir="rtl"] svg.line-vehicles { left: auto; right: 0; width: 100px; }
+:root[dir="rtl"] .line-vehicle text { direction: ltr; }
+:root[dir="rtl"] .use .modes::before { background: radial-gradient(circle at calc(100% - 7px) 50%, var(--mode-bus) 3px, transparent 3.5px); }
+
+/* What is typed into a search goes by its own first letter (dir="auto", app.js), so that "Nürnberg Hbf." keeps its full
+   stop at its end and the arrows select the way they point; at the side the page reads from, the lens there too. */
+:root[dir="rtl"] :is(#search-field, #languages-search) { text-align: right; }
+:root[dir="rtl"] :is(#search-field, #languages-search):placeholder-shown { direction: rtl; }
+:root[dir="rtl"] .search input { padding-left: 8px; padding-right: 31px; }
+/* (its cross stays at the far side, whichever way what is typed runs) */
+:root[dir="rtl"] #search-field:not(:placeholder-shown) { padding-left: 30px; }
+:root[dir="rtl"] #search-field::-webkit-search-cancel-button { position: absolute; left: 9px; top: 50%; margin: 0; transform: translateY(-50%); }
+:root[dir="rtl"] .languages-search input { padding-left: 12px; padding-right: 36px; }
+/* (a line's town and note: two items, each isolated, read from the right; by its first letter the row would find none) */
+:root[dir="rtl"] .line-stops .row .town { unicode-bidi: isolate; min-width: 0; }
+
+/* Urdu's script (Nastaliq) reaches far above its line: room for it where a box would cut the top of a letter. */
+:root[lang="ur"] .in-town .town { overflow-x: clip; overflow-y: visible; margin-top: 4px; }
+:root[lang="ur"] .row.departure > .details { overflow-x: clip; overflow-y: visible; }
+@media (max-width: 720px) {
+  :root[lang="ur"] .dialog .dialog-body { padding-top: 14px; }
+}

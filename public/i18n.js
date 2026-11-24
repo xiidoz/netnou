@@ -57,6 +57,10 @@ export const LANGUAGES = [
   ['ru', 'Русский'],
   ['sr', 'Српски'],
   ['uk', 'Українська'],
+  ['he', 'עברית'],
+  ['ur', 'اردو'],
+  ['ar', 'العربية'],
+  ['fa', 'فارسی'],
   ['mr', 'मराठी'],
   ['hi', 'हिन्दी'],
   ['bn', 'বাংলা'],
@@ -83,8 +87,79 @@ const ADDRESS_KEY = 'lang';
 // What the software is called. An instance may call itself something else
 // (NETNOU_SITE_NAME of the server); the credits name the software all the same.
 export const APP_NAME = 'Netnou';
+// The languages written right to left: the page is laid out mirrored for them
+// (style.css), but for the map, whose north stays north. first.js has the list
+// from the page, as the server writes it there (RIGHT_TO_LEFT_CODES).
+const RIGHT_TO_LEFT = ['ar', 'fa', 'he', 'ur'];
+export const RIGHT_TO_LEFT_CODES = RIGHT_TO_LEFT;
+// Those among them that write a comma as "،" (Hebrew has the Latin one).
+const ARABIC_COMMA = ['ar', 'fa', 'ur'];
 // The attributes data-i18n-<attribute> can fill in, see translatePage().
 export const ATTRIBUTES = ['aria-label', 'title', 'content', 'placeholder'];
+
+/** The direction a language is written in. */
+export const textDirection = (code) => (RIGHT_TO_LEFT.includes(code) ? 'rtl' : 'ltr');
+
+/** What a language puts between the parts of a list the code joins itself: ", ", in Arabic, Persian and Urdu "، ". */
+export const commaOf = (code) => (ARABIC_COMMA.includes(code) ? '، ' : ', ');
+
+/**
+ * A value inside a sentence written right to left, kept whole: a name in Latin
+ * letters with its brackets or colon, a time, a number stays as it is written,
+ * whatever stands around it (FIRST STRONG ISOLATE … POP DIRECTIONAL ISOLATE).
+ * The texts themselves hold no such marks. A value that is a sentence of such
+ * a text itself, with values of its own, may have no letter left to tell its
+ * direction by: it is right to left (RIGHT-TO-LEFT ISOLATE).
+ */
+const isolated = (value) => `${/[\u2066-\u2068]/.test(value) ? '\u2067' : '\u2068'}${value}\u2069`;
+/**
+ * A range of times or hours, with what both ends share after it ("5–7 PM").
+ * Right to left a range of digits stays as digits are written, the first on
+ * the left: "05:13–23:40", and so with a Latin "AM" (Urdu). One with letters of
+ * the language in it, as Arabic has for AM and PM, is read as they are, the
+ * first on the right, each end whole: left to right it would say the last time first.
+ */
+export function timeRange(from, to, code, after = '') {
+  if (!RIGHT_TO_LEFT.includes(code)) return `${from}–${to}${after}`;
+  if (/[\p{Script=Arabic}\p{Script=Hebrew}]/u.test(`${from}${to}${after}`)) return `\u2067${isolated(from)}–${isolated(to)}${after}\u2069`;
+  return `\u2066${from}–${to}${after}\u2069`;
+}
+/**
+ * The items of a list, each isolated where the language is written right to
+ * left: Latin names joined by a comma would otherwise run left to right as one,
+ * the last first for someone reading from the right.
+ */
+export const isolatedEach = (items, code) => (RIGHT_TO_LEFT.includes(code) ? items.map(isolated) : items);
+/** A text without those marks, to count what can be seen of it. */
+export const withoutIsolates = (text) => text.replace(/[\u2066-\u2069]/g, '');
+/**
+ * A text for what leaves the page and other programs draw (a title, a preview
+ * of a link), with the isolates put as the plain marks every program knows: a
+ * value in Latin letters closes with a left-to-right mark, so that a full stop
+ * at its end stays there, and each with a right-to-left mark, so that a comma
+ * after it does not join it to the next one. It begins with a right-to-left mark:
+ * a program that goes by the first letter would otherwise take a text that
+ * opens with a Latin name for a left-to-right one.
+ */
+export function withPlainMarks(text) {
+  if (!/[\u2066-\u2068]/.test(text)) return text;
+  const open = [];
+  return `\u200f${text.replace(/[\u2066-\u2069]/g, (mark, at) => {
+    if (mark === '\u2069') return open.pop() ? '\u200f' : '\u200e\u200f';
+    const letter = mark === '\u2068' ? /\p{L}/u.exec(text.slice(at, text.indexOf('\u2069', at)))?.[0] : null;
+    const rightToLeft = mark === '\u2067' || Boolean(letter && /[\p{Script=Arabic}\p{Script=Hebrew}]/u.test(letter));
+    open.push(rightToLeft);
+    return rightToLeft ? '\u200f' : '\u200e';
+  })}`;
+}
+/**
+ * A list as the language writes it ("a, b and c"), right to left with each
+ * item isolated. By its parts, so that the language sees the words themselves
+ * and not the marks: Hebrew's "and" depends on the letter that follows it.
+ */
+export const listedIn = (format, words, code) => (RIGHT_TO_LEFT.includes(code) && format.formatToParts
+  ? format.formatToParts(words).map(({ type, value }) => (type === 'element' ? isolated(value) : value)).join('')
+  : format.format(words));
 
 const primary = (tag) => {
   const code = tag.toLowerCase().split('-')[0];
@@ -176,16 +251,16 @@ export const languageNames = (code) => namesIn.get(primary(code)) ?? null;
  * numbers, platforms, delays and the signs have them: Bengali and Marathi,
  * for example, would write times with their own digits, beside a delay "+2".
  */
-export function latinDigits(tag) {
+export function plainLocale(tag) {
   try {
-    return new Intl.Locale(tag, { numberingSystem: 'latn' }).toString();
+    return new Intl.Locale(tag, { numberingSystem: 'latn', calendar: 'gregory' }).toString();
   } catch {
     return tag; // not a language tag Intl knows
   }
 }
 
 function setFormats() {
-  const digits = latinDigits(locale);
+  const digits = plainLocale(locale);
   const own = ownFormats && !Intl.DateTimeFormat.supportedLocalesOf([locale]).length ? formatsFrom(ownFormats, timeZone) : null;
   numberFormat = own?.number ?? new Intl.NumberFormat(digits);
   pluralRules = new Intl.PluralRules(locale);
@@ -281,7 +356,7 @@ export function textsIn(code, texts) {
 
 /** The plural rules and the numbers of a language, made once. */
 function rulesOf(code) {
-  if (!rulesByLanguage.has(code)) rulesByLanguage.set(code, { plural: new Intl.PluralRules(code), number: new Intl.NumberFormat(latinDigits(code)) });
+  if (!rulesByLanguage.has(code)) rulesByLanguage.set(code, { plural: new Intl.PluralRules(code), number: new Intl.NumberFormat(plainLocale(code)) });
   return rulesByLanguage.get(code);
 }
 
@@ -323,6 +398,9 @@ export const sentInAnother = (sent = SENT) => chosen && language !== sent;
 /**
  * The text for a key of locales/en.js. {name} in it is replaced by params.name,
  * numbers formatted for the language; plural forms are chosen by params.count.
+ * In a language written right to left each value is isolated (see isolated):
+ * by the language of the texts, which on the server or for an offer in another
+ * language is not the page's; a left-to-right text is left as it is.
  * @param texts those of another language than the visitor's, for the server:
  *   by the rules of their language where it is known (textsIn), else the page's
  */
@@ -332,10 +410,12 @@ export function t(key, params = {}, texts = messages) {
   const own = texts !== messages && languageOf.has(texts) ? rulesOf(languageOf.get(texts)) : null;
   // (a plural by the number itself where the language has words of its own for it, "twice", else by its kind)
   if (typeof message === 'object') message = message[params.count] ?? message[(own?.plural ?? pluralRules).select(params.count)] ?? message.other;
+  const rightToLeft = RIGHT_TO_LEFT.includes(languageOf.get(texts) ?? language);
   return message.replace(/\{(\w+)\}/g, (placeholder, name) => {
     const value = params[name];
     if (value === undefined) return placeholder;
-    return typeof value === 'number' ? (own?.number ?? numberFormat).format(value) : value;
+    const said = typeof value === 'number' ? (own?.number ?? numberFormat).format(value) : value;
+    return rightToLeft && said !== '' ? isolated(said) : said;
   });
 }
 
@@ -395,7 +475,7 @@ export function formatWhen(epoch, now) {
 }
 
 /** Words as a list: "a, b und c". */
-export const formatList = (words) => listFormat.format(words);
+export const formatList = (words) => listedIn(listFormat, words, language);
 
 /**
  * Times are shown in the time zone of the area (timeZone of api/area), as on
@@ -421,11 +501,25 @@ export function setTimeZone(zone) {
  */
 export function translatePage() {
   document.documentElement.lang = language;
+  document.documentElement.dir = textDirection(language);
   for (const node of document.querySelectorAll('[data-i18n]')) node.textContent = t(node.dataset.i18n);
   for (const attribute of ATTRIBUTES) {
     const source = `data-i18n-${attribute}`;
     for (const node of document.querySelectorAll(`[${source}]`)) node.setAttribute(attribute, t(node.getAttribute(source)));
   }
+}
+
+/** Whether the page is in a language written right to left: the sides of what is measured in px are the other way round. */
+export const rightToLeft = () => RIGHT_TO_LEFT.includes(language);
+
+/**
+ * Where something goes, with the arrow the way the language reads: "U1 → Fürth",
+ * or "→ Fürth" without what goes there; right to left the arrow points left,
+ * from the line on the right to the place on its left, each kept whole.
+ */
+export function towards(to, from = null) {
+  if (!rightToLeft()) return from === null ? `→ ${to}` : `${from} → ${to}`;
+  return from === null ? `\u2067← ${isolated(to)}\u2069` : `\u2067${isolated(from)} ← ${isolated(to)}\u2069`;
 }
 
 /** The language the page is in (loadLanguage). */
