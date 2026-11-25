@@ -42,11 +42,7 @@ export default {
   'attribution.data': 'Dane rozkładowe i dane w czasie rzeczywistym, przetworzone:',
 
   'status.connecting': 'Łączenie…',
-  'status.vehicles': { one: '{count} pojazd', few: '{count} pojazdy', many: '{count} pojazdów', other: '{count} pojazdu' },
-  'status.live': 'opóźnienia sprzed {seconds} s',
-  'status.waiting': 'wczytywanie opóźnień…',
-  'status.outage': 'teraz brak danych o opóźnieniach, wszystko według rozkładu',
-  'status.loading': 'Wczytywanie danych rozkładowych',
+  'status.outage': 'Teraz brak danych o opóźnieniach, wszystko według rozkładu',
   'status.noTimetable': 'Brak danych rozkładowych',
   'status.noConnection': 'Brak połączenia z serwerem',
 

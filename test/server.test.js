@@ -586,7 +586,7 @@ test('the page says what and where the instance is before any script runs', asyn
   assert.equal(/<ul class="search-results" id="search-results"[^>]*>(.*?)<\/ul>/s.exec(page)[1], '<li class="search-heading" role="presentation">In der Nähe</li>'
     + '<li role="option" aria-selected="false"><a href="stop/beta">Beta</a></li><li role="option" aria-selected="false"><a href="stop/alpha">Alpha</a></li>');
   // (and the header card, which a visitor sees before the scripts have run)
-  assert.ok(page.includes('<span id="status-text" data-i18n="status.connecting">Verbinde …</span>'));
+  assert.ok(page.includes('<p class="hint" id="vehicle-count" data-i18n="status.connecting">Verbinde …</p>'));
   assert.ok(page.includes(`<link rel="canonical" href="${address}">`));
   assert.ok(page.includes(`<link rel="alternate" hreflang="en" href="${address}?lang=en">`));
   // (the icons by addresses with the versions of their files, see versionsOfFiles)
@@ -605,7 +605,7 @@ test('the page says what and where the instance is before any script runs', asyn
   const english = await request('/?lang=en');
   assert.match(english.body.toString(), /<html lang="en"[ >]/);
   assert.match(english.body.toString(), /<title>Live map of public transport: Testland – Netnou<\/title>/);
-  assert.ok(english.body.toString().includes('<span id="status-text" data-i18n="status.connecting">Connecting …</span>'));
+  assert.ok(english.body.toString().includes('<p class="hint" id="vehicle-count" data-i18n="status.connecting">Connecting …</p>'));
   assert.ok(english.body.toString().includes(`<link rel="canonical" href="${address}?lang=en">`));
   assert.equal((await request('/?lang=en', { headers: { 'If-None-Match': english.headers.etag } })).status, 304);
   // each version has its own tag: one is not taken for the other
@@ -621,7 +621,7 @@ test('the page says what and where the instance is before any script runs', asyn
   const forEnglish = await asking('/', 'en-US,en;q=0.9');
   assert.match(forEnglish.body.toString(), /<html lang="en"[ >]/);
   assert.match(forEnglish.body.toString(), /<title>Live map of public transport: Testland – Netnou<\/title>/);
-  assert.ok(forEnglish.body.toString().includes('<span id="status-text" data-i18n="status.connecting">Connecting …</span>'));
+  assert.ok(forEnglish.body.toString().includes('<p class="hint" id="vehicle-count" data-i18n="status.connecting">Connecting …</p>'));
   assert.ok(forEnglish.body.toString().includes(`<link rel="canonical" href="${address}">`));
   assert.ok(forEnglish.body.toString().includes(`<meta property="og:url" content="${address}">`));
   assert.equal(forEnglish.headers.vary, 'Accept-Language, Accept-Encoding');

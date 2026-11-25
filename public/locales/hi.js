@@ -42,11 +42,7 @@ export default {
   'attribution.data': 'समय-सारणी और रियल-टाइम डेटा, संसाधित:',
 
   'status.connecting': 'कनेक्ट हो रहा है…',
-  'status.vehicles': { one: '{count} वाहन', other: '{count} वाहन' },
-  'status.live': 'देरी: {seconds} सेकंड पहले की स्थिति',
-  'status.waiting': 'देरी लोड हो रही है…',
   'status.outage': 'अभी देरी का डेटा नहीं, सब कुछ समय-सारणी के अनुसार',
-  'status.loading': 'समय-सारणी का डेटा लोड हो रहा है',
   'status.noTimetable': 'समय-सारणी का डेटा नहीं है',
   'status.noConnection': 'सर्वर से कनेक्शन नहीं है',
 

@@ -42,11 +42,7 @@ export default {
   'attribution.data': 'Даныя раскладу і рэальнага часу, са змяненнямі:',
 
   'status.connecting': 'Падключэнне…',
-  'status.vehicles': { one: '{count} адзінка транспарту', few: '{count} адзінкі транспарту', many: '{count} адзінак транспарту', other: '{count} адзінак транспарту' },
-  'status.live': 'затрымкі абноўлены {seconds} с таму',
-  'status.waiting': 'загрузка затрымак…',
-  'status.outage': 'зараз няма даных пра затрымкі, усё па раскладзе',
-  'status.loading': 'Загружаюцца даныя раскладу',
+  'status.outage': 'Зараз няма даных пра затрымкі, усё па раскладзе',
   'status.noTimetable': 'Няма даных раскладу',
   'status.noConnection': 'Няма злучэння з серверам',
 

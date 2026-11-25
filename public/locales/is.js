@@ -42,11 +42,7 @@ export default {
   'attribution.data': 'Tímatöflu- og rauntímagögn, unnin:',
 
   'status.connecting': 'Tengist…',
-  'status.vehicles': { one: '{count} farartæki', other: '{count} farartæki' },
-  'status.live': 'seinkanir uppfærðar fyrir {seconds} sek.',
-  'status.waiting': 'sæki seinkanir…',
-  'status.outage': 'engin rauntímagögn núna, allt samkvæmt tímatöflu',
-  'status.loading': 'Sæki tímatöflugögn',
+  'status.outage': 'Engin rauntímagögn núna, allt samkvæmt tímatöflu',
   'status.noTimetable': 'Engin tímatöflugögn',
   'status.noConnection': 'Engin tenging við netþjóninn',
 

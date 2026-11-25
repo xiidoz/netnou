@@ -42,11 +42,7 @@ export default {
   'attribution.data': 'সময়সূচি ও রিয়েল-টাইম তথ্য, প্রক্রিয়াকৃত:',
 
   'status.connecting': 'সংযোগ করা হচ্ছে…',
-  'status.vehicles': { one: '{count}টি গাড়ি', other: '{count}টি গাড়ি' },
-  'status.live': 'দেরি: {seconds} সেকেন্ড আগের অবস্থা',
-  'status.waiting': 'দেরির তথ্য লোড হচ্ছে…',
   'status.outage': 'এখন দেরির তথ্য নেই, সবই সময়সূচি অনুযায়ী',
-  'status.loading': 'সময়সূচির তথ্য লোড হচ্ছে',
   'status.noTimetable': 'সময়সূচির তথ্য নেই',
   'status.noConnection': 'সার্ভারের সঙ্গে সংযোগ নেই',
 

@@ -42,11 +42,7 @@ export default {
   'attribution.data': '시간표·실시간 데이터(가공):',
 
   'status.connecting': '연결 중…',
-  'status.vehicles': { other: '차량 {count}대' },
-  'status.live': '지연 정보: {seconds}초 전 기준',
-  'status.waiting': '지연 정보 불러오는 중…',
   'status.outage': '현재 지연 정보 없음, 모두 시간표 기준',
-  'status.loading': '시간표 데이터 불러오는 중',
   'status.noTimetable': '시간표 데이터 없음',
   'status.noConnection': '서버에 연결할 수 없음',
 

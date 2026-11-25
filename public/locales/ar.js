@@ -42,11 +42,7 @@ export default {
   'attribution.data': 'بيانات جدول المواعيد والوقت الفعلي، بعد معالجتها:',
 
   'status.connecting': 'جارٍ الاتصال…',
-  'status.vehicles': { zero: 'لا مركبات', one: 'مركبة واحدة', two: 'مركبتان', few: '{count} مركبات', many: '{count} مركبة', other: '{count} مركبة' },
-  'status.live': 'التأخيرات: قبل {seconds} ث',
-  'status.waiting': 'جارٍ تحميل التأخيرات…',
   'status.outage': 'لا بيانات تأخير حاليًا، والكل حسب الجدول',
-  'status.loading': 'جارٍ تحميل بيانات جدول المواعيد',
   'status.noTimetable': 'لا توجد بيانات جدول مواعيد',
   'status.noConnection': 'لا اتصال بالخادم',
 

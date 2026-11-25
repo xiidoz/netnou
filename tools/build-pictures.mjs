@@ -60,8 +60,8 @@ const SEARCH_VIEW = { lat: 49.462, lon: 11.03, zoom: 11.6 };
 // How the pictures are laid out, in CSS pixels.
 const PADDING = 20;
 const GAP = 24;
-// Where in its round of two seconds the pulse of the status dot is held, in milliseconds.
-const PULSE_MS = 600;
+// Where an animation that runs as the picture is taken is held, in milliseconds.
+const HOLD_MS = 600;
 
 if (typeof WebSocket === 'undefined') throw new Error('build-pictures needs Node.js 22.4 or newer, for the WebSocket that talks to the browser');
 
@@ -255,9 +255,9 @@ try {
     // two forms from run to run. A face that loads nothing does it.
     await evaluate("document.fonts.add(new FontFace('netnou-pictures', 'local(netnou-pictures)')); 0");
     await sleep(600);
-    // What moves by itself held still: the pulse of the status dot, from the next
-    // frame on; and the text cursor of a field, which blinks, not shown.
-    await evaluate(`for (const animation of document.getAnimations()) { animation.pause(); animation.currentTime = ${PULSE_MS}; }`);
+    // What moves by itself held still, from the next frame on; and the text
+    // cursor of a field, which blinks, not shown.
+    await evaluate(`for (const animation of document.getAnimations()) { animation.pause(); animation.currentTime = ${HOLD_MS}; }`);
     await evaluate("document.documentElement.style.caretColor = 'transparent'");
     await evaluate('new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)))');
     const { data: picture } = await page.send('Page.captureScreenshot', format === 'png' ? { format } : { format, quality: 82 });
@@ -293,7 +293,7 @@ try {
   await shoot('trip');
   // The search, on the map of Nürnberg and Fürth.
   await go('?lang=en');
-  await waitFor("/\\d/.test(document.getElementById('status-text').textContent)", 'The vehicles');
+  await waitFor("/\\d/.test(document.getElementById('vehicle-count').textContent)", 'The vehicles');
   await evaluate("document.getElementById('search-field').focus()");
   await page.send('Input.insertText', { text: SEARCH });
   await waitFor("document.querySelectorAll('#search-results li').length > 0", 'What the search finds');
@@ -350,7 +350,7 @@ ${names.map((name) => `<img src="${name}.png" alt="">`).join('\n')}
   if (!bus) throw new Error(`the ${moment.kind} ${trip.line} is not under way at the moment of the data`);
   const [, lat, lon] = bus.knots;
   await go(`${trip.address}?${new URLSearchParams({ lang: 'en', display: 'fixed', view: `${lat.toFixed(5)},${lon.toFixed(5)},${CLOSE_ZOOM}` })}`);
-  await waitFor("/\\d/.test(document.getElementById('status-text').textContent)", 'The vehicles');
+  await waitFor("/\\d/.test(document.getElementById('vehicle-count').textContent)", 'The vehicles');
   // (what a display keeps of the card, the details and the credits too: the image of link previews has credits of its own)
   await evaluate("for (const node of document.querySelectorAll('#controls, #panel, .maplibregl-control-container, #display-leave')) node.style.display = 'none'");
   await settle();

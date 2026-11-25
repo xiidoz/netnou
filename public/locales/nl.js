@@ -42,11 +42,7 @@ export default {
   'attribution.data': 'Dienstregelings- en realtimegegevens, bewerkt:',
 
   'status.connecting': 'Verbinden…',
-  'status.vehicles': { one: '{count} voertuig', other: '{count} voertuigen' },
-  'status.live': 'vertragingen bijgewerkt {seconds} s geleden',
-  'status.waiting': 'vertragingen laden…',
-  'status.outage': 'nu geen vertragingsgegevens, alles volgens dienstregeling',
-  'status.loading': 'Dienstregeling wordt geladen',
+  'status.outage': 'Nu geen vertragingsgegevens, alles volgens dienstregeling',
   'status.noTimetable': 'Geen dienstregeling',
   'status.noConnection': 'Geen verbinding met de server',
 

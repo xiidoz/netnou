@@ -42,11 +42,7 @@ export default {
   'attribution.data': '時刻表・リアルタイムデータ（加工済み）：',
 
   'status.connecting': '接続中…',
-  'status.vehicles': { other: '車両{count}台' },
-  'status.live': '遅延情報：{seconds}秒前の時点',
-  'status.waiting': '遅延情報を読み込み中…',
   'status.outage': '現在遅延情報なし、すべて時刻表どおりに表示',
-  'status.loading': '時刻表データを読み込み中',
   'status.noTimetable': '時刻表データがありません',
   'status.noConnection': 'サーバーに接続できません',
 

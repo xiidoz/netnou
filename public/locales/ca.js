@@ -42,11 +42,7 @@ export default {
   'attribution.data': 'Dades d’horaris i en temps real, processades:',
 
   'status.connecting': 'Connectant…',
-  'status.vehicles': { one: '{count} vehicle', many: '{count} vehicles', other: '{count} vehicles' },
-  'status.live': 'retards de fa {seconds} s',
-  'status.waiting': 'carregant els retards…',
-  'status.outage': 'ara no hi ha dades de retards, tot segons l’horari',
-  'status.loading': 'Carregant les dades d’horaris',
+  'status.outage': 'Ara no hi ha dades de retards, tot segons l’horari',
   'status.noTimetable': 'No hi ha dades d’horaris',
   'status.noConnection': 'Sense connexió amb el servidor',
 

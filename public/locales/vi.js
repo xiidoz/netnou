@@ -42,11 +42,7 @@ export default {
   'attribution.data': 'Dữ liệu lịch trình và thời gian thực, đã xử lý:',
 
   'status.connecting': 'Đang kết nối…',
-  'status.vehicles': { other: '{count} phương tiện' },
-  'status.live': 'dữ liệu trễ cập nhật {seconds} giây trước',
-  'status.waiting': 'đang tải dữ liệu trễ…',
-  'status.outage': 'hiện không có dữ liệu trễ, tất cả theo lịch trình',
-  'status.loading': 'Đang tải dữ liệu lịch trình',
+  'status.outage': 'Hiện không có dữ liệu trễ, tất cả theo lịch trình',
   'status.noTimetable': 'Không có dữ liệu lịch trình',
   'status.noConnection': 'Không kết nối được với máy chủ',
 

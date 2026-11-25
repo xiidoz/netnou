@@ -126,10 +126,10 @@ test('the page comes with its texts in its language and its icons drawn', () => 
   // a text a language lacks is the English one
   const partial = { ...de };
   delete partial['status.connecting'];
-  assert.ok(renderPage(html, { ...german, texts: partial }).includes('<span id="status-text" data-i18n="status.connecting">Connecting …</span>'));
+  assert.ok(renderPage(html, { ...german, texts: partial }).includes('<p class="hint" id="vehicle-count" data-i18n="status.connecting">Connecting …</p>'));
   // and a text is text, whatever is in it
   const odd = renderPage(html, { ...german, texts: { ...de, 'status.connecting': 'Tom & <b>"Jerry"</b>', 'search.label': 'a "b" <c> & $1' } });
-  assert.ok(odd.includes('data-i18n="status.connecting">Tom &#38; &#60;b&#62;&#34;Jerry&#34;&#60;/b&#62;</span>'));
+  assert.ok(odd.includes('data-i18n="status.connecting">Tom &#38; &#60;b&#62;&#34;Jerry&#34;&#60;/b&#62;</p>'));
   assert.ok(odd.includes(' placeholder="a &#34;b&#34; &#60;c&#62; &#38; $1" data-i18n-placeholder="search.label" aria-label="a &#34;b&#34; &#60;c&#62; &#38; $1" data-i18n-aria-label="search.label">'));
 
   // an icon in every element that asks for one, the shape of that name

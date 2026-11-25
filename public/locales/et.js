@@ -42,11 +42,7 @@ export default {
   'attribution.data': 'Sõiduplaani- ja reaalajaandmed, töödeldud:',
 
   'status.connecting': 'Ühendan…',
-  'status.vehicles': { one: '{count} sõiduk', other: '{count} sõidukit' },
-  'status.live': 'hilinemised seisuga {seconds} s tagasi',
-  'status.waiting': 'hilinemiste laadimine…',
-  'status.outage': 'hilinemisandmeid praegu pole, kõik sõiduplaani järgi',
-  'status.loading': 'Sõiduplaaniandmete laadimine',
+  'status.outage': 'Hilinemisandmeid praegu pole, kõik sõiduplaani järgi',
   'status.noTimetable': 'Sõiduplaaniandmeid pole',
   'status.noConnection': 'Serveriga puudub ühendus',
 

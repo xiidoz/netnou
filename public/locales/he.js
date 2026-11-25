@@ -42,11 +42,7 @@ export default {
   'attribution.data': 'נתוני לוח זמנים וזמן אמת, לאחר עיבוד:',
 
   'status.connecting': 'התחברות…',
-  'status.vehicles': { one: 'רכב אחד', two: 'שני כלי רכב', other: '{count} כלי רכב' },
-  'status.live': 'עיכובים: לפני {seconds} שנ׳',
-  'status.waiting': 'העיכובים נטענים…',
   'status.outage': 'אין כרגע נתוני עיכובים, הכול לפי לוח הזמנים',
-  'status.loading': 'נתוני לוח הזמנים נטענים',
   'status.noTimetable': 'אין נתוני לוח זמנים',
   'status.noConnection': 'אין חיבור לשרת',
 

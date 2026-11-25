@@ -42,11 +42,7 @@ export default {
   'attribution.data': 'Données horaires et en temps réel, traitées :',
 
   'status.connecting': 'Connexion…',
-  'status.vehicles': { one: '{count} véhicule', many: '{count} véhicules', other: '{count} véhicules' },
-  'status.live': 'retards mis à jour il y a {seconds} s',
-  'status.waiting': 'chargement des retards…',
-  'status.outage': 'pas de données de retard pour l’instant, horaires théoriques uniquement',
-  'status.loading': 'Chargement des données horaires',
+  'status.outage': 'Pas de données de retard pour l’instant, horaires théoriques uniquement',
   'status.noTimetable': 'Aucune donnée horaire',
   'status.noConnection': 'Pas de connexion au serveur',
 

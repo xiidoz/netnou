@@ -42,11 +42,7 @@ export default {
   'attribution.data': 'वेळापत्रक आणि रिअल-टाइम डेटा, प्रक्रिया केलेला:',
 
   'status.connecting': 'कनेक्ट होत आहे…',
-  'status.vehicles': { one: '{count} वाहन', other: '{count} वाहने' },
-  'status.live': 'उशीर: {seconds} सेकंदांपूर्वीची स्थिती',
-  'status.waiting': 'उशीर लोड होत आहे…',
   'status.outage': 'सध्या उशिराचा डेटा नाही, सर्व वेळापत्रकानुसार',
-  'status.loading': 'वेळापत्रकाचा डेटा लोड होत आहे',
   'status.noTimetable': 'वेळापत्रकाचा डेटा नाही',
   'status.noConnection': 'सर्व्हरशी कनेक्शन नाही',
 

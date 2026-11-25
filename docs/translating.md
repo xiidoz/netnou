@@ -105,13 +105,13 @@ lacks too goes into `WITHOUT_FORMATS` in that tool and in
 English is the reference. A locale file has exactly the keys of `en.js`.
 
 - **Placeholders** in braces are filled in by the page and must be kept:
-  `'delays as of {seconds} s ago'` → `'Verspätungen: Stand vor {seconds} s'`. They may move
+  `'Delay data from {source}'` → `'Verspätungsdaten von {source}'`. They may move
   within the sentence.
 - **Plural forms.** Where the wording depends on a number, the value is an
   object with one text per plural category of the language:
 
   ```js
-  'status.vehicles': { one: '{count} vehicle', other: '{count} vehicles' },
+  'line.vehicles': { one: '{count} vehicle under way', other: '{count} vehicles under way' },
   ```
 
   The categories are those of

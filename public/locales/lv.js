@@ -42,11 +42,7 @@ export default {
   'attribution.data': 'Kustības saraksta un reāllaika dati, apstrādāti:',
 
   'status.connecting': 'Savienojas…',
-  'status.vehicles': { zero: '{count} transportlīdzekļi', one: '{count} transportlīdzeklis', other: '{count} transportlīdzekļi' },
-  'status.live': 'kavējumu dati pirms {seconds} s',
-  'status.waiting': 'ielādē kavējumus…',
-  'status.outage': 'pašlaik nav kavējumu datu, viss pēc saraksta',
-  'status.loading': 'Ielādē kustības saraksta datus',
+  'status.outage': 'Pašlaik nav kavējumu datu, viss pēc saraksta',
   'status.noTimetable': 'Nav kustības saraksta datu',
   'status.noConnection': 'Nav savienojuma ar serveri',
 

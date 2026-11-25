@@ -42,11 +42,7 @@ export default {
   'attribution.data': 'Fahrplan- und Echtzeitdaten, aufbereitet:',
 
   'status.connecting': 'Verbinde …',
-  'status.vehicles': { one: '{count} Fahrzeug', other: '{count} Fahrzeuge' },
-  'status.live': 'Verspätungen: Stand vor {seconds} s',
-  'status.waiting': 'Verspätungen werden geladen …',
-  'status.outage': 'zurzeit keine Verspätungsdaten, alles nach Fahrplan',
-  'status.loading': 'Fahrplandaten werden geladen',
+  'status.outage': 'Zurzeit keine Verspätungsdaten, alles nach Fahrplan',
   'status.noTimetable': 'Keine Fahrplandaten',
   'status.noConnection': 'Keine Verbindung zum Server',
 

@@ -42,11 +42,7 @@ export default {
   'attribution.data': 'Menetrendi és valós idejű adatok, feldolgozva:',
 
   'status.connecting': 'Kapcsolódás…',
-  'status.vehicles': { one: '{count} jármű', other: '{count} jármű' },
-  'status.live': 'késések: frissítve {seconds} mp-e',
-  'status.waiting': 'késések betöltése…',
-  'status.outage': 'most nincsenek késési adatok, minden menetrend szerint',
-  'status.loading': 'Menetrendi adatok betöltése',
+  'status.outage': 'Most nincsenek késési adatok, minden menetrend szerint',
   'status.noTimetable': 'Nincsenek menetrendi adatok',
   'status.noConnection': 'Nincs kapcsolat a szerverrel',
 

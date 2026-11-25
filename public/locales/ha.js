@@ -42,11 +42,7 @@ export default {
   'attribution.data': 'Bayanan jadawali da na kai tsaye, an sarrafa su:',
 
   'status.connecting': 'Ana haɗawa…',
-  'status.vehicles': { one: 'Abin hawa {count}', other: 'Ababen hawa {count}' },
-  'status.live': 'jinkiri: daƙiƙa {seconds} da suka wuce',
-  'status.waiting': 'ana loda bayanan jinkiri…',
-  'status.outage': 'babu bayanan jinkiri yanzu, komai bisa jadawali',
-  'status.loading': 'Ana loda bayanan jadawali',
+  'status.outage': 'Babu bayanan jinkiri yanzu, komai bisa jadawali',
   'status.noTimetable': 'Babu bayanan jadawali',
   'status.noConnection': 'Babu haɗi da sabar',
 

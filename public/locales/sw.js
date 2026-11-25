@@ -42,11 +42,7 @@ export default {
   'attribution.data': 'Data ya ratiba na ya wakati halisi, imechakatwa:',
 
   'status.connecting': 'Inaunganisha…',
-  'status.vehicles': { one: 'Gari {count}', other: 'Magari {count}' },
-  'status.live': 'kuchelewa: hali ya sek {seconds} zilizopita',
-  'status.waiting': 'inapakia data ya kuchelewa…',
-  'status.outage': 'hakuna data ya kuchelewa kwa sasa, yote kwa ratiba',
-  'status.loading': 'Inapakia data ya ratiba',
+  'status.outage': 'Hakuna data ya kuchelewa kwa sasa, yote kwa ratiba',
   'status.noTimetable': 'Hakuna data ya ratiba',
   'status.noConnection': 'Hakuna muunganisho na seva',
 

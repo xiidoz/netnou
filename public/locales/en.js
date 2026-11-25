@@ -65,14 +65,11 @@ export default {
   // followed by the names of those who publish the data (NETNOU_DATA_ATTRIBUTION of the server)
   'attribution.data': 'Timetable and realtime data, processed:',
 
+  // Until the first answer, in the line of the card that then says how many vehicles are under way (line.vehicles).
   'status.connecting': 'Connecting …',
-  'status.vehicles': { one: '{count} vehicle', other: '{count} vehicles' },
-  // What is live is the delays, not the positions: the status line says so.
-  'status.live': 'delays as of {seconds} s ago',
-  // Without any realtime data: while it may still be on its way, and once it is clear that there is none.
-  'status.waiting': 'loading delays …',
-  'status.outage': 'no delay data right now, all by timetable',
-  'status.loading': 'Loading timetable data',
+  // The card says nothing of its connection or delays while all is well; these begin a band of their own when not.
+  // Without realtime data, once it is clear that there is none:
+  'status.outage': 'No delay data right now, all by timetable',
   'status.noTimetable': 'No timetable data',
   'status.noConnection': 'No connection to the server',
 

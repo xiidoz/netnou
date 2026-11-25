@@ -161,6 +161,10 @@ button { font: inherit; color: inherit; }
   display: grid;
   gap: 10px;
 }
+/* (where the details beside it are 390 wide and leave room: the eight kinds of all of Germany in three rows of chips, not four) */
+@media (min-width: 900px) {
+  .controls { width: 420px; }
+}
 /* Out of sight until it is what this visitor gets, so that it does not change
    under their eyes: first.js says so before the first paint where the page
    came that way, app.js once it has made it so. */
@@ -223,8 +227,7 @@ button { font: inherit; color: inherit; }
 .controls.sized .card-grip { position: absolute; left: 0; bottom: 0; width: 100%; margin: 0; }
 .controls.dragging { transition: none; }
 :root[data-board] .card-grip, :root[data-display] .card-grip, :root:not([data-display]) .display-toggle { display: none; }
-:root[data-fold]:not([data-board]) .controls > :not(.title, .status, .bubble, .card-grip),
-:root[data-fold]:not([data-board]) .status:not([data-state="outage"], [data-state="error"]) { display: none; }
+:root[data-fold]:not([data-board]) .controls > :not(.title, .status, .bubble, .card-grip) { display: none; }
 :root[data-fold]:not([data-board]) .search-open,
 :root[data-fold]:not([data-board]) .search-close { display: grid; }
 :root[data-fold]:not([data-board]) .controls.searching .title { display: none; }
@@ -386,9 +389,14 @@ button { font: inherit; color: inherit; }
 /* (what a stop picked is added to, where the search adds one to a board) */
 .search-mode { margin: 0; padding: 9px 10px 2px; color: var(--text-muted); font-size: 12.5px; font-weight: 600; }
 
-/* Its dot stands in the column of the dots in the filters below it (a chip
-   has a border of 1 and a padding of 7 before its dot, of 11, and 6 after),
-   and so what it says begins where their names do. */
+/* What is not as it should be, below the chips: no realtime data at all, no
+   connection, no timetable. While all is well the card says nothing of its
+   connection or its delays: no warning is the sign that all is well,
+   and every state that is not says so in words here. Its dot stands in the
+   column of the dots in the filters above it (a chip has a border of 1 and a
+   padding of 7 before its dot, of 11, and 6 after), and so what it says
+   begins where their names do. */
+.status:not([data-state="outage"], [data-state="error"]) { display: none; }
 .status {
   margin: 0;
   padding-inline-start: 8px;
@@ -397,34 +405,15 @@ button { font: inherit; color: inherit; }
   gap: 6px;
   color: var(--text-muted);
   font-size: 13px;
-  font-variant-numeric: tabular-nums;
-  /* (the pulse of the dot lies under what the line says, see below) */
-  isolation: isolate;
 }
+/* (red: a connection lost, or no timetable; where there are no delay data the warning sign stands in its place) */
 .status .dot {
-  position: relative;
   width: 11px;
   height: 11px;
   border-radius: 50%;
-  background: var(--delay-none);
+  background: var(--delay-severe);
   flex: none;
 }
-.status[data-state="live"] .dot { background: var(--delay-ok); }
-/* The pulse of the dot while it is live: a disc of its colour that grows out
-   of it and fades. Over the dot it is of the dot's own colour: only the ring
-   beyond it shows. It changes only in size and opacity, which the browser
-   animates without the page: a shadow that grew had the page paint anew at
-   every frame, as long as it was open. */
-.status[data-state="live"] .dot::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  z-index: -1;
-  border-radius: 50%;
-  background: var(--delay-ok);
-  animation: pulse 2s ease-out infinite;
-}
-.status[data-state="error"] .dot { background: var(--delay-severe); }
 /* (the line as dark as the text then, as the note of the details that say it: what the map shows is not current, #382) */
 .status[data-state="error"] { color: var(--text); }
 /* No realtime data at all: the line is a warning that is not overlooked, with
@@ -443,13 +432,7 @@ button { font: inherit; color: inherit; }
 .status[data-state="outage"] .dot { display: none; }
 .status[data-state="outage"] .warn { display: block; }
 
-/* (out to 8 pixels beyond the dot of 11 on every side: 27 across) */
-@keyframes pulse {
-  0% { transform: scale(1); opacity: 0.55; }
-  100% { transform: scale(calc(27 / 11)); opacity: 0; }
-}
 @media (prefers-reduced-motion: reduce) {
-  .status .dot::after { display: none; }
   /* the sheets and the header card come to rest at once */
   .panel, .dialog, .controls.sized { transition: none !important; }
   .chips { scroll-behavior: auto !important; }
@@ -487,6 +470,9 @@ button { font: inherit; color: inherit; }
 .chip[data-mode="cable"] { --chip-color: var(--mode-cable); }
 .chip[data-mode="other"] { --chip-color: var(--mode-other); }
 .chip .swatch { background: var(--chip-color); }
+/* While the vehicles have the colours of their delays, a kind's colour is on no vehicle: its chip has no dot then, so
+   that the card has one key of colours, that of the delays. (The empty ring stays what it is, a kind switched off.) */
+.chips.by-delay .chip[aria-pressed="true"] .swatch { display: none; }
 .chip .count { color: var(--text-muted); font-variant-numeric: tabular-nums; }
 /* (the page is sent without the counts, which the script puts in: #289) */
 .chip .count:empty { display: none; }
@@ -543,6 +529,8 @@ button { font: inherit; color: inherit; }
 }
 .legend li { display: inline-flex; align-items: center; gap: 5px; }
 
+/* how many vehicles are under way, at the head of what everybody should know about them: one block, its lines close */
+.about-block { display: grid; }
 .hint {
   margin: 0;
   font-size: 12px;
@@ -835,8 +823,8 @@ button:focus-visible, select:focus-visible, .row:focus-visible, .panel:focus-vis
 .panel-head .notes .connection > span { padding-inline-start: 1.28em; text-indent: -1.28em; white-space: normal; overflow: visible; }
 .panel-head .notes .connection .part { display: inline; padding: 0; white-space: nowrap; overflow: visible; }
 .panel-head .notes .connection .dot { width: 0.8em; height: 0.8em; margin-inline-end: 0.48em; }
-/* While the page connects at a start without a connection, the dot of the card's "Verbinde …" (.status .dot): grey,
-   not the red of a connection lost, which is not known yet (app.js, "a start without a connection"). */
+/* While the page connects at a start without a connection: grey, not the red of a connection lost, which is not
+   known yet (app.js, "a start without a connection"). */
 .panel-head .notes .connection.connecting .dot { background: var(--delay-none); }
 :root[data-display] .board-head .notes .connection { font-size: 1.6em; }
 :root[data-display] .board-head .notes .connection .dot { width: 0.6em; height: 0.6em; }
@@ -1321,7 +1309,6 @@ body:has(> .map-keys:not([hidden], .gave-way)) :is(#tip, #offer, #map-note) { vi
 :root[data-display] .controls { width: auto; max-width: 360px; }
 :root[data-display=""] .controls > :not(.title, .status),
 :root[data-display="fixed"] .controls > :not(.title, .status, .legend),
-:root[data-display] .status:not([data-state="outage"], [data-state="error"]),
 :root[data-display] .title .settings-open,
 :root[data-display] .title .search-open,
 :root[data-display="fixed"] .title button,
@@ -1453,9 +1440,13 @@ body:has(> .map-keys:not([hidden], .gave-way)) :is(#tip, #offer, #map-note) { vi
 }
 /* (the button that shows the sources of the map, in the corner of the screen) */
 .maplibregl-ctrl-attrib-button::after { inset: -10px; }
-/* (the field of the search, as high as a chip: the room around it for a finger is a label of it that cannot be seen, from
-   the foot of the title row to the top of the status line below, which is no button; above it the field itself) */
+/* (the field of the search, as high as a chip: the room around it for a finger is a label of it that cannot be seen.
+   Where the chips follow 7 px below it, as on the card that shows everything, that room is all above the field: up
+   into the foot of the title row, whose names are no button, and under the gear and the lens their own rooms, which
+   lie over it; the chips' rooms of 44 px begin below the field (style.css, "pointer: coarse"). Where nothing follows it, on a board and in a folded
+   card's search, 2 px above it and 12 below.) */
 .search-reach { position: absolute; z-index: 1; left: 0; right: 0; top: -2px; bottom: -12px; }
+:root:not([data-fold], [data-board]) .search-reach { top: -14px; bottom: 0; }
 .search input, .search-close { position: relative; z-index: 2; }
 /* (and the lens in the field over the field, which a finger goes through) */
 .search-sign { z-index: 3; }
@@ -1478,7 +1469,9 @@ body:has(> .map-keys:not([hidden], .gave-way)) :is(#tip, #offer, #map-note) { vi
   .line-stops .joins > .branch::after { bottom: -22px; }
   button.line-vehicle { left: -22px; top: -22px; width: 44px; height: 44px; }
   .row.stop { min-height: 44px; }
-  #about-line { margin-top: 11px; }
+  /* (a pixel lower, so that the room of 44 px of each chip ends where the field of the search does, not inside it) */
+  .controls > .chips-row { margin-top: 1px; }
+  #about-block { margin-top: 11px; }
   #about-open { position: relative; }
   #about-open::before, #about-open::after { content: ""; position: absolute; z-index: 1; }
   #about-open::after { left: var(--wide-left, -6px); right: var(--wide-right, -6px); top: calc(-11.5px - var(--up, 0px)); bottom: calc(-1 * var(--foot, 6px)); }
@@ -1768,8 +1761,7 @@ body:has(> .map-keys:not([hidden], .gave-way)) :is(#tip, #offer, #map-note) { vi
   :root[data-board=""] .controls { max-width: none; }
   /* Above a board the map has little height: of the header card its title
      row stays, as in display mode, and the status line where it warns. */
-  :root[data-board] .controls > :not(.title, .status, .search, .bubble),
-  :root[data-board] .status:not([data-state="outage"], [data-state="error"]) { display: none; }
+  :root[data-board] .controls > :not(.title, .status, .search, .bubble) { display: none; }
 }
 
 /* The grip: as large as a finger needs (the button), and in its middle a

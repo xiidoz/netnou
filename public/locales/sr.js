@@ -42,11 +42,7 @@ export default {
   'attribution.data': 'Ред вожње и подаци у реалном времену, обрађено:',
 
   'status.connecting': 'Повезивање…',
-  'status.vehicles': { one: '{count} возило', few: '{count} возила', other: '{count} возила' },
-  'status.live': 'кашњења од пре {seconds} с',
-  'status.waiting': 'учитавање кашњења…',
-  'status.outage': 'тренутно нема података о кашњењу, све по реду вожње',
-  'status.loading': 'Учитавање података о реду вожње',
+  'status.outage': 'Тренутно нема података о кашњењу, све по реду вожње',
   'status.noTimetable': 'Нема података о реду вожње',
   'status.noConnection': 'Нема везе са сервером',
 

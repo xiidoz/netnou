@@ -42,11 +42,7 @@ export default {
   'attribution.data': 'Data jadwal dan real-time, diolah:',
 
   'status.connecting': 'Menghubungkan…',
-  'status.vehicles': { other: '{count} kendaraan' },
-  'status.live': 'keterlambatan diperbarui {seconds} dtk lalu',
-  'status.waiting': 'memuat keterlambatan…',
-  'status.outage': 'saat ini tidak ada data keterlambatan, semua sesuai jadwal',
-  'status.loading': 'Memuat data jadwal',
+  'status.outage': 'Saat ini tidak ada data keterlambatan, semua sesuai jadwal',
   'status.noTimetable': 'Tidak ada data jadwal',
   'status.noConnection': 'Tidak ada koneksi ke server',
 
