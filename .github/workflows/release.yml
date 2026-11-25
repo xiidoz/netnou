@@ -64,8 +64,13 @@ jobs:
         # Only a hint for later: never in the way of a release.
         continue-on-error: true
         run: |
-          own='map(select((.isCrossRepository | not) and (.headRefName | startswith("release-please--"))))[0] // empty | [.headRefName, .title] | @tsv'
-          pr=$(gh pr list --state open --base "$GITHUB_REF_NAME" --label 'autorelease: pending' --json headRefName,title,isCrossRepository --jq "$own")
+          # The release pull request is picked out of the open ones by its
+          # label and its branch, here and in the steps below. gh is not
+          # asked for it with --label: gh then asks GitHub's search, which
+          # finds a pull request only some seconds after it was opened, and
+          # release-please may have opened it just before the steps below.
+          own='map(select((.isCrossRepository | not) and (.headRefName | startswith("release-please--")) and any(.labels[]; .name == "autorelease: pending")))[0] // empty | [.headRefName, .title] | @tsv'
+          pr=$(gh pr list --state open --base "$GITHUB_REF_NAME" --limit 100 --json headRefName,title,isCrossRepository,labels --jq "$own")
           if [ -z "$pr" ]; then
             echo "No release pull request is open."
             exit 0
@@ -89,8 +94,8 @@ jobs:
         # is named again: not worth a failed run.
         continue-on-error: true
         run: |
-          own='map(select((.isCrossRepository | not) and (.headRefName | startswith("release-please--"))))[0].number // empty'
-          number=$(gh pr list --state open --base "$GITHUB_REF_NAME" --label 'autorelease: pending' --json number,headRefName,isCrossRepository --jq "$own")
+          own='map(select((.isCrossRepository | not) and (.headRefName | startswith("release-please--")) and any(.labels[]; .name == "autorelease: pending")))[0].number // empty'
+          number=$(gh pr list --state open --base "$GITHUB_REF_NAME" --limit 100 --json number,headRefName,isCrossRepository,labels --jq "$own")
           if [ -z "$number" ]; then
             echo "No release pull request is open."
             exit 0
@@ -157,8 +162,8 @@ jobs:
       - name: Keep the release pull request on top of main
         run: |
           # the one release-please made: by its label and the name of its branch here, not in a fork
-          own='map(select((.isCrossRepository | not) and (.headRefName | startswith("release-please--"))))[0].number // empty'
-          number=$(gh pr list --state open --base "$GITHUB_REF_NAME" --label 'autorelease: pending' --json number,headRefName,isCrossRepository --jq "$own")
+          own='map(select((.isCrossRepository | not) and (.headRefName | startswith("release-please--")) and any(.labels[]; .name == "autorelease: pending")))[0].number // empty'
+          number=$(gh pr list --state open --base "$GITHUB_REF_NAME" --limit 100 --json number,headRefName,isCrossRepository,labels --jq "$own")
           if [ -z "$number" ]; then
             echo "No release pull request is open."
             exit 0
@@ -200,8 +205,8 @@ jobs:
         # A release without a name is not worth a failed run.
         continue-on-error: true
         run: |
-          own='map(select((.isCrossRepository | not) and (.headRefName | startswith("release-please--"))))[0] // empty | [.number, .headRefName, .title] | @tsv'
-          pr=$(gh pr list --state open --base "$GITHUB_REF_NAME" --label 'autorelease: pending' --json number,headRefName,title,isCrossRepository --jq "$own")
+          own='map(select((.isCrossRepository | not) and (.headRefName | startswith("release-please--")) and any(.labels[]; .name == "autorelease: pending")))[0] // empty | [.number, .headRefName, .title] | @tsv'
+          pr=$(gh pr list --state open --base "$GITHUB_REF_NAME" --limit 100 --json number,headRefName,title,isCrossRepository,labels --jq "$own")
           if [ -z "$pr" ]; then
             echo "No release pull request is open."
             exit 0
