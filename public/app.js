@@ -3871,9 +3871,15 @@ let panelOpener = null;
 // heights, that and all of it. Its grip, a row at its foot, folds and
 // unfolds it, with a tap or a pull. On a phone it folds by itself while the
 // details of a stop, a line or a trip are open, so that the map has the room
-// between it and them; unfolded there, it folds again when the map or the
-// details are touched.
+// between it and them; unfolded there, it folds again when the map is
+// touched. The details never lie under it: they come up to its foot at most,
+// and move with that foot as it unfolds and folds (sheetGap, "the card's
+// foot").
 const card = { folded: false, unfolded: false }; // folded by the visitor; unfolded while details are open on a phone
+let sheetOwn = null; // (the height of the sheet before the card's foot moved it down, to go back to: see followCard)
+let sheetOwnNatural = false; // (whether that was the height it has by itself)
+let sheetNatural = null; // (the height in px a sheet glides to on its way back to as high as it is by itself: restNatural)
+let sheetAtTop = false; // whether the sheet last came to rest at the highest of its heights, up to the card
 let cardFoldedAt = -Infinity; // (when a touch on the map folded the card last)
 const sheetOpen = () => narrowScreen.matches && !panel.hidden;
 function showFold() {
@@ -3889,7 +3895,10 @@ function setFold(fold) {
 }
 // (also as the page comes: at the address of a stop or a line its details are open from the start)
 new MutationObserver(() => {
-  if (panel.hidden) card.unfolded = false;
+  if (panel.hidden) {
+    card.unfolded = false;
+    sheetOwn = null;
+  }
   showFold();
   renderBanner();
   markLost(panel.hidden ? false : document.documentElement.hasAttribute('data-lost') || Boolean(state.selection?.failing));
@@ -3905,7 +3914,39 @@ const folded = () => document.documentElement.dataset.fold !== undefined;
 // The grip's strip below the card (style.css), a finger's worth, reaches into
 // the map and stops short of the details: on a phone the sheet comes up to
 // just below the card, and its own bar is then where the strip would be.
-const GRIP_REACH_PX = 29; // (as high as the strip is in style.css)
+const GRIP_REACH_PX = 31; // (as high as the strip is in style.css: with the row and the 2 px above it, 44 px)
+// (where the grip is a row with a chevron, under a mouse, it has no strip: style.css)
+const gripRow = matchMedia('(hover: hover) and (pointer: fine)');
+// Folded, with the details come up right below it, the strip has no map to
+// lie on: the pill's column reaches up over the title as far as the strip
+// falls short, clear of the lens and the gear and their room for a finger
+// (style.css, the round buttons of the title row), and not over a search
+// opened in that row or the settings box (style.css).
+const reachUp = document.createElement('span');
+reachUp.className = 'reach-up';
+grip.append(reachUp);
+function gripReachUp(reach, gripBox) {
+  if (!folded() || !gripBox || reach >= GRIP_REACH_PX) {
+    grip.style.setProperty('--up', '0px');
+    return;
+  }
+  const middle = gripBox.left + gripBox.width / 2;
+  let [left, right] = [middle - 80, middle + 80];
+  for (const button of controls.querySelectorAll('.title > button')) {
+    if (!button.getClientRects().length) continue;
+    const { left: from, right: to } = button.getBoundingClientRect();
+    // (with their room for a finger, 7 px to each side, and 1 px between)
+    if (from - 8 < right && to + 8 > left) {
+      if (from > middle) right = Math.min(right, from - 8);
+      else left = Math.max(left, to + 8);
+    }
+  }
+  // (a column as wide on both sides of the pill, which stays its middle)
+  const half = Math.max(0, Math.min(middle - left, right - middle));
+  grip.style.setProperty('--up-left', `${Math.round(middle - half - gripBox.left)}px`);
+  grip.style.setProperty('--up-width', `${Math.round(2 * half)}px`);
+  grip.style.setProperty('--up', `${GRIP_REACH_PX + 2 - reach}px`);
+}
 function gripReach() {
   // (what is where, first: then what follows from it)
   const gripBox = grip.getClientRects().length ? grip.getBoundingClientRect() : null;
@@ -3916,7 +3957,9 @@ function gripReach() {
   const line = $('about-block').getBoundingClientRect();
   const card = controls.getBoundingClientRect();
   const links = $('links').hidden ? null : $('links').getBoundingClientRect();
-  grip.style.setProperty('--reach', `${Math.max(0, Math.min(GRIP_REACH_PX, Math.floor(room)))}px`);
+  const reach = Math.max(0, Math.min(GRIP_REACH_PX, Math.floor(room)));
+  grip.style.setProperty('--reach', `${reach}px`);
+  gripReachUp(reach, gripBox);
   // The way to "how it works" takes a finger in its own column (style.css,
   // "room for a finger"): from the chips' room above its line down to the
   // grip, past the operator's links where it has not 44 px above them (their
@@ -4000,9 +4043,14 @@ function restCard(fold) {
   setFoldAttribute(false);
   void controls.offsetHeight;
   sizeCard(fold ? low : high);
+  // (the details up to its foot glide with it, to where that foot comes to rest)
+  followCard(controls.getBoundingClientRect().top + (fold ? low : high), sheetGap(!fold), false);
+  // (where the details closed or opened while it glided, the card is as it is with or without them, not as it was told)
+  const open = sheetOpen();
   const done = () => {
     sizeCard(null);
-    setFold(fold);
+    if (sheetOpen() === open) setFold(fold);
+    else showFold();
   };
   if (matchMedia('(prefers-reduced-motion: reduce)').matches) done();
   else cardRest = setTimeout(done, 220);
@@ -4029,7 +4077,12 @@ grip.addEventListener('click', () => restCard(!folded()));
       setFoldAttribute(false);
     }
     const [low, high] = drag.heights;
-    sizeCard(Math.max(low - 12, Math.min(high + 12, drag.height + by)));
+    const height = Math.max(low - 12, Math.min(high + 12, drag.height + by));
+    sizeCard(height);
+    // (the details below follow its foot at once, as far below it as they come to be folded or unfolded, in between in
+    // proportion)
+    const part = Math.max(0, Math.min(1, (height - low) / Math.max(1, high - low)));
+    followCard(controls.getBoundingClientRect().top + height, sheetGap(false) + part * (sheetGap(true) - sheetGap(false)), true);
     drag.last.push([event.timeStamp, event.clientY]);
     if (drag.last.length > 5) drag.last.shift();
   });
@@ -4040,6 +4093,7 @@ grip.addEventListener('click', () => restCard(!folded()));
     drag = null;
     if (!moved) return;
     controls.classList.remove('dragging');
+    panel.classList.remove('following');
     // (a pull ends without the click a tap ends in)
     const swallow = (click) => {
       click.stopPropagation();
@@ -4057,15 +4111,33 @@ grip.addEventListener('click', () => restCard(!folded()));
   grip.addEventListener('pointerup', end);
   grip.addEventListener('pointercancel', end);
 }
-// (a touch on the map folds the card and is not a tap on the map as well: as outside an open box)
-for (const surface of [$('map'), panel]) {
-  surface.addEventListener('pointerdown', () => {
-    if (!sheetOpen() || !card.unfolded) return;
-    card.unfolded = false;
-    showFold();
-    if (surface !== panel) cardFoldedAt = performance.now();
-  });
-}
+// (a touch on the map folds the card and is not a tap on the map as well: as outside an open box. Not one on the
+// details: they would move up with the card's foot under the finger, and what it meant to tap with them.)
+$('map').addEventListener('pointerdown', () => {
+  if (!sheetOpen() || !card.unfolded) return;
+  // (gliding, as from its grip: the details up to its foot go with it)
+  restCard(true);
+  cardFoldedAt = performance.now();
+  // The click that ends this touch does not land on the details: they glide
+  // up under the finger meanwhile, and would take it (a row, their ✕). The
+  // map's own buttons stay where they are and take theirs.
+  const swallow = (click) => {
+    stop();
+    // (a click of no finger, as a key or a screen reader makes, is one of its own)
+    if (click.detail === 0 || !panel.contains(click.target)) return;
+    click.stopPropagation();
+    click.preventDefault();
+  };
+  const stop = () => {
+    document.removeEventListener('click', swallow, true);
+    removeEventListener('pointerdown', stop, true);
+    removeEventListener('keydown', stop, true);
+  };
+  document.addEventListener('click', swallow, true);
+  // (until that click; a touch that moved has none, and then until the next touch or key, which are their own)
+  addEventListener('pointerdown', stop, true);
+  addEventListener('keydown', stop, true);
+});
 
 function closePanel() {
   state.moves = (state.moves ?? 0) + 1;
@@ -6481,6 +6553,7 @@ const sheetHandle = $('panel-handle');
 
 /** The height of the sheet in px, or null for as high as it is by itself. */
 function setSheetHeight(height) {
+  sheetNatural = null;
   // (from the height it has by itself to one it is given: the style sheet can only glide between two numbers)
   if (height !== null && !panel.classList.contains('sized')) {
     panel.style.height = `${panel.offsetHeight}px`;
@@ -6489,16 +6562,97 @@ function setSheetHeight(height) {
   }
   panel.style.height = height === null ? '' : `${Math.round(height)}px`;
   panel.classList.toggle('sized', height !== null);
+  // (as high as it is by itself, as details opened anew are: neither at the top nor moved down by the card)
+  if (height === null) {
+    sheetAtTop = false;
+    sheetOwn = null;
+  }
 }
 
 /** The heights the sheet rests at, lowest first. */
 function sheetHeights() {
   const safe = parseFloat(getComputedStyle(panel).paddingBottom) || 0;
   const low = sheetHandle.offsetHeight + panelHead.offsetHeight + safe;
-  const middle = Math.round(SHEET_MIDDLE * viewSize.y);
-  // (up to the header card, and a gap as between the card and the edge of the screen)
-  const high = Math.round(viewSize.y - $('controls').getBoundingClientRect().bottom - 8);
-  return [Math.min(low, middle), middle, Math.max(high, middle)];
+  const high = sheetTop($('controls').getBoundingClientRect().bottom, sheetGap());
+  // (where the highest is lower than the middle, as on a phone on its side under the unfolded card, the middle is that)
+  const middle = Math.min(Math.round(SHEET_MIDDLE * viewSize.y), high);
+  return [Math.min(low, middle), middle, high];
+}
+
+/**
+ * The highest the sheet comes up to, with the header card's foot at y: gap
+ * below it. Where that leaves too little for the sheet's bar and head, as on
+ * a phone on its side, the grip's strip gives way first, down to 8 px as
+ * below the folded card; then the head runs off the foot of the screen,
+ * never under the card.
+ */
+function sheetTop(foot, gap) {
+  const safe = parseFloat(getComputedStyle(panel).paddingBottom) || 0;
+  const low = sheetHandle.offsetHeight + panelHead.offsetHeight + safe;
+  const room = viewSize.y - foot;
+  return Math.round(Math.max(room - gap, Math.min(low, SHEET_MIDDLE * viewSize.y, room - 8)));
+}
+
+/**
+ * How far below the header card's foot the details come up to at most: 8 px,
+ * as between the card and the edge of the screen. Below the unfolded card on
+ * a touch screen as far as its grip's strip reaches, so that the grip keeps
+ * it over the map; folded, the grip reaches up into the card instead (see
+ * gripReach), and the details have that room.
+ */
+function sheetGap(unfolded = !folded()) {
+  if (!unfolded || gripRow.matches) return 8;
+  // (how far the grip's row reaches below the card's edge, as it rests: style.css, .card-grip's margins)
+  if (!controls.classList.contains('sized') && grip.getClientRects().length) gripFoot = Math.round(grip.getBoundingClientRect().bottom - controls.getBoundingClientRect().bottom);
+  return gripFoot + 4 + GRIP_REACH_PX;
+}
+let gripFoot = 3;
+
+/**
+ * The details as the header card's foot goes to y: where it glides to, or
+ * where a finger has it (now: there at once). A sheet resting at its highest
+ * comes to rest gap below that foot; one lower stays where it is unless the
+ * foot comes nearer than gap, and goes back to where it was as the foot
+ * moves away again (sheetOwn).
+ */
+function followCard(foot, gap, now) {
+  panel.classList.toggle('following', now && sheetOpen());
+  if (!sheetOpen() || state.board !== null || panel.classList.contains('dragging')) return;
+  const room = sheetTop(foot, gap);
+  const own = sheetOwn ?? panel.offsetHeight;
+  // (a sheet as high as it is by itself goes back to that, whatever it is by then, as where the screen was turned)
+  const natural = sheetOwn === null ? !panel.classList.contains('sized') : sheetOwnNatural;
+  const height = sheetAtTop ? room : Math.min(own, room);
+  if (!sheetAtTop && natural && height >= own) {
+    sheetOwn = null;
+    if (panel.classList.contains('sized')) restNatural(now);
+    return;
+  }
+  sheetOwn = !sheetAtTop && height < own ? own : null;
+  sheetOwnNatural = sheetOwn !== null && natural;
+  if (Math.abs(height - panel.offsetHeight) > 1) setSheetHeight(height);
+}
+
+/**
+ * The sheet back to as high as it is by itself: a height of its own cannot
+ * glide, so it glides to that height in px first, with the card's foot, and
+ * is left to itself once there (now: under a finger, there at once).
+ */
+function restNatural(now) {
+  const given = panel.style.height;
+  panel.classList.remove('sized');
+  panel.style.height = '';
+  const natural = panel.offsetHeight;
+  panel.classList.add('sized');
+  panel.style.height = given;
+  void panel.offsetHeight;
+  setSheetHeight(natural);
+  sheetNatural = natural;
+  const done = () => {
+    if (sheetNatural === natural && sheetOpen() && !panel.classList.contains('dragging')) setSheetHeight(null);
+  };
+  if (now || matchMedia('(prefers-reduced-motion: reduce)').matches) done();
+  else setTimeout(done, 220);
 }
 
 /** Moves the map so that what is at the height y of the screen is not under the sheet, if there is room for it above. */
@@ -6576,10 +6730,10 @@ clearing.observe(map.getContainer().querySelector('.maplibregl-ctrl-bottom-right
 if (rightToLeft()) clearing.observe($('controls'));
 map.on('resize', clearMapButtons);
 
-let sheetAtTop = false; // whether the sheet last came to rest at the highest of its heights, up to the card
 
 /** The sheet comes to rest at a height, and what is chosen on the map stays in sight above it. */
 function restSheet(height) {
+  sheetOwn = null;
   sheetAtTop = height !== null && height >= sheetHeights()[2] - 1;
   setSheetHeight(height);
   // (once it has got there: the way up is a transition of the style sheet)
@@ -6588,15 +6742,19 @@ function restSheet(height) {
   }, 220);
 }
 
-// The folded card grows by its status line, as where the delay data is out:
-// a sheet resting up to it, or under it then, moves down to stay below it,
-// its bar and buttons in reach, and up again as the card shrinks.
+// The card's foot: the card grows by its status line, as where the delay data
+// is out, or as it unfolds and folds without gliding (a touch on the map). A
+// sheet resting up to it, or under it then, moves down to stay below it, its
+// bar and buttons in reach, and up again as the card shrinks. While the card
+// glides or is pulled the sheet is with it already (followCard).
 new ResizeObserver(() => {
   const card = $('controls');
-  if (!narrowScreen.matches || panel.hidden || state.board !== null || !document.documentElement.hasAttribute('data-fold')) return;
-  if (!panel.classList.contains('sized') || panel.classList.contains('dragging') || card.classList.contains('dragging')) return;
-  const high = sheetHeights()[2];
-  if (sheetAtTop || panel.offsetHeight > high + 1) setSheetHeight(high);
+  if (!sheetOpen() || state.board !== null) return;
+  if (panel.classList.contains('dragging') || card.classList.contains('dragging') || card.classList.contains('sized')) return;
+  if (sheetAtTop) setSheetHeight(sheetHeights()[2]);
+  // (lower down: moved only as far as the foot needs, and back to its own height as the foot goes, also where the screen
+  // was turned)
+  else followCard(card.getBoundingClientRect().bottom, sheetGap(), false);
 }).observe($('controls'));
 
 sheetHandle.addEventListener('click', () => {
@@ -6606,7 +6764,11 @@ sheetHandle.addEventListener('click', () => {
   const now = panel.offsetHeight;
   // one up from where it is, and from the highest back to the middle
   const next = heights.find((height) => height > now + 4) ?? heights[1];
-  restSheet(next);
+  // (where it can go neither way under the unfolded card, as on a phone on its side: the card folds, and it goes up)
+  if (card.unfolded && Math.abs(next - now) <= 4) {
+    restSheet(heights[2]);
+    restCard(true);
+  } else restSheet(next);
 });
 
 {
@@ -6630,13 +6792,15 @@ sheetHandle.addEventListener('click', () => {
       panel.classList.add('dragging');
     }
     const [, , high] = sheetHeights();
-    setSheetHeight(Math.max(24, Math.min(high + 16, drag.height + by)));
+    // (a little past the highest, as a sign that it goes no further, but not under the card)
+    const below = viewSize.y - $('controls').getBoundingClientRect().bottom - 2;
+    setSheetHeight(Math.max(24, Math.min(high + 16, Math.max(high, below), drag.height + by)));
     drag.last.push([event.timeStamp, event.clientY]);
     if (drag.last.length > 5) drag.last.shift();
   };
   const end = (event) => {
     if (!drag || event.pointerId !== drag.id) return;
-    const { moved, last } = drag;
+    const { moved, last, height: from } = drag;
     drag = null;
     if (!moved) return;
     panel.classList.remove('dragging');
@@ -6657,8 +6821,14 @@ sheetHandle.addEventListener('click', () => {
     else if (speed > SHEET_FLICK) rest = heights.find((height) => height > now) ?? heights.at(-1);
     else if (speed < -SHEET_FLICK) rest = [...heights].reverse().find((height) => height < now);
     else if (now >= heights[0] - SHEET_CLOSE_PX) rest = heights.reduce((best, height) => (Math.abs(height - now) < Math.abs(best - now) ? height : best));
+    // Pulled on up past its highest, under the unfolded card, or flicked up from
+    // there: the card folds, and the sheet goes up with its foot.
+    const top = heights[2];
     if (rest === undefined) closePanel();
-    else restSheet(rest);
+    else if (card.unfolded && rest >= top - 1 && event.type !== 'pointercancel' && (now > top + 4 || (speed > SHEET_FLICK && from >= top - 1))) {
+      restSheet(top);
+      restCard(true);
+    } else restSheet(rest);
   };
   // (and the buttons in its corner, as those in the head: all of the top edge moves the sheet, a button presses only
   // where the finger does not move)
