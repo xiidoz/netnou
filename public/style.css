@@ -197,16 +197,21 @@ button { font: inherit; color: inherit; }
    details have one at their head, and part of the card. A tap or a pull
    folds the card to its title row and unfolds it (app.js); on a phone it
    folds by itself while details are open. The eye is there only to leave display mode.
-   For a finger it reaches from 2 px above its row to 40 px below that: the
+   For a finger it reaches from 2 px above its row to 42 px below that: the
    row in the card, and under the pill a tab of 160 px over the map. On a
    touch screen the link "How it works" above it takes the room down to it,
    and on its row the side of the pill nearer the link (see "room for a
-   finger"); the pill's own column is the grip's. The card is as high as
-   without it, and the pill where it would be. */
+   finger"); the pill's own column is the grip's. Folded with the details
+   right below it, where the tab has no map to lie on, the pill's column
+   reaches up over the title instead (.reach-up), clear of the lens and the
+   gear. The card is as high as without it, and the pill where it would be. */
 .card-grip { position: relative; display: block; width: calc(100% + 28px); height: 11px; margin: 1px -14px -12px; padding: 0; border: 0; border-radius: 0 0 12px 12px; background: none; color: var(--text-muted); cursor: pointer; touch-action: none; }
 .card-grip::before { content: ""; position: absolute; left: calc(50% - 18px); top: -2px; width: 36px; height: 4px; border-radius: 2px; background: var(--border); }
 /* (as far as there is map below the card: not onto the details, whose bar may be right there, app.js sets --reach) */
-.card-grip::after { content: ""; position: absolute; left: calc(50% - 80px); top: 100%; width: 160px; height: var(--reach, 29px); touch-action: none; }
+.card-grip::after { content: ""; position: absolute; left: calc(50% - 80px); top: 100%; width: 160px; height: var(--reach, 31px); touch-action: none; }
+/* (what the tab lacks, above the row: app.js sets its height and its column; over the title's text, which is no control) */
+.card-grip .reach-up { position: absolute; bottom: 100%; left: var(--up-left, 0); width: var(--up-width, 0); height: var(--up, 0); touch-action: none; }
+.controls.searching .reach-up, .controls:has(#settings:not([hidden])) .reach-up { display: none; }
 .card-grip .icon { display: none; }
 /* (held, the pill darkens at once, on this grip as on that of the details) */
 .card-grip:active::before, .card-grip.grabbed::before, .handle:active::before { background: var(--text-muted); }
@@ -214,7 +219,7 @@ button { font: inherit; color: inherit; }
    which points the way the card goes, and lights up under the pointer. */
 @media (hover: hover) and (pointer: fine) {
   .card-grip { height: 22px; margin: -6px -14px -12px; }
-  .card-grip::after { display: none; }
+  .card-grip::after, .card-grip .reach-up { display: none; }
   .controls.sized { padding-bottom: 26px; }
   .card-grip::before { display: none; }
   .card-grip .icon { display: block; width: 18px; height: 18px; margin: 0 auto; transition: transform 0.2s; }
@@ -223,7 +228,7 @@ button { font: inherit; color: inherit; }
 }
 /* While it is pulled, and gliding to where it rests, the card is as high as
    it is given, its grip at its foot, what does not fit cut off. */
-.controls.sized { overflow: hidden; padding-bottom: 22px; transition: height 0.2s ease; }
+.controls.sized { overflow: hidden; padding-bottom: 22px; transition: height 180ms ease; }
 .controls.sized .card-grip { position: absolute; left: 0; bottom: 0; width: 100%; margin: 0; }
 .controls.dragging { transition: none; }
 :root[data-board] .card-grip, :root[data-display] .card-grip, :root:not([data-display]) .display-toggle { display: none; }
@@ -1579,7 +1584,8 @@ body:has(> .map-keys:not([hidden], .gave-way)) :is(#tip, #offer, #map-note) { vi
     transition: height 180ms ease;
   }
   .panel.sized { max-height: none; }
-  .panel.dragging, .dialog.dragging { transition: none; }
+  /* (and while it follows the foot of the header card, which a finger pulls: see app.js) */
+  .panel.dragging, .panel.following, .dialog.dragging { transition: none; }
   /* The bar: all of the top edge takes the finger, the stroke in its middle shows where. */
   .handle {
     display: block;
@@ -1593,6 +1599,8 @@ body:has(> .map-keys:not([hidden], .gave-way)) :is(#tip, #offer, #map-note) { vi
     background: none;
     cursor: grab;
   }
+  /* (its ring inside it, as a row's: the sheet cuts off what lies outside it, and runs from edge to edge of the screen) */
+  .handle:focus-visible { outline-offset: -2px; }
   .handle::before {
     content: "";
     position: absolute;

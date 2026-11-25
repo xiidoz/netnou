@@ -1110,6 +1110,49 @@ test('what gets the keyboard focus in the details is in sight: clear of the time
   assert.match(app, /group\.style\.visibility = out \? 'hidden' : '';\s*\}\s*coverCredits\(\);/);
 });
 
+test('on a phone the details never lie under the header card: they move with its foot, and its grip keeps a finger\'s room above them', () => {
+  const app = withoutComments(read('app.js'));
+  const css = read('style.css');
+  // up to the card's foot at most, as far below it as its grip needs, unfolded and folded
+  assert.match(app, /const high = sheetTop\(\$\('controls'\)\.getBoundingClientRect\(\)\.bottom, sheetGap\(\)\);/);
+  // (where there is too little room, as on a phone on its side, the strip gives way first, then the head runs off the foot)
+  assert.match(app, /return Math\.round\(Math\.max\(room - gap, Math\.min\(low, SHEET_MIDDLE \* viewSize\.y, room - 8\)\)\);/);
+  assert.match(app, /const room = sheetTop\(foot, gap\);/);
+  assert.match(app, /if \(!unfolded \|\| gripRow\.matches\) return 8;[^]*return gripFoot \+ 4 \+ GRIP_REACH_PX;/);
+  // gliding with the card as it unfolds and folds, and at once under a finger that pulls its grip
+  assert.match(app, /sizeCard\(fold \? low : high\);\s*followCard\(controls\.getBoundingClientRect\(\)\.top \+ \(fold \? low : high\), sheetGap\(!fold\), false\);/);
+  assert.match(app, /sizeCard\(height\);\s*const part = [^\n]*\n\s*followCard\(controls\.getBoundingClientRect\(\)\.top \+ height, [^\n]*, true\);/);
+  assert.match(css, /\.panel\.dragging, \.panel\.following, \.dialog\.dragging \{ transition: none; \}/);
+  // a touch on the map folds the unfolded card; one on the details does not, or they would move under the finger
+  assert.match(app, /\$\('map'\)\.addEventListener\('pointerdown', \(\) => \{\s*if \(!sheetOpen\(\) \|\| !card\.unfolded\) return;/);
+  // (and the click that ends that touch does not land on the details gliding up under the finger meanwhile; the map's
+  // own buttons, and a click of no finger, keep theirs)
+  assert.match(app, /const swallow = \(click\) => \{\s*stop\(\);\s*if \(click\.detail === 0 \|\| !panel\.contains\(click\.target\)\) return;/);
+  assert.match(app, /document\.addEventListener\('click', swallow, true\);\s*addEventListener\('pointerdown', stop, true\);\s*addEventListener\('keydown', stop, true\);/);
+  // (a sheet as high as it is by itself, moved down by the card, goes back to that, gliding there in px first)
+  assert.match(app, /if \(!sheetAtTop && natural && height >= own\) \{\s*sheetOwn = null;\s*if \(panel\.classList\.contains\('sized'\)\) restNatural\(now\);/);
+  assert.match(app, /setSheetHeight\(natural\);\s*sheetNatural = natural;/);
+  // details opened anew are as high as they are by themselves, not at the top as the last ones were
+  assert.match(app, /if \(height === null\) \{\s*sheetAtTop = false;\s*sheetOwn = null;\s*\}/);
+  // where the sheet can go neither way under the unfolded card, a tap on its bar folds the card; pulled past its
+  // highest it stops short of the card
+  assert.match(app, /if \(card\.unfolded && Math\.abs\(next - now\) <= 4\) \{\s*restSheet\(heights\[2\]\);\s*restCard\(true\);\s*\} else restSheet\(next\);/);
+  assert.match(app, /setSheetHeight\(Math\.max\(24, Math\.min\(high \+ 16, Math\.max\(high, below\), drag\.height \+ by\)\)\);/);
+  assert.doesNotMatch(app, /for \(const surface of \[\$\('map'\), panel\]\)/);
+  assert.match(app, /if \(!sheetOpen\(\) \|\| !card\.unfolded\) return;\s*restCard\(true\);\s*cardFoldedAt = performance\.now\(\);/);
+  // the details pulled on up past their highest under the unfolded card, or flicked up from there, fold it
+  assert.match(app, /else if \(card\.unfolded && rest >= top - 1 && [^\n]*\) \{\s*restSheet\(top\);\s*restCard\(true\);\s*\} else restSheet\(rest\);/);
+  // the grip: 44 px with its strip below; folded over the details, the pill's column up over the title instead, clear of
+  // the lens and the gear, and not over a search or the settings in that row
+  assert.match(app, /const GRIP_REACH_PX = 31;/);
+  assert.match(css, /height: var\(--reach, 31px\); touch-action: none; \}/);
+  assert.match(app, /grip\.style\.setProperty\('--up', `\$\{GRIP_REACH_PX \+ 2 - reach\}px`\);/);
+  assert.match(app, /for \(const button of controls\.querySelectorAll\('\.title > button'\)\)/);
+  assert.match(css, /\.controls\.searching \.reach-up, \.controls:has\(#settings:not\(\[hidden\]\)\) \.reach-up \{ display: none; \}/);
+  // the bar's ring inside it, whole, as a row's
+  assert.match(css, /\.handle:focus-visible \{ outline-offset: -2px; \}/);
+});
+
 test('a dialog that says something opens on its text, which the keys scroll and which is a stop of its own while it is long', () => {
   const app = withoutComments(read('app.js'));
   const html = read('index.html');
@@ -1290,7 +1333,7 @@ test('long without an answer, the details show their delays grey for as long as 
   assert.match(css, /#panel\.stale \.delay \{ color: var\(--text-muted\); \}/);
   // the folded card does not say what the head says, and a sheet up to it stays below it as it grows
   assert.match(css, /:root\[data-lost\] \.status\[data-state="error"\] \{ display: none; \}/);
-  assert.match(app, /if \(sheetAtTop \|\| panel\.offsetHeight > high \+ 1\) setSheetHeight\(high\);\s*\}\)\.observe\(\$\('controls'\)\);/);
+  assert.match(app, /if \(sheetAtTop\) setSheetHeight\(sheetHeights\(\)\[2\]\);\s*else followCard\(card\.getBoundingClientRect\(\)\.bottom, sheetGap\(\), false\);\s*\}\)\.observe\(\$\('controls'\)\);/);
   // an address the page cannot ask about: what it showed in this visit, else that it will load, once the connection is back
   assert.match(app, /res = await askServer\(`api\/address\?path=\$\{encodeURIComponent\(path\)\}`\);\s*\} catch \{\s*clearTimeout\(slow\);\s*return here\(\) === path && state\.moves === moves \? addressLost\(path, loaded\) : true;/);
   // (every question to the server gives up after ANSWER_MS: a hang counts as not coming; while the connection fails, after
