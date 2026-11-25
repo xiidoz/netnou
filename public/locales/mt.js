@@ -42,11 +42,7 @@ export default {
   'attribution.data': 'Data tal-orarju u fil-ħin reali, ipproċessata:',
 
   'status.connecting': 'Qed jikkonnettja…',
-  'status.vehicles': { one: '{count} vettura', two: '{count} vetturi', few: '{count} vetturi', many: '{count}-il vettura', other: '{count} vettura' },
-  'status.live': 'dewmien kif kien {seconds} s ilu',
-  'status.waiting': 'qed jitgħabba d-dewmien…',
-  'status.outage': 'bħalissa m’hemmx data tad-dewmien, kollox skont l-orarju',
-  'status.loading': 'Qed titgħabba d-data tal-orarju',
+  'status.outage': 'Bħalissa m’hemmx data tad-dewmien, kollox skont l-orarju',
   'status.noTimetable': 'M’hemmx data tal-orarju',
   'status.noConnection': 'M’hemmx konnessjoni mas-server',
 

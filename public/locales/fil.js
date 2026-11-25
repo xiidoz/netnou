@@ -42,11 +42,7 @@ export default {
   'attribution.data': 'Datos ng iskedyul at real-time, naproseso:',
 
   'status.connecting': 'Kumokonekta…',
-  'status.vehicles': { one: '{count} sasakyan', other: '{count} sasakyan' },
-  'status.live': 'na-update ang antala {seconds} seg ang nakalipas',
-  'status.waiting': 'nilo-load ang antala…',
-  'status.outage': 'walang datos ng antala ngayon, lahat ayon sa iskedyul',
-  'status.loading': 'Nilo-load ang datos ng iskedyul',
+  'status.outage': 'Walang datos ng antala ngayon, lahat ayon sa iskedyul',
   'status.noTimetable': 'Walang datos ng iskedyul',
   'status.noConnection': 'Walang koneksyon sa server',
 

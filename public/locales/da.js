@@ -42,11 +42,7 @@ export default {
   'attribution.data': 'Køreplans- og realtidsdata, bearbejdet:',
 
   'status.connecting': 'Forbinder…',
-  'status.vehicles': { one: '{count} køretøj', other: '{count} køretøjer' },
-  'status.live': 'forsinkelser opdateret for {seconds} sek. siden',
-  'status.waiting': 'indlæser forsinkelser…',
-  'status.outage': 'ingen forsinkelsesdata lige nu, alt efter køreplanen',
-  'status.loading': 'Indlæser køreplansdata',
+  'status.outage': 'Ingen forsinkelsesdata lige nu, alt efter køreplanen',
   'status.noTimetable': 'Ingen køreplansdata',
   'status.noConnection': 'Ingen forbindelse til serveren',
 

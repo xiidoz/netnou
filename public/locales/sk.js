@@ -42,11 +42,7 @@ export default {
   'attribution.data': 'Údaje cestovných poriadkov a údaje v reálnom čase, spracované:',
 
   'status.connecting': 'Pripája sa…',
-  'status.vehicles': { one: '{count} vozidlo', few: '{count} vozidlá', many: '{count} vozidla', other: '{count} vozidiel' },
-  'status.live': 'meškania: stav spred {seconds} s',
-  'status.waiting': 'načítavajú sa meškania…',
-  'status.outage': 'teraz bez údajov o meškaní, všetko podľa cestovného poriadku',
-  'status.loading': 'Načítavajú sa cestovné poriadky',
+  'status.outage': 'Teraz bez údajov o meškaní, všetko podľa cestovného poriadku',
   'status.noTimetable': 'Žiadne údaje cestovných poriadkov',
   'status.noConnection': 'Bez pripojenia k serveru',
 

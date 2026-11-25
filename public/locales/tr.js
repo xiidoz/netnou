@@ -42,11 +42,7 @@ export default {
   'attribution.data': 'İşlenmiş tarife ve gerçek zamanlı veriler:',
 
   'status.connecting': 'Bağlanıyor…',
-  'status.vehicles': { one: '{count} araç', other: '{count} araç' },
-  'status.live': 'gecikmeler {seconds} sn önce güncellendi',
-  'status.waiting': 'gecikmeler yükleniyor…',
-  'status.outage': 'şu an gecikme verisi yok, tümü tarifeye göre',
-  'status.loading': 'Tarife verileri yükleniyor',
+  'status.outage': 'Şu an gecikme verisi yok, tümü tarifeye göre',
   'status.noTimetable': 'Tarife verisi yok',
   'status.noConnection': 'Sunucuyla bağlantı yok',
 

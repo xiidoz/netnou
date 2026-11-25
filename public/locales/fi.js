@@ -42,11 +42,7 @@ export default {
   'attribution.data': 'Aikataulu- ja reaaliaikatiedot, käsitelty:',
 
   'status.connecting': 'Yhdistetään…',
-  'status.vehicles': { one: '{count} ajoneuvo', other: '{count} ajoneuvoa' },
-  'status.live': 'viiveet päivitetty {seconds} s sitten',
-  'status.waiting': 'ladataan viiveitä…',
-  'status.outage': 'viivetietoja ei nyt ole, kaikki aikataulun mukaan',
-  'status.loading': 'Ladataan aikataulutietoja',
+  'status.outage': 'Viivetietoja ei nyt ole, kaikki aikataulun mukaan',
   'status.noTimetable': 'Ei aikataulutietoja',
   'status.noConnection': 'Ei yhteyttä palvelimeen',
 

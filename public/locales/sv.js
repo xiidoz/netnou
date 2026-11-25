@@ -42,11 +42,7 @@ export default {
   'attribution.data': 'Tidtabells- och realtidsdata, bearbetade:',
 
   'status.connecting': 'Ansluter…',
-  'status.vehicles': { one: '{count} fordon', other: '{count} fordon' },
-  'status.live': 'förseningar uppdaterade för {seconds} s sedan',
-  'status.waiting': 'laddar förseningar…',
-  'status.outage': 'ingen förseningsdata just nu, allt enligt tidtabell',
-  'status.loading': 'Laddar tidtabellsdata',
+  'status.outage': 'Ingen förseningsdata just nu, allt enligt tidtabell',
   'status.noTimetable': 'Ingen tidtabellsdata',
   'status.noConnection': 'Ingen anslutning till servern',
 

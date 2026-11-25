@@ -42,11 +42,7 @@ export default {
   'attribution.data': 'Daneyên demnameyê û yên dema rast, amadekirî:',
 
   'status.connecting': 'Tê girêdan…',
-  'status.vehicles': { one: '{count} wesayît', other: '{count} wesayît' },
-  'status.live': 'derengî {seconds} çirk berê hatin nûkirin',
-  'status.waiting': 'derengî tên barkirin…',
-  'status.outage': 'niha daneyên derengiyê tune ne, hemû li gorî demnameyê',
-  'status.loading': 'Daneyên demnameyê tên barkirin',
+  'status.outage': 'Niha daneyên derengiyê tune ne, hemû li gorî demnameyê',
   'status.noTimetable': 'Daneyên demnameyê tune ne',
   'status.noConnection': 'Girêdana bi serverê re tune ye',
 

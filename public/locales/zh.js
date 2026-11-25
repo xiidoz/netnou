@@ -42,11 +42,7 @@ export default {
   'attribution.data': '时刻表和实时数据（经处理）：',
 
   'status.connecting': '正在连接…',
-  'status.vehicles': { other: '{count}辆车' },
-  'status.live': '晚点数据更新于{seconds}秒前',
-  'status.waiting': '正在加载晚点数据…',
   'status.outage': '暂无晚点数据，全部按时刻表显示',
-  'status.loading': '正在加载时刻表数据',
   'status.noTimetable': '没有时刻表数据',
   'status.noConnection': '无法连接服务器',
 

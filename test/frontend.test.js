@@ -713,7 +713,8 @@ test('delays as text hold 4.5:1 on the ground and on a row under the pointer, li
 test('the style sheet animates only transform and opacity', () => {
   const css = read('style.css').replace(/\/\*[\s\S]*?\*\//g, '');
   const keyframes = [...css.matchAll(/@keyframes\s+([\w-]+)\s*\{((?:[^{}]*\{[^{}]*\})*)\s*\}/g)];
-  assert.ok(keyframes.length > 0, 'no @keyframes found in style.css');
+  // (every one of them read, whether there are any: the sheet has had none since the card's live dot went)
+  assert.equal(keyframes.length, (css.match(/@keyframes/g) ?? []).length, 'an @keyframes that was not read');
   for (const [, name, body] of keyframes) {
     for (const [, property] of body.matchAll(/([\w-]+)\s*:/g)) assert.ok(['transform', 'opacity'].includes(property), `@keyframes ${name} animates ${property}`);
   }
@@ -959,8 +960,8 @@ test('texts with placeholders and plural forms, numbers and times in the languag
   const plain = (text) => text.replace(/\s/g, ' '); // newer ICU data puts a narrow no-break space before AM
 
   assert.equal(await loadLanguage('de', ['en-US']), 'de');
-  assert.equal(t('status.vehicles', { count: 1 }), de['status.vehicles'].one.replace('{count}', '1'));
-  assert.equal(t('status.vehicles', { count: 1234 }), de['status.vehicles'].other.replace('{count}', '1.234'));
+  assert.equal(t('line.vehicles', { count: 1 }), de['line.vehicles'].one.replace('{count}', '1'));
+  assert.equal(t('line.vehicles', { count: 1234 }), de['line.vehicles'].other.replace('{count}', '1.234'));
   assert.equal(t('trip.source', { source: 'VAG' }), de['trip.source'].replace('{source}', 'VAG'));
   assert.equal(t('trip.source'), de['trip.source']); // nothing to put in: the placeholder stays
   assert.equal(t('no.such.key'), 'no.such.key');
@@ -971,8 +972,8 @@ test('texts with placeholders and plural forms, numbers and times in the languag
   assert.equal(formatTime(0), '19:00');
 
   assert.equal(await loadLanguage(null, ['xx', 'en-US', 'de']), 'en');
-  assert.equal(t('status.vehicles', { count: 1 }), en['status.vehicles'].one.replace('{count}', '1'));
-  assert.equal(t('status.vehicles', { count: 1234 }), en['status.vehicles'].other.replace('{count}', '1,234'));
+  assert.equal(t('line.vehicles', { count: 1 }), en['line.vehicles'].one.replace('{count}', '1'));
+  assert.equal(t('line.vehicles', { count: 1234 }), en['line.vehicles'].other.replace('{count}', '1,234'));
   assert.equal(formatNumber(1234), '1,234');
   assert.equal(plain(formatTime(0)), '7:00 PM');
   setTimeZone('Europe/Berlin');

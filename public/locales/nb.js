@@ -42,11 +42,7 @@ export default {
   'attribution.data': 'Rute- og sanntidsdata, bearbeidet:',
 
   'status.connecting': 'Kobler til…',
-  'status.vehicles': { one: '{count} kjøretøy', other: '{count} kjøretøy' },
-  'status.live': 'forsinkelser oppdatert for {seconds} s siden',
-  'status.waiting': 'laster inn forsinkelser…',
-  'status.outage': 'ingen forsinkelsesdata nå, alt etter rutetabellen',
-  'status.loading': 'Laster inn rutedata',
+  'status.outage': 'Ingen forsinkelsesdata nå, alt etter rutetabellen',
   'status.noTimetable': 'Ingen rutedata',
   'status.noConnection': 'Ingen forbindelse med serveren',
 

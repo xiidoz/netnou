@@ -158,8 +158,6 @@
         <p class="search-note" id="search-note" role="status"></p>
       </div>
     </div>
-    <!-- (the sign takes the place of the dot where the line is a warning: no realtime data at all) -->
-    <p class="status" id="status"><span class="dot"></span><span class="warn" data-icon="mdiAlert"></span><span id="status-text" data-i18n="status.connecting">Connecting …</span></p>
     <!-- A chip for each mode of transport (MODES in app.js), with the number of
          its vehicles once the server has told it. Of those that only some
          timetables have, the chips are hidden: the server shows the chips of the
@@ -186,11 +184,24 @@
       </div>
       <button type="button" class="chips-more" id="modes-on" tabindex="-1" aria-hidden="true"><span data-icon="mdiChevronRight"></span></button>
     </div>
-    <!-- the key to the colours of the delays, while the vehicles have them (see the settings) -->
+    <!-- What is not as it should be: no realtime data at all, no connection,
+         no timetable. While all is well it is out of sight: the card says
+         nothing of its connection then (style.css). (The sign takes the place
+         of the dot where the band is a warning: no realtime data at all.) -->
+    <p class="status" id="status"><span class="dot"></span><span class="warn" data-icon="mdiAlert"></span><span id="status-text"></span></p>
+    <!-- the key to the colours of the delays, while the vehicles have them (see the settings): after the band, as an
+         outage of the delays makes it meaningless -->
     <ul class="legend" id="delay-legend" hidden></ul>
     <!-- What everybody should know about the markers, and the way to how the
-         page comes by them (the dialog below). -->
-    <p class="hint" id="about-line"><span data-i18n="about.fact">Positions are calculated, not tracked by GPS.</span> <button type="button" class="link" id="about-open" aria-haspopup="dialog" data-i18n="about.title">How it works</button></p>
+         page comes by them (the dialog below), under how many vehicles are
+         under way: the total of all kinds, also of those switched off. Its
+         line is there from the first paint, with status.connecting until the
+         first answer brings the number, so that nothing below it moves then;
+         without a connection it goes (app.js, updateStatus). -->
+    <div class="about-block" id="about-block">
+      <p class="hint" id="vehicle-count" data-i18n="status.connecting">Connecting …</p>
+      <p class="hint" id="about-line"><span data-i18n="about.fact">Positions are calculated, not tracked by GPS.</span> <button type="button" class="link" id="about-open" aria-haspopup="dialog" data-i18n="about.title">How it works</button></p>
+    </div>
     <!-- The operator's own links, such as who runs the instance and how it
          treats personal data. The server writes them in here (NETNOU_LINKS in
          docs/configuration.md); without any, this stays hidden. -->

@@ -42,11 +42,7 @@ export default {
   'attribution.data': 'Tvarkaraščio ir realiojo laiko duomenys, apdoroti:',
 
   'status.connecting': 'Jungiamasi…',
-  'status.vehicles': { one: '{count} transporto priemonė', few: '{count} transporto priemonės', many: '{count} transporto priemonės', other: '{count} transporto priemonių' },
-  'status.live': 'vėlavimai prieš {seconds} s',
-  'status.waiting': 'įkeliami vėlavimai…',
-  'status.outage': 'šiuo metu vėlavimo duomenų nėra, viskas pagal tvarkaraštį',
-  'status.loading': 'Įkeliami tvarkaraščio duomenys',
+  'status.outage': 'Šiuo metu vėlavimo duomenų nėra, viskas pagal tvarkaraštį',
   'status.noTimetable': 'Nėra tvarkaraščio duomenų',
   'status.noConnection': 'Nėra ryšio su serveriu',
 

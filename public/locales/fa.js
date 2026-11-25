@@ -42,11 +42,7 @@ export default {
   'attribution.data': 'داده‌های برنامهٔ حرکت و تأخیر، پردازش‌شده:',
 
   'status.connecting': 'در حال اتصال…',
-  'status.vehicles': { one: '{count} وسیلهٔ نقلیه', other: '{count} وسیلهٔ نقلیه' },
-  'status.live': 'تأخیرها: {seconds} ثانیه پیش',
-  'status.waiting': 'در حال بارگیری تأخیرها…',
   'status.outage': 'فعلاً دادهٔ تأخیر نیست، همه طبق برنامهٔ حرکت',
-  'status.loading': 'در حال بارگیری داده‌های برنامهٔ حرکت',
   'status.noTimetable': 'دادهٔ برنامهٔ حرکت موجود نیست',
   'status.noConnection': 'اتصال به سرور برقرار نیست',
 

@@ -42,11 +42,7 @@ export default {
   'attribution.data': 'ٹائم ٹیبل اور تاخیر کا ڈیٹا، پروسیس شدہ:',
 
   'status.connecting': 'کنیکٹ ہو رہا ہے…',
-  'status.vehicles': { one: '{count} گاڑی', other: '{count} گاڑیاں' },
-  'status.live': 'تاخیر: {seconds} سیکنڈ پہلے کی معلومات',
-  'status.waiting': 'تاخیر لوڈ ہو رہی ہے…',
   'status.outage': 'ابھی تاخیر کا ڈیٹا نہیں، سب کچھ ٹائم ٹیبل کے مطابق',
-  'status.loading': 'ٹائم ٹیبل کا ڈیٹا لوڈ ہو رہا ہے',
   'status.noTimetable': 'ٹائم ٹیبل کا ڈیٹا نہیں',
   'status.noConnection': 'سرور سے کنکشن نہیں',
 

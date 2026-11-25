@@ -42,11 +42,7 @@ export default {
   'attribution.data': 'Data jízdních řádů a data v reálném čase, zpracovaná:',
 
   'status.connecting': 'Připojování…',
-  'status.vehicles': { one: '{count} vozidlo', few: '{count} vozidla', many: '{count} vozidla', other: '{count} vozidel' },
-  'status.live': 'zpoždění: stav před {seconds} s',
-  'status.waiting': 'načítání zpoždění…',
-  'status.outage': 'teď bez údajů o zpoždění, vše podle jízdního řádu',
-  'status.loading': 'Načítání jízdních řádů',
+  'status.outage': 'Teď bez údajů o zpoždění, vše podle jízdního řádu',
   'status.noTimetable': 'Žádná data jízdních řádů',
   'status.noConnection': 'Bez připojení k serveru',
 

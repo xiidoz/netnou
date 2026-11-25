@@ -42,11 +42,7 @@ export default {
   'attribution.data': 'Rooster- en intydse data, verwerk:',
 
   'status.connecting': 'Koppel tans…',
-  'status.vehicles': { one: '{count} voertuig', other: '{count} voertuie' },
-  'status.live': 'vertragings bygewerk {seconds} s gelede',
-  'status.waiting': 'laai vertragings…',
-  'status.outage': 'tans geen vertragingsdata, alles volgens rooster',
-  'status.loading': 'Laai roosterdata',
+  'status.outage': 'Tans geen vertragingsdata, alles volgens rooster',
   'status.noTimetable': 'Geen roosterdata',
   'status.noConnection': 'Geen verbinding met die bediener',
 

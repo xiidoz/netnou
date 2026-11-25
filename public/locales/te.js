@@ -42,11 +42,7 @@ export default {
   'attribution.data': 'టైమ్‌టేబుల్, రియల్ టైమ్ డేటా (ప్రాసెస్ చేసినది), అందించినవారు:',
 
   'status.connecting': 'కనెక్ట్ అవుతోంది …',
-  'status.vehicles': { one: '{count} వాహనం', other: '{count} వాహనాలు' },
-  'status.live': 'ఆలస్యాలు: {seconds} సెకన్ల క్రితం నాటివి',
-  'status.waiting': 'ఆలస్యాలు లోడ్ అవుతున్నాయి …',
   'status.outage': 'ప్రస్తుతం ఆలస్యం డేటా లేదు, అన్నీ టైమ్‌టేబుల్ ప్రకారం',
-  'status.loading': 'టైమ్‌టేబుల్ డేటా లోడ్ అవుతోంది',
   'status.noTimetable': 'టైమ్‌టేబుల్ డేటా లేదు',
   'status.noConnection': 'సర్వర్‌తో కనెక్షన్ లేదు',
 

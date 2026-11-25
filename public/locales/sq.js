@@ -42,11 +42,7 @@ export default {
   'attribution.data': 'Të dhënat e orarit dhe në kohë reale, të përpunuara:',
 
   'status.connecting': 'Po lidhet…',
-  'status.vehicles': { one: '{count} mjet', other: '{count} mjete' },
-  'status.live': 'vonesat, përditësuar para {seconds} s',
-  'status.waiting': 'po ngarkohen vonesat…',
-  'status.outage': 'tani nuk ka të dhëna për vonesat, gjithçka sipas orarit',
-  'status.loading': 'Po ngarkohen të dhënat e orarit',
+  'status.outage': 'Tani nuk ka të dhëna për vonesat, gjithçka sipas orarit',
   'status.noTimetable': 'Nuk ka të dhëna orari',
   'status.noConnection': 'Nuk ka lidhje me serverin',
 

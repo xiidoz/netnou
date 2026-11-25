@@ -42,11 +42,7 @@ export default {
   'attribution.data': 'Данные расписания и реального времени, с изменениями:',
 
   'status.connecting': 'Подключение…',
-  'status.vehicles': { one: '{count} единица транспорта', few: '{count} единицы транспорта', many: '{count} единиц транспорта', other: '{count} единиц транспорта' },
-  'status.live': 'задержки обновлены {seconds} с назад',
-  'status.waiting': 'загрузка задержек…',
-  'status.outage': 'сейчас нет данных о задержках, всё по расписанию',
-  'status.loading': 'Загружаются данные расписания',
+  'status.outage': 'Сейчас нет данных о задержках, всё по расписанию',
   'status.noTimetable': 'Нет данных расписания',
   'status.noConnection': 'Нет соединения с сервером',
 

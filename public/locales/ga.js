@@ -42,11 +42,7 @@ export default {
   'attribution.data': 'Sonraí amchláir agus fíor-ama, próiseáilte:',
 
   'status.connecting': 'Ag ceangal…',
-  'status.vehicles': { one: 'feithicil amháin', two: '{count} fheithicil', few: '{count} fheithicil', many: '{count} bhfeithicil', other: '{count} feithicil' },
-  'status.live': 'moilleanna: {seconds} s ó shin',
-  'status.waiting': 'moilleanna á lódáil…',
-  'status.outage': 'níl aon sonraí moille ann faoi láthair, gach rud de réir an amchláir',
-  'status.loading': 'Sonraí amchláir á lódáil',
+  'status.outage': 'Níl aon sonraí moille ann faoi láthair, gach rud de réir an amchláir',
   'status.noTimetable': 'Níl aon sonraí amchláir ann',
   'status.noConnection': 'Níl ceangal leis an bhfreastalaí',
 

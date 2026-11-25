@@ -42,11 +42,7 @@ export default {
   'attribution.data': 'Date de orar și în timp real, prelucrate:',
 
   'status.connecting': 'Se conectează…',
-  'status.vehicles': { one: '{count} vehicul', few: '{count} vehicule', other: '{count} de vehicule' },
-  'status.live': 'întârzieri actualizate acum {seconds} s',
-  'status.waiting': 'se încarcă întârzierile…',
-  'status.outage': 'momentan fără date despre întârzieri, totul după orar',
-  'status.loading': 'Se încarcă datele de orar',
+  'status.outage': 'Momentan fără date despre întârzieri, totul după orar',
   'status.noTimetable': 'Fără date de orar',
   'status.noConnection': 'Fără conexiune la server',
 

@@ -42,11 +42,7 @@ export default {
   'attribution.data': 'Разписание и данни в реално време, обработени:',
 
   'status.connecting': 'Свързване…',
-  'status.vehicles': { one: '{count} превозно средство', other: '{count} превозни средства' },
-  'status.live': 'закъснения отпреди {seconds} сек.',
-  'status.waiting': 'зареждане на закъсненията…',
-  'status.outage': 'в момента няма данни за закъснения, всичко е по разписание',
-  'status.loading': 'Зареждане на данните от разписанието',
+  'status.outage': 'В момента няма данни за закъснения, всичко е по разписание',
   'status.noTimetable': 'Няма данни от разписанието',
   'status.noConnection': 'Няма връзка със сървъра',
 

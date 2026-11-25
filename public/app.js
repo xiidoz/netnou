@@ -3130,29 +3130,38 @@ function buildControls() {
 let shownRealtime = null; // the realtime state the card showed last (updateStatus)
 
 function updateStatus() {
-  // (without a connection, no numbers: its vehicles leave the map as their known ways end, see "a connection lost")
+  // (without a connection, no numbers: its vehicles leave the map as their known ways end, see "a connection lost"; the
+  // line of the count goes then, and the card's band says why. Before the first answer it keeps its "Connecting …".)
   if (!state.online) {
     for (const [, node] of chipCounts) node.textContent = '';
+    if (state.polled) $('vehicle-count').hidden = true;
     return;
   }
-  // The numbers refer to the whole area, not just the map section in view.
+  // The numbers refer to the whole area, not just the map section in view. The count is that of all kinds, also of
+  // those switched off: they are under way all the same, and the chips say how many of each.
   const counts = state.counts;
-  let shown = 0;
-  for (const [mode, count] of Object.entries(counts)) if (state.enabled.has(mode)) shown += count;
+  let total = 0;
+  for (const count of Object.values(counts)) total += count;
+  // (written only where it changes: this runs every second, and a screen reader takes each change of the page anew)
+  const count = $('vehicle-count');
+  const said = t('line.vehicles', { count: total });
+  count.hidden = false;
+  if (count.textContent !== said) count.textContent = said;
   for (const [mode, node] of chipCounts) node.textContent = formatNumber(counts[mode] ?? 0);
   // A chip for each kind the timetable has, and for no other: the page came
   // with those of the timetable the server had then (server/lib/page.js).
   if (state.kinds) for (const [mode, node] of chipCounts) node.parentElement.hidden = !state.kinds.includes(mode);
 
   // Without realtime data all positions are by the timetable alone. While it
-  // may still be on its way that is said calmly, after that as a warning.
+  // may still be on its way the vehicles and the departures say "?"; after
+  // that the card says it as a warning.
   const realtime = realtimeState();
   // (the vehicles say it too, with their flags (flagOf): drawn anew when it changes, which between two answers happens here first)
   if (realtime !== shownRealtime) askDraw();
   shownRealtime = realtime;
+  // (only an outage is said, in the card's band: while all is well the card says nothing)
   $('status').dataset.state = { live: 'live', waiting: 'schedule', outage: 'outage' }[realtime];
-  const text = realtime === 'live' ? t('status.live', { seconds: realtimeAge() }) : realtime === 'outage' ? t('status.outage') : t('status.waiting');
-  $('status-text').textContent = `${t('status.vehicles', { count: shown })} · ${text}`;
+  $('status-text').textContent = realtime === 'outage' ? t('status.outage') : '';
 }
 
 /** How old the realtime data in use is, in whole seconds; null without any. */
@@ -3788,6 +3797,8 @@ async function chooseFromList(code) {
   const show = () => {
     for (const button of buttons) button.setAttribute('aria-pressed', String(button.dataset.delaysChoice === shown()));
     $('delay-legend').hidden = state.colorBy !== 'delay';
+    // (the kinds' colours on no vehicle then: their chips without them, style.css)
+    $('modes').classList.toggle('by-delay', state.colorBy === 'delay');
   };
   for (const button of buttons) {
     button.addEventListener('click', () => {
@@ -3901,7 +3912,8 @@ function gripReach() {
   const room = sheetOpen() ? panel.getBoundingClientRect().top - (gripBox?.bottom ?? 0) - 4 : Infinity;
   const about = $('about-open');
   const box = about.getBoundingClientRect();
-  const line = $('about-line').getBoundingClientRect();
+  // (from the head of the block, whose first line is the count's: not a control, so the finger may reach over it)
+  const line = $('about-block').getBoundingClientRect();
   const card = controls.getBoundingClientRect();
   const links = $('links').hidden ? null : $('links').getBoundingClientRect();
   grip.style.setProperty('--reach', `${Math.max(0, Math.min(GRIP_REACH_PX, Math.floor(room)))}px`);
@@ -7729,7 +7741,8 @@ async function poll() {
       $('status-said').textContent = '';
       showBanner(loadingText(data), true);
       $('status').dataset.state = data.state === 'error' ? 'error' : 'schedule';
-      $('status-text').textContent = data.state === 'error' ? t('status.noTimetable') : t('status.loading');
+      // (while it loads it, the map's banner says what the server does; the card's band only that there is none)
+      $('status-text').textContent = data.state === 'error' ? t('status.noTimetable') : '';
       delay = RETRY_LOADING_MS;
       mapTries = 0;
       detailTries = 0;

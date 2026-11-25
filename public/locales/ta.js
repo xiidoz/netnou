@@ -42,11 +42,7 @@ export default {
   'attribution.data': 'கால அட்டவணை மற்றும் நிகழ்நேரத் தரவு (செயலாக்கப்பட்டது), வழங்குவோர்:',
 
   'status.connecting': 'இணைக்கிறது …',
-  'status.vehicles': { one: '{count} வாகனம்', other: '{count} வாகனங்கள்' },
-  'status.live': 'தாமதங்கள்: {seconds} வினாடிக்கு முன்பு',
-  'status.waiting': 'தாமதங்கள் ஏற்றப்படுகின்றன …',
   'status.outage': 'இப்போது தாமதத் தரவு இல்லை, அனைத்தும் கால அட்டவணைப்படி',
-  'status.loading': 'கால அட்டவணைத் தரவு ஏற்றப்படுகிறது',
   'status.noTimetable': 'கால அட்டவணைத் தரவு இல்லை',
   'status.noConnection': 'சர்வருடன் இணைப்பு இல்லை',
 
