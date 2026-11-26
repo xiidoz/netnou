@@ -8,7 +8,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { test } from 'node:test';
-import { MODEL, buildRequest, describeRelease, firstParagraph, originalDescription, readAnswer, readRelease, repeated, writeRelease } from '../tools/release-notes.mjs';
+import { MODEL, aboutPart, buildRequest, describeRelease, originalDescription, readAnswer, readRelease, repeated, writeRelease } from '../tools/release-notes.mjs';
 
 const COMPARE = 'https://github.com/xiidoz/netnou/compare';
 const COMMIT = 'https://github.com/xiidoz/netnou/commit';
@@ -164,13 +164,31 @@ test('a release without a name is described by its version, and what is not rele
   assert.equal(describeRelease(DESCRIPTION, '0.29.0', long), DESCRIPTION);
 });
 
-test('the first paragraph of a description is what it is about', () => {
-  assert.equal(firstParagraph('Riders on a train lose the connection.\nThe page forgot.\n\n**Kept:**\n- this'), 'Riders on a train lose the connection.\nThe page forgot.');
-  assert.equal(firstParagraph('<!--\nWhat does this change?\n-->\r\n\r\nOne line.\r\n\r\nTwo.'), 'One line.');
-  assert.equal(firstParagraph(''), '');
-  // a paragraph that leads into a list keeps it, and nothing after it
-  assert.equal(firstParagraph('Two things were not right (#361):\n\n- **The note.** It claimed more.\n- **The delays.** They went.\n\n**The note and the delays:**\n- this'), 'Two things were not right (#361):\n\n- **The note.** It claimed more.\n- **The delays.** They went.');
-  assert.equal(firstParagraph('It ends in a colon:'), 'It ends in a colon:');
+test('what a description says about its pull request is all of it before the pictures', () => {
+  const description = [
+    '<!--\r\nWhat does this change?\r\n-->\r\n',
+    'The card said at all times how many vehicles there are.\r\n',
+    '**While all is well, the card says nothing.** When something is not, a band says it:',
+    '- no delay data;\n- no connection.\n',
+    '| Before | After |\n|---|---|\n| ![](https://example.org/before.webp) | ![](https://example.org/after.webp) |\n',
+    '## Measured\n\n| | |\n| --- | --- |\n| Blocking time | 120 ms |\n',
+    '```sh\n# a setting, not a heading\nNETNOU_SEARCH_PAGES=home\n```\n',
+    '## Pictures\n\n![](https://example.org/phone.webp)\n',
+    '## Checklist\n\n- [x] `npm test` passes',
+  ].join('\n');
+  assert.equal(aboutPart(description), [
+    'The card said at all times how many vehicles there are.',
+    '**While all is well, the card says nothing.** When something is not, a band says it:\n- no delay data;\n- no connection.',
+    '## Measured',
+    '| | |\n| --- | --- |\n| Blocking time | 120 ms |',
+    '```sh\n# a setting, not a heading\nNETNOU_SEARCH_PAGES=home\n```',
+  ].join('\n\n'));
+  // whichever comes first ends it, and a picture in the text goes
+  assert.equal(aboutPart('One.\n\n### Checklist\n\n- [x] this\n\n## Pictures'), 'One.');
+  assert.equal(aboutPart('One.\n\n## Merging\n\nAfter #12.'), 'One.');
+  assert.equal(aboutPart('One.\n<img src="a.webp" width="300">\nTwo.'), 'One.\n\nTwo.');
+  assert.equal(aboutPart('A pull request without headings.\n\nAll of it.'), 'A pull request without headings.\n\nAll of it.');
+  assert.equal(aboutPart(''), '');
 });
 
 test('the request gives Claude the list, what its pull requests are about, and the name it had', () => {
@@ -190,8 +208,8 @@ test('the request gives Claude the list, what its pull requests are about, and t
   const asked = request.messages[0].content;
   assert.ok(asked.startsWith('Version 0.29.0.'));
   assert.ok(asked.includes(section));
-  assert.ok(asked.includes('#371: Riders on a train lose the connection'));
-  assert.ok(!asked.includes('#368:'), 'a pull request without a description is left out');
+  assert.ok(asked.includes('<pull_request number="371">\nRiders on a train lose the connection for minutes at a time.\n</pull_request>'));
+  assert.ok(!asked.includes('number="368"'), 'a pull request without a description is left out');
   assert.ok(asked.includes('was called "The Offline Release", with these sentences:\n\nKnown delays stay.'));
   assert.match(request.system, /"The … Release"/);
 
@@ -291,7 +309,7 @@ test('the script reads and writes CHANGELOG.md as the workflow calls it', () => 
     assert.equal(described, describeRelease(DESCRIPTION, '0.29.0', read));
     assert.equal(execFileSync(process.execPath, [script, 'original'], { input: described, encoding: 'utf8' }), DESCRIPTION);
     assert.equal(execFileSync(process.execPath, [script, 'original'], { input: DESCRIPTION, encoding: 'utf8' }), DESCRIPTION);
-    assert.equal(execFileSync(process.execPath, [script, 'excerpt'], { input: 'First.\n\nSecond.', encoding: 'utf8' }), 'First.\n');
+    assert.equal(execFileSync(process.execPath, [script, 'excerpt'], { input: 'First.\n\nSecond.\n\n## Pictures\n\nThird.', encoding: 'utf8' }), 'First.\n\nSecond.\n');
     assert.throws(() => execFileSync(process.execPath, [script, 'read', file, '0.1.0'], { stdio: 'pipe' }));
     // the answer, checked against the names before it in the changelog given
     fs.writeFileSync(file, NAMED);

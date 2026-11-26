@@ -186,9 +186,9 @@ jobs:
 
       # The section of the release in the pull request's CHANGELOG.md loses the
       # day release-please writes in its heading. Where it has no name, Claude
-      # is asked for one and for a few sentences, from the list and the first
-      # paragraph of each listed pull request's description, and the names of
-      # the releases before it, which its name must not repeat
+      # is asked for one and for a few sentences, from the list, the
+      # description of each listed pull request up to its pictures, and the
+      # names of the releases before it, which its name must not repeat
       # (tools/release-notes.mjs); a section whose name repeats one is asked
       # for anew. What changed is committed to the pull
       # request. release-please compares only the description of its pull

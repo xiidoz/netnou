@@ -261,6 +261,31 @@ pull request that was opened before another one was merged has to be brought
 up to date first, with "Update branch" or by rebasing it; its checks then
 run again.
 
+### The title and the description
+
+The title and the description are read by people who know neither the code
+nor the words we use among ourselves for the parts of the page: in the
+changelog, on the release page, and by Claude, who names the release from
+them (see [The name of a release](#the-name-of-a-release)). Write them for
+somebody who opens the page for the first time.
+
+- **Name a part of the page by what anybody sees:** where it is, what it
+  shows, or the words the page itself shows on it. "The card at the top
+  left", not "the start card"; "the panel that slides up on a phone", not
+  "the sheet". Where a word of our own cannot be avoided, the description
+  says once what it is.
+- **Words in their plain sense.** Taken word for word, the title is true:
+  "a quiet start" says something about starting, though only what the card
+  at the top left shows has changed.
+- **What changes for riders or operators,** not how it is done: "the card at
+  the top left says nothing of its connection while all is well", not
+  "remove the status line".
+- **The description begins with the change:** what was wrong or missing, as a
+  rider or an operator met it, then what is different now and what follows
+  from it. That part is what Claude reads, all of it up to the heading
+  "Pictures" (or "Merging" or "Checklist", whichever comes first). Pictures
+  go under "## Pictures", below it.
+
 ### Trying a pull request
 
 Every push to a pull request from a branch of this repository builds its
@@ -382,7 +407,8 @@ was published, and git when the changelog changed.
 - Where the repository has the secret `ANTHROPIC_API_KEY`, a key of the
   Claude API, the workflow asks Claude for them each time release-please
   opens the release pull request or writes it anew. Claude is given the list
-  and the first paragraph of the description of each pull request in it, the
+  and the description of each pull request in it up to its pictures (see
+  [Pull requests](#pull-requests)), the
   name the release had before, to keep if it still fits, and the names and
   sentences of the last ten named releases. Its name must say what is new: a
   name whose words are all words of an earlier one ("The Language Release"

@@ -33,7 +33,8 @@
 //     prints the description release-please wrote, which "describe" keeps in
 //     its own; a description release-please wrote is printed as it is
 //   node tools/release-notes.mjs excerpt   < description
-//     prints the first paragraph of a pull request's description
+//     prints what a pull request's description says about it: all of it up to
+//     its pictures, how to merge it or its checklist, without pictures
 //   node tools/release-notes.mjs request   < {version, section, pulls, previous, earlier}
 //     prints the request to the Claude API that asks for a name and sentences:
 //     pulls is [{number, about}], previous the {name, text} the release had
@@ -193,13 +194,42 @@ export function describeRelease(description, version, { name, section }) {
   return described.length > MAX_DESCRIPTION ? original : described;
 }
 
-// The first paragraph of a pull request's description: what it is about and
-// why, before its lists, headings and pictures. Where it ends in a colon, the
-// block it leads into belongs to it.
-export function firstParagraph(description) {
-  const text = description.replace(/<!--[\s\S]*?-->/g, '').replace(/\r\n/g, '\n').trim();
-  const blocks = text.split(/\n\s*\n/).map(block => block.trim());
-  return blocks[0].endsWith(':') && blocks[1] ? `${blocks[0]}\n\n${blocks[1]}` : blocks[0];
+// The headings below which a pull request's description is no longer about
+// what changes: its pictures, how to merge it, its checklist.
+const AFTER_ABOUT = /^#{1,6}\s+(pictures?|merging|checklist)\s*$/i;
+
+// What a pull request's description says about it: what was wrong or missing,
+// and what is different now. That is all of it up to its pictures, how to
+// merge it or its checklist, whichever comes first (a heading in a block of
+// code does not count), without comments and pictures; a table that held only
+// pictures goes with them.
+export function aboutPart(description) {
+  const lines = description.replace(/<!--[\s\S]*?-->/g, '').replace(/\r\n/g, '\n').split('\n');
+  const about = [];
+  let fence = '';
+  for (const line of lines) {
+    const marker = line.match(/^\s*(`{3,}|~{3,})/)?.[1] ?? '';
+    if (fence) {
+      if (marker.startsWith(fence)) fence = '';
+    } else if (marker) {
+      fence = marker;
+    } else if (AFTER_ABOUT.test(line)) {
+      break;
+    }
+    about.push(line);
+  }
+  const text = about.join('\n')
+    .replace(/\[!\[[^\]]*\]\([^)]*\)\]\([^)]*\)/g, '')
+    .replace(/!\[[^\]]*\]\([^)]*\)/g, '')
+    .replace(/<img\b[^>]*>/gi, '');
+  return text.split(/\n\s*\n/)
+    // the rows of a table that are empty now, but not its head
+    .map(block => block.split('\n').filter((line, i) => i === 0 || !/^\s*\|[\s|]*$/.test(line)))
+    // a table left with no rows under its head held only pictures
+    .filter(lines => lines.join('').trim() && !(lines.length < 3 && lines.every(line => /^\s*\|/.test(line))))
+    .map(lines => lines.join('\n'))
+    .join('\n\n')
+    .trim();
 }
 
 export const MODEL = 'claude-opus-5-5';
@@ -232,7 +262,7 @@ export function buildRequest({ version, section, pulls = [], previous = null, ea
   const parts = [`Version ${version}. Its list of changes, as it will stand in the changelog:\n\n${section}`];
   const about = pulls.filter(pull => pull.about);
   if (about.length) {
-    parts.push(`What its pull requests are about, from the first paragraph of their descriptions:\n\n${about.map(pull => `#${pull.number}: ${pull.about}`).join('\n\n')}`);
+    parts.push(`What its pull requests are about, from their descriptions (without their pictures):\n\n${about.map(pull => `<pull_request number="${pull.number}">\n${pull.about}\n</pull_request>`).join('\n\n')}`);
   }
   if (previous?.name || previous?.text) {
     parts.push(`Before its last changes were added, the release was called "${previous.name}", with these sentences:\n\n${previous.text}`);
@@ -290,7 +320,7 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
     } else if (command === 'original') {
       process.stdout.write(originalDescription(stdin()));
     } else if (command === 'excerpt') {
-      console.log(firstParagraph(stdin()));
+      console.log(aboutPart(stdin()));
     } else if (command === 'request') {
       console.log(JSON.stringify(buildRequest(JSON.parse(stdin()))));
     } else if (command === 'answer') {
