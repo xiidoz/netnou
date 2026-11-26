@@ -261,6 +261,36 @@ pull request that was opened before another one was merged has to be brought
 up to date first, with "Update branch" or by rebasing it; its checks then
 run again.
 
+### The title and the description
+
+The title and the description are read by people who did not take part in
+the change: by those who look at pull requests before they are released,
+mostly developers; in the changelog and on the release page; and by Claude,
+who names the release from them (see
+[The name of a release](#the-name-of-a-release)). They know how a user
+interface is built, but not the code, nor what we have come to call its
+parts among ourselves.
+
+- **Name a part of the page so that it is clear which one is meant, and
+  so that its name says nothing false.** The usual words for the parts of
+  a user interface are fine: card, sheet, chip, dialog, banner. Where the
+  page has several, say which: "the details sheet" or "the sheet for
+  choosing a stop's lines", not "the sheet". A name must not suggest what
+  the page does not have: "the start card" sounds like a start screen,
+  though there is none and the card is always there. It is "the header
+  card", as in [docs/architecture.md](docs/architecture.md).
+- **Words in their plain sense.** Taken word for word, the title is true:
+  "a quiet start" says something about starting, though only what the
+  header card shows has changed.
+- **What changes for riders or operators,** not how it is done: "the header
+  card says nothing of its connection while all is well", not "remove the
+  status line".
+- **The description begins with the change:** what was wrong or missing, as a
+  rider or an operator met it, then what is different now and what follows
+  from it. That part is what Claude reads, all of it up to the heading
+  "Pictures" (or "Merging" or "Checklist", whichever comes first). Pictures
+  go under "## Pictures", below it.
+
 ### Trying a pull request
 
 Every push to a pull request from a branch of this repository builds its
@@ -382,7 +412,8 @@ was published, and git when the changelog changed.
 - Where the repository has the secret `ANTHROPIC_API_KEY`, a key of the
   Claude API, the workflow asks Claude for them each time release-please
   opens the release pull request or writes it anew. Claude is given the list
-  and the first paragraph of the description of each pull request in it, the
+  and the description of each pull request in it up to its pictures (see
+  [Pull requests](#pull-requests)), the
   name the release had before, to keep if it still fits, and the names and
   sentences of the last ten named releases. Its name must say what is new: a
   name whose words are all words of an earlier one ("The Language Release"
