@@ -263,23 +263,28 @@ run again.
 
 ### The title and the description
 
-The title and the description are read by people who know neither the code
-nor the words we use among ourselves for the parts of the page: in the
-changelog, on the release page, and by Claude, who names the release from
-them (see [The name of a release](#the-name-of-a-release)). Write them for
-somebody who opens the page for the first time.
+The title and the description are read by people who did not take part in
+the change: by those who look at pull requests before they are released,
+mostly developers; in the changelog and on the release page; and by Claude,
+who names the release from them (see
+[The name of a release](#the-name-of-a-release)). They know how a user
+interface is built, but not the code, nor what we have come to call its
+parts among ourselves.
 
-- **Name a part of the page by what anybody sees:** where it is, what it
-  shows, or the words the page itself shows on it. "The card at the top
-  left", not "the start card"; "the panel that slides up on a phone", not
-  "the sheet". Where a word of our own cannot be avoided, the description
-  says once what it is.
+- **Name a part of the page so that it is clear which one is meant, and
+  so that its name says nothing false.** The usual words for the parts of
+  a user interface are fine: card, sheet, chip, dialog, banner. Where the
+  page has several, say which: "the details sheet" or "the sheet for
+  choosing a stop's lines", not "the sheet". A name must not suggest what
+  the page does not have: "the start card" sounds like a start screen,
+  though there is none and the card is always there. It is "the header
+  card", as in [docs/architecture.md](docs/architecture.md).
 - **Words in their plain sense.** Taken word for word, the title is true:
-  "a quiet start" says something about starting, though only what the card
-  at the top left shows has changed.
-- **What changes for riders or operators,** not how it is done: "the card at
-  the top left says nothing of its connection while all is well", not
-  "remove the status line".
+  "a quiet start" says something about starting, though only what the
+  header card shows has changed.
+- **What changes for riders or operators,** not how it is done: "the header
+  card says nothing of its connection while all is well", not "remove the
+  status line".
 - **The description begins with the change:** what was wrong or missing, as a
   rider or an operator met it, then what is different now and what follows
   from it. That part is what Claude reads, all of it up to the heading
