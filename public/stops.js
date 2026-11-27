@@ -20,7 +20,7 @@ export const FAVOURITE_NAME_ZOOM = 11;
 // api/stations) has a mark at each; below it, one at its own point.
 export const PLACES_ZOOM = 15;
 // How high a name is taken to be, and how far it is from its stop.
-const NAME_HEIGHT = 16;
+export const NAME_HEIGHT = 16;
 const NAME_SPACE = 5;
 
 /**

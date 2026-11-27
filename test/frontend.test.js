@@ -1153,6 +1153,42 @@ test('on a phone the details never lie under the header card: they move with its
   assert.match(css, /\.handle:focus-visible \{ outline-offset: -2px; \}/);
 });
 
+test('a finger finds what it means on every touch screen: vehicles, the names of stops, chips, switches and results', () => {
+  const app = withoutComments(read('app.js'));
+  const css = read('style.css');
+  // a finger's tap reaches a vehicle out to a ring, which gives way to every vehicle drawn there and to a stop; a mouse and
+  // the crosshair keep to what is drawn
+  assert.match(app, /const VEHICLE_RING_PX = 22;/);
+  assert.equal(app.match(/ring: VEHICLE_RING_PX, vehicle:/g)?.length, 4);
+  // (not a vehicle out of sight, under the card, the details or the map's buttons)
+  assert.match(app, /const ringed = d > hit\.r && finger && hit\.ring && d <= hit\.ring && onFreeMap\(hit\);/);
+  assert.match(app, /score = ringed \? 2000 \+ d - hit\.r : d \+ \(hit\.above \? -1000 : hit\.station \? 1000 : 0\);/);
+  assert.match(app, /fingerOnMap = event\.pointerType === 'touch';/);
+  assert.match(app, /const hit = hitTest\(event\.point, \{ finger: fingerOnMap \}\);/);
+  // a stop's name opens it: its letters after a vehicle drawn over them and after a stop's mark, a finger a little past them
+  assert.match(app, /nameHits\.push\(\{ x: mark\.x, y: mark\.y, r: 0, box: \[lefts\[i\] - 2, mark\.y - NAME_HEIGHT \/ 2, mark\.width \+ 4, NAME_HEIGHT\], station, named: true/);
+  assert.match(app, /if \(dx === 0 && dy === 0\) score = \(hit\.above \? -1000 : 1000\) \+ STOP_HIT_PX;\s*else if \(finger && dx <= NAME_REACH_PX && dy <= \(44 - h\) \/ 2\) score = 2000 \+ Math\.hypot\(dx, dy\);/);
+  assert.match(read('stops.js'), /export const NAME_HEIGHT = 16;/);
+  // the phone's one row of chips also on a touch screen as low as a phone on its side; the chips, the switch of the
+  // details and Filter 44 px high on every touch screen, the rows of chips as far apart where they wrap
+  assert.match(css, /@media \(max-width: 720px\), \(pointer: coarse\) and \(max-height: 500px\) \{\s*\.chips-row \{ margin: 0 -12px; \}/);
+  assert.match(css, /@media \(max-width: 720px\), \(pointer: coarse\) \{\s*\.chips \.chip \{ position: relative; \}\s*\.chips \.chip::after \{ content: ""; position: absolute; top: calc\(50% - 22px\); left: -3px; right: -3px; height: 44px; \}\s*\.chips \{ row-gap: 16px; \}\s*\.panel-head \.view-switch button::after/);
+  // results of the search 44 px high on a touch screen; while a screen's keyboard is up, the list down to above it, never
+  // under it, with room between them; a tap outside the search then only shuts it (the map, the head of the details), a
+  // click with a mouse does what it does
+  assert.match(css, /\.search-results li:not\(\.search-heading\) \{ min-height: 44px; \}/);
+  assert.match(app, /drop\.style\.maxHeight = `\$\{Math\.floor\(Math\.max\(Math\.min\(3 \* 44, visible - 8\), visible - KEYBOARD_ROOM_PX\)\)\}px`;/);
+  assert.match(app, /if \(!keyboardUp \|\| event\.pointerType === 'mouse' \|\| document\.activeElement !== searchField \|\| !searchBox\.classList\.contains\('open'\) \|\| searchBox\.contains\(event\.target\)\) return;\s*const swallow = \(click\) => \{\s*stop\(\);\s*if \(click\.detail === 0\) return;\s*click\.stopPropagation\(\);\s*click\.preventDefault\(\);/);
+  // (not a page zoomed in to read: a keyboard comes with the field's focus, at the page's own scale)
+  assert.match(app, /document\.activeElement === searchField && Math\.abs\(view\.scale - 1\) < 0\.01;/);
+  // (the map's tap is that click: nothing more to hold back on the map, so the next tap there is its own at once)
+  assert.doesNotMatch(app, /searchShutAt/);
+  // (a board's grip on a touch screen on its side 44 px wide, over the board and not the map)
+  assert.match(css, /@media \(pointer: coarse\) and \(orientation: landscape\) \{\s*:root\[data-board\] \.handle \{ inset-inline-start: -10px; width: 44px; \}/);
+  // (and no ring reaches a vehicle out of sight, under a bubble as well)
+  assert.match(app, /if \(state\.covers\.some\(\(\[left, top, w, h\]\) => x >= left && x <= left \+ w && y >= top && y <= top \+ h\)\) return false;/);
+});
+
 test('a dialog that says something opens on its text, which the keys scroll and which is a stop of its own while it is long', () => {
   const app = withoutComments(read('app.js'));
   const html = read('index.html');
@@ -1186,7 +1222,8 @@ test('the keyboard reaches the map from its first stop, and the map shows its ke
   assert.match(app, /if \(keys !== null\) edges\.bottom = Math\.min\(edges\.bottom, keys - 4\);/);
   // (in a short window, where they would leave the crosshair no room, they give way to it)
   assert.match(app, /if \(room\.covered && keysTop\(\) !== null\) \{\s*mapKeys\.classList\.add\('gave-way'\);/);
-  assert.match(css, /body:has\(> \.map-keys:not\(\[hidden\], \.gave-way\)\) :is\(#tip, #offer, #map-note\) \{ visibility: hidden; \}/);
+  // (the other notes wait while the keys show, and while the settings are open)
+  assert.match(css, /body:has\(> \.map-keys:not\(\[hidden\], \.gave-way\)\) :is\(#tip, #offer, #map-note\),\s*body:has\(#settings:not\(\[hidden\]\)\) :is\(#tip, #offer, #map-note\) \{ visibility: hidden; \}/);
   // (above the banner where both stand at the foot of the map; placed anew as it comes and goes)
   assert.match(app, /if \(meets\(banner, mapKeys\.getBoundingClientRect\(\)\)\) mapKeys\.style\.bottom = /);
   assert.match(app, /crossResized\.observe\(\$\('banner'\)\);/);
