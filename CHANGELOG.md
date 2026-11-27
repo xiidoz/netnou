@@ -8,7 +8,9 @@ This file is written by
 messages when a release is made. Do not edit it by hand; see
 [Releases](CONTRIBUTING.md#releases).
 
-## [0.32.0](https://github.com/xiidoz/netnou/compare/v0.31.0...v0.32.0) (2026-11-27)
+## [0.32.0](https://github.com/xiidoz/netnou/compare/v0.31.0...v0.32.0) – The Touch Release
+
+On every touch screen, riders now reach vehicles, stop names, chips and search results with a finger. On a phone, the details make way for the unfolded card instead of lying under it, so their buttons stay within reach. While all is well, the start card stays silent, and the count of vehicles under way heads the caveat.
 
 
 ### Features
