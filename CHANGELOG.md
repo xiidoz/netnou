@@ -8,6 +8,19 @@ This file is written by
 messages when a release is made. Do not edit it by hand; see
 [Releases](CONTRIBUTING.md#releases).
 
+## [0.32.0](https://github.com/xiidoz/netnou/compare/v0.31.0...v0.32.0) (2026-11-27)
+
+
+### Features
+
+* **page:** a calmer start card, silent while all is well, the count above the caveat ([#405](https://github.com/xiidoz/netnou/issues/405)) ([0a9c508](https://github.com/xiidoz/netnou/commit/0a9c508c598cf162cb169ce808ce0a78a3b58621))
+* **page:** a finger finds vehicles, stop names, chips and results on every touch screen ([#410](https://github.com/xiidoz/netnou/issues/410)) ([6ae5ae7](https://github.com/xiidoz/netnou/commit/6ae5ae788dc9b2810264959fcaf68268bc3e35ad))
+
+
+### Bug Fixes
+
+* **page:** on a phone the details make way for the card and never lie under it ([#408](https://github.com/xiidoz/netnou/issues/408)) ([5e7baed](https://github.com/xiidoz/netnou/commit/5e7baeda47c16f009b1694a1498b3b28c1e25156))
+
 ## [0.31.0](https://github.com/xiidoz/netnou/compare/v0.30.0...v0.31.0) – The World Languages Release
 
 The page now speaks 54 languages, four right to left, and riders find theirs by any name, even in a script they cannot read. Times and days follow the page's language in Chrome too, timetables tell morning from afternoon, and wall screens keep their language. Operators can choose pages and languages for search engines, and give an email address.
