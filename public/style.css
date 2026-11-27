@@ -1264,7 +1264,10 @@ li:last-child > .row.stop .rail::before { bottom: 50%; }
 .map-keys kbd.side { padding-bottom: 4px; }
 /* (where it would leave the crosshair no room, it gives way, and the other notes show) */
 .map-keys.gave-way { visibility: hidden; }
-body:has(> .map-keys:not([hidden], .gave-way)) :is(#tip, #offer, #map-note) { visibility: hidden; }
+/* (the other notes wait while the map shows its keys, and while the settings are open: on a short phone they would
+   lie over its foot, and the box has the language at its top anyway) */
+body:has(> .map-keys:not([hidden], .gave-way)) :is(#tip, #offer, #map-note),
+body:has(#settings:not([hidden])) :is(#tip, #offer, #map-note) { visibility: hidden; }
 
 /* The offer of the browser's language (#287), in the look of the tip: its
    line beside an ✕, below them the switch, filled, and the end of the offer,
@@ -1474,6 +1477,8 @@ body:has(> .map-keys:not([hidden], .gave-way)) :is(#tip, #offer, #map-note) { vi
   .line-stops .joins > .branch::after { bottom: -22px; }
   button.line-vehicle { left: -22px; top: -22px; width: 44px; height: 44px; }
   .row.stop { min-height: 44px; }
+  /* (the results of the search too, which touch as well; not their headings, which are no button) */
+  .search-results li:not(.search-heading) { min-height: 44px; }
   /* (a pixel lower, so that the room of 44 px of each chip ends where the field of the search does, not inside it) */
   .controls > .chips-row { margin-top: 1px; }
   #about-block { margin-top: 11px; }
@@ -1487,41 +1492,14 @@ body:has(> .map-keys:not([hidden], .gave-way)) :is(#tip, #offer, #map-note) { vi
   .links a { position: relative; z-index: 1; }
 }
 
-/* ---------- small screens: controls on top, details as bottom sheet ---------- */
-
-@media (max-width: 720px) {
-  :root { --gap: 8px; }
-
-  /* (the sheet that opens shows where the focus went: no ring around it, which the keys of a phone's own keyboard would show too) */
-  .panel:focus-visible { outline: none; }
-
-  .controls {
-    width: auto;
-    inset-inline-end: calc(var(--gap) + var(--safe-end));
-    padding: 9px 12px;
-    gap: 7px;
-  }
-  .title h1, .title .site-name { font-size: 16px; }
-  /* The search is a field under the title row, as on a wide screen (#220).
-     Above a board, where the card is its title row, it is a button with a
-     lens in that row; opened, the field takes the place of the row, with a
-     button to shut it again. */
-  :root[data-board] .search-open, :root[data-board] .search-close { display: grid; }
-  .search-close { width: 34px; height: 34px; color: var(--text); }
-  :root[data-board] .search { display: none; }
-  :root[data-board] .controls.searching .title { display: none; }
-  :root[data-board] .controls.searching .search { display: flex; }
-  /* (as high as a chip, and 16 px: with less, Safari on a phone zooms the page in when the field gets the focus) */
-  .search input { height: 30px; padding-top: 0; padding-bottom: 0; font-size: 16px; }
-  /* clear of the departures, which cover the lower half */
-  .search-drop { max-height: min(40vh, 330px); }
-  /* One row of chips that scrolls sideways, out to the edges of the card. */
+/* One row of chips that scrolls sideways, out to the edges of the card: on a
+   phone, upright and on its side (a touch screen as low as that), where rows of
+   them would leave little of the map. On a wide card its edges are 2 px wider. */
+@media (max-width: 720px), (pointer: coarse) and (max-height: 500px) {
   .chips-row { margin: 0 -12px; }
   /* (scroll-padding: a chip that gets the keyboard focus comes to rest clear of the arrows) */
   /* (the room above and below the chips is the row's too, as much as it gives back: a finger takes a chip there, see "room for a finger") */
   .chips { flex-wrap: nowrap; overflow-x: auto; margin: -9px 0; padding: 9px 12px 11px; scrollbar-width: none; scroll-behavior: smooth; scroll-padding-inline: 64px; }
-  .chips .chip { position: relative; }
-  .chips .chip::after { content: ""; position: absolute; top: calc(50% - 22px); left: -3px; right: -3px; height: 44px; }
   .chips::-webkit-scrollbar { display: none; }
   /* Where the row goes on (app.js knows), the chips fade out under an arrow
      that moves the row on: without it nothing shows that there are more. */
@@ -1567,6 +1545,53 @@ body:has(> .map-keys:not([hidden], .gave-way)) :is(#tip, #offer, #map-note) { vi
     display: grid;
     place-items: center;
   }
+}
+@media (pointer: coarse) and (max-height: 500px) and (min-width: 721px) {
+  .chips-row { margin: 0 -14px; }
+  .chips { padding-inline: 14px; }
+}
+/* Room for a finger on every touch screen, whatever its width: each chip 44
+   px high, and where they wrap into rows, as on a tablet, the rows as far
+   apart as that; the switch of the details' views, Filter and its cross as
+   high, and their two lines apart as far, where directions are chosen. */
+@media (max-width: 720px), (pointer: coarse) {
+  .chips .chip { position: relative; }
+  .chips .chip::after { content: ""; position: absolute; top: calc(50% - 22px); left: -3px; right: -3px; height: 44px; }
+  .chips { row-gap: 16px; }
+  .panel-head .view-switch button::after, .panel-head .choice-open::after, .panel-head .choice-clear::after { left: 0; right: 0; top: calc(50% - 20px); height: 44px; }
+  /* (and where they take two lines, as with directions chosen, the second as far below the first as these areas need) */
+  .panel-head .sub.with-choice { row-gap: 20px; }
+  /* (the cross that shows all lines again is narrow: its area takes the end of the chip it is in, and half the room beside it) */
+  .panel-head .choice-clear::after { inset-inline: -15px -6px; }
+}
+/* ---------- small screens: controls on top, details as bottom sheet ---------- */
+
+@media (max-width: 720px) {
+  :root { --gap: 8px; }
+
+  /* (the sheet that opens shows where the focus went: no ring around it, which the keys of a phone's own keyboard would show too) */
+  .panel:focus-visible { outline: none; }
+
+  .controls {
+    width: auto;
+    inset-inline-end: calc(var(--gap) + var(--safe-end));
+    padding: 9px 12px;
+    gap: 7px;
+  }
+  .title h1, .title .site-name { font-size: 16px; }
+  /* The search is a field under the title row, as on a wide screen (#220).
+     Above a board, where the card is its title row, it is a button with a
+     lens in that row; opened, the field takes the place of the row, with a
+     button to shut it again. */
+  :root[data-board] .search-open, :root[data-board] .search-close { display: grid; }
+  .search-close { width: 34px; height: 34px; color: var(--text); }
+  :root[data-board] .search { display: none; }
+  :root[data-board] .controls.searching .title { display: none; }
+  :root[data-board] .controls.searching .search { display: flex; }
+  /* (as high as a chip, and 16 px: with less, Safari on a phone zooms the page in when the field gets the focus) */
+  .search input { height: 30px; padding-top: 0; padding-bottom: 0; font-size: 16px; }
+  /* clear of the departures, which cover the lower half */
+  .search-drop { max-height: min(40vh, 330px); }
 
   /* The details are a sheet from the bottom: as high as what they show, up to
      about half the screen (SHEET_MIDDLE in app.js), until the bar at its top
@@ -1640,11 +1665,6 @@ body:has(> .map-keys:not([hidden], .gave-way)) :is(#tip, #offer, #map-note) { vi
   /* (for a finger, see "room for a finger": the buttons from the foot of the bar down, the chips under them, side by side, from there to the departures; on a board, whose bar is a tab over the map, from the edge of the screen) */
   :root:not([data-board]) .panel :is(.close, .share, .board-toggle, .heart)::after { inset: 0 -6px -12px; }
   :root[data-board] .panel :is(.close, .share, .board-toggle, .heart)::after { inset: -12px -6px 0; }
-  .panel-head .view-switch button::after, .panel-head .choice-open::after, .panel-head .choice-clear::after { left: 0; right: 0; top: calc(50% - 20px); height: 44px; }
-  /* (and where they take two lines, as with directions chosen, the second as far below the first as these areas need) */
-  .panel-head .sub.with-choice { row-gap: 20px; }
-  /* (the cross that shows all lines again is narrow: its area takes the end of the chip it is in, and half the room beside it) */
-  .panel-head .choice-clear::after { inset-inline: -15px -6px; }
   .panel-head .notes, .panel-head .sub.with-choice { margin-inline-end: 0; }
   /* A sheet has little room: every note is one line there, cut where it does
      not fit. app.js makes a button of what is cut, and keeps all notes to a
@@ -1826,6 +1846,21 @@ body:has(> .map-keys:not([hidden], .gave-way)) :is(#tip, #offer, #map-note) { vi
   :root[data-board="alone"] .handle::after { top: 14px; }
   /* (and the name of the stop below its pill, which it would cross where the name takes one line) */
   :root[data-board="alone"]:not([data-display="fixed"]) .panel .panel-head.board-head { padding-top: max(0.6em, 28px); }
+}
+/* (and a board's grip at its edge on a screen on its side, 44 px wide for a finger: 10 px over the map, clear of its
+   buttons, the rest over the board, whose rows are no buttons; its pill stays on the edge, right to left as well, and
+   where the board is alone at the edge of the screen) */
+@media (pointer: coarse) and (orientation: landscape) {
+  :root[data-board] .handle { inset-inline-start: -10px; width: 44px; }
+  :root[data-board] .handle::before { left: 3px; }
+  :root[data-board] .handle::after { left: 8px; }
+  :root[dir="rtl"][data-board] .handle::before { left: auto; right: 3px; }
+  :root[dir="rtl"][data-board] .handle::after { left: auto; right: 8px; }
+  :root[data-board="alone"] .handle { inset-inline-start: 0; }
+  :root[data-board="alone"] .handle::before { left: 9px; }
+  :root[data-board="alone"] .handle::after { left: 14px; }
+  :root[dir="rtl"][data-board="alone"] .handle::before { left: auto; right: 9px; }
+  :root[dir="rtl"][data-board="alone"] .handle::after { left: auto; right: 14px; }
 }
 
 /* (no heart on a board: it is in the details of the stop) */

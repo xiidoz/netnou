@@ -11,7 +11,7 @@
 import { parseAddress, stopPathAt, wordsOf } from './address.js';
 import { APP_NAME, browserLanguage, chooseLanguage, commaOf, dayOf, dayStartOf, formatHour, formatList, formatNumber, formatTime, formatWeekday, formatWhen, fromAddress, isolatedEach, keepLanguage, LANGUAGES, languageToOffer, loadLanguage, pageTexts, primaryCode, READMES, rightToLeft, sentInAnother, setTimeZone, storageWorks, storedLanguage, t, textDirection, textsOf, towards, translatePage, withoutIsolates, withPlainMarks } from './i18n.js';
 import { languageFound, languageOrder, nameAlone, nameIn, secondName } from './languages.js';
-import { FAVOURITE_NAME_ZOOM, HEART_MIDDLE, PLACES_ZOOM, RAIL_MODES, heartMark, joiningLines, mergePlaces, namePrecedence, namedAt, placeNames, stopMark, townToShow, townsAlong, withoutStyleStops } from './stops.js';
+import { FAVOURITE_NAME_ZOOM, HEART_MIDDLE, NAME_HEIGHT, PLACES_ZOOM, RAIL_MODES, heartMark, joiningLines, mergePlaces, namePrecedence, namedAt, placeNames, stopMark, townToShow, townsAlong, withoutStyleStops } from './stops.js';
 import { favouritesFrom, isFavourite, lineFavourite, metres, sameStop, stopFavourite, stopNamedAt, withChoice, withFavourite } from './favourites.js';
 import { choiceValue, chosenWays, readChoice, shownKeys, toggled } from './choice.js';
 import { HELD, heldArea, heldDetails, heldLast, heldPaths, holdArea, holdDetails, holdLast } from './held.js';
@@ -154,6 +154,11 @@ const ALL_STATIONS_ZOOM = 14;
 // A tap this near a stop opens it (#222): 28 px across, which a finger finds.
 // Where it hits a vehicle as well, the vehicle wins (hitTest).
 const STOP_HIT_PX = 14;
+// A finger's tap this near a vehicle opens it, though it be smaller: a ring that gives way to any vehicle drawn
+// there and to a stop (hitTest). A mouse and the crosshair keep to what is drawn.
+const VEHICLE_RING_PX = 22;
+// (and a finger's tap this far past either end of a stop's name, which is taken as 44 px high: hitTest)
+const NAME_REACH_PX = 6;
 // Delay classes in seconds (DELAY_*_S in panel.js); the legend is made from them. A delay belongs to
 // the class of the whole minutes it is shown as: what reads "+2" is "from 2 min".
 // Vehicles count as being at one place when their markers are at most
@@ -395,6 +400,7 @@ const state = {
   directions: null, // what there is to choose from at the open stop: { id, list } as api/departures has it
   view: 'departures', // what the open stop shows, of VIEWS in panel.js: its next departures or all its lines (#255)
   hits: [], // what can be pointed at on the map: { x, y, r, vehicle or station; named: a stop with its name on the map }, see draw()
+  nameHits: [], // (and the names of stops: { box, station }, which a tap takes as their marks, hitTest; the crosshair steps from mark to mark)
   covers: [], // the boxes of the bubbles, which hide what is under them: [x, y, width, height]
   peek: null, // the id of the vehicle a pointer rests on while vehicles are dots: drawn as zoomed in, see "the peek"
   chosenAt: null, // where on the screen the chosen vehicle is drawn, if it is in view: { x, y, … }
@@ -1197,6 +1203,7 @@ function draw() {
   // (with a margin: a marker whose centre is just outside still reaches in)
   const onScreen = (x, y) => x > -30 && y > -30 && x < viewSize.x + 30 && y < viewSize.y + 30;
   const hits = [];
+  const nameHits = [];
   const selection = state.selection;
 
   // Everything outside the area, where vehicles are only followed roughly, is
@@ -1392,6 +1399,10 @@ function draw() {
     const withNames = [];
     stopNames.forEach((mark, i) => {
       if (lefts[i] === null) return;
+      // A tap on a stop's name opens the stop, as one on its mark, which a
+      // vehicle may cover: the name's box as placeNames has it (hitTest).
+      const station = mark.station ?? mark.hit?.station ?? state.stations.find((each) => each.id === mark.id);
+      if (station) nameHits.push({ x: mark.x, y: mark.y, r: 0, box: [lefts[i] - 2, mark.y - NAME_HEIGHT / 2, mark.width + 4, NAME_HEIGHT], station, named: true, ...(mark.lifted ? { above: true } : {}) });
       if (mark.lifted) liftedNames.push([mark, lefts[i]]);
       else {
         writeName(mark, lefts[i]);
@@ -1517,7 +1528,7 @@ function draw() {
         peeked = { v, x, y, a: headingAt(v, target) };
         continue;
       }
-      hits.push({ x, y, r: Math.max(r + 3, 10), vehicle: v });
+      hits.push({ x, y, r: Math.max(r + 3, 10), ring: VEHICLE_RING_PX, vehicle: v });
       // (the chosen one after the loop)
       if (isChosen(v)) chosen = { x, y, dot: v };
       else drawDisc(x, y, r, v, false);
@@ -1549,7 +1560,7 @@ function draw() {
     drawDisc(x, y, big, v, true);
     const flag = flagOf(v, live);
     if (flag) drawFlag(x + big * 0.55, y - big - 5, flag);
-    hits.push({ x, y, r: big + 3, vehicle: v });
+    hits.push({ x, y, r: big + 3, ring: VEHICLE_RING_PX, vehicle: v });
   }
 
   // Which of them are at one place: so close that one would hide the other,
@@ -1595,7 +1606,7 @@ function draw() {
       drawDisc(x, y, r, v, true);
       const flag = flagOf(v, live);
       if (flag) drawFlag(x + r * 0.55, y - r - 5, flag);
-      hits.push({ x, y, r: Math.max(r + 3, 10), vehicle: v });
+      hits.push({ x, y, r: Math.max(r + 3, 10), ring: VEHICLE_RING_PX, vehicle: v });
       continue;
     }
 
@@ -1625,7 +1636,7 @@ function draw() {
       setLabelFont(member.label);
       ctx.fillText(member.label, middle, y + 0.5);
       // each name is its own to point at
-      hits.push({ x: middle, y, r: Math.max(widths[i] / 2 + 2, 10), vehicle: member });
+      hits.push({ x: middle, y, r: Math.max(widths[i] / 2 + 2, 10), ring: VEHICLE_RING_PX, vehicle: member });
       left += widths[i];
       if (i === members.length - 1) return;
       ctx.beginPath();
@@ -1752,6 +1763,7 @@ function draw() {
   }
 
   state.hits = hits;
+  state.nameHits = nameHits;
   state.covers = covers;
   state.chosenAt = chosen;
   // (what the crosshair aims at, among what this frame has drawn: see "the crosshair"; placed first where the keyboard came by a
@@ -1883,17 +1895,42 @@ function askDraw() {
 
 // ---------- interaction ----------
 
-function hitTest(point) {
+/** Whether what is drawn at a point of the map is in sight: not under the card, the details, the map's buttons or a bubble. */
+function onFreeMap({ x, y }) {
+  if (state.covers.some(([left, top, w, h]) => x >= left && x <= left + w && y >= top && y <= top + h)) return false;
+  const canvas = map.getCanvas();
+  const box = canvas.getBoundingClientRect();
+  return document.elementFromPoint(box.left + x, box.top + y) === canvas;
+}
+
+function hitTest(point, { finger = false } = {}) {
   let best = null;
   let bestScore = Infinity;
   // Under a bubble nothing can be pointed at but what is in it.
   const covered = state.covers.some(([x, y, w, h]) => point.x >= x && point.x <= x + w && point.y >= y && point.y <= y + h);
-  for (const hit of state.hits) {
+  for (const hit of [...state.hits, ...state.nameHits]) {
     if (covered && !hit.top) continue;
-    const d = Math.hypot(hit.x - point.x, hit.y - point.y);
-    if (d > hit.r) continue;
-    // vehicles win over the station they are standing at; a favourite drawn above them over the vehicles
-    const score = d + (hit.above ? -1000 : hit.station ? 1000 : 0);
+    let score;
+    if (hit.box) {
+      // A stop's name: on its letters after a vehicle drawn over them and
+      // after a stop's mark (an open stop's name may lie over another's), a
+      // lifted favourite's over the vehicles as its mark is; a finger a
+      // little beyond them too, 44 px high in all, where nothing is drawn.
+      const [x, y, w, h] = hit.box;
+      const dx = Math.max(x - point.x, 0, point.x - x - w);
+      const dy = Math.max(y - point.y, 0, point.y - y - h);
+      if (dx === 0 && dy === 0) score = (hit.above ? -1000 : 1000) + STOP_HIT_PX;
+      else if (finger && dx <= NAME_REACH_PX && dy <= (44 - h) / 2) score = 2000 + Math.hypot(dx, dy);
+      else continue;
+    } else {
+      const d = Math.hypot(hit.x - point.x, hit.y - point.y);
+      // (a finger beyond what is drawn, in a vehicle's ring: after every vehicle drawn there and every stop, the nearer
+      // edge first, a ring's or a name's)
+      const ringed = d > hit.r && finger && hit.ring && d <= hit.ring && onFreeMap(hit);
+      if (d > hit.r && !ringed) continue;
+      // vehicles win over the station they are standing at; a favourite drawn above them over the vehicles
+      score = ringed ? 2000 + d - hit.r : d + (hit.above ? -1000 : hit.station ? 1000 : 0);
+    }
     if (score < bestScore) {
       best = hit;
       bestScore = score;
@@ -1942,11 +1979,15 @@ map.on('mousemove', (event) => {
 map.on('mouseout', () => { hideTooltip(); peekAt(null); });
 map.on('movestart', () => { hideTooltip(); peekAt(null); });
 
+// (whether the last press on the map was a finger's: its tap reaches a little past what is drawn, VEHICLE_RING_PX)
+let fingerOnMap = false;
+$('map').addEventListener('pointerdown', (event) => { fingerOnMap = event.pointerType === 'touch'; }, true);
 map.on('click', (event) => {
-  // (the tap that folds the unfolded card does only that: see "the card while details are open")
+  // (the tap that folds the unfolded card does only that: see "the card while details are open"; one that shuts the
+  // search with a screen's keyboard up never comes here, see fitSearchDrop)
   if (FIXED || performance.now() - cardFoldedAt < 700) return;
   hideTooltip();
-  const hit = hitTest(event.point);
+  const hit = hitTest(event.point, { finger: fingerOnMap });
   if (hit) openHit(hit);
   else closePanel();
 });
@@ -2894,6 +2935,7 @@ function listResults(towns, lines, stops, note = '', nearby = []) {
   setActive(-1);
   // (where a stop is added to a board, what it is added to is said above, also before anything is typed)
   searchBox.classList.toggle('open', found.length > 0 || note !== '' || state.adding !== null);
+  fitSearchDrop();
   // (the badges of the lines found as wide as the widest, so that their names stand in one column, as in the departures)
   searchResults.style.removeProperty('--line-badge');
   const lineBadges = [...searchResults.querySelectorAll('.line .badge')];
@@ -2920,6 +2962,59 @@ function answered({ turn: of, failed = false, towns = [], lines, stops, nearby =
   if (failed) listResults([], [], [], typed ? t('search.failed') : '');
   else listResults(towns, lines, stops, !typed || towns.length || lines.length || stops.length ? '' : t('search.none'), nearby);
 }
+
+// While the keyboard of a screen is up, the list of the search reaches down to
+// above it, however large it is, and leaves a finger's room between them: a
+// tap there, or anywhere outside the search, shuts the search and the
+// keyboard and does nothing else (searchShut), whatever lies there, the map
+// or the head of the details. Where there is not room for three rows and that
+// strip, the strip gives way; the list never goes under the keyboard. Without
+// a keyboard the list is as high as style.css has it, and a click outside it
+// does what it does.
+const KEYBOARD_ROOM_PX = 56;
+let keyboardUp = false;
+function fitSearchDrop() {
+  const drop = searchBox.querySelector('.search-drop');
+  const view = window.visualViewport;
+  // (what the keyboard covers at the foot of the page; a bar of the browser that comes and goes is less)
+  // (not a page zoomed in to read, whose view is as much smaller: the keyboard comes with the field's focus, at its scale)
+  const typing = view && searchBox.classList.contains('open') && document.activeElement === searchField && Math.abs(view.scale - 1) < 0.01;
+  const covered = typing ? Math.max(0, innerHeight - view.height - view.offsetTop) : 0;
+  keyboardUp = covered >= 100;
+  if (!keyboardUp) {
+    drop.style.maxHeight = '';
+    return;
+  }
+  const top = drop.getBoundingClientRect().top;
+  const visible = view.offsetTop + view.height - top;
+  drop.style.maxHeight = `${Math.floor(Math.max(Math.min(3 * 44, visible - 8), visible - KEYBOARD_ROOM_PX))}px`;
+}
+window.visualViewport?.addEventListener('resize', fitSearchDrop);
+window.visualViewport?.addEventListener('scroll', fitSearchDrop);
+// (the press that shuts it: its click goes nowhere, the map's included, whose tap is that very click)
+document.addEventListener('pointerdown', (event) => {
+  if (!keyboardUp || event.pointerType === 'mouse' || document.activeElement !== searchField || !searchBox.classList.contains('open') || searchBox.contains(event.target)) return;
+  const swallow = (click) => {
+    stop();
+    if (click.detail === 0) return;
+    click.stopPropagation();
+    click.preventDefault();
+    // (the keyboard goes with the field's focus; nor is it left on what was pressed, which did nothing)
+    if (document.activeElement && document.activeElement !== document.body) document.activeElement.blur();
+  };
+  const stop = () => {
+    document.removeEventListener('click', swallow, true);
+    removeEventListener('pointerdown', stop, true);
+    removeEventListener('keydown', stop, true);
+  };
+  document.addEventListener('click', swallow, true);
+  // (until that click; a press that moved, as one that pans the map, has none and shuts nothing, and then until the next
+  // press or key, which are their own)
+  setTimeout(() => {
+    addEventListener('pointerdown', stop, true);
+    addEventListener('keydown', stop, true);
+  });
+}, true);
 
 /** Shuts the list, and on a narrow screen the field with it. */
 function closeSearch() {
